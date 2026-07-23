@@ -72,6 +72,28 @@ Rules:
 
 ---
 
+## Repository & git workflow
+
+**Monorepo on GitHub** at `VanoraSC/mage_free_client`; the JVM bridge and the Android app
+live here together (see [`docs/architecture.md`](docs/architecture.md)). The remote is used
+over HTTPS. `docs/` holds the planning set; `bridge/`, `app/`, `core/`, and `feature/`
+modules arrive as work lands.
+
+**Branch model.** `main` is the default branch and the protected baseline. All work happens
+on branches off `main`.
+
+**`main` is protected — every change lands via a pull request:**
+
+- Branch off `main`, commit, open a PR, and merge it there. **No one pushes directly to
+  `main`** (enforced on admins too); direct pushes are rejected.
+- No approvals are required, so the maintainer self-merges their own PRs.
+- Force-pushes and branch deletion on `main` are blocked; PR conversations must be resolved
+  before merging.
+- Pushing to a feature branch — including one with an open PR — is normal and updates that
+  PR.
+
+---
+
 ## Coding conventions
 
 - **State:** UI state is a single immutable `data class` per screen, exposed as
@@ -155,4 +177,5 @@ adb -s <serial> install -r app/build/outputs/apk/debug/app-debug.apk
   device → only if you actually did.
 - **Don't reintroduce desktop UX.** If a request would recreate the Swing layout on a phone,
   flag the tension with [`docs/ux-principles.md`](docs/ux-principles.md) before doing it.
-- Commit/push only when the maintainer asks. Branch off the default branch first.
+- Commit/push only when the maintainer asks; then follow **Repository & git workflow**
+  above — branch off `main`, land changes via a PR, never push to `main` directly.

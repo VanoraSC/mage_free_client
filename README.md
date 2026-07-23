@@ -54,7 +54,7 @@ mage_free_client/
 ├── AGENTS.md              # engineering standards & agent instructions (canonical)
 ├── CLAUDE.md              # imports AGENTS.md for Claude Code
 ├── docs/
-│   ├── project-plan.md    # incremental build plan (start here for what's next)
+│   ├── project-plan.md    # feature plan — epics & user stories (start here)
 │   ├── architecture.md    # XMage integration analysis + transport challenge
 │   └── ux-principles.md   # mobile-first UX direction (how we diverge)
 └── (bridge/, app/, core/, feature/ modules to come)
