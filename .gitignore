@@ -1,0 +1,32 @@
+# Android / Gradle
+.gradle/
+build/
+*/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.DS_Store
+
+# Keystores & signing (never commit)
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# APK / AAB / mapping outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+mapping.txt
+
+# Kotlin
+.kotlin/
+
+# Logs / misc
+*.log
