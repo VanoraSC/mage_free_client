@@ -36,6 +36,9 @@ These are settled; details in [`architecture.md`](architecture.md). Epics assume
   don't build UI against invented game states; fakes used in tests are recordings of real
   bridge output.
 - **Auth** is XMage's own account auth, proxied through the bridge.
+- **Self-hosted server.** We run our own version-pinned XMage server, so the bridge/client is
+  always version-matched and we upgrade on our own schedule (XMage enforces exact-version
+  lockstep). See [`architecture.md`](architecture.md).
 
 ## How to read the epics
 

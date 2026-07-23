@@ -73,7 +73,8 @@ Android client on the other.
 
 - ✅ Android stays fully modern; no legacy transport on-device.
 - ✅ We control the mobile-facing schema; decouples us from upstream DTO churn.
-- ✅ Works against *any* existing public/self-hosted XMage server unchanged.
+- ✅ Can target any self-hosted or public XMage server the bridge is **version-matched** to
+  (see [Versioning & upstream updates](#versioning--upstream-updates)).
 - ⚠️ Adds a hop and an extra deployable to run/host.
 - ⚠️ Bridge must faithfully map the callback/`sendPlayer*` loop.
 
@@ -123,6 +124,36 @@ correct and low-maintenance with:
 - **Blast-radius discipline.** Nothing above `:core:network` (app) or the mapper (bridge)
   knows the wire/view shapes. Upstream changes are absorbed at those two boundaries only.
 
+## Versioning & upstream updates
+
+XMage enforces **exact-version lockstep** between client and server: `SessionImpl.connectStart`
+rejects the connection unless the client's `MageVersion` equals the server's, and the
+Java-serialized `mage.view.*` DTOs are not cross-version safe. The bridge embeds
+`mage-common`, so it *is* an XMage client bound by this rule — if the server's version differs
+from the bridge's, the bridge cannot connect at all (no partial/degraded mode).
+
+Three version axes, which Option A deliberately decouples:
+
+- **Server version** — its cadence; the bridge must match it exactly.
+- **Bridge's embedded `mage-common`** — ours; rebuilt to match the server.
+- **Bridge↔app schema** — ours; kept stable so the app rarely moves.
+
+The Android app never sees `mage.view.*` or the version gate — it speaks the schema. So a
+server update is normally a **bridge-only** rebuild/redeploy, and because the bridge is
+infrastructure we run, one redeploy restores every app user at once (no per-user client
+update, unlike the desktop client). The golden-file mapping tests are the detector for
+whether an upstream change leaked into the app schema or was absorbed in the mapper.
+
+**Current posture: a self-hosted, version-pinned server.** We run our own XMage server at a
+version we choose, so the bridge/client is always version-matched and we upgrade on our own
+schedule. Version skew happens only when *we* decide to upgrade — never imposed by a third
+party. Targeting arbitrary public servers (which ship ~weekly and would put the bridge on a
+constant catch-up treadmill) is out of scope for now.
+
+**Design consequence:** the bridge treats a version mismatch as a first-class, legible state
+(server on X, bridge supports Y) rather than a generic connection error, and a server upgrade
+is a hard cutover — reconnection does not paper over it.
+
 ## Decisions
 
 Committed:
@@ -135,8 +166,11 @@ Committed:
 4. **Wire format** → JSON first; a Protobuf swap stays optional later.
 5. **Auth** → proxy XMage's own account auth through the bridge; our own layer only if a
    real need appears.
+6. **Target-server posture** → a self-hosted, version-pinned server we operate, so the
+   bridge/client version is always under our control (see
+   [Versioning & upstream updates](#versioning--upstream-updates)).
 
 Open:
 
-6. How much of `GameView` does a phone actually need per frame, and how do we diff/delta it
+7. How much of `GameView` does a phone actually need per frame, and how do we diff/delta it
    to keep payloads small on mobile data?
