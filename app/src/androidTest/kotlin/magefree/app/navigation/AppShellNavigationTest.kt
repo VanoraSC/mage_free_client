@@ -11,7 +11,7 @@ import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.testing.TestNavHostController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import magefree.app.screens.DECKS_SCREEN_LABEL
-import magefree.app.screens.HOME_SCREEN_LABEL
+import magefree.app.screens.HOME_TITLE
 import magefree.app.screens.PROFILE_SCREEN_LABEL
 import magefree.app.screens.SETTINGS_SCREEN_LABEL
 import magefree.app.theme.MageTheme
@@ -48,7 +48,7 @@ class AppShellNavigationTest {
     fun startsOnHomeWithHomeSelected() {
         setShell(WindowWidthSizeClass.Compact)
 
-        composeTestRule.onNodeWithText(HOME_SCREEN_LABEL).assertIsDisplayed()
+        composeTestRule.onNodeWithText(HOME_TITLE).assertIsDisplayed()
         composeTestRule
             .onNodeWithContentDescription(TopLevelDestination.HOME.contentDescription)
             .assertIsSelected()
@@ -60,7 +60,7 @@ class AppShellNavigationTest {
         assertTabNavigates(TopLevelDestination.DECKS, DECKS_SCREEN_LABEL)
         assertTabNavigates(TopLevelDestination.PROFILE, PROFILE_SCREEN_LABEL)
         assertTabNavigates(TopLevelDestination.SETTINGS, SETTINGS_SCREEN_LABEL)
-        assertTabNavigates(TopLevelDestination.HOME, HOME_SCREEN_LABEL)
+        assertTabNavigates(TopLevelDestination.HOME, HOME_TITLE)
     }
 
     @Test
