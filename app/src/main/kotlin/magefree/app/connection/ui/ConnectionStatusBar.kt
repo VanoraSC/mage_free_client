@@ -33,7 +33,7 @@ import magefree.app.connection.ConnectionState
 import magefree.app.connection.ConnectionStatusUiState
 import magefree.app.connection.ConnectionStatusViewModel
 import magefree.app.connection.toUiState
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 
 /** Visible label on the (stubbed) retry affordance; shared with tests. */
 const val CONNECTION_RETRY_LABEL: String = "Retry"

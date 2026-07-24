@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 
 /** Placeholder text on the immersive game surface; shared with tests so the two agree. */
 const val IMMERSIVE_GAME_LABEL: String = "In-game (immersive placeholder)"

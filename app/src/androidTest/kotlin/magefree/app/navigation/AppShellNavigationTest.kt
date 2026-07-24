@@ -14,7 +14,7 @@ import magefree.app.screens.DECKS_SCREEN_LABEL
 import magefree.app.screens.HOME_TITLE
 import magefree.app.screens.PROFILE_SCREEN_LABEL
 import magefree.app.screens.SETTINGS_SCREEN_LABEL
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

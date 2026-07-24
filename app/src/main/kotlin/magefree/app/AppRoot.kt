@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import magefree.app.navigation.AppNavHost
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 
 /**
  * Application root: hosts the [AppNavHost] — the **root** Navigation-Compose graph that switches
