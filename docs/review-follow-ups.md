@@ -87,6 +87,17 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 - **Revisit:** when `:core:common` is introduced, relocate `DispatcherProvider` (and any other
   shared utils that accumulate in `:app/core`) there.
 
+### Nested navigation hosts (root graph around the shell)
+- **Surfaced:** story 0011.
+- **What:** the root `AppNavHost` hosts `ShellRoute` (the tabbed `AppShell`, which has its **own**
+  inner nav controller) plus `GameRoute` — two nested `NavHost`s, so the immersive game route can
+  render outside the shell chrome.
+- **Why non-blocking:** the correct, well-documented way to render the game with no bar/rail; it
+  builds and the entry/exit flow is covered by tests.
+- **Revisit:** when real game entry is wired (EPIC-06/07 from lobby/table) and if deep links or
+  process-death state restoration are added — nested hosts need care for the cross-host back stack,
+  deep-link routing, and saved state. Re-verify entry/exit and state behavior then.
+
 ---
 
 _Note: several items converge on the **EPIC-03 design pass** and the **Kotlin/KSP toolchain
