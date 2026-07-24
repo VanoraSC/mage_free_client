@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
+import magefree.designsystem.theme.FontScalePreviews
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Sizing
 import magefree.designsystem.theme.Spacing
@@ -124,6 +125,23 @@ private fun ButtonContent(
     Text(text = text)
 }
 
+@Composable
+private fun ButtonsShowcase() {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column(
+            modifier = Modifier.padding(Spacing.medium),
+            verticalArrangement = Arrangement.spacedBy(Spacing.small),
+        ) {
+            MagePrimaryButton(text = "Primary", onClick = {})
+            MagePrimaryButton(text = "Primary + icon", onClick = {}, icon = Icons.Filled.Star)
+            MageSecondaryButton(text = "Secondary", onClick = {})
+            MageSecondaryButton(text = "Secondary + icon", onClick = {}, icon = Icons.Filled.Add)
+            MageTextButton(text = "Text", onClick = {})
+            MagePrimaryButton(text = "Disabled", onClick = {}, enabled = false)
+        }
+    }
+}
+
 @Preview(name = "Buttons - light", showBackground = true)
 @Preview(
     name = "Buttons - dark",
@@ -133,18 +151,15 @@ private fun ButtonContent(
 @Composable
 private fun ButtonsPreview() {
     MageTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            Column(
-                modifier = Modifier.padding(Spacing.medium),
-                verticalArrangement = Arrangement.spacedBy(Spacing.small),
-            ) {
-                MagePrimaryButton(text = "Primary", onClick = {})
-                MagePrimaryButton(text = "Primary + icon", onClick = {}, icon = Icons.Filled.Star)
-                MageSecondaryButton(text = "Secondary", onClick = {})
-                MageSecondaryButton(text = "Secondary + icon", onClick = {}, icon = Icons.Filled.Add)
-                MageTextButton(text = "Text", onClick = {})
-                MagePrimaryButton(text = "Disabled", onClick = {}, enabled = false)
-            }
-        }
+        ButtonsShowcase()
+    }
+}
+
+// Dynamic-type check: labels must grow with the font scale without clipping.
+@FontScalePreviews
+@Composable
+private fun ButtonsFontScalePreview() {
+    MageTheme {
+        ButtonsShowcase()
     }
 }
