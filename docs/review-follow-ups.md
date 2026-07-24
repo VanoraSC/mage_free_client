@@ -100,6 +100,20 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 
 ---
 
+## Design / product
+
+### Brand palette + theme identity are agent-chosen placeholders
+- **Surfaced:** story 0012.
+- **What:** the design system's `MageTheme` ships a specific brand identity the implementer
+  *designed* — a violet/teal/amber "mage" palette, dark-first — plus the typography scale and the
+  decision to keep **dynamic color OFF**. These are real, coherent choices, but they were not
+  specified by the product owner.
+- **Why non-blocking:** the theme is complete, accessible, and builds; it's a legitimate
+  placeholder identity that everything else can proceed on.
+- **Revisit:** product-owner review of the actual brand palette / typography / dynamic-color
+  stance (a quick design pass). Changing them later is a localized edit in `:core:designsystem`
+  (`Color.kt` / `Type.kt` / `MageTheme.kt`) — nothing downstream hard-codes colors.
+
 ## Bridge (server-side)
 
 ### Bridge binds to a hardcoded `0.0.0.0`
