@@ -22,8 +22,10 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 - **Why non-blocking:** everything builds; `enableAggregatingTask = false` is a documented Hilt
   option, not a hack.
 - **Revisit:** when KSP ships a Kotlin-2.4.x build — re-evaluate re-enabling the aggregating
-  task and unblocking AGP 9.x / newer androidx / `compileSdk 37`. Also reconsider whether the
-  Kotlin baseline should track KSP availability rather than lead it.
+  task and unblocking AGP 9.x / newer androidx / `compileSdk 37`. Note AGP 9.x **also** requires
+  bumping the Gradle wrapper from story 0001's deliberate **9.3.1** pin (chosen to avoid a
+  ~130 MB re-download) to ≥ 9.5. Also reconsider whether the Kotlin baseline should track KSP
+  availability rather than lead it.
 
 ---
 
@@ -97,6 +99,29 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 - **Revisit:** when real game entry is wired (EPIC-06/07 from lobby/table) and if deep links or
   process-death state restoration are added — nested hosts need care for the cross-host back stack,
   deep-link routing, and saved state. Re-verify entry/exit and state behavior then.
+
+---
+
+## Bridge (server-side)
+
+### Bridge binds to a hardcoded `0.0.0.0`
+- **Surfaced:** story 0001 (reviewed retroactively; PR #3, already merged).
+- **What:** `bridge/src/main/kotlin/magefree/bridge/Application.kt` starts Netty with
+  `host = "0.0.0.0"` (all interfaces). The port is config-driven (`application.conf` /
+  `BRIDGE_PORT`), but the bind address is a literal.
+- **Why non-blocking:** correct/convenient for a local dev scaffold whose only route is `/health`.
+- **Revisit:** before the bridge carries real traffic — make the bind address configurable and
+  make network exposure a deliberate decision, and pair it with the WebSocket endpoint's
+  transport security (TLS) and auth as those land (EPIC-01 stories 0004–0005 / deployment).
+
+### Hand-rolled `main()` instead of Ktor `EngineMain`
+- **Surfaced:** story 0001 (PR #3, already merged).
+- **What:** `main()` manually loads `application.conf`, reads the port, and calls
+  `embeddedServer(Netty, port) { module() }`, rather than using Ktor's config-driven `EngineMain`.
+- **Why non-blocking:** works and is explicit; chosen to satisfy the story's simultaneous asks
+  (hand-written `main()` + `application.conf` port + `mainClass`).
+- **Revisit:** low priority — consider migrating to `EngineMain` for idiomatic, config-driven
+  startup as bridge configuration grows (engines, connectors, modules declared in config).
 
 ---
 
