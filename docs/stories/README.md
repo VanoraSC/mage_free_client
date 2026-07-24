@@ -33,13 +33,30 @@ Every story uses these sections:
 2. **Context & background** — the essentials to act without hunting: relevant repo docs and
    the specific `../mage` classes/facts involved (with signatures where they matter).
 3. **Scope** — explicit *In scope* / *Out of scope* lists.
-4. **Design & approach** — the intended structure: modules, key types, protocol/schema,
+4. **Prerequisites & toolchain** — tools and versions the story assumes, stated **explicitly**
+   (never "latest"): JDK/Gradle/plugin versions, env vars, and any prior story that must be
+   merged. Default to the [Project toolchain baseline](#project-toolchain-baseline) and note
+   only the deltas.
+5. **Design & approach** — the intended structure: modules, key types, protocol/schema,
    upstream APIs to call, and how correctness is preserved.
-5. **Implementation steps** — an ordered, concrete path.
-6. **Testing & verification** — unit and (where relevant) integration tests, plus exact
+6. **Implementation steps** — an ordered, concrete path.
+7. **Testing & verification** — unit and (where relevant) integration tests, plus exact
    commands. Correctness is verified against a locally-run XMage server, never invented data.
-7. **Acceptance criteria** — a checklist that defines done.
-8. **References** — files and docs to read.
+8. **Acceptance criteria** — a checklist that defines done.
+9. **References** — files and docs to read.
+
+## Project toolchain baseline
+
+Established by story 0001; a story states only its **deltas** from this and pins exact
+versions (avoid "latest" — it is ambiguous and non-reproducible).
+
+- **JDK 17** — the `:bridge` toolchain is `jvmToolchain(17)`. Ensure a JDK 17 is installed and
+  `JAVA_HOME` points at it; Gradle needs a JVM to launch and none may be on `PATH`.
+- **Gradle via the committed wrapper** (currently **9.3.1**) — always `./gradlew`, never a
+  local Gradle. Note: Gradle 9 requires `junit-platform-launcher` on the test runtime classpath.
+- **Kotlin / Ktor / kotlinx-serialization / logback / JUnit 5 / ktlint** — all pinned in
+  `gradle/libs.versions.toml`; no hard-coded versions in build files.
+- **Gate:** `./gradlew check` (lint + tests) must pass.
 
 ---
 
