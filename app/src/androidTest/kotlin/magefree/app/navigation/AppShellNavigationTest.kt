@@ -39,7 +39,13 @@ class AppShellNavigationTest {
                     navigatorProvider.addNavigator(ComposeNavigator())
                 }
             MageTheme {
-                AppShell(widthSizeClass = widthSizeClass, navController = navController)
+                // Pass a stateless status bar so this navigation test needs no Hilt graph; the
+                // connection surface has its own coverage in ConnectionStatusBarTest.
+                AppShell(
+                    widthSizeClass = widthSizeClass,
+                    navController = navController,
+                    connectionStatusBar = {},
+                )
             }
         }
     }
