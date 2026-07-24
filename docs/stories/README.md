@@ -81,4 +81,25 @@ this foundation.
 | 0005 | Session bridge: connect / login / reconnect over WebSocket | 0003, 0004 | WebSocket login wired to a per-session `SessionImpl`; relays connected/failed/disconnected/reconnect state. |
 | 0006 | Callback relay & mapping/golden-file test harness | 0005 | Generic `ClientCallback` relay (decompress → map → forward) and server-call plumbing back; the `mage.view.*`→schema mapper boundary + golden-file test infrastructure, proven on one sample push and one relayed call. |
 
-Downstream epics continue the numbering from `0007`.
+---
+
+## Epic 2 — App Shell & Navigation
+
+The Android app's foundation and the Arena-style information architecture: a home hub with a
+prominent path to play, top-level destinations (Home/Play, Decks, Profile/Social, Settings),
+an always-visible connection status, and a separate immersive in-game mode. See
+[`../project-plan.md`](../project-plan.md) (EPIC-02) and [`../ux-principles.md`](../ux-principles.md).
+
+The full visual system (theme, components) is **EPIC-03**; these stories use a minimal default
+Material 3 theme and stub any data (connection state, "play" actions) — real wiring arrives in
+EPIC-04/05.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0007 | Android app module scaffold | — | `:app` Android module (AGP, Compose, Material 3, Hilt, single Activity); builds a debug APK, launches to a placeholder; CI `check`. The Android analog of 0001. |
+| 0008 | Navigation shell & top-level destinations | 0007 | Navigation-Compose type-safe routes; Home/Decks/Profile/Settings placeholder destinations; adaptive bottom-bar ↔ nav-rail. |
+| 0009 | Home hub with prominent "Play" entry | 0008 | The Arena-style home: a primary, thumb-reachable Play CTA plus entries to other destinations (stub actions). |
+| 0010 | Persistent connection-status surface | 0008 | An always-visible connection indicator across the shell, driven by a state holder over a stub source. |
+| 0011 | Immersive in-game mode shell | 0008 | The in-game experience as a separate full-screen, edge-to-edge immersive route, distinct from the tabbed shell (placeholder content). |
+
+Downstream epics continue the numbering from `0012`.
