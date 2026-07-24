@@ -29,22 +29,20 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 
 ## Android UI / Compose
 
-### Inset double-counting between screens and the shell
-- **Surfaced:** story 0009.
-- **What:** `HomeScreen` applies `safeDrawingPadding()` while the compact-width `AppShell` also
-  passes the Scaffold's `innerPadding` to the nav host, so bottom insets can double-count in
-  bottom-bar mode (slightly excess bottom padding).
-- **Why non-blocking:** cosmetic only.
-- **Revisit:** EPIC-03 design pass — establish a single **inset-ownership convention** (shell
-  owns chrome insets; screens own content insets) and apply it consistently across screens.
+### Inset double-counting between screens and the shell — RESOLVED ✅
+- **Surfaced:** story 0009; **resolved** by story 0015 (PR #17).
+- **What was fixed:** `:core:designsystem/layout/Insets.kt` now defines the inset-ownership
+  convention — the shell owns and **consumes** chrome insets; screens apply only the
+  consumption-aware `Modifier.contentInsets()`. `HomeScreen` moved off `safeDrawingPadding()` to
+  `contentInsets()`, so it structurally cannot double-count under the bottom bar.
 
-### Window size class uses the older experimental API
-- **Surfaced:** story 0008.
-- **What:** `AppShell` uses `WindowSizeClass.calculateFromSize`
-  (`ExperimentalMaterial3WindowSizeClassApi`). Newer Compose favors
-  `currentWindowAdaptiveInfo()` / the `material3-adaptive` artifacts.
-- **Why non-blocking:** works with the pinned Compose BOM.
-- **Revisit:** on a Compose BOM bump — consider migrating to the `material3-adaptive` API.
+### Window size class uses the older experimental API — centralized (migration deferred)
+- **Surfaced:** story 0008; **de-risked** by story 0015 (PR #17).
+- **What changed:** the experimental API is now confined to the single access point
+  `:core:designsystem/layout/WindowSize.kt` (own `WindowWidthClass` enum); callers use
+  `windowWidthClass()` and never touch the experimental API — the drift risk is gone.
+- **Remaining (optional):** migrating from `WindowSizeClass.calculateFromSize` to the stable
+  `currentWindowAdaptiveInfo()` is now a **one-file** edit — do it on a Compose BOM bump.
 
 ### Nav items use a single icon (no selected/unselected pair)
 - **Surfaced:** story 0008.
