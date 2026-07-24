@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Minimal window theme used only before the Compose content takes over. The real
+      colors come from MageTheme (Compose Material 3). Light variant here; dark in
+      values-night/themes.xml so the launch window respects system dark mode.
+    -->
+    <style name="Theme.MageFreeClient" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
