@@ -11,21 +11,19 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 
 ## Toolchain
 
-### Kotlin 2.4.10 baseline is ahead of KSP / AGP support
-- **Surfaced:** story 0007.
-- **What:** The pinned Kotlin `2.4.10` has no matching KSP release yet. This forced
-  `hilt { enableAggregatingTask = false }` in `app/build.gradle.kts` — routing Hilt aggregation
-  through KSP because the legacy javac aggregating task reads Kotlin `@Metadata` via a bundled
-  `kotlin-metadata-jvm` that only supports ≤ Kotlin 2.2. The same version chain also caps **AGP
-  at 8.13.2** (AGP 9.x needs Gradle 9.5+, but the shared wrapper is 9.3.1) and androidx at the
-  **pre-API-37** wave (`compose-bom 2025.09.01`, `core-ktx 1.16.0`, etc.).
-- **Why non-blocking:** everything builds; `enableAggregatingTask = false` is a documented Hilt
-  option, not a hack.
-- **Revisit:** when KSP ships a Kotlin-2.4.x build — re-evaluate re-enabling the aggregating
-  task and unblocking AGP 9.x / newer androidx / `compileSdk 37`. Note AGP 9.x **also** requires
-  bumping the Gradle wrapper from story 0001's deliberate **9.3.1** pin (chosen to avoid a
-  ~130 MB re-download) to ≥ 9.5. Also reconsider whether the Kotlin baseline should track KSP
-  availability rather than lead it.
+### Toolchain baseline — locked & documented ✅ (corrected diagnosis)
+- **Surfaced:** stories 0007–0010; **resolved** by the toolchain-alignment pass (PR #12).
+- **Correction:** the earlier "Kotlin 2.4.10 has no matching KSP" framing was **wrong**. KSP has
+  been **version-independent of Kotlin since 2.3.0** and supports Kotlin 2.2+ (incl. 2.4.10), so
+  the KSP 2.3.10 / Kotlin 2.4.10 pairing is correct. `hilt { enableAggregatingTask = false }` is
+  only about Hilt's *legacy* aggregating task's old metadata reader (≤ Kotlin 2.2) and is a
+  standard, recommended Hilt setting — not a temporary workaround.
+- **Outcome:** the toolchain is coherent (a clean `check + assembleDebug` builds green) and is now
+  the **locked, authoritative baseline** with a story guardrail — see *Project toolchain baseline*
+  in [`stories/README.md`](stories/README.md).
+- **Remaining (deliberate future pass, not a story):** moving to AGP 9.x / newer androidx /
+  `compileSdk 37` requires bumping the Gradle wrapper (9.3.1 → ≥ 9.5) and re-verifying the whole
+  set together — do it as its own toolchain pass when there's a reason.
 
 ---
 
