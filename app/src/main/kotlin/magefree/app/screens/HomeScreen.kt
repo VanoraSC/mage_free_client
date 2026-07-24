@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -28,6 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import magefree.designsystem.layout.contentInsets
 import magefree.designsystem.theme.MageTheme
 
 /**
@@ -67,7 +67,10 @@ fun HomeScreen(
         modifier =
             modifier
                 .fillMaxSize()
-                .safeDrawingPadding()
+                // Inset-ownership convention: the shell owns the system-bar / chrome insets (bottom bar,
+                // status bar), so the screen applies only its content insets (side cutouts) here — a
+                // plain safeDrawingPadding() would re-add the bottom inset and double-count under the bar.
+                .contentInsets()
                 .padding(horizontal = 24.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

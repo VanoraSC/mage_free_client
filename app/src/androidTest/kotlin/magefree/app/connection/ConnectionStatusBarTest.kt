@@ -1,6 +1,5 @@
 package magefree.app.connection
 
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,6 +14,7 @@ import magefree.app.navigation.AppShell
 import magefree.app.navigation.TopLevelDestination
 import magefree.app.screens.DECKS_SCREEN_LABEL
 import magefree.app.screens.SETTINGS_SCREEN_LABEL
+import magefree.designsystem.layout.WindowWidthClass
 import magefree.designsystem.theme.MageTheme
 import org.junit.Rule
 import org.junit.Test
@@ -41,7 +41,7 @@ class ConnectionStatusBarTest {
                 }
             MageTheme {
                 AppShell(
-                    widthSizeClass = WindowWidthSizeClass.Compact,
+                    widthClass = WindowWidthClass.Compact,
                     navController = navController,
                     connectionStatusBar = {
                         ConnectionStatusBar(uiState = state.toUiState(), onRetry = {})

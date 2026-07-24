@@ -26,6 +26,12 @@ const val SETTINGS_SCREEN_LABEL: String = "Settings"
 const val ENTER_GAME_STUB_LABEL: String = "Enter game (dev stub)"
 
 /**
+ * Visible label on the developer entry into the design-system component catalog (story 0015). Shared
+ * with tests so the two agree; clearly marked as a dev-only affordance.
+ */
+const val OPEN_CATALOG_STUB_LABEL: String = "Component catalog (dev)"
+
+/**
  * Placeholder for the Settings destination. Real preferences (DataStore-backed) arrive later; story
  * 0008 only proves the shell can reach this route.
  *
@@ -38,6 +44,7 @@ const val ENTER_GAME_STUB_LABEL: String = "Enter game (dev stub)"
 fun SettingsPlaceholderScreen(
     modifier: Modifier = Modifier,
     onEnterGame: () -> Unit = {},
+    onOpenCatalog: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -59,6 +66,18 @@ fun SettingsPlaceholderScreen(
                     .heightIn(min = 48.dp),
         ) {
             Text(text = ENTER_GAME_STUB_LABEL, textAlign = TextAlign.Center)
+        }
+
+        // Debug-only affordance to open the design-system component catalog (story 0015) — a visual-QA
+        // surface, not a production feature.
+        OutlinedButton(
+            onClick = onOpenCatalog,
+            modifier =
+                Modifier
+                    .padding(top = 12.dp)
+                    .heightIn(min = 48.dp),
+        ) {
+            Text(text = OPEN_CATALOG_STUB_LABEL, textAlign = TextAlign.Center)
         }
     }
 }
