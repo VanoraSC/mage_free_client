@@ -45,6 +45,7 @@ import magefree.app.connection.ui.ConnectionStatusBar
 fun AppShell(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    onEnterGame: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -52,6 +53,7 @@ fun AppShell(
         AppShell(
             widthSizeClass = windowSizeClass.widthSizeClass,
             navController = navController,
+            onEnterGame = onEnterGame,
             connectionStatusBar = connectionStatusBar,
         )
     }
@@ -71,6 +73,7 @@ fun AppShell(
     widthSizeClass: WindowWidthSizeClass,
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    onEnterGame: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -107,6 +110,7 @@ fun AppShell(
                 connectionStatusBar()
                 MageNavHost(
                     navController = navController,
+                    onEnterGame = onEnterGame,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -137,6 +141,7 @@ fun AppShell(
                 connectionStatusBar()
                 MageNavHost(
                     navController = navController,
+                    onEnterGame = onEnterGame,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
