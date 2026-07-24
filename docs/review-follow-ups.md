@@ -61,5 +61,33 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 
 ---
 
+## Build & dependencies
+
+### Manual `concurrent-futures` version constraint
+- **Surfaced:** story 0010.
+- **What:** `app/build.gradle.kts` adds a `constraints { implementation(libs.androidx.concurrent.futures) }`
+  (pinned 1.2.0) to align classpaths — the main runtime pulls `concurrent-futures 1.1.0`
+  transitively (navigation → profileinstaller) while `androidx.test:core` (androidTest) needs
+  1.2.0, and AGP's consistent resolution then makes the two conflict.
+- **Why non-blocking:** the constraint resolves both classpaths cleanly and is documented inline.
+- **Revisit:** as dependencies grow and on AGP/androidx bumps — the constraint may become
+  unnecessary or need adjusting. If more of these appear, consider a shared dependency-alignment
+  strategy rather than one-off constraints.
+
+---
+
+## Architecture
+
+### `DispatcherProvider` lives in `:app`, not `:core:common`
+- **Surfaced:** story 0010.
+- **What:** `magefree.app.core.DispatcherProvider` was introduced in the `:app` module. The target
+  module layout (`AGENTS.md`) puts shared utilities like dispatchers in `:core:common`.
+- **Why non-blocking:** correct for now — modules are introduced as features need them, not
+  scaffolded early; `:app` is the only consumer today.
+- **Revisit:** when `:core:common` is introduced, relocate `DispatcherProvider` (and any other
+  shared utils that accumulate in `:app/core`) there.
+
+---
+
 _Note: several items converge on the **EPIC-03 design pass** and the **Kotlin/KSP toolchain
 version chain** — worth handling as themed cleanups rather than one-offs._
