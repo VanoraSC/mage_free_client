@@ -19,3 +19,4 @@ rootProject.name = "mage-free-client"
 
 include(":bridge")
 include(":app")
+include(":core:designsystem")
