@@ -1,0 +1,7 @@
+root = true
+
+[*.{kt,kts}]
+# Jetpack Compose @Composable functions are PascalCase by convention, which otherwise trips
+# ktlint's function-naming rule. This is ktlint's official knob for that; it only affects
+# @Composable-annotated functions, so non-Compose modules (e.g. :bridge) are unaffected.
+ktlint_function_naming_ignore_when_annotated_with = Composable
