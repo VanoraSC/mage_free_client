@@ -49,17 +49,19 @@ are built).
 Deltas from the [Project toolchain baseline](README.md#project-toolchain-baseline) and 0007:
 
 - Requires 0007 merged (the `:app` module, AGP/Compose/Hilt setup, version catalog entries).
-- New module is an **Android library**: pin `com.android.library` (AGP 8.13.2, already in the
-  catalog) and enable Compose in it (Compose BOM + Kotlin Compose plugin, as in `:app`).
-- Reuse the existing pinned versions; add a catalog alias for the Android library plugin if not
-  present. Android SDK + `compileSdk 36` as in `:app`.
+- New module is an **Android library**: apply the **`magefree.android.library`** and
+  **`magefree.android.compose`** convention plugins (`build-logic/`). Do **not** hand-write AGP /
+  SDK / Compose config — that is exactly what the conventions exist to prevent (see the toolchain
+  baseline). No `magefree.hilt` — the design system is pure UI.
+- Reuse the existing catalog versions; SDK/Java/Kotlin and the Compose BOM come from the
+  conventions. Android SDK + `compileSdk 36` as in `:app`.
 
 ## 5. Design & approach
 
 ```
 settings.gradle.kts                    # + include(":core:designsystem")
 core/designsystem/
-├── build.gradle.kts                   # com.android.library + kotlin.android + kotlin.compose
+├── build.gradle.kts                   # applies magefree.android.library + magefree.android.compose
 └── src/main/kotlin/magefree/designsystem/theme/
     ├── Color.kt                       # brand light/dark ColorSchemes (+ palette)
     ├── Type.kt                        # Typography
@@ -69,9 +71,9 @@ core/designsystem/
 app/…                                  # migrated: import magefree.designsystem.theme.MageTheme
 ```
 
-- **`:core:designsystem`** applies `com.android.library`, Kotlin, and the Compose plugin;
-  `buildFeatures.compose = true`; depends on the Compose BOM + `material3`; no Hilt (pure UI).
-  Namespace `magefree.designsystem`.
+- **`:core:designsystem`** applies the **`magefree.android.library`** + **`magefree.android.compose`**
+  conventions (SDK/Java/Kotlin/Compose/BOM all come from there) and declares only `material3` (plus
+  any other Compose libs it uses). No Hilt — pure UI. Namespace `magefree.designsystem`.
 - **Theme**: `MageTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = <decision>, content)`.
   Define real brand `lightColorScheme(...)`/`darkColorScheme(...)`, a `Typography`, and `Shapes`.
   Document the dynamic-color choice (default: **off**, for a deliberate, consistent brand look —
@@ -84,8 +86,9 @@ app/…                                  # migrated: import magefree.designsyste
 
 ## 6. Implementation steps
 
-1. Add the Android-library plugin alias to the catalog if missing; create `:core:designsystem`
-   (`build.gradle.kts`, namespace, Compose enabled, material3 + BOM).
+1. Create `:core:designsystem` with a `build.gradle.kts` that applies the `magefree.android.library`
+   + `magefree.android.compose` conventions, sets `namespace = "magefree.designsystem"`, and adds
+   `material3` (the Compose BOM comes from the convention).
 2. `include(":core:designsystem")` in `settings.gradle.kts`.
 3. Implement `Color`, `Type`, `Shape`, `Tokens`, and `MageTheme` (branded light + dark; document
    dynamic-color decision); add light/dark theme previews.
