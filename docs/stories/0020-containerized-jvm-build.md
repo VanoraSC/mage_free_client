@@ -23,10 +23,16 @@ untouched.** No upstream-mage layer and no XMage server yet (those are 0021 / 00
 ## 3. Scope
 
 **In scope**
-- `docker/build/Dockerfile` — base image: `eclipse-temurin:17-jdk` + `git`, `curl`, `unzip`, and
-  the Maven CLI (used by later layers). A non-root build user.
+- `docker/jvm/Dockerfile` — base image `maven:3.9-eclipse-temurin-17` (Maven + Temurin JDK 17,
+  matching the locked toolchain) + `git`, `curl`, `unzip`. Runs as root (simplest for bind-mount
+  writes). *(Note: `docker/jvm/`, not `docker/build/` — the repo's `*/build/` gitignore would
+  swallow the latter.)*
 - `docker/docker-compose.yml` — a `build` service using that image, with the repo bind-mounted at a
-  working dir and named cache volumes for `~/.gradle` (and `~/.m2` for later).
+  working dir, named cache volumes for `~/.gradle` and `~/.m2`, and `MAGE_JVM_ONLY=1` so the
+  SDK-less container skips the Android modules.
+- A `settings.gradle.kts` guard (`if (System.getenv("MAGE_JVM_ONLY") != "1")`) that includes the
+  Android modules only on the host; and `gradlew` normalized to LF (`.gitattributes`) so it runs
+  in the Linux container.
 - `scripts/dev` — a bash wrapper: `./scripts/dev gradle <args>` runs
   `docker compose run --rm build ./gradlew <args>`; plus `up`/`down` passthroughs.
 - Docs: a short `docker/README.md` (prereqs, usage) and the run commands.
@@ -48,14 +54,14 @@ Deltas from the [Project toolchain baseline](stories/README.md#project-toolchain
 
 ```
 docker/
-├── build/Dockerfile        # temurin:17-jdk + git/curl/unzip + maven; non-root user; WORKDIR /workspace
+├── jvm/Dockerfile        # temurin:17-jdk + git/curl/unzip + maven; non-root user; WORKDIR /workspace
 ├── docker-compose.yml      # service: build (repo + gradle/m2 cache volumes)
 └── README.md               # prereqs + usage
 scripts/
 └── dev                     # ./scripts/dev gradle <args> | up <svc> | down | mvn <args>
 ```
 
-- **`build` service:** `image` from `docker/build/Dockerfile`; `volumes:` repo → `/workspace`,
+- **`build` service:** `image` from `docker/jvm/Dockerfile`; `volumes:` repo → `/workspace`,
   `gradle-cache` → `/home/build/.gradle`, `m2-cache` → `/home/build/.m2`; `working_dir: /workspace`.
   Run Gradle via the wrapper so the Gradle version is the repo's.
 - **`scripts/dev`:** dispatch on the first arg — `gradle` → `docker compose run --rm build ./gradlew "$@"`,
@@ -64,7 +70,7 @@ scripts/
 
 ## 6. Implementation steps
 
-1. Write `docker/build/Dockerfile` (base + tools + non-root user + workdir).
+1. Write `docker/jvm/Dockerfile` (base + tools + non-root user + workdir).
 2. Write `docker/docker-compose.yml` with the `build` service and cache volumes.
 3. Write `scripts/dev` (executable) and `docker/README.md`.
 4. Verify: `./scripts/dev gradle :bridge:check` builds the bridge **in-container**, green, and the
@@ -84,7 +90,7 @@ scripts/
 
 ## 8. Acceptance criteria
 
-- [ ] `docker/build/Dockerfile`, `docker/docker-compose.yml`, and `scripts/dev` exist; `scripts/dev`
+- [ ] `docker/jvm/Dockerfile`, `docker/docker-compose.yml`, and `scripts/dev` exist; `scripts/dev`
       is documented in `docker/README.md`.
 - [ ] `./scripts/dev gradle :bridge:check` builds `:bridge` inside the container (JDK 17), green.
 - [ ] The `~/.gradle` cache persists across runs via a named volume.

@@ -60,7 +60,7 @@ Deltas from the [Project toolchain baseline](stories/README.md#project-toolchain
 
 ## 6. Implementation steps
 
-1. Add the mage-build layer to `docker/build/Dockerfile` (pinned `MAGE_REF`, clone, `mvn install`).
+1. Add the mage-build layer to `docker/jvm/Dockerfile` (pinned `MAGE_REF`, clone, `mvn install`).
 2. Build the image; capture whether upstream builds on JDK 17 and any flags needed (document them).
 3. Add a small in-container check that `org.mage:mage-common:1.4.60` resolves from `mavenLocal()`
    (e.g. a throwaway `dependencies` resolution or a tiny Gradle task).

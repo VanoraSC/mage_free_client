@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Run the heavy/JVM path (bridge build, upstream mage build, reference XMage server) in containers.
+# Android :app builds run on the host, not through this. See docs/build-environment.md.
+#
+# Usage (from the repo root):
+#   ./scripts/dev gradle <args>    # e.g. ./scripts/dev gradle :bridge:check
+#   ./scripts/dev mvn <args>       # maven inside the build container
+#   ./scripts/dev up <service>     # e.g. ./scripts/dev up xmage-server   (added in story 0022)
+#   ./scripts/dev down
+#   ./scripts/dev sh               # interactive shell in the build container
+set -euo pipefail
+
+# Resolve the repo root so the script works from anywhere.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE=(docker compose -f "$ROOT/docker/docker-compose.yml")
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  gradle) exec "${COMPOSE[@]}" run --rm build sh ./gradlew "$@" ;;
+  mvn)    exec "${COMPOSE[@]}" run --rm build mvn "$@" ;;
+  up)     exec "${COMPOSE[@]}" up -d "$@" ;;
+  down)   exec "${COMPOSE[@]}" down "$@" ;;
+  sh)     exec "${COMPOSE[@]}" run --rm build bash ;;
+  *)
+    echo "usage: ./scripts/dev {gradle|mvn|up|down|sh} ..." >&2
+    exit 2
+    ;;
+esac

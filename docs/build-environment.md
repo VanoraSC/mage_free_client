@@ -27,14 +27,14 @@ This split is deliberate (see the decision log below): we containerize only the 
 
 ```
 docker/
-├── build/Dockerfile          # the JVM build image, built in layers
+├── jvm/Dockerfile          # the JVM build image, built in layers
 ├── server/Dockerfile         # (or a stage) the runnable Mage.Server image
 └── docker-compose.yml        # services: build, xmage-server
 scripts/
 └── dev                       # thin wrapper: `./scripts/dev gradle :bridge:check`, `./scripts/dev up xmage-server`, ...
 ```
 
-### The build image (`docker/build/Dockerfile`), in layers
+### The build image (`docker/jvm/Dockerfile`), in layers
 1. **Base** — `eclipse-temurin:17-jdk` (matches the locked JDK 17) + `git`, `curl`, `unzip`.
 2. **Maven** — the Maven CLI, for the upstream reactor build.
 3. **Upstream mage layer** — clone `magefree/mage` at a **pinned commit/tag** and

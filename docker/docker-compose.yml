@@ -1,0 +1,22 @@
+# Containerized heavy/JVM path: the bridge build and (later) the upstream mage build + XMage server.
+# Android :app builds run on the host. Driven via ../scripts/dev. See ../docs/build-environment.md.
+#
+# Relative paths resolve from this file's directory (docker/), so `..` is the repo root.
+services:
+  build:
+    build:
+      context: ..
+      dockerfile: docker/jvm/Dockerfile
+    image: mage-free-client/build:latest
+    environment:
+      # No Android SDK in this image — skip Android modules so :bridge configures/builds cleanly.
+      MAGE_JVM_ONLY: "1"
+    volumes:
+      - ..:/workspace
+      - gradle-cache:/root/.gradle
+      - m2-cache:/root/.m2
+    working_dir: /workspace
+
+volumes:
+  gradle-cache:
+  m2-cache:
