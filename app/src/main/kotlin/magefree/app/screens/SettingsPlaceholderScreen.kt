@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 
 /** Text rendered by [SettingsPlaceholderScreen]; shared with tests so the two agree. */
 const val SETTINGS_SCREEN_LABEL: String = "Settings"

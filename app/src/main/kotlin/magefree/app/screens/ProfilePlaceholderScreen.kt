@@ -8,7 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 
 /** Text rendered by [ProfilePlaceholderScreen]; shared with tests so the two agree. */
 const val PROFILE_SCREEN_LABEL: String = "Profile"

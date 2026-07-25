@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dagger.hilt.android.AndroidEntryPoint
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 
 /**
  * The single Activity hosting the Compose UI. Edge-to-edge is enabled here (consistent with the

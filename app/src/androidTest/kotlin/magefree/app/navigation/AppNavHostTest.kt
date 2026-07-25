@@ -13,7 +13,7 @@ import magefree.app.game.EXIT_GAME_CONTENT_DESCRIPTION
 import magefree.app.game.IMMERSIVE_GAME_LABEL
 import magefree.app.screens.ENTER_GAME_STUB_LABEL
 import magefree.app.screens.HOME_TITLE
-import magefree.app.theme.MageTheme
+import magefree.designsystem.theme.MageTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
