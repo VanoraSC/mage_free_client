@@ -132,7 +132,7 @@ bridge/src/test/resources/golden/mapping/
 5. Build the golden harness (`GoldenFiles.assertMatchesGolden` + `UPDATE_GOLDEN`), add
    `chat_talk.json`, and write `ChatMessageMapperTest` (hermetic).
 6. Write `CallbackRelayIT` (env-gated) doing the real chat round-trip and asserting the same golden.
-7. `./gradlew check` green (hermetic mapper + protocol tests run; live test skipped without env var).
+7. `./scripts/dev gradle check` green (hermetic mapper + protocol tests run; live test skipped without env var).
 
 ## 6. Testing & verification
 
@@ -141,8 +141,8 @@ bridge/src/test/resources/golden/mapping/
   → `ServerInfo`. No XMage server needed.
 - **Live (opt-in):**
   ```bash
-  ./scripts/xmage-server/run-local-server.sh
-  XMAGE_SERVER=localhost:17171 ./gradlew :bridge:test --tests '*CallbackRelayIT'
+  ./scripts/dev up xmage-server
+  XMAGE_SERVER=xmage-server:17171 ./scripts/dev gradle :bridge:test --tests '*CallbackRelayIT'
   ```
   A real chat message flows server → `SessionImpl` → relay → mapper → WebSocket and matches the
   committed golden.
@@ -161,7 +161,7 @@ bridge/src/test/resources/golden/mapping/
       the same golden (env-gated, skipped by default).
 - [ ] `mage.view.*` types appear **only** inside `magefree.bridge.mapping`; `:protocol` and the
       rest of the bridge see only app-schema types.
-- [ ] `./gradlew check` passes and stays hermetic; the live test is opt-in via `XMAGE_SERVER`.
+- [ ] `./scripts/dev gradle check` passes and stays hermetic; the live test is opt-in via `XMAGE_SERVER`.
 
 ## 8. References
 

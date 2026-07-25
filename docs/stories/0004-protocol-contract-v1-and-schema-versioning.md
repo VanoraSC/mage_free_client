@@ -139,17 +139,17 @@ enum class ProtocolErrorCode { PROTOCOL_VERSION_UNSUPPORTED, MALFORMED_MESSAGE, 
 6. Add `SessionWebSocketTest` using `testApplication` + a WS client: (a) happy handshake, (b)
    `PROTOCOL_VERSION_UNSUPPORTED` on major mismatch, (c) ping→pong, (d) malformed first frame →
    `MALFORMED_MESSAGE`.
-7. `./gradlew check` green.
+7. `./scripts/dev gradle check` green.
 
 ## 6. Testing & verification
 
 - **Unit (`:protocol`):** serialization round-trips and unknown-field tolerance.
 - **Integration (`:bridge`, hermetic):** `testApplication` drives the WebSocket through the
   handshake, ping/pong, version-mismatch, and malformed-message paths. **No live XMage server
-  needed** — this story is fully hermetic and runs in the normal `./gradlew check` gate.
+  needed** — this story is fully hermetic and runs in the normal `./scripts/dev gradle check` gate.
 
 ```bash
-./gradlew check
+./scripts/dev gradle check
 ```
 
 ## 7. Acceptance criteria
@@ -162,7 +162,7 @@ enum class ProtocolErrorCode { PROTOCOL_VERSION_UNSUPPORTED, MALFORMED_MESSAGE, 
       succeeds; a major-version mismatch yields `PROTOCOL_VERSION_UNSUPPORTED` and closes; a
       `Ping` yields a matching `Pong`; a malformed first frame yields `MALFORMED_MESSAGE`.
 - [ ] The versioning/compatibility rules are documented in the `:protocol` module.
-- [ ] `./gradlew check` passes and is hermetic (no XMage server, no `org.mage` dependency in
+- [ ] `./scripts/dev gradle check` passes and is hermetic (no XMage server, no `org.mage` dependency in
       `:protocol`).
 - [ ] Sealed `ClientMessage`/`ServerMessage` are structured so later stories **extend** them.
 

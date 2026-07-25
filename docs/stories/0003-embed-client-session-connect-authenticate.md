@@ -52,9 +52,10 @@ Verified upstream facts (`../mage`, `org.mage:*:1.4.60`):
   `connectSetUserData(...)` for non-admin users — supply a non-null `UserData`
   (`mage.players.net.UserData`; verify the correct factory/defaults) to avoid a null being
   rejected.
-- **Dependency source:** 0002's `mvn install` publishes `mage-common` and its transitive
-  artifacts (`mage`, jboss-remoting, log4j, …) to the local Maven repo (`~/.m2`). The bridge
-  consumes them via `mavenLocal()`.
+- **Dependency source:** `mage-common` (+ `org.mage:mage`) is **baked into the build container's
+  local Maven repo** by story 0021 (see [`../build-environment.md`](../build-environment.md)). The
+  bridge consumes it via `mavenLocal()` — build in-container with `./scripts/dev gradle`. No host
+  `mvn install` is needed.
 
 ## 3. Scope
 
@@ -107,8 +108,8 @@ bridge/src/test/kotlin/magefree/bridge/xmage/
 ## 5. Implementation steps
 
 1. Add `repositories { mavenLocal() }` and `implementation("org.mage:mage-common:1.4.60")` to
-   `bridge/build.gradle.kts` (pin the version via the catalog). Confirm it resolves after
-   0002's `mvn install`.
+   `bridge/build.gradle.kts` (pin the version via the catalog). It resolves from the build
+   container's baked Maven repo (story 0021) when built with `./scripts/dev gradle`.
 2. Implement `BridgeMageClient` (all `MageClient`/`CallbackClient` methods; version from
    `mage-common`).
 3. Implement `XMageConnection.build(...)` (set host/port/username/password/userIdStr/UserData).
@@ -117,18 +118,18 @@ bridge/src/test/kotlin/magefree/bridge/xmage/
 5. Write `ConnectAuthenticateIT` (env-gated on `XMAGE_SERVER`): parse target via 0002's
    `XMageServerTarget`; connect with a random username; assert `connect()` succeeded, `MageClient.connected(...)`
    fired, and `mainRoomId()` is non-null; then `disconnect()` and assert disconnected.
-6. Verify `./gradlew check` passes with the IT **skipped** (no env var).
-7. Manually verify against a running local server (0002 script) with
-   `XMAGE_SERVER=localhost:17171`.
+6. Verify `./scripts/dev gradle check` passes with the IT **skipped** (no env var).
+7. Manually verify against a running local server (story 0022 xmage-server container) with
+   `XMAGE_SERVER=xmage-server:17171`.
 
 ## 6. Testing & verification
 
-- **Hermetic gate:** `./gradlew check` passes; `ConnectAuthenticateIT` is *skipped* when
+- **Hermetic gate:** `./scripts/dev gradle check` passes; `ConnectAuthenticateIT` is *skipped* when
   `XMAGE_SERVER` is unset.
 - **Live (opt-in):**
   ```bash
-  ./scripts/xmage-server/run-local-server.sh        # from 0002; wait for "Started"
-  XMAGE_SERVER=localhost:17171 ./gradlew :bridge:test --tests '*ConnectAuthenticateIT'
+  ./scripts/dev up xmage-server        # from 0022 (reference server); wait for "Started"
+  XMAGE_SERVER=xmage-server:17171 ./scripts/dev gradle :bridge:test --tests '*ConnectAuthenticateIT'
   ```
   Connects, authenticates (auth disabled locally), returns a non-null main room id, disconnects.
 
@@ -140,7 +141,7 @@ bridge/src/test/kotlin/magefree/bridge/xmage/
       a `MageVersion` derived from `mage-common` (no hand-rolled version).
 - [ ] Against a running local server, the IT connects, `connected(...)` fires, and
       `mainRoomId()` returns a non-null `UUID`; `disconnect()` leaves the session cleanly closed.
-- [ ] The IT is env-gated and **skipped** when `XMAGE_SERVER` is unset; `./gradlew check`
+- [ ] The IT is env-gated and **skipped** when `XMAGE_SERVER` is unset; `./scripts/dev gradle check`
       stays green and hermetic.
 - [ ] No decoding of callback payloads and no `mage.view.*` mapping is done here.
 - [ ] The `org.mage` dependency exists **only** in `:bridge`; no Android module references it.

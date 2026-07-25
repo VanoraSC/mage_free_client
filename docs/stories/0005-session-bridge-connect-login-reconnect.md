@@ -23,7 +23,7 @@ the socket closes. Still **no game/lobby/deck domain data and no `mage.view.*` m
   `MageClient`/connection-listener events into protocol messages.
 - **Pinned-server posture** ([`../architecture.md`](../architecture.md), Decision #6): the
   bridge targets **its own configured** XMage server; the app does **not** send host/port. The
-  bridge reads its upstream target from config (env `XMAGE_UPSTREAM`, default `localhost:17171`).
+  bridge reads its upstream target from config (env `XMAGE_UPSTREAM`, default `xmage-server:17171`).
 - **Version mismatch is first-class** (side-conversation decision): `connectStart` throws
   `MageVersionException(clientVersion, serverVersion)` on a version gap. The bridge must catch
   it and emit a specific `VERSION_UNSUPPORTED` status carrying both versions — never a generic
@@ -117,7 +117,7 @@ bridge/src/main/kotlin/magefree/bridge/ws/
 - **`SessionWebSocket`** delegates to `SessionCoordinator` after `ServerHello`.
 
 **Config:** the upstream target comes from `XMAGE_UPSTREAM` (`host:port`, default
-`localhost:17171`); credentials come from the app's `Login`.
+`xmage-server:17171`); credentials come from the app's `Login`.
 
 ## 5. Implementation steps
 
@@ -137,7 +137,7 @@ bridge/src/main/kotlin/magefree/bridge/ws/
 6. **Live integration test** (env-gated `XMAGE_SERVER`, mirrors 0003): real WS client → handshake
    → `Login` with a throwaway username → observe `CONNECTING`/`CONNECTED` against the pinned
    local server; close and confirm clean teardown.
-7. `./gradlew check` green (hermetic tests run; live test skipped without the env var).
+7. `./scripts/dev gradle check` green (hermetic tests run; live test skipped without the env var).
 
 ## 6. Testing & verification
 
@@ -145,8 +145,8 @@ bridge/src/main/kotlin/magefree/bridge/ws/
   through the real WebSocket/coordinator plumbing — no XMage needed.
 - **Live (opt-in):**
   ```bash
-  ./scripts/xmage-server/run-local-server.sh
-  XMAGE_SERVER=localhost:17171 ./gradlew :bridge:test --tests '*SessionBridgeIT'
+  ./scripts/dev up xmage-server
+  XMAGE_SERVER=xmage-server:17171 ./scripts/dev gradle :bridge:test --tests '*SessionBridgeIT'
   ```
   A WebSocket client logs in through the bridge to the real server and observes
   `CONNECTING` → `CONNECTED`.
@@ -164,7 +164,7 @@ bridge/src/main/kotlin/magefree/bridge/ws/
 - [ ] Upstream drop surfaces `RECONNECTING`/`DISCONNECTED` (verified with the fake; observed
       live if feasible).
 - [ ] Hermetic tests cover all state paths; the live test is env-gated and skipped by default;
-      `./gradlew check` stays green.
+      `./scripts/dev gradle check` stays green.
 - [ ] No domain/game payloads and no `mage.view.*` decoding are introduced here.
 
 ## 8. References
