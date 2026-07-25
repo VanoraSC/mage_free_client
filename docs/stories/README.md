@@ -200,4 +200,27 @@ connection state. See [`../project-plan.md`](../project-plan.md) (EPIC-04) and
 | 0018 | Connect & sign-in UI | 0017, EPIC-03 | `:feature:connect`: server list / add-server, sign-in, and connection-state screens (connecting / connected / auth-failed / version-unsupported), built on the design system. |
 | 0019 | Registration & auth error handling | 0018 | Account registration where the server supports it; auth-failure / version-unsupported handling and retry, surfaced through the design-system prompt/error surfaces. |
 
-Downstream epics continue the numbering from `0020`.
+Downstream epics continue the numbering from `0023`.
+
+---
+
+## Build Infrastructure
+
+Containerizing the **heavy / JVM path** (the bridge build, the upstream `../mage` Maven build, and
+the reference XMage server) via Docker Compose + a `scripts/dev` helper. Android `:app` stays a
+host build. Full design in [`../build-environment.md`](../build-environment.md).
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0020 | Containerized JVM build | — | Base build image (JDK 17 + Maven), a Compose `build` service + cache volumes, and `scripts/dev`; runs `:bridge` in-container. |
+| 0021 | Upstream mage build layer | 0020 | A cached image layer that builds `magefree/mage` at a pinned ref and installs `org.mage:mage-common` into the container's Maven repo. |
+| 0022 | Reference XMage server container | 0021 | An `xmage-server` Compose service running `Mage.Server` on 17171 (auth off) — realizes story 0002's reference environment. |
+
+## Recommended build order (now)
+
+The story numbers are **identifiers, not a strict sequence** (the app epics shipped ahead of the
+bridge). The current recommended order is:
+
+1. **Build infrastructure:** 0020 → 0021 → 0022.
+2. **Bridge:** 0002 (realized by 0022) → 0003 → 0004 → 0005 → 0006, built in-container.
+3. **Epic 4 (connect):** 0016 → 0017 → 0018 → 0019, once the bridge runs.
