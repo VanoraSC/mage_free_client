@@ -47,16 +47,50 @@ Every story uses these sections:
 
 ## Project toolchain baseline
 
-Established by story 0001; a story states only its **deltas** from this and pins exact
-versions (avoid "latest" — it is ambiguous and non-reproducible).
+This is the **locked, authoritative** toolchain. It is internally coherent — a clean
+`./gradlew check :app:assembleDebug` builds green across `:bridge` and `:app`. Every version
+is pinned in `gradle/libs.versions.toml`; no versions are hard-coded in build files.
 
-- **JDK 17** — the `:bridge` toolchain is `jvmToolchain(17)`. Ensure a JDK 17 is installed and
-  `JAVA_HOME` points at it; Gradle needs a JVM to launch and none may be on `PATH`.
-- **Gradle via the committed wrapper** (currently **9.3.1**) — always `./gradlew`, never a
-  local Gradle. Note: Gradle 9 requires `junit-platform-launcher` on the test runtime classpath.
-- **Kotlin / Ktor / kotlinx-serialization / logback / JUnit 5 / ktlint** — all pinned in
-  `gradle/libs.versions.toml`; no hard-coded versions in build files.
-- **Gate:** `./gradlew check` (lint + tests) must pass.
+> **Guardrail for stories (human or agent):** consume these fixed versions. **Do not** change
+> toolchain versions, bump the Gradle wrapper, or add per-module version workarounds inside a
+> story. If a build genuinely needs a version change or a new constraint, **stop and flag it**
+> for a deliberate, project-wide toolchain decision — never improvise in an isolated story
+> (that is how the stack drifts). A story states only its **deltas** (e.g. a new module's
+> plugins), never "latest."
+
+### Locked versions
+
+| Area | Pin | Notes |
+|------|-----|-------|
+| Gradle | wrapper **9.3.1** | always `./gradlew`; requires `junit-platform-launcher` on the test runtime classpath |
+| JDK | **17** | `:bridge` uses `jvmToolchain(17)`; ensure `JAVA_HOME` points at a JDK 17 (none may be on `PATH`) |
+| Kotlin | **2.4.10** | one version for all modules |
+| KSP | **2.3.10** | KSP is **version-independent of Kotlin since 2.3.0** and supports Kotlin 2.2+ (incl. 2.4.10) — this pairing is correct |
+| AGP | **8.13.2** | newest AGP that runs on Gradle 9.3.1 with the standard plugin set; AGP 9.x needs Gradle ≥ 9.5 |
+| Android SDK | **compileSdk/targetSdk 36**, **minSdk 26** | platforms 35/36 installed locally; SDK wired via `local.properties` (git-ignored) |
+| Compose | **BOM 2025.09.01** + Kotlin Compose plugin | Compose libs are BOM-managed (no per-lib versions) |
+| Hilt | **2.57.2** | see the aggregation note below |
+| Ktor / kotlinx-serialization / coroutines / logback / JUnit5 / ktlint | per catalog | bridge + test stack |
+
+### Standard, deliberate accommodations (not per-story hacks)
+
+- **Hilt uses `hilt { enableAggregatingTask = false }` in every Hilt-consuming module.** This
+  routes Hilt aggregation through KSP. Hilt's *legacy* javac aggregating task bundles a
+  `kotlin-metadata-jvm` that reads only ≤ Kotlin 2.2 `@Metadata`, so it chokes on our Kotlin
+  2.4 metadata; the KSP path handles it. This is a documented, recommended Hilt option — apply
+  it consistently, don't re-derive it.
+- **`:app` pins `androidx.concurrent:concurrent-futures` 1.2.0 via a `constraints { }` block**
+  to align the main runtime (1.1.0 via navigation → profileinstaller) with androidTest
+  (1.2.0 via androidx.test:core) under AGP consistent resolution. Any Hilt/test module that
+  hits the same split applies the same constraint.
+
+### Gate
+`./gradlew check` (lint + tests) must pass; Android modules also build `assembleDebug`.
+
+### When to revisit (deliberately, project-wide — not in a story)
+Moving to AGP 9.x / newer androidx / `compileSdk 37` requires bumping the Gradle wrapper to
+≥ 9.5 and re-verifying the whole set together. Track such changes in
+[`review-follow-ups.md`](../review-follow-ups.md); do them as their own toolchain pass.
 
 ---
 
