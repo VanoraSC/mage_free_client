@@ -102,4 +102,28 @@ EPIC-04/05.
 | 0010 | Persistent connection-status surface | 0008 | An always-visible connection indicator across the shell, driven by a state holder over a stub source. |
 | 0011 | Immersive in-game mode shell | 0008 | The in-game experience as a separate full-screen, edge-to-edge immersive route, distinct from the tabbed shell (placeholder content). |
 
-Downstream epics continue the numbering from `0012`.
+---
+
+## Epic 3 — Design System & Theming
+
+The original Material 3-based visual system in a shared **`:core:designsystem`** module: theme
+(brand color, typography, shape, tokens), the reusable **components** (buttons, list rows,
+section chrome, the decision/prompt surface), the **card-forward** components (card tile,
+full-bleed card view), and adaptive/accessible foundations. Replaces the minimal placeholder
+`MageTheme` from story 0007. See [`../project-plan.md`](../project-plan.md) (EPIC-03) and
+[`../ux-principles.md`](../ux-principles.md) ("one coherent visual system," card inspection as a
+first-class surface, decisions come to the player).
+
+Components are built as **stateless, parameterized, previewed** shells with placeholder inputs —
+real data wiring (card data, connection state, game decisions) stays in the owning epics. This
+epic also resolves several logged design-pass items in
+[`review-follow-ups.md`](../review-follow-ups.md).
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0012 | Design system module & theme foundation | 0007 | `:core:designsystem` library module; brand color schemes (light/dark), typography, shape, and design tokens; the real `MageTheme` moved here; `:app` migrated off the placeholder. |
+| 0013 | Foundational components | 0012 | Reusable non-card Composables: action/button hierarchy, list rows, section chrome (app bar/headers), loading/empty/error states, and the thumb-reachable **decision/prompt surface**. |
+| 0014 | Card-forward components | 0012 | The **card tile** and **full-bleed card inspection view** shells (parameterized, placeholder data), with tap-to-peek / long-press inspection patterns. Real card data is EPIC-10. |
+| 0015 | Adaptive & accessible foundations + component catalog | 0013, 0014 | Window-size-class layout helpers and a shared inset-ownership convention; dynamic-type / scaling support; a dev **component catalog** screen showcasing everything across light/dark and sizes. |
+
+Downstream epics continue the numbering from `0016`.
