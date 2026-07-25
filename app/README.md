@@ -1,13 +1,16 @@
 # :app
 
-The **Android application** module — the phone-native client entry point. This module is the
-scaffold (story 0007): an Android Gradle Plugin app with Jetpack Compose + Material 3 and Hilt,
-a single `Activity` hosting a Compose root that renders a placeholder, plus a passing lint/unit
-gate and a buildable debug APK.
+The **Android application** module — the phone-native client entry point. Established as the
+scaffold (story 0007) and given its **navigation shell** in story 0008: an Android Gradle Plugin
+app with Jetpack Compose + Material 3 and Hilt, a single `Activity` hosting a Navigation-Compose
+host with the four Arena-style top-level destinations (Home/Play, Decks, Profile/Social,
+Settings) behind an adaptive bottom-bar ↔ nav-rail, plus a passing lint/unit gate and a buildable
+debug APK.
 
-It is deliberately **foundation only** — no navigation, no design system, no features, no
-networking. Those arrive later: navigation in 0008, the design system in EPIC-03, features in
-their own epics. `AppRoot` is the seam 0008 replaces with the Navigation-Compose host.
+It is deliberately **shell only** — the destinations are placeholder screens with no real content,
+no design system, no features, no networking. Those arrive later: the home hub (0009),
+connection status (0010) and immersive game route (0011); the design system in EPIC-03; features
+in their own epics. `AppRoot` now hosts `AppShell` (the nav host + adaptive chrome).
 
 ## Layout
 
@@ -21,11 +24,16 @@ app/
     │   ├── kotlin/magefree/app/
     │   │   ├── MageApp.kt                 # @HiltAndroidApp Application (DI root)
     │   │   ├── MainActivity.kt            # @AndroidEntryPoint, enableEdgeToEdge(), setContent { MageTheme { AppRoot() } }
-    │   │   ├── AppRoot.kt                 # placeholder root composable (replaced by the nav host in 0008)
+    │   │   ├── AppRoot.kt                 # root composable → hosts AppShell()
+    │   │   ├── navigation/
+    │   │   │   ├── TopLevelDestination.kt # @Serializable routes + the ordered destination model
+    │   │   │   ├── MageNavHost.kt         # NavHost with type-safe composable<Route> entries
+    │   │   │   └── AppShell.kt            # Scaffold: adaptive NavigationBar (compact) / NavigationRail
+    │   │   ├── screens/                   # four placeholder destination composables
     │   │   └── theme/MageTheme.kt         # minimal MaterialTheme wrapper (default M3 light + dark schemes)
     │   └── res/                           # app name string + minimal launch-window themes (light + values-night)
-    ├── test/kotlin/magefree/app/          # AppRootPlaceholderTest — trivial JVM unit test
-    └── androidTest/kotlin/magefree/app/   # AppRootSmokeTest — Compose instrumented smoke test (device only)
+    ├── test/kotlin/magefree/app/          # TopLevelDestinationTest — hermetic JVM unit test
+    └── androidTest/kotlin/magefree/app/   # AppShellNavigationTest — Compose instrumented nav test (device only)
 ```
 
 ## Prerequisites
@@ -65,7 +73,7 @@ first (`adb devices` to confirm), then:
 
 ```bash
 ./gradlew :app:installDebug                 # build + install the debug APK; launches to the placeholder
-./gradlew :app:connectedDebugAndroidTest    # run the Compose instrumented smoke test (AppRootSmokeTest)
+./gradlew :app:connectedDebugAndroidTest    # run the Compose instrumented nav test (AppShellNavigationTest)
 ```
 
 Per [`../AGENTS.md`](../AGENTS.md), do not assume a device is attached; the instrumented smoke
