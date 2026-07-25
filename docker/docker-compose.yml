@@ -5,8 +5,8 @@
 services:
   build:
     build:
-      context: ..
-      dockerfile: docker/jvm/Dockerfile
+      context: .
+      dockerfile: jvm/Dockerfile
     image: mage-free-client/build:latest
     environment:
       # No Android SDK in this image — skip Android modules so :bridge configures/builds cleanly.
@@ -17,6 +17,17 @@ services:
       # No /root/.m2 volume: mage-common is baked into the image there (story 0021), and a volume
       # mount would shadow it. Gradle's own deps cache in gradle-cache.
     working_dir: /workspace
+
+  # Reference XMage server (story 0022): Mage.Server on 17171 with auth disabled. The build
+  # service reaches it at xmage-server:17171; bridge integration tests use XMAGE_SERVER for it.
+  xmage-server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: mage-free-client/xmage-server:latest
+    ports:
+      - "17171:17171"
+    # Startup loads the card database (~1–2 min); readiness is a TCP connect to 17171.
 
 volumes:
   gradle-cache:

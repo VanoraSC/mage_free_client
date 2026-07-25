@@ -47,17 +47,21 @@ Deltas from the [Project toolchain baseline](stories/README.md#project-toolchain
   17 even if it targets older Java; document any flag needed). Port 17171 (and `secondaryBindPort`
   behavior) exposed on the compose network.
 
-## 5. Design & approach
-
-- **Server image:** from 0021's build, take the `Mage.Server` distribution (the assembly zip /
-  `lib` + `plugins`), drop in the local `config.xml` (auth off, bind `0.0.0.0:17171`), and set the
-  entrypoint to launch `mage.server.Main` with a sensible `-Xmx`.
-- **Compose service `xmage-server`:** `ports: ["17171:17171"]` (host optional), on the shared
-  network so the `build` service reaches it at `xmage-server:17171`.
-- **Reachability:** a small check from the `build` container (a TCP connect to `xmage-server:17171`),
-  and the documented env var `XMAGE_SERVER=xmage-server:17171` that bridge integration tests read.
-- Startup is slow (loads the card DB) — document the readiness wait (poll the port / a log line)
-  and a compose `healthcheck`.
+- **Multi-stage image** (`docker/server/Dockerfile`): the **build** stage is `FROM` the 0021 jvm
+  image (warm Maven cache), clones the pinned ref, does a **full-reactor `mvn install`** (card DB +
+  all plugins), then runs **`mvn -pl Mage.Server package assembly:single`** to produce the
+  distribution zip, and unpacks it to `/opt/xmage`. The **runtime** stage is `FROM eclipse-temurin:17-jre`,
+  copies `/opt/xmage`, flips `authenticationActivated`/`serverAddress` in `config/config.xml`, and
+  runs the server jar.
+  - **Assembly gotcha (learned):** the assembly plugin isn't bound to a lifecycle phase, and
+    `assembly:single` run *standalone* omits the project's own `mage-server` jar — it must be run in
+    the **same invocation as `package`** so the project artifact is attached.
+  - The Java-1.8-era server **runs on JDK 17 with no extra flags** (verified).
+- **Compose service `xmage-server`:** `ports: ["17171:17171"]`, on the default network so the
+  `build` service reaches it at `xmage-server:17171` (**verified reachable from the build container**);
+  also published to `localhost:17171`.
+- **Config path:** the server reads `config/config.xml` relative to its working dir (`/opt/xmage`).
+- Startup loads the card DB (~30–60 s) before it listens; readiness is a TCP connect to 17171.
 
 ## 6. Implementation steps
 
