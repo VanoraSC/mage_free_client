@@ -1,6 +1,5 @@
 package magefree.app.navigation
 
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -14,6 +13,7 @@ import magefree.app.screens.DECKS_SCREEN_LABEL
 import magefree.app.screens.HOME_TITLE
 import magefree.app.screens.PROFILE_SCREEN_LABEL
 import magefree.app.screens.SETTINGS_SCREEN_LABEL
+import magefree.designsystem.layout.WindowWidthClass
 import magefree.designsystem.theme.MageTheme
 import org.junit.Rule
 import org.junit.Test
@@ -23,7 +23,7 @@ import org.junit.runner.RunWith
  * Instrumented Compose UI test for the navigation shell. NOT part of the hermetic `./gradlew check`
  * gate — run with a device/emulator attached via `./gradlew :app:connectedDebugAndroidTest`.
  *
- * It drives the stateless [AppShell] with an explicit [WindowWidthSizeClass] and a
+ * It drives the stateless [AppShell] with an explicit [WindowWidthClass] and a
  * [TestNavHostController], so both the bottom-bar (compact) and rail (expanded) layouts are covered
  * without needing to resize a real window.
  */
@@ -32,7 +32,7 @@ class AppShellNavigationTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private fun setShell(widthSizeClass: WindowWidthSizeClass) {
+    private fun setShell(widthClass: WindowWidthClass) {
         composeTestRule.setContent {
             val navController =
                 TestNavHostController(androidx.compose.ui.platform.LocalContext.current).apply {
@@ -42,7 +42,7 @@ class AppShellNavigationTest {
                 // Pass a stateless status bar so this navigation test needs no Hilt graph; the
                 // connection surface has its own coverage in ConnectionStatusBarTest.
                 AppShell(
-                    widthSizeClass = widthSizeClass,
+                    widthClass = widthClass,
                     navController = navController,
                     connectionStatusBar = {},
                 )
@@ -52,7 +52,7 @@ class AppShellNavigationTest {
 
     @Test
     fun startsOnHomeWithHomeSelected() {
-        setShell(WindowWidthSizeClass.Compact)
+        setShell(WindowWidthClass.Compact)
 
         composeTestRule.onNodeWithText(HOME_TITLE).assertIsDisplayed()
         composeTestRule
@@ -62,7 +62,7 @@ class AppShellNavigationTest {
 
     @Test
     fun tappingEachDestinationShowsItsScreenAndSelectsItInBottomBar() {
-        setShell(WindowWidthSizeClass.Compact)
+        setShell(WindowWidthClass.Compact)
         assertTabNavigates(TopLevelDestination.DECKS, DECKS_SCREEN_LABEL)
         assertTabNavigates(TopLevelDestination.PROFILE, PROFILE_SCREEN_LABEL)
         assertTabNavigates(TopLevelDestination.SETTINGS, SETTINGS_SCREEN_LABEL)
@@ -71,7 +71,7 @@ class AppShellNavigationTest {
 
     @Test
     fun railLayoutNavigatesAtExpandedWidth() {
-        setShell(WindowWidthSizeClass.Expanded)
+        setShell(WindowWidthClass.Expanded)
         assertTabNavigates(TopLevelDestination.DECKS, DECKS_SCREEN_LABEL)
         assertTabNavigates(TopLevelDestination.SETTINGS, SETTINGS_SCREEN_LABEL)
     }

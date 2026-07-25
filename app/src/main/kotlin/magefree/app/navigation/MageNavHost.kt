@@ -24,6 +24,7 @@ fun MageNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
     onEnterGame: () -> Unit = {},
+    onOpenCatalog: () -> Unit = {},
 ) {
     // Navigate to a top-level route while preserving each tab's own back stack/state, mirroring the
     // tab-selection behaviour in [AppShell] so the hub's secondary entries and the nav chrome stay
@@ -57,6 +58,8 @@ fun MageNavHost(
                 // Stub entry into the immersive game route; real entry arrives via lobby/table
                 // flows in EPIC-06/07.
                 onEnterGame = onEnterGame,
+                // Debug-only entry into the design-system component catalog (story 0015).
+                onOpenCatalog = onOpenCatalog,
             )
         }
     }

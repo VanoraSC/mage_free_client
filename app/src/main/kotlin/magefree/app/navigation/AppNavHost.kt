@@ -7,6 +7,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
+import magefree.app.catalog.CatalogRoute
+import magefree.app.catalog.ComponentCatalogScreen
 import magefree.app.connection.ui.ConnectionStatusBar
 import magefree.app.game.GameRoute
 import magefree.app.game.ImmersiveGameScreen
@@ -27,9 +29,11 @@ data object ShellRoute
  *   Home/Decks/Profile/Settings tabs. The connection strip lives inside the shell.
  * - [GameRoute] renders the full-screen [ImmersiveGameScreen] with no shell chrome at all — no
  *   bottom bar / rail, no connection strip — so the game surface is edge-to-edge and immersive.
+ * - [CatalogRoute] renders the debug-only [ComponentCatalogScreen] (story 0015), also outside the
+ *   shell chrome; it is reached from the Settings dev entry.
  *
- * Entering the game is a hoisted action ([AppShell]'s `onEnterGame`) so the shell needs no knowledge
- * of the root graph; exiting simply pops back to the shell.
+ * Entering the game / opening the catalog are hoisted actions ([AppShell]'s `onEnterGame` /
+ * `onOpenCatalog`) so the shell needs no knowledge of the root graph; exiting simply pops back.
  */
 @Composable
 fun AppNavHost(
@@ -45,11 +49,15 @@ fun AppNavHost(
         composable<ShellRoute> {
             AppShell(
                 onEnterGame = { navController.navigate(GameRoute) },
+                onOpenCatalog = { navController.navigate(CatalogRoute) },
                 connectionStatusBar = connectionStatusBar,
             )
         }
         composable<GameRoute> {
             ImmersiveGameScreen(onExit = { navController.popBackStack() })
+        }
+        composable<CatalogRoute> {
+            ComponentCatalogScreen(onExit = { navController.popBackStack() })
         }
     }
 }
