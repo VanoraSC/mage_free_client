@@ -1,6 +1,7 @@
 package magefree.bridge
 
 import com.typesafe.config.ConfigFactory
+import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -10,7 +11,10 @@ import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
 import magefree.bridge.routes.healthRoutes
+import magefree.bridge.ws.sessionWebSocket
+import magefree.protocol.ProtocolJson
 import org.slf4j.event.Level
 
 /**
@@ -36,7 +40,11 @@ fun Application.module() {
     install(CallLogging) {
         level = Level.INFO
     }
+    install(WebSockets) {
+        contentConverter = KotlinxWebsocketSerializationConverter(ProtocolJson.json)
+    }
     routing {
         healthRoutes()
+        sessionWebSocket()
     }
 }
