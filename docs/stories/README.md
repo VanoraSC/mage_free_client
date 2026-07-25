@@ -84,6 +84,22 @@ is pinned in `gradle/libs.versions.toml`; no versions are hard-coded in build fi
   (1.2.0 via androidx.test:core) under AGP consistent resolution. Any Hilt/test module that
   hits the same split applies the same constraint.
 
+### Module build config: convention plugins
+
+Shared build config lives in **`build-logic/`** (an included build) as `magefree.*` convention
+plugins, so a module never re-declares SDK/Java/Kotlin/Compose/Hilt settings and can't drift:
+
+- **`magefree.android.application`** — AGP application + Kotlin + ktlint + the SDK/Java/Kotlin
+  baseline + `targetSdk` + the dependency alignment.
+- **`magefree.android.library`** — the same, for `:core:*` / `:feature:*` library modules.
+- **`magefree.android.compose`** — enables Compose and wires the Compose **BOM** + tooling.
+- **`magefree.hilt`** — applies KSP + Hilt, sets `enableAggregatingTask = false`, adds the Hilt deps.
+
+A module's `build.gradle.kts` applies the conventions it needs and declares only its own
+dependencies (versions come from the catalog / Compose BOM). **New Android modules MUST apply
+these conventions** instead of re-deriving config — that is the structural guarantee behind the
+guardrail above.
+
 ### Gate
 `./gradlew check` (lint + tests) must pass; Android modules also build `assembleDebug`.
 
