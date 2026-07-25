@@ -176,4 +176,28 @@ epic also resolves several logged design-pass items in
 | 0014 | Card-forward components | 0012 | The **card tile** and **full-bleed card inspection view** shells (parameterized, placeholder data), with tap-to-peek / long-press inspection patterns. Real card data is EPIC-10. |
 | 0015 | Adaptive & accessible foundations + component catalog | 0013, 0014 | Window-size-class layout helpers and a shared inset-ownership convention; dynamic-type / scaling support; a dev **component catalog** screen showcasing everything across light/dark and sizes. |
 
-Downstream epics continue the numbering from `0016`.
+---
+
+## Epic 4 — Server Connection & Sign-In
+
+The first epic that **wires the app to the real bridge**: choosing/adding a server, signing in
+with an XMage account (proxied auth), registering where the server allows it, and seeing live
+connection state. See [`../project-plan.md`](../project-plan.md) (EPIC-04) and
+[`../architecture.md`](../architecture.md).
+
+> **Dependency (important):** this epic connects to the bridge, so it depends on the **bridge
+> session** — Epic 1 stories **0004** (the shared `:protocol` contract module) and **0005** (the
+> WebSocket session bridge), which are **planned but not yet implemented** (only the 0001
+> scaffold exists). Per the project's *fakes-are-recordings* principle, the app side is built
+> against the `:protocol` contract with a **`FakeBridgeClient`** and verified there; **live
+> end-to-end connection requires the bridge (0002–0006) implemented.** The `:protocol` module
+> (0004) in particular is a hard prerequisite for the app's `:core:network`.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0016 | App network layer & session client | 0004 (`:protocol`), 0007 | `:core:model` (connection/session domain) + `:core:network` (a WebSocket bridge client speaking the `:protocol` contract, DTO→domain mappers, and a `FakeBridgeClient`). |
+| 0017 | Connection repository & live status wiring | 0016, 0010 | A connection/session repository that maps the bridge `SessionStatus` into the app `ConnectionState` and replaces the **stub** behind story 0010's `ConnectionStatusSource` seam; server-list persistence (DataStore). |
+| 0018 | Connect & sign-in UI | 0017, EPIC-03 | `:feature:connect`: server list / add-server, sign-in, and connection-state screens (connecting / connected / auth-failed / version-unsupported), built on the design system. |
+| 0019 | Registration & auth error handling | 0018 | Account registration where the server supports it; auth-failure / version-unsupported handling and retry, surfaced through the design-system prompt/error surfaces. |
+
+Downstream epics continue the numbering from `0020`.
