@@ -1,6 +1,7 @@
 package magefree.app.navigation
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,6 +27,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import magefree.app.connection.ui.ConnectionStatusBar
 
 /**
  * The app shell: a [Scaffold] hosting [MageNavHost] plus adaptive primary navigation. At
@@ -43,12 +45,14 @@ import androidx.navigation.compose.rememberNavController
 fun AppShell(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val windowSizeClass = WindowSizeClass.calculateFromSize(DpSize(maxWidth, maxHeight))
         AppShell(
             widthSizeClass = windowSizeClass.widthSizeClass,
             navController = navController,
+            connectionStatusBar = connectionStatusBar,
         )
     }
 }
@@ -67,6 +71,7 @@ fun AppShell(
     widthSizeClass: WindowWidthSizeClass,
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -97,10 +102,14 @@ fun AppShell(
                     )
                 }
             }
-            MageNavHost(
-                navController = navController,
-                modifier = Modifier.fillMaxSize(),
-            )
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Shell-wide status surface: sits above content so it persists across destinations.
+                connectionStatusBar()
+                MageNavHost(
+                    navController = navController,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     } else {
         Scaffold(
@@ -123,10 +132,14 @@ fun AppShell(
                 }
             },
         ) { innerPadding ->
-            MageNavHost(
-                navController = navController,
-                modifier = Modifier.padding(innerPadding),
-            )
+            Column(modifier = Modifier.padding(innerPadding)) {
+                // Shell-wide status surface: sits above content so it persists across destinations.
+                connectionStatusBar()
+                MageNavHost(
+                    navController = navController,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }
