@@ -14,9 +14,9 @@ services:
     volumes:
       - ..:/workspace
       - gradle-cache:/root/.gradle
-      - m2-cache:/root/.m2
+      # No /root/.m2 volume: mage-common is baked into the image there (story 0021), and a volume
+      # mount would shadow it. Gradle's own deps cache in gradle-cache.
     working_dir: /workspace
 
 volumes:
   gradle-cache:
-  m2-cache:

@@ -35,19 +35,21 @@ scripts/
 ```
 
 ### The build image (`docker/jvm/Dockerfile`), in layers
-1. **Base** — `eclipse-temurin:17-jdk` (matches the locked JDK 17) + `git`, `curl`, `unzip`.
-2. **Maven** — the Maven CLI, for the upstream reactor build.
-3. **Upstream mage layer** — clone `magefree/mage` at a **pinned commit/tag** and
-   `mvn -DskipTests install`, populating `mage-common` (+ deps) into the image's local Maven repo.
-   This is the heavy, cached layer (see story 0021).
-4. *(future layers appended as epics need them.)*
+1. **Base** — `maven:3.9-eclipse-temurin-17` (Maven + Temurin JDK 17, matching the locked
+   toolchain) + `git`, `curl`, `unzip`.
+2. **Upstream mage layer** — clone `magefree/mage` at a **pinned commit** and
+   `mvn -pl Mage.Common -am -DskipTests install`, baking `org.mage:mage-common` (+ `org.mage:mage`)
+   into the image's local Maven repo (`/root/.m2`). Only Mage.Common + its reactor deps are built —
+   the card database (`Mage.Sets`) is skipped. This is the heavy, cached layer (see story 0021).
+3. *(future layers appended as epics need them.)*
 
 The bridge's Gradle build runs via the committed wrapper inside this image; `~/.gradle` is a mounted
-cache volume so downloads persist across runs.
+cache volume so downloads persist across runs. `/root/.m2` is **not** volume-mounted, so the baked
+`mage-common` stays visible.
 
 ### Compose services (`docker/docker-compose.yml`)
-- **`build`** — the build image; mounts the repo and the `~/.gradle` / `~/.m2` caches; used to run
-  Gradle/Maven for `:bridge` (and any JVM module).
+- **`build`** — the build image; mounts the repo and the `~/.gradle` cache (mage-common is baked
+  into the image's `/root/.m2`); used to run Gradle/Maven for `:bridge` (and any JVM module).
 - **`xmage-server`** — runs `Mage.Server` on `17171` with `authenticationActivated="false"` (local
   config), on the compose network. The bridge's env-gated integration tests connect to it at
   `XMAGE_SERVER=xmage-server:17171` (see story 0022). **This realizes story 0002's "reference
