@@ -2,7 +2,15 @@
 
 - **Epic:** EPIC-01 — Bridge & Server Integration
 - **Depends on:** 0001
-- **Status:** ready
+- **Status:** superseded — realized by the containerized reference server, story
+  [`0022`](0022-reference-xmage-server-container.md)
+
+> **Note:** the objective below (a repeatable local reference XMage server + a reachability hook)
+> is now delivered as a **container** — the `xmage-server` Compose service in story
+> [`0022`](0022-reference-xmage-server-container.md) — per
+> [`../build-environment.md`](../build-environment.md). The host-based approach described in this
+> document is retained for context but is not the implementation path; the bridge's integration
+> tests use `XMAGE_SERVER=xmage-server:17171` against that container.
 
 ## 1. Objective
 
