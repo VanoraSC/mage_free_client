@@ -1,7 +1,8 @@
 # 0003 — Embed the XMage client session & connect/authenticate
 
 - **Epic:** EPIC-01 — Bridge & Server Integration
-- **Depends on:** 0002
+- **Depends on:** 0021 (baked `org.mage:mage-common` in the build image) & 0022 (`xmage-server`
+  reference container) — these realize story 0002's reference environment.
 - **Status:** ready
 
 ## 1. Objective
@@ -84,6 +85,7 @@ bridge/src/main/kotlin/magefree/bridge/xmage/
 └── XMageSession.kt       # wraps SessionImpl(client): connect(), mainRoomId(), disconnect()
 
 bridge/src/test/kotlin/magefree/bridge/xmage/
+├── XMageServerTarget.kt        # parses host:port from the XMAGE_SERVER env var (defined here)
 └── ConnectAuthenticateIT.kt   # env-gated (XMAGE_SERVER) end-to-end connect+auth
 ```
 
@@ -115,9 +117,12 @@ bridge/src/test/kotlin/magefree/bridge/xmage/
 3. Implement `XMageConnection.build(...)` (set host/port/username/password/userIdStr/UserData).
 4. Implement `XMageSession` (construct `SessionImpl`, `connect`/`mainRoomId`/`disconnect`,
    IO dispatcher).
-5. Write `ConnectAuthenticateIT` (env-gated on `XMAGE_SERVER`): parse target via 0002's
-   `XMageServerTarget`; connect with a random username; assert `connect()` succeeded, `MageClient.connected(...)`
-   fired, and `mainRoomId()` is non-null; then `disconnect()` and assert disconnected.
+5. Write `ConnectAuthenticateIT` (env-gated on `XMAGE_SERVER`): parse the target with a small
+   `XMageServerTarget` helper — a `host:port` parser for the `XMAGE_SERVER` env var — **defined in
+   this story** (story 0002's only realized artifact is the `xmage-server` container from 0022; the
+   Kotlin parse helper it once described belongs here, to the first consumer). Connect with a random
+   username; assert `connect()` succeeded, `MageClient.connected(...)` fired, and `mainRoomId()` is
+   non-null; then `disconnect()` and assert disconnected.
 6. Verify `./scripts/dev gradle check` passes with the IT **skipped** (no env var).
 7. Manually verify against a running local server (story 0022 xmage-server container) with
    `XMAGE_SERVER=xmage-server:17171`.

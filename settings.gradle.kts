@@ -10,6 +10,12 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // mavenLocal resolves org.mage:mage-common (+ org.mage:mage), baked into the build image's
+        // /root/.m2 (story 0021) and consumed only by :bridge. Declared here because the repo runs
+        // FAIL_ON_PROJECT_REPOS, which forbids a project-level repositories {} block; story 0003's
+        // "add mavenLocal to the :bridge build" is realized here. It only affects resolution — no
+        // module gains an org.mage dependency by its presence.
+        mavenLocal()
         google()
         mavenCentral()
     }

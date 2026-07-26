@@ -8,6 +8,10 @@ junit = "5.14.4"
 junit-platform = "1.14.4"
 ktlint = "13.1.0"
 
+# XMage client session library (bridge-only; resolved from mavenLocal, baked into the build image).
+# Pulls org.mage:mage transitively. Must NEVER reach an Android module. See story 0003.
+mage = "1.4.60"
+
 # Android / Compose / DI (story 0007)
 agp = "8.13.2"
 ksp = "2.3.10"
@@ -34,10 +38,14 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+
+# XMage client session library — :bridge only (see [versions].mage).
+mage-common = { module = "org.mage:mage-common", version.ref = "mage" }
 
 # Android / Compose / DI (story 0007)
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core-ktx" }

@@ -15,6 +15,8 @@ kotlin {
 
 dependencies {
     implementation(project(":protocol"))
+    implementation(libs.mage.common)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.content.negotiation)
@@ -33,4 +35,17 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // XMage's JBoss-Remoting/JBoss-serialization client stack (used by SessionImpl to talk to the
+    // server) reflects into JDK internals; on JDK 17 the module system blocks that unless these
+    // packages are opened — the same flags XMage's own client launch scripts pass ("Wrong java
+    // version - check your client running scripts and params"). Needed for the live IT to connect.
+    jvmArgs(
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang=ALL-UNNAMED",
+        "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+        "--add-opens=java.base/java.util=ALL-UNNAMED",
+        "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+        "--add-opens=java.base/java.net=ALL-UNNAMED",
+        "--add-opens=java.base/java.text=ALL-UNNAMED",
+    )
 }
