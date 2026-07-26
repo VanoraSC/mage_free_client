@@ -12,13 +12,16 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import magefree.protocol.ClientMessage
+import magefree.protocol.GetServerInfo
 import magefree.protocol.Login
 import magefree.protocol.Logout
 import magefree.protocol.Ping
 import magefree.protocol.Pong
 import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
+import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.SessionStatus
 import org.slf4j.LoggerFactory
 
 /**
@@ -30,6 +33,10 @@ import org.slf4j.LoggerFactory
  * - The first `Login` launches `upstream.connect(...)` and forwards every `SessionStatus` to the
  *   socket, stamping the login's `requestId` onto the first emission.
  * - `Logout` (or socket close/cancel) disconnects the upstream and cancels the forwarding.
+ * - `GetServerInfo` replies with a `ServerInfo` (upstream version + main room id) correlated by
+ *   `requestId` — the generic client→server request/response shape (story 0006).
+ * - Relayed server pushes (e.g. `ChatEvent`, story 0006) arrive on the same outbound stream as
+ *   `SessionStatus` and are forwarded to the socket without a `requestId`.
  * - A second `Login` while a session is active is **ignored** (documented choice) with a log line —
  *   the app should await the in-flight status stream or `Logout` first. After a session ends
  *   (e.g. `AUTH_FAILED`), a fresh `Login` is accepted again.
@@ -79,9 +86,16 @@ public class SessionCoordinator(
                                         var first = true
                                         upstream
                                             .connect(Credentials(message.username, message.password))
-                                            .collect { status ->
+                                            .collect { outbound ->
+                                                // Stamp the login's requestId onto the first status only
+                                                // (0005 behavior); relayed pushes (e.g. ChatEvent) and
+                                                // later statuses pass through untouched.
                                                 val framed =
-                                                    if (first) status.copy(requestId = message.requestId) else status
+                                                    if (first && outbound is SessionStatus) {
+                                                        outbound.copy(requestId = message.requestId)
+                                                    } else {
+                                                        outbound
+                                                    }
                                                 first = false
                                                 ws.sendSerialized<ServerMessage>(framed)
                                             }
@@ -92,6 +106,16 @@ public class SessionCoordinator(
                             upstream.disconnect()
                             loginJob?.cancelAndJoin()
                             loginJob = null
+                        }
+
+                        is GetServerInfo -> {
+                            // Client→server request/response, correlated by requestId. Sources the
+                            // version + main room id from the upstream (getServerState().version /
+                            // getMainRoomId()); replies with a best-effort placeholder if not connected.
+                            val info =
+                                upstream.serverInfo()
+                                    ?: ServerInfo(serverVersion = "unavailable", mainRoomId = null)
+                            ws.sendSerialized<ServerMessage>(info.copy(requestId = message.requestId))
                         }
 
                         else ->

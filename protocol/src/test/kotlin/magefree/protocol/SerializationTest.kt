@@ -19,6 +19,8 @@ class SerializationTest {
                 Login(username = "tester"),
                 Logout(requestId = "r-4"),
                 Logout(),
+                GetServerInfo(requestId = "r-5"),
+                GetServerInfo(),
             )
 
         for (message in messages) {
@@ -52,6 +54,22 @@ class SerializationTest {
                 ),
                 SessionStatus(state = SessionStateCode.RECONNECTING),
                 SessionStatus(state = SessionStateCode.DISCONNECTED),
+                ChatEvent(
+                    text = "hello",
+                    username = "alice",
+                    timestampEpochMs = 1_700_000_000_000L,
+                    kind = ChatKind.TALK,
+                ),
+                ChatEvent(text = "sys", username = null, timestampEpochMs = 0L, kind = ChatKind.STATUS),
+                ChatEvent(
+                    text = "psst",
+                    username = "bob",
+                    timestampEpochMs = 42L,
+                    kind = ChatKind.WHISPER_IN,
+                    requestId = "r-6",
+                ),
+                ServerInfo(serverVersion = "1.4.60", mainRoomId = "room-1", requestId = "r-7"),
+                ServerInfo(serverVersion = "1.4.60", mainRoomId = null),
             )
 
         for (message in messages) {
@@ -71,6 +89,20 @@ class SerializationTest {
             json.encodeToString<ClientMessage>(Login("tester")).contains("\"type\":\"login\""),
         )
         assertTrue(json.encodeToString<ClientMessage>(Logout()).contains("\"type\":\"logout\""))
+        assertTrue(
+            json.encodeToString<ClientMessage>(GetServerInfo()).contains("\"type\":\"get_server_info\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(
+                    ChatEvent(text = "hi", username = "a", timestampEpochMs = 1L, kind = ChatKind.TALK),
+                ).contains("\"type\":\"chat_event\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(ServerInfo(serverVersion = "1", mainRoomId = null))
+                .contains("\"type\":\"server_info\""),
+        )
         assertTrue(
             json
                 .encodeToString<ServerMessage>(SessionStatus(SessionStateCode.CONNECTED))

@@ -1,14 +1,19 @@
 package magefree.bridge.session
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import mage.remote.MageVersionException
+import magefree.bridge.mapping.CallbackRelay
 import magefree.bridge.xmage.XMageClientEvent
 import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageSession
+import magefree.protocol.ServerInfo
+import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import org.slf4j.LoggerFactory
@@ -50,7 +55,7 @@ public class XMageUpstreamSession(
     @Volatile
     private var current: XMageSession? = null
 
-    override fun connect(credentials: Credentials): Flow<SessionStatus> =
+    override fun connect(credentials: Credentials): Flow<ServerMessage> =
         channelFlow {
             val session = sessionFactory()
             current = session
@@ -70,6 +75,17 @@ public class XMageUpstreamSession(
                                 }
                             else -> Unit // Connected handled inline; messages/errors carry no status here.
                         }
+                    }
+                }
+
+            // Relay mapped server pushes (chat, etc.) onto the SAME outbound stream (story 0006). The
+            // raw callbacks are handed off by BridgeMageClient off the remoting thread; CallbackRelay
+            // does the decompress+map on this coroutine and the ClientCallback/mage.view.* references
+            // stay entirely inside magefree.bridge.mapping — this layer only ever sees ServerMessage.
+            val callbackRelay =
+                launch {
+                    CallbackRelay.relay(session.client.callbacks).collect { message ->
+                        send(message)
                     }
                 }
 
@@ -112,8 +128,20 @@ public class XMageUpstreamSession(
                 }
             } finally {
                 relay.cancel()
+                callbackRelay.cancel()
             }
         }
+
+    override suspend fun serverInfo(): ServerInfo? {
+        val session = current ?: return null
+        if (!session.isConnected) return null
+        return withContext(Dispatchers.IO) {
+            ServerInfo(
+                serverVersion = session.versionInfo(),
+                mainRoomId = session.mainRoomId()?.toString(),
+            )
+        }
+    }
 
     override suspend fun disconnect() {
         current?.disconnect()

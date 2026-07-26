@@ -1,6 +1,8 @@
 package magefree.bridge.session
 
 import kotlinx.coroutines.flow.Flow
+import magefree.protocol.ServerInfo
+import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStatus
 
 /**
@@ -24,13 +26,23 @@ public data class Credentials(
  */
 public interface UpstreamSession {
     /**
-     * Opens the upstream connection for [credentials] and emits [SessionStatus] transitions until the
-     * session ends. The flow is **cold**: collection starts the connect. It emits `CONNECTING` first,
-     * then a terminal status (`AUTH_FAILED`/`VERSION_UNSUPPORTED`) and completes on a failed login, or
-     * `CONNECTED` and stays hot to relay later `RECONNECTING`/`DISCONNECTED` transitions. Cancelling
-     * the collection (e.g. on socket close) tears the upstream down.
+     * Opens the upstream connection for [credentials] and emits [ServerMessage]s until the session
+     * ends. The flow is **cold**: collection starts the connect. It emits a `CONNECTING`
+     * [SessionStatus] first, then a terminal status (`AUTH_FAILED`/`VERSION_UNSUPPORTED`) and completes
+     * on a failed login, or `CONNECTED` and stays hot to relay later `RECONNECTING`/`DISCONNECTED`
+     * transitions **and mapped server pushes** ([magefree.protocol.ChatEvent], story 0006) on the same
+     * stream. Widening from `SessionStatus` to `ServerMessage` lets both session status and relayed
+     * pushes share one per-session outbound stream. Cancelling the collection (e.g. on socket close)
+     * tears the upstream down.
      */
-    public fun connect(credentials: Credentials): Flow<SessionStatus>
+    public fun connect(credentials: Credentials): Flow<ServerMessage>
+
+    /**
+     * The upstream server's info (version + main room id) for a [magefree.protocol.GetServerInfo]
+     * request, or `null` when there is no active/connected session. Sourced from the upstream
+     * (`getVersionInfo()` == `getServerState().version`, and `getMainRoomId()`).
+     */
+    public suspend fun serverInfo(): ServerInfo?
 
     /** Disconnects the upstream session cleanly. Idempotent; safe to call when never connected. */
     public suspend fun disconnect()
