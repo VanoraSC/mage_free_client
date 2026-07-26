@@ -2,7 +2,7 @@
 
 - **Epic:** EPIC-04 — Server Connection & Sign-In
 - **Depends on:** 0004 (`:protocol` shared module), 0007 (`:app` / build setup)
-- **Status:** blocked on 0004 (see Dependency)
+- **Status:** ready (0004 `:protocol` merged)
 
 ## 1. Objective
 
