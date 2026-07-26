@@ -9,8 +9,8 @@ import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.routing.routing
-import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.withTimeout
+import magefree.bridge.testApplicationTimed
 import magefree.bridge.ws.sessionWebSocket
 import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
@@ -44,7 +44,7 @@ class SessionCoordinatorTest {
     private fun scenario(
         fake: FakeUpstreamSession,
         block: suspend (client: HttpClient) -> Unit,
-    ) = testApplication {
+    ) = testApplicationTimed {
         application { sessionModule { fake } }
         val wsClient =
             createClient {
