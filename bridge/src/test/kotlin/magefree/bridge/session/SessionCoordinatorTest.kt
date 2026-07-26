@@ -14,6 +14,7 @@ import kotlinx.coroutines.withTimeout
 import magefree.bridge.ws.sessionWebSocket
 import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
+import magefree.protocol.GetServerInfo
 import magefree.protocol.Login
 import magefree.protocol.Logout
 import magefree.protocol.Ping
@@ -21,6 +22,7 @@ import magefree.protocol.Pong
 import magefree.protocol.ProtocolJson
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.ServerHello
+import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
@@ -169,6 +171,29 @@ class SessionCoordinatorTest {
                 assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
                 sendSerialized<ClientMessage>(Logout())
                 withTimeout(5_000) { fake.awaitDisconnect() }
+            }
+        }
+    }
+
+    @Test
+    fun `GetServerInfo yields ServerInfo correlated by requestId`() {
+        val fake =
+            FakeUpstreamSession(
+                listOf(status(SessionStateCode.CONNECTING), status(SessionStateCode.CONNECTED)),
+                scriptedServerInfo = ServerInfo(serverVersion = "1.4.60", mainRoomId = "room-42"),
+            )
+        scenario(fake) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(Login(username = "frank"))
+                assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
+                assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+
+                sendSerialized<ClientMessage>(GetServerInfo(requestId = "gsi-1"))
+                val info = assertInstanceOf(ServerInfo::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals("1.4.60", info.serverVersion)
+                assertEquals("room-42", info.mainRoomId)
+                assertEquals("gsi-1", info.requestId)
             }
         }
     }

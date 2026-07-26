@@ -47,6 +47,37 @@ public class XMageSession(
     public fun mainRoomId(): UUID? = session.mainRoomId
 
     /**
+     * The server's version string via `SessionImpl.getVersionInfo()` — which is exactly
+     * `serverState.getVersion().toString()`, or `"<no server state>"` before the handshake populates it.
+     */
+    public fun versionInfo(): String = session.versionInfo
+
+    /**
+     * The chat id of the lobby's main room: `getMainRoomId()` → `getRoomChatId(roomId)`. Null if
+     * disconnected or the server returns no chat for the room. Runs the blocking calls on
+     * [Dispatchers.IO].
+     */
+    public suspend fun mainRoomChatId(): UUID? =
+        withContext(Dispatchers.IO) {
+            session.mainRoomId?.let { session.getRoomChatId(it).orElse(null) }
+        }
+
+    /** Joins the chat [chatId] via `SessionImpl.joinChat`. Returns the server's acceptance flag. */
+    public suspend fun joinChat(chatId: UUID): Boolean =
+        withContext(Dispatchers.IO) {
+            session.joinChat(chatId)
+        }
+
+    /** Sends [text] to chat [chatId] via `SessionImpl.sendChatMessage`. Returns the server's flag. */
+    public suspend fun sendChatMessage(
+        chatId: UUID,
+        text: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            session.sendChatMessage(chatId, text)
+        }
+
+    /**
      * Disconnects cleanly via `connectStop(false, false)` — no reconnect prompt, do not keep the
      * server-side session alive. Runs on [Dispatchers.IO].
      */

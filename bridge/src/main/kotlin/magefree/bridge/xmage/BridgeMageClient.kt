@@ -45,9 +45,27 @@ public class BridgeMageClient : MageClient {
             onBufferOverflow = BufferOverflow.DROP_OLDEST,
         )
 
+    // Raw server callbacks re-published for the mapping/relay layer (story 0006). Same non-blocking
+    // hand-off as [eventFlow]: onCallback runs on a remoting thread and only tryEmits; the *decompress
+    // + mage.view.* mapping* happens on the collector's coroutine (magefree.bridge.mapping), never here.
+    private val callbackFlow =
+        MutableSharedFlow<ClientCallback>(
+            replay = 0,
+            extraBufferCapacity = 256,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+
     /** Lifecycle events re-published from the remoting-thread callbacks; see the class KDoc. */
     public val events: SharedFlow<XMageClientEvent>
         get() = eventFlow
+
+    /**
+     * Raw [ClientCallback]s re-published off the remoting thread for the mapping/relay layer. The
+     * envelope transits here undecoded; only `magefree.bridge.mapping` decompresses and reads its
+     * `mage.view.*` payload.
+     */
+    public val callbacks: SharedFlow<ClientCallback>
+        get() = callbackFlow
 
     /** True between a [connected] and the following [disconnected] callback. */
     public val isConnected: Boolean
@@ -108,14 +126,17 @@ public class BridgeMageClient : MageClient {
     }
 
     /**
-     * Records that a server callback arrived. No decoding: `ClientCallback.getData()` is compressed
-     * until `decompressData()`, which is left to story 0006. Here we only count callbacks and note
-     * the method for observability.
+     * Records that a server callback arrived and re-publishes it (undecoded) on [callbacks] for the
+     * mapping/relay layer. **No decoding here:** `ClientCallback.getData()` is compressed until
+     * `decompressData()`, which — with all `mage.view.*` mapping — happens on the collector's coroutine
+     * inside `magefree.bridge.mapping`, never on this remoting thread. Emission uses `tryEmit`, which
+     * never blocks the caller.
      */
     override fun onCallback(callback: ClientCallback) {
         val method = callback.method?.name
         callbackCounter.incrementAndGet()
         lastCallbackMethodRef.set(method)
         logger.debug("XMage callback received: method={}", method)
+        callbackFlow.tryEmit(callback)
     }
 }
