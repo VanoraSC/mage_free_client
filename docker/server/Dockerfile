@@ -25,4 +25,17 @@ RUN sed -i -E 's/authenticationActivated="[^"]*"/authenticationActivated="false"
     /opt/xmage/config/config.xml
 WORKDIR /opt/xmage
 EXPOSE 17171
-ENTRYPOINT ["sh", "-c", "exec java -Xmx1024m -jar lib/mage-server-1.4.60.jar"]
+# XMage's JBoss-serialization stack reflects into JDK internals during the client/server handshake;
+# on JDK 17 the module system blocks that unless these packages are opened, so without the flags the
+# server accepts the TCP socket then drops it mid-handshake (clients see an EOFException / "wrong
+# client-server protocol"). This is the headless subset of the flags XMage's own startServer scripts
+# pass on Java 17+ (the client mirrors them; see :bridge test task). Keep the two sets in sync.
+ENTRYPOINT ["sh", "-c", "exec java -Xmx1024m \
+    --add-opens=java.base/java.io=ALL-UNNAMED \
+    --add-opens=java.base/java.lang=ALL-UNNAMED \
+    --add-opens=java.base/java.lang.reflect=ALL-UNNAMED \
+    --add-opens=java.base/java.util=ALL-UNNAMED \
+    --add-opens=java.base/java.util.concurrent=ALL-UNNAMED \
+    --add-opens=java.base/java.net=ALL-UNNAMED \
+    --add-opens=java.base/java.text=ALL-UNNAMED \
+    -jar lib/mage-server-1.4.60.jar"]
