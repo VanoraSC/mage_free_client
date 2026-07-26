@@ -26,9 +26,14 @@ rootProject.name = "mage-free-client"
 include(":protocol")
 include(":bridge")
 
+// Pure Kotlin/JVM (no Android SDK), so it configures in the JVM-only container too — kept alongside
+// :protocol rather than behind the Android guard below.
+include(":core:model")
+
 // Android modules require the Android SDK. The JVM/bridge build container has no SDK, so it sets
 // MAGE_JVM_ONLY=1 to skip them; host builds include them normally. See docs/build-environment.md.
 if (System.getenv("MAGE_JVM_ONLY") != "1") {
     include(":app")
     include(":core:designsystem")
+    include(":core:network")
 }
