@@ -15,6 +15,10 @@ class SerializationTest {
                 ClientHello(protocolMajor = ProtocolVersion.MAJOR, protocolMinor = ProtocolVersion.MINOR),
                 Ping(nonce = "n-1", requestId = "r-1"),
                 Ping(),
+                Login(username = "tester", password = "secret", requestId = "r-3"),
+                Login(username = "tester"),
+                Logout(requestId = "r-4"),
+                Logout(),
             )
 
         for (message in messages) {
@@ -39,6 +43,15 @@ class SerializationTest {
                     message = "unsupported",
                     requestId = "r-2",
                 ),
+                SessionStatus(state = SessionStateCode.CONNECTING, requestId = "r-3"),
+                SessionStatus(state = SessionStateCode.CONNECTED),
+                SessionStatus(state = SessionStateCode.AUTH_FAILED, message = "bad credentials"),
+                SessionStatus(
+                    state = SessionStateCode.VERSION_UNSUPPORTED,
+                    message = "server=1.4.61 bridge=1.4.60",
+                ),
+                SessionStatus(state = SessionStateCode.RECONNECTING),
+                SessionStatus(state = SessionStateCode.DISCONNECTED),
             )
 
         for (message in messages) {
@@ -54,6 +67,15 @@ class SerializationTest {
             json.encodeToString<ClientMessage>(ClientHello(1, 0)).contains("\"type\":\"client_hello\""),
         )
         assertTrue(json.encodeToString<ClientMessage>(Ping()).contains("\"type\":\"ping\""))
+        assertTrue(
+            json.encodeToString<ClientMessage>(Login("tester")).contains("\"type\":\"login\""),
+        )
+        assertTrue(json.encodeToString<ClientMessage>(Logout()).contains("\"type\":\"logout\""))
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(SessionStatus(SessionStateCode.CONNECTED))
+                .contains("\"type\":\"session_status\""),
+        )
         assertTrue(
             json.encodeToString<ServerMessage>(ServerHello(1, 0, "1.0.0")).contains("\"type\":\"server_hello\""),
         )

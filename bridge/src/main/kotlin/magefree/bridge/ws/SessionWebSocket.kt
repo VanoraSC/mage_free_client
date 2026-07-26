@@ -7,11 +7,12 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import magefree.bridge.session.SessionCoordinator
+import magefree.bridge.session.UpstreamSession
+import magefree.bridge.session.UpstreamTarget
+import magefree.bridge.session.XMageUpstreamSession
 import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
-import magefree.protocol.Ping
-import magefree.protocol.Pong
 import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
 import magefree.protocol.ProtocolVersion
@@ -23,12 +24,20 @@ public const val BRIDGE_VERSION: String = "0.1.0"
 
 /**
  * Registers the `/v1/session` WebSocket — the app-facing session transport (protocol major = the
- * `v1` path segment). This story implements framing only: the version handshake, app-level
- * ping/pong liveness, and the protocol-error/close behaviour. XMage/session wiring arrives in 0005.
+ * `v1` path segment). It runs the 0004 version handshake, then (story 0005) hands off to a per-socket
+ * [SessionCoordinator] that awaits `Login`, drives one [UpstreamSession] to the pinned XMage server,
+ * streams `SessionStatus` back, and answers app-level `Ping`/`Pong` for liveness.
+ *
+ * @param newUpstream builds the per-connection upstream session. Defaults to the real
+ *   [XMageUpstreamSession] pointed at [UpstreamTarget.fromEnv] (pinned-server posture); tests inject
+ *   a fake. Called once per accepted socket so each app client gets its own upstream.
  *
  * Handshake and message handling follow the rules documented in the `:protocol` module.
  */
-public fun Route.sessionWebSocket(bridgeVersion: String = BRIDGE_VERSION) {
+public fun Route.sessionWebSocket(
+    bridgeVersion: String = BRIDGE_VERSION,
+    newUpstream: () -> UpstreamSession = { XMageUpstreamSession(UpstreamTarget.fromEnv()) },
+) {
     webSocket("/${ProtocolVersion.PATH_SEGMENT}/session") {
         // 1. First frame must be a ClientHello. Any deserialization failure is a malformed envelope.
         val hello =
@@ -73,31 +82,8 @@ public fun Route.sessionWebSocket(bridgeVersion: String = BRIDGE_VERSION) {
             ),
         )
 
-        // 4. Post-handshake message loop: Ping -> Pong; anything else -> UNKNOWN_MESSAGE_TYPE (no close).
-        while (true) {
-            val message =
-                try {
-                    receiveDeserialized<ClientMessage>()
-                } catch (closed: ClosedReceiveChannelException) {
-                    // The peer closed the connection; end the loop cleanly.
-                    break
-                } catch (cancellation: CancellationException) {
-                    throw cancellation
-                } catch (failure: Exception) {
-                    sendSerialized<ServerMessage>(
-                        ProtocolError(ProtocolErrorCode.UNKNOWN_MESSAGE_TYPE, "Unrecognised or malformed message."),
-                    )
-                    continue
-                }
-
-            when (message) {
-                is Ping ->
-                    sendSerialized<ServerMessage>(Pong(nonce = message.nonce, requestId = message.requestId))
-                else ->
-                    sendSerialized<ServerMessage>(
-                        ProtocolError(ProtocolErrorCode.UNKNOWN_MESSAGE_TYPE, "Unhandled message after handshake."),
-                    )
-            }
-        }
+        // 4. Post-handshake: hand off to a per-socket coordinator that owns one upstream session.
+        //    It handles Login/Logout/Ping and streams SessionStatus, tearing down on socket close.
+        SessionCoordinator(newUpstream()).run(this)
     }
 }

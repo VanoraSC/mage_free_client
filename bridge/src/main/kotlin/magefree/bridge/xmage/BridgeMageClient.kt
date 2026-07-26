@@ -1,5 +1,8 @@
 package magefree.bridge.xmage
 
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import mage.interfaces.MageClient
 import mage.interfaces.callback.ClientCallback
 import mage.utils.MageVersion
@@ -16,6 +19,12 @@ import java.util.concurrent.atomic.AtomicReference
  * connection lifecycle and any callbacks that arrive. It performs **no decoding** of callback
  * payloads and does **no** `mage.view.*` mapping — those are stories 0004–0006. `onCallback` only
  * counts the callback and remembers the last method for observability.
+ *
+ * **Thread hand-off (story 0005).** `SessionImpl` invokes these callbacks on JBoss-remoting threads.
+ * In addition to recording state, each lifecycle callback is re-published as an [XMageClientEvent] on
+ * [events] — a buffered, non-suspending [MutableSharedFlow] — so a coroutine consumer
+ * (`XMageUpstreamSession`) can translate them into protocol frames without ever being called on, or
+ * blocking, a remoting thread. Emission uses `tryEmit`, which never blocks the caller.
  */
 public class BridgeMageClient : MageClient {
     private val logger = LoggerFactory.getLogger(BridgeMageClient::class.java)
@@ -25,6 +34,20 @@ public class BridgeMageClient : MageClient {
     private val lastConnectedMessageRef = AtomicReference<String?>(null)
     private val callbackCounter = AtomicInteger(0)
     private val lastCallbackMethodRef = AtomicReference<String?>(null)
+
+    // Replay=0 (only live transitions matter); a generous buffer + DROP_OLDEST keeps tryEmit
+    // non-blocking on the remoting thread even if no consumer is attached yet. A collector that
+    // subscribes before connect() (as XMageUpstreamSession does) sees every transition.
+    private val eventFlow =
+        MutableSharedFlow<XMageClientEvent>(
+            replay = 0,
+            extraBufferCapacity = 64,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+
+    /** Lifecycle events re-published from the remoting-thread callbacks; see the class KDoc. */
+    public val events: SharedFlow<XMageClientEvent>
+        get() = eventFlow
 
     /** True between a [connected] and the following [disconnected] callback. */
     public val isConnected: Boolean
@@ -53,6 +76,7 @@ public class BridgeMageClient : MageClient {
         connectedFlag = true
         lastConnectedMessageRef.set(message)
         logger.info("XMage session connected: {}", message)
+        eventFlow.tryEmit(XMageClientEvent.Connected(message))
     }
 
     override fun disconnected(
@@ -65,18 +89,22 @@ public class BridgeMageClient : MageClient {
             askToReconnect,
             keepMySessionActive,
         )
+        eventFlow.tryEmit(XMageClientEvent.Disconnected(askToReconnect, keepMySessionActive))
     }
 
     override fun showMessage(message: String) {
         logger.info("XMage server message: {}", message)
+        eventFlow.tryEmit(XMageClientEvent.ServerMessage(message))
     }
 
     override fun showError(message: String) {
         logger.warn("XMage server error: {}", message)
+        eventFlow.tryEmit(XMageClientEvent.ServerError(message))
     }
 
     override fun onNewConnection() {
         logger.info("XMage callback channel established (onNewConnection).")
+        eventFlow.tryEmit(XMageClientEvent.NewConnection)
     }
 
     /**
