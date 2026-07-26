@@ -23,7 +23,8 @@ run in Docker containers. The Android `:app` build stays on the host. Full desig
 ```
 
 Bridge integration tests reach the server over the compose network at **`XMAGE_SERVER=xmage-server:17171`**
-(verified reachable from the build container). It is also published to the host on `localhost:17171`.
+(verified end-to-end: story 0003's `ConnectAuthenticateIT` completes the full XMage connect/auth
+handshake from the build container). It is also published to the host on `localhost:17171`.
 
 ## Images
 - **`mage-free-client/build`** — JDK 17 + Maven + `git`; a cached layer builds `magefree/mage` at a
@@ -31,7 +32,8 @@ Bridge integration tests reach the server over the compose network at **`XMAGE_S
   JVM/bridge builds.
 - **`mage-free-client/xmage-server`** — a multi-stage image that full-reactor-builds XMage, assembles
   the server distribution, and runs `mage.server.Main` on 17171 with `authenticationActivated=false`
-  (story 0022). The Java-1.8-era server runs on JDK 17 with no extra flags.
+  (story 0022). Launched with `--add-opens` for the JBoss-serialization handshake — required on JDK 17
+  (see the server `Dockerfile`); the `:bridge` test task mirrors the same flags.
 
 ## Notes
 - **First builds are slow, then cached.** The `build` image's mage layer takes minutes; the

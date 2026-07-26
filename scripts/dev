@@ -17,12 +17,21 @@ COMPOSE=(docker compose -f "$ROOT/docker/docker-compose.yml")
 cmd="${1:-}"
 shift || true
 
+# Forward opt-in env vars into the one-off container. XMAGE_SERVER gates the live integration test
+# (story 0003's ConnectAuthenticateIT): without this pass-through the documented command
+# `XMAGE_SERVER=xmage-server:17171 ./scripts/dev gradle :bridge:test ...` would silently *skip* the
+# test inside the container. `compose run` does not inherit the host env otherwise.
+RUN_ENV=()
+if [ -n "${XMAGE_SERVER:-}" ]; then
+  RUN_ENV+=(-e "XMAGE_SERVER=$XMAGE_SERVER")
+fi
+
 case "$cmd" in
-  gradle) exec "${COMPOSE[@]}" run --rm build sh ./gradlew "$@" ;;
-  mvn)    exec "${COMPOSE[@]}" run --rm build mvn "$@" ;;
+  gradle) exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build sh ./gradlew "$@" ;;
+  mvn)    exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build mvn "$@" ;;
   up)     exec "${COMPOSE[@]}" up -d "$@" ;;
   down)   exec "${COMPOSE[@]}" down "$@" ;;
-  sh)     exec "${COMPOSE[@]}" run --rm build bash ;;
+  sh)     exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build bash ;;
   *)
     echo "usage: ./scripts/dev {gradle|mvn|up|down|sh} ..." >&2
     exit 2
