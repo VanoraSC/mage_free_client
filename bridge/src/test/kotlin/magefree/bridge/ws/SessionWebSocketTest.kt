@@ -5,9 +5,9 @@ import io.ktor.client.plugins.websocket.receiveDeserialized
 import io.ktor.client.plugins.websocket.sendSerialized
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
-import io.ktor.server.testing.testApplication
 import io.ktor.websocket.Frame
 import magefree.bridge.module
+import magefree.bridge.testApplicationTimed
 import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
 import magefree.protocol.Ping
@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test
 
 class SessionWebSocketTest {
     private fun testWebSocket(block: suspend io.ktor.client.plugins.websocket.DefaultClientWebSocketSession.() -> Unit) =
-        testApplication {
+        testApplicationTimed {
             application { module() }
             val wsClient =
                 createClient {
