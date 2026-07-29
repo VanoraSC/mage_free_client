@@ -1,0 +1,190 @@
+package magefree.feature.connect
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import magefree.designsystem.component.EmptyState
+import magefree.designsystem.component.LoadingState
+import magefree.designsystem.component.prompt.DecisionEmphasis
+import magefree.designsystem.component.prompt.DecisionPrompt
+import magefree.designsystem.component.prompt.DecisionPromptChoice
+import magefree.designsystem.theme.MageTheme
+import magefree.designsystem.theme.Spacing
+import magefree.model.ServerTarget
+
+/*
+ * The connection-state surfaces for the sign-in flow. Each is a stateless, previewable Composable
+ * built entirely from the EPIC-03 design system (LoadingState / EmptyState / DecisionPrompt) so the
+ * five ConnectionState outcomes read distinctly and the retry/cancel choice comes to the thumb.
+ *
+ * Labels shared with tests are hoisted as constants.
+ */
+
+const val CONNECT_RETRY_LABEL: String = "Try again"
+const val CONNECT_CANCEL_LABEL: String = "Cancel"
+const val CONNECT_CONTINUE_LABEL: String = "Continue"
+const val AUTH_FAILED_TITLE: String = "Sign-in failed"
+const val VERSION_UNSUPPORTED_TITLE: String = "Server version unsupported"
+
+/** In-progress surface: a spinner + message, distinct copy for a first connect vs a reconnect. */
+@Composable
+fun ConnectingSurface(
+    server: ServerTarget,
+    reconnecting: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val message =
+        if (reconnecting) {
+            "Reconnecting to ${server.title}…"
+        } else {
+            "Connecting to ${server.title}…"
+        }
+    LoadingState(modifier = modifier.fillMaxSize(), message = message)
+}
+
+/**
+ * Success surface. The handoff to the shell is explicit — a thumb-reachable [CONNECT_CONTINUE_LABEL]
+ * primary — so a stateless Composable never performs navigation as a side effect.
+ */
+@Composable
+fun ConnectedSurface(
+    server: ServerTarget,
+    onContinue: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    EmptyState(
+        modifier = modifier.fillMaxSize(),
+        title = "Connected to ${server.title}",
+        message = "You're signed in and ready to play.",
+        actionLabel = CONNECT_CONTINUE_LABEL,
+        onAction = onContinue,
+    )
+}
+
+/** Authentication-failure surface: distinct copy + a bottom-anchored retry/cancel [DecisionPrompt]. */
+@Composable
+fun AuthFailedSurface(
+    onRetry: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FailureSurface(
+        title = AUTH_FAILED_TITLE,
+        message = "The server rejected your username or password. Check your details and try again.",
+        icon = Icons.Filled.Lock,
+        onRetry = onRetry,
+        onCancel = onCancel,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Version-mismatch surface — first-class and visibly distinct from [AuthFailedSurface]. [detail]
+ * carries the wire diagnostic (e.g. `"server=<v> bridge=<v>"`) and is shown when present.
+ *
+ * NOTE: the 0017 `ConnectionRepository` seam maps every `SessionEvent` down to a bare
+ * `ConnectionState` enum before it reaches this feature, so the version strings are not currently
+ * plumbed through — [detail] is null in practice today. The surface renders them the moment the seam
+ * carries them (deliberately not worked around here, which would mean changing read-only `:core:network`).
+ */
+@Composable
+fun VersionUnsupportedSurface(
+    onRetry: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+) {
+    val base =
+        "This client is not compatible with the server's version. Update the app, or connect to a " +
+            "compatible server."
+    FailureSurface(
+        title = VERSION_UNSUPPORTED_TITLE,
+        message = if (detail.isNullOrBlank()) base else "$base\n\n$detail",
+        icon = Icons.Filled.Warning,
+        onRetry = onRetry,
+        onCancel = onCancel,
+        modifier = modifier,
+    )
+}
+
+/** Shared failure layout: a centered [EmptyState] explainer + a bottom [DecisionPrompt] for the choice. */
+@Composable
+private fun FailureSurface(
+    title: String,
+    message: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onRetry: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        EmptyState(
+            modifier = Modifier.align(Alignment.Center).padding(bottom = Spacing.extraLarge),
+            title = title,
+            message = message,
+            icon = icon,
+        )
+        DecisionPrompt(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            title = title,
+            choices =
+                listOf(
+                    DecisionPromptChoice(label = CONNECT_RETRY_LABEL, emphasis = DecisionEmphasis.Primary),
+                    DecisionPromptChoice(label = CONNECT_CANCEL_LABEL, emphasis = DecisionEmphasis.Tertiary),
+                ),
+            onChoice = { choice ->
+                when (choice.label) {
+                    CONNECT_RETRY_LABEL -> onRetry()
+                    CONNECT_CANCEL_LABEL -> onCancel()
+                }
+            },
+        )
+    }
+}
+
+private val PreviewServer = ServerTarget(host = "bridge.local", port = 9000, displayName = "Local bridge")
+
+@Preview(name = "Connecting", showBackground = true, heightDp = 480)
+@Composable
+private fun ConnectingPreview() {
+    MageTheme { ConnectingSurface(server = PreviewServer, reconnecting = false) }
+}
+
+@Preview(name = "Connected", showBackground = true, heightDp = 480)
+@Composable
+private fun ConnectedPreview() {
+    MageTheme { ConnectedSurface(server = PreviewServer, onContinue = {}) }
+}
+
+@Preview(name = "Auth failed - light", showBackground = true, heightDp = 560)
+@Preview(
+    name = "Auth failed - dark",
+    showBackground = true,
+    heightDp = 560,
+    uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun AuthFailedPreview() {
+    MageTheme { AuthFailedSurface(onRetry = {}, onCancel = {}) }
+}
+
+@Preview(name = "Version unsupported - light", showBackground = true, heightDp = 560)
+@Preview(
+    name = "Version unsupported - dark",
+    showBackground = true,
+    heightDp = 560,
+    uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun VersionUnsupportedPreview() {
+    MageTheme {
+        VersionUnsupportedSurface(onRetry = {}, onCancel = {}, detail = "server=1.4.61 bridge=1.4.60")
+    }
+}
