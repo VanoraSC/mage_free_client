@@ -2,7 +2,7 @@
 
 - **Epic:** EPIC-04 — Server Connection & Sign-In
 - **Depends on:** 0017 (connection/server repositories), EPIC-03 (design system)
-- **Status:** blocked on 0017
+- **Status:** ready (0017 + EPIC-03 merged)
 
 ## 1. Objective
 
