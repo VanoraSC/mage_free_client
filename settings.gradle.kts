@@ -36,4 +36,5 @@ if (System.getenv("MAGE_JVM_ONLY") != "1") {
     include(":app")
     include(":core:designsystem")
     include(":core:network")
+    include(":feature:connect")
 }
