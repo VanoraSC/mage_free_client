@@ -29,6 +29,8 @@ android {
 
 dependencies {
     implementation(project(":core:designsystem"))
+    // Story 0017: the real ConnectionStatusSource is backed by :core:network's ConnectionRepository.
+    implementation(project(":core:network"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

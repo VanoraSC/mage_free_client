@@ -26,6 +26,7 @@ androidx-espresso = "3.7.0"
 androidx-navigation = "2.9.8"
 androidx-hilt-navigation-compose = "1.2.0"
 androidx-concurrent-futures = "1.2.0"
+androidx-datastore = "1.1.7"
 turbine = "1.2.0"
 
 [libraries]
@@ -74,6 +75,7 @@ junit4 = { module = "junit:junit", version.ref = "junit4" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidx-test-ext-junit" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "androidx-espresso" }
 androidx-concurrent-futures = { module = "androidx.concurrent:concurrent-futures", version.ref = "androidx-concurrent-futures" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "androidx-datastore" }
 
 # Gradle plugin artifacts — consumed by the build-logic convention plugins (compileOnly)
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }

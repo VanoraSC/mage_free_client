@@ -2,7 +2,7 @@
 
 - **Epic:** EPIC-04 — Server Connection & Sign-In
 - **Depends on:** 0016 (`:core:model` / `:core:network`), 0010 (`ConnectionStatusSource` seam)
-- **Status:** blocked on 0016
+- **Status:** ready (0016 merged)
 
 ## 1. Objective
 
