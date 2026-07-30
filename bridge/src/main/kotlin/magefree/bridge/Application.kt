@@ -13,6 +13,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import magefree.bridge.routes.healthRoutes
+import magefree.bridge.session.SessionRegistry
 import magefree.bridge.ws.sessionWebSocket
 import magefree.protocol.ProtocolJson
 import org.slf4j.event.Level
@@ -43,8 +44,11 @@ fun Application.module() {
     install(WebSockets) {
         contentConverter = KotlinxWebsocketSerializationConverter(ProtocolJson.json)
     }
+    // One registry per application: it holds parked sessions across app-socket drops (story 0023).
+    // Parented to the application scope so its TTL/keepalive coroutines are cancelled on shutdown.
+    val registry = SessionRegistry(parentContext = coroutineContext)
     routing {
         healthRoutes()
-        sessionWebSocket()
+        sessionWebSocket(registry = registry)
     }
 }

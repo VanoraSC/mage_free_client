@@ -21,6 +21,8 @@ class SerializationTest {
                 Logout(),
                 GetServerInfo(requestId = "r-5"),
                 GetServerInfo(),
+                Resume(resumeId = "rsm-1"),
+                Resume(resumeId = "rsm-2", requestId = "r-6"),
             )
 
         for (message in messages) {
@@ -70,6 +72,10 @@ class SerializationTest {
                 ),
                 ServerInfo(serverVersion = "1.4.60", mainRoomId = "room-1", requestId = "r-7"),
                 ServerInfo(serverVersion = "1.4.60", mainRoomId = null),
+                SessionResumable(resumeId = "rsm-1"),
+                SessionResumable(resumeId = "rsm-2", requestId = "r-8"),
+                ResumeRejected(reason = "unknown or expired resume handle"),
+                ResumeRejected(reason = "expired", requestId = "r-9"),
             )
 
         for (message in messages) {
@@ -91,6 +97,19 @@ class SerializationTest {
         assertTrue(json.encodeToString<ClientMessage>(Logout()).contains("\"type\":\"logout\""))
         assertTrue(
             json.encodeToString<ClientMessage>(GetServerInfo()).contains("\"type\":\"get_server_info\""),
+        )
+        assertTrue(
+            json.encodeToString<ClientMessage>(Resume(resumeId = "rsm")).contains("\"type\":\"resume\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(SessionResumable(resumeId = "rsm"))
+                .contains("\"type\":\"session_resumable\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(ResumeRejected(reason = "x"))
+                .contains("\"type\":\"resume_rejected\""),
         )
         assertTrue(
             json

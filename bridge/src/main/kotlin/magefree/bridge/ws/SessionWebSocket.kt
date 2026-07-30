@@ -8,6 +8,7 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.close
 import kotlinx.coroutines.CancellationException
 import magefree.bridge.session.SessionCoordinator
+import magefree.bridge.session.SessionRegistry
 import magefree.bridge.session.UpstreamSession
 import magefree.bridge.session.UpstreamTarget
 import magefree.bridge.session.XMageUpstreamSession
@@ -28,13 +29,17 @@ public const val BRIDGE_VERSION: String = "0.1.0"
  * [SessionCoordinator] that awaits `Login`, drives one [UpstreamSession] to the pinned XMage server,
  * streams `SessionStatus` back, and answers app-level `Ping`/`Pong` for liveness.
  *
- * @param newUpstream builds the per-connection upstream session. Defaults to the real
+ * @param registry the **shared** session registry (story 0023) that holds parked sessions across
+ *   app-socket drops. One instance backs every socket, so it is created once (by [magefree.bridge.module]
+ *   or a test) and passed in — never per-socket. Defaults to a standalone registry for convenience.
+ * @param newUpstream builds a per-**login** upstream session. Defaults to the real
  *   [XMageUpstreamSession] pointed at [UpstreamTarget.fromEnv] (pinned-server posture); tests inject
- *   a fake. Called once per accepted socket so each app client gets its own upstream.
+ *   a fake. Not called on a `Resume` — that re-binds the parked session instead.
  *
  * Handshake and message handling follow the rules documented in the `:protocol` module.
  */
 public fun Route.sessionWebSocket(
+    registry: SessionRegistry = SessionRegistry(),
     bridgeVersion: String = BRIDGE_VERSION,
     newUpstream: () -> UpstreamSession = { XMageUpstreamSession(UpstreamTarget.fromEnv()) },
 ) {
@@ -82,8 +87,9 @@ public fun Route.sessionWebSocket(
             ),
         )
 
-        // 4. Post-handshake: hand off to a per-socket coordinator that owns one upstream session.
-        //    It handles Login/Logout/Ping and streams SessionStatus, tearing down on socket close.
-        SessionCoordinator(newUpstream()).run(this)
+        // 4. Post-handshake: hand off to a per-socket coordinator sharing the session registry.
+        //    It handles Login/Resume/Logout/Ping, streams SessionStatus, and parks (rather than
+        //    disconnects) the upstream on an unexpected socket close so the app can resume it.
+        SessionCoordinator(registry = registry, newUpstream = newUpstream).run(this)
     }
 }
