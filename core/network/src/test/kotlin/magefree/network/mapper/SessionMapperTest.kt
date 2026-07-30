@@ -11,10 +11,13 @@ import magefree.protocol.Pong
 import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
 import magefree.protocol.ProtocolVersion
+import magefree.protocol.ResumeRejected
 import magefree.protocol.ServerHello
+import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -139,6 +142,27 @@ class SessionMapperTest {
         assertTrue(event is SessionEvent.Error)
         val error = (event as SessionEvent.Error).error
         assertEquals(ConnectionError.Protocol("MALFORMED_MESSAGE", "bad frame"), error)
+    }
+
+    @Test
+    fun resumeIdIsExtractedFromSessionResumableOnly() {
+        assertEquals("resume-123", SessionMapper.resumeIdOrNull(SessionResumable(resumeId = "resume-123")))
+        assertNull(SessionMapper.resumeIdOrNull(SessionStatus(SessionStateCode.CONNECTED)))
+        assertNull(SessionMapper.resumeIdOrNull(ResumeRejected(reason = "expired")))
+    }
+
+    @Test
+    fun resumeRejectedIsDetected() {
+        assertTrue(SessionMapper.isResumeRejected(ResumeRejected(reason = "expired")))
+        assertFalse(SessionMapper.isResumeRejected(SessionResumable(resumeId = "r1")))
+        assertFalse(SessionMapper.isResumeRejected(SessionStatus(SessionStateCode.CONNECTED)))
+    }
+
+    @Test
+    fun resumeFlowControlFramesAreNotLifecycleEvents() {
+        // SessionResumable/ResumeRejected are handled out-of-band by the relay, never as SessionEvents.
+        assertNull(SessionMapper.toSessionEvent(SessionResumable(resumeId = "r1"), target, credentials.username, null))
+        assertNull(SessionMapper.toSessionEvent(ResumeRejected(reason = "expired"), target, credentials.username, null))
     }
 
     @Test

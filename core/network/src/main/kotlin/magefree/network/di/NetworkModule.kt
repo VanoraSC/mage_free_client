@@ -15,6 +15,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import magefree.network.BridgeClient
 import magefree.network.ktor.KtorBridgeClient
+import magefree.network.reconnect.AndroidConnectivityObserver
+import magefree.network.reconnect.AppLifecycleObserver
+import magefree.network.reconnect.ConnectivityObserver
+import magefree.network.reconnect.ProcessAppLifecycleObserver
 import javax.inject.Singleton
 
 /**
@@ -35,9 +39,32 @@ object NetworkModule {
     /** The user's saved server list lives in this Preferences DataStore file. */
     private val Context.serverDataStore by preferencesDataStore(name = "server_targets")
 
+    /**
+     * The device-connectivity observer (story 0024) that lets the reconnect loop wake a waiting
+     * back-off the instant the network returns. Android-backed; a JVM/unit context uses the always-on
+     * default inside [KtorBridgeClient].
+     */
     @Provides
     @Singleton
-    fun provideBridgeClient(): BridgeClient = KtorBridgeClient()
+    fun provideConnectivityObserver(
+        @ApplicationContext context: Context,
+    ): ConnectivityObserver = AndroidConnectivityObserver(context)
+
+    /**
+     * The whole-app foreground/background observer (story 0024). Backed by `ProcessLifecycleOwner`, it
+     * nudges a reconnect on foreground and relaxes retries while backgrounded (the bridge holds the
+     * session per story 0023). Lives here (not `:app`) so `:app` needs no lifecycle wiring.
+     */
+    @Provides
+    @Singleton
+    fun provideAppLifecycleObserver(): AppLifecycleObserver = ProcessAppLifecycleObserver()
+
+    @Provides
+    @Singleton
+    fun provideBridgeClient(
+        connectivity: ConnectivityObserver,
+        lifecycle: AppLifecycleObserver,
+    ): BridgeClient = KtorBridgeClient(connectivity = connectivity, lifecycle = lifecycle)
 
     @Provides
     @IoDispatcher

@@ -8,8 +8,10 @@ import magefree.model.SessionEvent
 import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
 import magefree.protocol.ProtocolVersion
+import magefree.protocol.ResumeRejected
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerMessage
+import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 
@@ -52,8 +54,23 @@ object SessionMapper {
         }
 
     /**
+     * The bridge-issued resume handle carried by a [SessionResumable] (story 0023), or `null` for any
+     * other message. The relay captures this so a later reconnect can `Resume` the parked session; it is
+     * not a lifecycle transition, so [toSessionEvent] deliberately ignores [SessionResumable].
+     */
+    fun resumeIdOrNull(message: ServerMessage): String? = (message as? SessionResumable)?.resumeId
+
+    /**
+     * `true` when [message] is the bridge rejecting a `Resume` ([ResumeRejected]) — the parked session
+     * is unknown/expired/inconsistent and the app must fall back to a fresh `Login` (story 0024). Like
+     * [SessionResumable] this is flow-control, not a lifecycle event, so [toSessionEvent] ignores it.
+     */
+    fun isResumeRejected(message: ServerMessage): Boolean = message is ResumeRejected
+
+    /**
      * Map a server→app [ServerMessage] to a domain [SessionEvent], or `null` for messages that do
-     * not affect the session lifecycle (handshake echoes, pings, chat, server-info — the app logs
+     * not affect the session lifecycle (handshake echoes, pings, chat, server-info, and the resume
+     * flow-control frames [SessionResumable]/[ResumeRejected] handled out-of-band — the app logs
      * and ignores those here). [target]/[credentials-derived username] and the negotiated
      * [bridgeVersion] furnish the [Session] handle on a successful connect.
      */

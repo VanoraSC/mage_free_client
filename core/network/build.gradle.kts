@@ -24,6 +24,8 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    // Story 0024: ProcessLifecycleOwner for the whole-app foreground/background reconnect hook.
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.websockets)
