@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import magefree.model.ConnectionError
 import magefree.model.ConnectionState
 import magefree.model.Credentials
 import magefree.model.ServerTarget
@@ -25,6 +26,7 @@ import magefree.network.ConnectionRepository
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -145,6 +147,74 @@ class SignInViewModelTest {
                 awaitPhase(ConnectPhase.Connecting)
                 val unsupported = awaitPhase(ConnectPhase.VersionUnsupported)
                 assertEquals(ConnectPhase.VersionUnsupported, unsupported.phase)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun authFailedDetailReachesTheUi() =
+        runTest {
+            // Story 0019: the auth message flows through the enriched connectionStatus seam.
+            val vm = viewModel(listOf(SessionEvent.Connecting, SessionEvent.AuthFailed("bad creds")))
+            vm.uiState.test {
+                awaitItem()
+                vm.bind(target)
+                vm.updateUsername("pete")
+
+                vm.connect()
+                val failed = awaitPhase(ConnectPhase.AuthFailed)
+                assertEquals("bad creds", failed.detail)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun versionUnsupportedDetailReachesTheUi() =
+        runTest {
+            // Story 0019: the server=… bridge=… version detail is carried through to the surface.
+            val vm =
+                viewModel(
+                    listOf(
+                        SessionEvent.Connecting,
+                        SessionEvent.VersionUnsupported("server=1.4.61 bridge=1.4.60"),
+                    ),
+                )
+            vm.uiState.test {
+                awaitItem()
+                vm.bind(target)
+                vm.updateUsername("pete")
+
+                vm.connect()
+                val unsupported = awaitPhase(ConnectPhase.VersionUnsupported)
+                assertEquals("server=1.4.61 bridge=1.4.60", unsupported.detail)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun transportErrorSurfacesAsNetworkWithDetail() =
+        runTest {
+            // Story 0019: a transport fault (socket/timeout) reduces to a distinct Network surface,
+            // NOT a login error, and its reason reaches the UI.
+            val vm =
+                viewModel(
+                    listOf(
+                        SessionEvent.Connecting,
+                        SessionEvent.Error(ConnectionError.Transport("failed to open websocket: timeout")),
+                    ),
+                )
+            vm.uiState.test {
+                awaitItem()
+                vm.bind(target)
+                vm.updateUsername("pete")
+
+                vm.connect()
+                val network = awaitPhase(ConnectPhase.Network)
+                assertEquals(ConnectPhase.Network, network.phase)
+                assertTrue(
+                    "network detail must carry the transport reason",
+                    network.detail?.contains("failed to open websocket") == true,
+                )
                 cancelAndIgnoreRemainingEvents()
             }
         }

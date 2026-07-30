@@ -32,6 +32,7 @@ const val CONNECT_CANCEL_LABEL: String = "Cancel"
 const val CONNECT_CONTINUE_LABEL: String = "Continue"
 const val AUTH_FAILED_TITLE: String = "Sign-in failed"
 const val VERSION_UNSUPPORTED_TITLE: String = "Server version unsupported"
+const val NETWORK_ERROR_TITLE: String = "Can't reach the server"
 
 /** In-progress surface: a spinner + message, distinct copy for a first connect vs a reconnect. */
 @Composable
@@ -89,10 +90,8 @@ fun AuthFailedSurface(
  * Version-mismatch surface — first-class and visibly distinct from [AuthFailedSurface]. [detail]
  * carries the wire diagnostic (e.g. `"server=<v> bridge=<v>"`) and is shown when present.
  *
- * NOTE: the 0017 `ConnectionRepository` seam maps every `SessionEvent` down to a bare
- * `ConnectionState` enum before it reaches this feature, so the version strings are not currently
- * plumbed through — [detail] is null in practice today. The surface renders them the moment the seam
- * carries them (deliberately not worked around here, which would mean changing read-only `:core:network`).
+ * As of story 0019 the `ConnectionRepository` seam carries this detail through
+ * `connectionStatus`, so [detail] is populated live from a real version mismatch.
  */
 @Composable
 fun VersionUnsupportedSurface(
@@ -106,6 +105,30 @@ fun VersionUnsupportedSurface(
             "compatible server."
     FailureSurface(
         title = VERSION_UNSUPPORTED_TITLE,
+        message = if (detail.isNullOrBlank()) base else "$base\n\n$detail",
+        icon = Icons.Filled.Warning,
+        onRetry = onRetry,
+        onCancel = onCancel,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Network/timeout surface — a transport failure ended the attempt, distinct from a login or version
+ * error. [detail] carries the transport reason (e.g. the socket/timeout message) and is shown when
+ * present so the failure is diagnosable, while the primary copy stays user-actionable.
+ */
+@Composable
+fun NetworkSurface(
+    onRetry: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+) {
+    val base =
+        "Couldn't reach the server. Check your connection and the server address, then try again."
+    FailureSurface(
+        title = NETWORK_ERROR_TITLE,
         message = if (detail.isNullOrBlank()) base else "$base\n\n$detail",
         icon = Icons.Filled.Warning,
         onRetry = onRetry,
@@ -186,5 +209,19 @@ private fun AuthFailedPreview() {
 private fun VersionUnsupportedPreview() {
     MageTheme {
         VersionUnsupportedSurface(onRetry = {}, onCancel = {}, detail = "server=1.4.61 bridge=1.4.60")
+    }
+}
+
+@Preview(name = "Network error - light", showBackground = true, heightDp = 560)
+@Preview(
+    name = "Network error - dark",
+    showBackground = true,
+    heightDp = 560,
+    uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun NetworkPreview() {
+    MageTheme {
+        NetworkSurface(onRetry = {}, onCancel = {}, detail = "failed to open websocket: timeout")
     }
 }
