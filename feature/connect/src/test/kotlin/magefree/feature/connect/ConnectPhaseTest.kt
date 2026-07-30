@@ -56,12 +56,56 @@ class ConnectPhaseTest {
     }
 
     @Test
-    fun connectingAndReconnectingAreInProgress() {
+    fun connectingReconnectingAndRestoringAreInProgress() {
         assertTrue(ConnectPhase.Connecting.isInProgress)
         assertTrue(ConnectPhase.Reconnecting.isInProgress)
+        assertTrue(ConnectPhase.Restoring.isInProgress)
         assertFalse(ConnectPhase.Idle.isInProgress)
         assertFalse(ConnectPhase.Connected.isInProgress)
         assertFalse(ConnectPhase.AuthFailed.isInProgress)
+        assertFalse(ConnectPhase.SessionLost.isInProgress)
+    }
+
+    @Test
+    fun restoringIsDistinctFromReconnectingAndConnecting() {
+        assertEquals(ConnectPhase.Restoring, ConnectionState.Restoring.toConnectPhase())
+        assertEquals(ConnectPhase.Restoring, ConnectionStatus(ConnectionState.Restoring).toConnectPhase())
+        // The three progress phases must read as three different surfaces.
+        assertEquals(
+            3,
+            setOf(
+                ConnectionState.Connecting.toConnectPhase(),
+                ConnectionState.Reconnecting.toConnectPhase(),
+                ConnectionState.Restoring.toConnectPhase(),
+            ).size,
+        )
+    }
+
+    @Test
+    fun exhaustedRecoveryMapsToSessionLostWhileCleanDisconnectStaysIdle() {
+        // Budget exhausted: a Disconnected carrying a reason (but no transport error) → terminal SessionLost.
+        val exhausted =
+            ConnectionStatus(
+                state = ConnectionState.Disconnected,
+                detail = "reconnect attempts exhausted",
+            )
+        assertEquals(ConnectPhase.SessionLost, exhausted.toConnectPhase())
+
+        // A clean close (no detail, no error) still returns to the form.
+        assertEquals(ConnectPhase.Idle, ConnectionStatus(ConnectionState.Disconnected).toConnectPhase())
+    }
+
+    @Test
+    fun sessionLostIsDistinctFromNetworkAndIdle() {
+        val sessionLost =
+            ConnectionStatus(ConnectionState.Disconnected, detail = "reconnect attempts exhausted").toConnectPhase()
+        val network =
+            ConnectionStatus(
+                ConnectionState.Disconnected,
+                error = ConnectionError.Transport("boom"),
+            ).toConnectPhase()
+        val idle = ConnectionStatus(ConnectionState.Disconnected).toConnectPhase()
+        assertEquals(3, setOf(sessionLost, network, idle).size)
     }
 
     @Test

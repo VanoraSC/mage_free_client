@@ -25,6 +25,13 @@ enum class ConnectionState {
     /** A previously-established session dropped and is being re-established. */
     Reconnecting,
 
+    /**
+     * The socket is back and the held session is being re-attached — a `Resume` was sent and its ack
+     * is awaited (story 0023/0024). Distinct from [Reconnecting] (still reaching the bridge) so the UI
+     * can show a "restoring your session" state in the moment before [Connected].
+     */
+    Restoring,
+
     /** The server rejected authentication (bad credentials / session). */
     AuthFailed,
 

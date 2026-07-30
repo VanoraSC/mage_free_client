@@ -49,6 +49,7 @@ class ConnectionStatusSourceImpl
                 DomainConnectionState.Connecting -> ConnectionState.Connecting
                 DomainConnectionState.Connected -> ConnectionState.Connected
                 DomainConnectionState.Reconnecting -> ConnectionState.Reconnecting
+                DomainConnectionState.Restoring -> ConnectionState.Restoring
                 DomainConnectionState.AuthFailed -> ConnectionState.AuthFailed
                 DomainConnectionState.Unsupported -> ConnectionState.Unsupported
             }

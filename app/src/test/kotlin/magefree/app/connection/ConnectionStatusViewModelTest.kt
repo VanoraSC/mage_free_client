@@ -59,6 +59,7 @@ class ConnectionStatusViewModelTest {
                         ConnectionState.Connecting,
                         ConnectionState.Connected,
                         ConnectionState.Reconnecting,
+                        ConnectionState.Restoring,
                         ConnectionState.AuthFailed,
                         ConnectionState.Unsupported,
                     )
@@ -91,7 +92,19 @@ class ConnectionStatusViewModelTest {
         assertFalse(ConnectionState.Connected.toUiState().showRetry)
         assertFalse(ConnectionState.Connecting.toUiState().showRetry)
         assertFalse(ConnectionState.Reconnecting.toUiState().showRetry)
+        assertFalse(ConnectionState.Restoring.toUiState().showRetry)
         assertFalse(ConnectionState.Unsupported.toUiState().showRetry)
+    }
+
+    @Test
+    fun restoringIsAProgressStateDistinctFromReconnecting() {
+        val restoring = ConnectionState.Restoring.toUiState()
+        val reconnecting = ConnectionState.Reconnecting.toUiState()
+        assertEquals(ConnectionSeverity.Progress, restoring.severity)
+        assertFalse(restoring.showRetry)
+        // Visually/semantically distinct from a plain reconnect (story 0025).
+        assertTrue(restoring.label != reconnecting.label)
+        assertTrue(restoring.contentDescription != reconnecting.contentDescription)
     }
 
     @Test

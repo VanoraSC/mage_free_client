@@ -22,6 +22,9 @@ enum class ConnectionState {
     /** A previously-established session dropped and is being re-established. */
     Reconnecting,
 
+    /** The socket is back and the held session is being re-attached (resume in progress). */
+    Restoring,
+
     /** The server rejected authentication (bad credentials / session). */
     AuthFailed,
 

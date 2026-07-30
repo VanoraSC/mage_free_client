@@ -20,8 +20,18 @@ enum class ConnectPhase {
     /** A first connection attempt is opening. Maps from [ConnectionState.Connecting]. */
     Connecting,
 
-    /** A previously-established session dropped and is being restored. Maps from [ConnectionState.Reconnecting]. */
+    /**
+     * A previously-established session dropped and the client is still trying to reach the bridge.
+     * Maps from [ConnectionState.Reconnecting]. Non-destructive: the current screen is preserved.
+     */
     Reconnecting,
+
+    /**
+     * The socket is back and the held session is being re-attached (resume in progress) — visually
+     * distinct from [Reconnecting] and a fresh [Connecting]. Maps from [ConnectionState.Restoring].
+     * Non-destructive: the current screen is preserved.
+     */
+    Restoring,
 
     /** Authenticated and connected; hand off to the shell. Maps from [ConnectionState.Connected]. */
     Connected,
@@ -38,10 +48,20 @@ enum class ConnectPhase {
      * [magefree.model.ConnectionError].
      */
     Network,
+
+    /**
+     * Recovery has truly failed — 0024's reconnect/resume budget was exhausted (or the parked session
+     * was rejected and re-authentication is required). A terminal surface, distinct from a clean return
+     * to the form ([Idle]) and from a first-connect transport failure ([Network]): it offers a
+     * re-authenticate CTA that routes back to sign-in with the last server pre-selected. Maps from a
+     * [ConnectionState.Disconnected] [ConnectionStatus] that carries a reason [ConnectionStatus.detail]
+     * (but no transport [ConnectionStatus.error]).
+     */
+    SessionLost,
     ;
 
-    /** True while a connection attempt is in progress and the form/actions should be locked. */
-    val isInProgress: Boolean get() = this == Connecting || this == Reconnecting
+    /** True while a connection attempt or recovery is in progress and the form/actions should be locked. */
+    val isInProgress: Boolean get() = this == Connecting || this == Reconnecting || this == Restoring
 }
 
 /**
@@ -53,6 +73,7 @@ fun ConnectionState.toConnectPhase(): ConnectPhase =
         ConnectionState.Disconnected -> ConnectPhase.Idle
         ConnectionState.Connecting -> ConnectPhase.Connecting
         ConnectionState.Reconnecting -> ConnectPhase.Reconnecting
+        ConnectionState.Restoring -> ConnectPhase.Restoring
         ConnectionState.Connected -> ConnectPhase.Connected
         ConnectionState.AuthFailed -> ConnectPhase.AuthFailed
         ConnectionState.Unsupported -> ConnectPhase.VersionUnsupported
@@ -60,15 +81,24 @@ fun ConnectionState.toConnectPhase(): ConnectPhase =
 
 /**
  * Projects the enriched [ConnectionStatus] onto the flow's [ConnectPhase]. Identical to the
- * [ConnectionState] projection except that a [ConnectionState.Disconnected] carrying a
- * [ConnectionStatus.error] surfaces as [ConnectPhase.Network] (a transport/timeout failure) rather
- * than [ConnectPhase.Idle] (a clean return to the form).
+ * [ConnectionState] projection except for how a [ConnectionState.Disconnected] is disambiguated by its
+ * diagnostic:
+ * - a transport [ConnectionStatus.error] → [ConnectPhase.Network] (a first-connect network/timeout);
+ * - otherwise a non-blank [ConnectionStatus.detail] (a reason: recovery exhausted, or a relayed
+ *   disconnect) → the terminal [ConnectPhase.SessionLost];
+ * - no detail (a clean close / no active session) → [ConnectPhase.Idle] (return to the form).
  */
 fun ConnectionStatus.toConnectPhase(): ConnectPhase =
     when (state) {
-        ConnectionState.Disconnected -> if (error != null) ConnectPhase.Network else ConnectPhase.Idle
+        ConnectionState.Disconnected ->
+            when {
+                error != null -> ConnectPhase.Network
+                !detail.isNullOrBlank() -> ConnectPhase.SessionLost
+                else -> ConnectPhase.Idle
+            }
         ConnectionState.Connecting -> ConnectPhase.Connecting
         ConnectionState.Reconnecting -> ConnectPhase.Reconnecting
+        ConnectionState.Restoring -> ConnectPhase.Restoring
         ConnectionState.Connected -> ConnectPhase.Connected
         ConnectionState.AuthFailed -> ConnectPhase.AuthFailed
         ConnectionState.Unsupported -> ConnectPhase.VersionUnsupported
