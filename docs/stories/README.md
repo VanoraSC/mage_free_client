@@ -185,22 +185,37 @@ with an XMage account (proxied auth), registering where the server allows it, an
 connection state. See [`../project-plan.md`](../project-plan.md) (EPIC-04) and
 [`../architecture.md`](../architecture.md).
 
-> **Dependency (important):** this epic connects to the bridge, so it depends on the **bridge
-> session** — Epic 1 stories **0004** (the shared `:protocol` contract module) and **0005** (the
-> WebSocket session bridge), which are **planned but not yet implemented** (only the 0001
-> scaffold exists). Per the project's *fakes-are-recordings* principle, the app side is built
-> against the `:protocol` contract with a **`FakeBridgeClient`** and verified there; **live
-> end-to-end connection requires the bridge (0002–0006) implemented.** The `:protocol` module
-> (0004) in particular is a hard prerequisite for the app's `:core:network`.
+> **Status:** implemented and merged. The bridge session (Epic 1 stories 0004 `:protocol` and 0005
+> session bridge) it depends on is complete, so the app connects live end-to-end (verified against
+> the reference server), in addition to the hermetic `FakeBridgeClient` path.
 
 | Story | Title | Depends on | What it delivers |
 |-------|-------|------------|------------------|
 | 0016 | App network layer & session client | 0004 (`:protocol`), 0007 | `:core:model` (connection/session domain) + `:core:network` (a WebSocket bridge client speaking the `:protocol` contract, DTO→domain mappers, and a `FakeBridgeClient`). |
 | 0017 | Connection repository & live status wiring | 0016, 0010 | A connection/session repository that maps the bridge `SessionStatus` into the app `ConnectionState` and replaces the **stub** behind story 0010's `ConnectionStatusSource` seam; server-list persistence (DataStore). |
 | 0018 | Connect & sign-in UI | 0017, EPIC-03 | `:feature:connect`: server list / add-server, sign-in, and connection-state screens (connecting / connected / auth-failed / version-unsupported), built on the design system. |
-| 0019 | Registration & auth error handling | 0018 | Account registration where the server supports it; auth-failure / version-unsupported handling and retry, surfaced through the design-system prompt/error surfaces. |
+| 0019 | Auth, version & network error handling | 0018 | Enriches 0017's seam to carry failure **detail**; distinct auth-failed / version-unsupported (`server=… bridge=…`) / network-timeout surfaces with retry. **Registration permanently deferred** (2026-07-30) — see the story doc. |
 
-Downstream epics continue the numbering from `0023`.
+---
+
+## Epic 5 — Session Resilience & Notifications
+
+Surviving network drops, rotation, and backgrounding without losing the session, with automatic
+reconnection; and (later) push notifications for "it's your turn," invites, and mentions. See
+[`../project-plan.md`](../project-plan.md) (EPIC-05).
+
+**Resilience track (planned & built now):**
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0023 | Bridge session hold & resume | 0005, 0004 | The bridge parks a per-client XMage session on an unexpected app-socket drop (kept alive), issues a `resumeId`, and re-attaches a reconnecting app via a `Resume` message — no re-auth. Additive `:protocol` resume messages. |
+| 0024 | App reconnect & lifecycle-aware session | 0023, 0016, 0017 | App-side automatic reconnection with resume (no credential re-entry), bounded exponential back-off, and network/lifecycle awareness; survives rotation and backgrounding. |
+| 0025 | Resilience UX & recovery surfaces | 0024, 0019, 0010 | Non-destructive reconnecting/restoring indicator (via the 0010 status bar) that preserves context, and a distinct "session lost — sign in again" recovery surface. |
+
+**Notifications track (deferred):** push transport (FCM vs. alternatives), device-token
+registration, and "your turn"/invite/mention delivery are **deferred** until after the resilience
+track and a push-transport decision — and are partly gated on gameplay (EPIC-11+) to trigger on.
+They will be numbered when planned.
 
 ---
 
@@ -219,8 +234,12 @@ host build. Full design in [`../build-environment.md`](../build-environment.md).
 ## Recommended build order (now)
 
 The story numbers are **identifiers, not a strict sequence** (the app epics shipped ahead of the
-bridge). The current recommended order is:
+bridge). Stories **0001–0022 are complete and merged**:
 
-1. **Build infrastructure:** 0020 → 0021 → 0022.
-2. **Bridge:** 0002 (realized by 0022) → 0003 → 0004 → 0005 → 0006, built in-container.
-3. **Epic 4 (connect):** 0016 → 0017 → 0018 → 0019, once the bridge runs.
+1. **Build infrastructure:** 0020 → 0021 → 0022. ✅
+2. **Bridge (Epic 1):** 0002 (realized by 0022) → 0003 → 0004 → 0005 → 0006, built in-container. ✅
+3. **App shell / design system (Epics 2–3):** 0007–0011, 0012–0015. ✅
+4. **Epic 4 (connect):** 0016 → 0017 → 0018 → 0019. ✅ (registration deferred)
+
+**Next:** **Epic 5 resilience track** — 0023 → 0024 → 0025. (Epic 5's notifications track is
+deferred; downstream epics 06–17 are not yet broken into stories.)
