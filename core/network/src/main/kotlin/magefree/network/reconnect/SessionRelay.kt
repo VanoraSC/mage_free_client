@@ -1,0 +1,87 @@
+package magefree.network.reconnect
+
+import magefree.model.Credentials
+import magefree.model.ServerTarget
+import magefree.model.Session
+import magefree.model.SessionEvent
+import magefree.network.mapper.SessionMapper
+import magefree.protocol.ClientMessage
+import magefree.protocol.Login
+import magefree.protocol.Resume
+import magefree.protocol.ServerMessage
+
+/**
+ * The frame-level relay for one authenticated socket session (story 0024), factored out of the Ktor
+ * transport so the **`Resume` vs `Login`** decision and the `ResumeRejected` → `Login` fallback are
+ * unit-testable without a live socket: it speaks in `:protocol` [ServerMessage]/[ClientMessage] over two
+ * injected suspend I/O lambdas ([receive]/[send]) and emits `:core:model` [SessionEvent]s via the
+ * production [SessionMapper].
+ *
+ * Post-handshake behaviour:
+ * - **Open:** if [handle] holds a `resumeId`, send `Resume(resumeId)` (a reconnect resuming the parked
+ *   session, story 0023); otherwise send `Login` with the retained [credentials].
+ * - **`SessionResumable`:** capture the handle; when it is the ack of a `Resume` we just sent, surface
+ *   [SessionEvent.Connected] (the resume completed — recovery is over).
+ * - **`ResumeRejected`:** the parked session is gone/expired — clear the handle and fall back to a fresh
+ *   `Login` on the same socket.
+ * - Every other server frame maps through [SessionMapper]; a terminal event ends the session.
+ */
+internal object SessionRelay {
+    suspend fun run(
+        server: ServerTarget,
+        credentials: Credentials,
+        bridgeVersion: String?,
+        handle: ResumeHandle,
+        receive: suspend () -> ServerMessage?,
+        send: suspend (ClientMessage) -> Unit,
+        emit: suspend (SessionEvent) -> Unit,
+        isDisconnectRequested: () -> Boolean,
+    ): SessionOutcome {
+        var awaitingResumeAck = false
+        val held = handle.resumeId
+        if (held != null) {
+            send(Resume(held))
+            awaitingResumeAck = true
+        } else {
+            send(Login(credentials.username, credentials.password))
+        }
+
+        while (true) {
+            val message = receive() ?: break
+
+            val resumeId = SessionMapper.resumeIdOrNull(message)
+            if (resumeId != null) {
+                handle.resumeId = resumeId
+                if (awaitingResumeAck) {
+                    // The bridge acked our Resume: the parked session is live again.
+                    awaitingResumeAck = false
+                    emit(SessionEvent.Connected(Session(server, credentials.username, bridgeVersion)))
+                }
+                continue
+            }
+
+            if (SessionMapper.isResumeRejected(message)) {
+                // Handle unknown/expired: drop it and re-authenticate on this same socket.
+                handle.resumeId = null
+                awaitingResumeAck = false
+                send(Login(credentials.username, credentials.password))
+                continue
+            }
+
+            val event =
+                SessionMapper.toSessionEvent(message, server, credentials.username, bridgeVersion) ?: continue
+            emit(event)
+            when (event) {
+                is SessionEvent.AuthFailed,
+                is SessionEvent.VersionUnsupported,
+                is SessionEvent.Disconnected,
+                is SessionEvent.Error,
+                -> return SessionOutcome.TERMINAL
+
+                else -> Unit // Connecting / Connected / Reconnecting: keep relaying.
+            }
+        }
+        // Incoming closed without a terminal status.
+        return if (isDisconnectRequested()) SessionOutcome.CLEAN_CLOSE else SessionOutcome.RETRY
+    }
+}

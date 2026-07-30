@@ -1,0 +1,230 @@
+package magefree.network.reconnect
+
+import app.cash.turbine.test
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
+import magefree.model.ServerTarget
+import magefree.model.Session
+import magefree.model.SessionEvent
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Turbine coverage of the story-0024 reconnect loop over a **fake [SessionRunner] + fake connectivity/
+ * lifecycle**, exercising every path hermetically: an unexpected drop auto-reconnects (surfacing
+ * `Reconnecting`) and carries the resume handle forward; a terminal outcome and an explicit disconnect
+ * stop the loop; a connectivity return and a foreground refocus cut a waiting back-off short; a
+ * backgrounded app relaxes to waiting for the foreground; and `maxAttempts` exhaustion gives up.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ReconnectingSessionTest {
+    private val target = ServerTarget(host = "bridge.local", port = 9000)
+    private val connected = SessionEvent.Connected(Session(target, "pete"))
+
+    /** A [SessionRunner] driven by a list of per-invocation steps; records the handle each attempt saw. */
+    private class ScriptedRunner(
+        private val steps: List<suspend (ResumeHandle, suspend (SessionEvent) -> Unit) -> SessionOutcome>,
+    ) : SessionRunner {
+        val handlesSeen = mutableListOf<String?>()
+
+        override suspend fun runOnce(
+            handle: ResumeHandle,
+            emit: suspend (SessionEvent) -> Unit,
+        ): SessionOutcome {
+            handlesSeen += handle.resumeId
+            val index = (handlesSeen.size - 1).coerceAtMost(steps.size - 1)
+            return steps[index](handle, emit)
+        }
+    }
+
+    private fun session(
+        runner: SessionRunner,
+        policy: ReconnectPolicy = ReconnectPolicy(initialDelayMillis = 1_000, jitterRatio = 0.0),
+        connectivity: ConnectivityObserver = FakeConnectivityObserver(),
+        lifecycle: AppLifecycleObserver = FakeAppLifecycleObserver(),
+        isDisconnectRequested: () -> Boolean = { false },
+    ) = ReconnectingSession(policy, connectivity, lifecycle, isDisconnectRequested, runner)
+
+    @Test
+    fun dropReconnectsResumesAndSurfacesReconnecting() =
+        runTest {
+            val runner =
+                ScriptedRunner(
+                    listOf(
+                        // First connect: reach Connected, capture a resume handle, then drop.
+                        { handle, emit ->
+                            emit(connected)
+                            handle.resumeId = "r1"
+                            SessionOutcome.RETRY
+                        },
+                        // Reconnect: should be offered the handle (real runner would Resume), then connect.
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.TERMINAL
+                        },
+                    ),
+                )
+
+            session(runner).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                assertEquals(SessionEvent.Reconnecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                awaitComplete()
+            }
+
+            // The handle captured in attempt 0 was carried into attempt 1 (Resume, not a fresh Login).
+            assertEquals(listOf(null, "r1"), runner.handlesSeen)
+        }
+
+    @Test
+    fun terminalOutcomeStopsTheLoop() =
+        runTest {
+            val runner =
+                ScriptedRunner(
+                    listOf { _, emit ->
+                        emit(SessionEvent.AuthFailed("bad creds"))
+                        SessionOutcome.TERMINAL
+                    },
+                )
+
+            session(runner).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertEquals(SessionEvent.AuthFailed("bad creds"), awaitItem())
+                awaitComplete()
+            }
+            assertEquals(1, runner.handlesSeen.size) // never retried
+        }
+
+    @Test
+    fun explicitDisconnectSurfacesACleanDisconnected() =
+        runTest {
+            val runner =
+                ScriptedRunner(
+                    listOf { _, emit ->
+                        emit(connected)
+                        SessionOutcome.CLEAN_CLOSE
+                    },
+                )
+
+            session(runner).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                assertEquals(SessionEvent.Disconnected(), awaitItem())
+                awaitComplete()
+            }
+        }
+
+    @Test
+    fun connectivityReturnCutsTheBackoffShort() =
+        runTest(UnconfinedTestDispatcher()) {
+            // A huge back-off so any progress before it elapses proves the connectivity kick.
+            val policy = ReconnectPolicy(initialDelayMillis = 3_600_000, maxDelayMillis = 3_600_000, jitterRatio = 0.0)
+            // Start offline so the rising-edge collector is definitely waiting for the return.
+            val connectivity = FakeConnectivityObserver(initial = false)
+            val runner =
+                ScriptedRunner(
+                    listOf(
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.RETRY
+                        },
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.TERMINAL
+                        },
+                    ),
+                )
+
+            session(runner, policy = policy, connectivity = connectivity).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                assertEquals(SessionEvent.Reconnecting, awaitItem())
+                // Network returns → the waiting back-off is kicked immediately (no virtual time elapses).
+                connectivity.set(true)
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                awaitComplete()
+            }
+            assertEquals("reconnect must happen immediately, not after the back-off", 0, testScheduler.currentTime)
+        }
+
+    @Test
+    fun foregroundRefocusCutsTheBackoffShort() =
+        runTest(UnconfinedTestDispatcher()) {
+            val policy = ReconnectPolicy(initialDelayMillis = 3_600_000, maxDelayMillis = 3_600_000, jitterRatio = 0.0)
+            val lifecycle = FakeAppLifecycleObserver(initial = true)
+            val runner =
+                ScriptedRunner(
+                    listOf(
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.RETRY
+                        },
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.TERMINAL
+                        },
+                    ),
+                )
+
+            session(runner, policy = policy, lifecycle = lifecycle).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                assertEquals(SessionEvent.Reconnecting, awaitItem())
+                // A background→foreground edge refocuses the app and kicks the waiting back-off.
+                lifecycle.set(false)
+                lifecycle.set(true)
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                awaitComplete()
+            }
+            assertEquals(0, testScheduler.currentTime)
+        }
+
+    @Test
+    fun backgroundedAppRelaxesUntilForegroundReturns() =
+        runTest(UnconfinedTestDispatcher()) {
+            val lifecycle = FakeAppLifecycleObserver(initial = false) // start backgrounded
+            val runner =
+                ScriptedRunner(
+                    listOf(
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.RETRY
+                        },
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.TERMINAL
+                        },
+                    ),
+                )
+
+            session(runner, lifecycle = lifecycle).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                assertEquals(SessionEvent.Reconnecting, awaitItem())
+                // Backgrounded: the loop waits quietly (bridge holds the session) — no reconnect yet.
+                expectNoEvents()
+                // Return to foreground → the reconnect proceeds.
+                lifecycle.set(true)
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                awaitComplete()
+            }
+        }
+
+    @Test
+    fun exhaustingMaxAttemptsGivesUpWithDisconnected() =
+        runTest {
+            val policy = ReconnectPolicy(initialDelayMillis = 10, maxDelayMillis = 10, jitterRatio = 0.0, maxAttempts = 1)
+            val runner = ScriptedRunner(listOf { _, _ -> SessionOutcome.RETRY })
+
+            session(runner, policy = policy).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                // attempt 1 (allowed) then attempt 2 exceeds maxAttempts=1 → give up.
+                assertEquals(SessionEvent.Reconnecting, awaitItem())
+                assertEquals(SessionEvent.Disconnected("reconnect attempts exhausted"), awaitItem())
+                awaitComplete()
+            }
+        }
+}
