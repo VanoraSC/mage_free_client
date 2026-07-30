@@ -1,6 +1,8 @@
 package magefree.feature.connect
 
+import magefree.model.ConnectionError
 import magefree.model.ConnectionState
+import magefree.model.ConnectionStatus
 import magefree.model.ServerTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -25,6 +27,32 @@ class ConnectPhaseTest {
             ConnectionState.AuthFailed.toConnectPhase(),
             ConnectionState.Unsupported.toConnectPhase(),
         )
+    }
+
+    @Test
+    fun transportErrorMapsToNetworkWhileCleanDisconnectStaysIdle() {
+        val cleanDisconnect = ConnectionStatus(ConnectionState.Disconnected)
+        assertEquals(ConnectPhase.Idle, cleanDisconnect.toConnectPhase())
+
+        val transportFailure =
+            ConnectionStatus(
+                state = ConnectionState.Disconnected,
+                detail = "failed to open websocket: timeout",
+                error = ConnectionError.Transport("failed to open websocket: timeout"),
+            )
+        assertEquals(ConnectPhase.Network, transportFailure.toConnectPhase())
+    }
+
+    @Test
+    fun statusProjectionKeepsAuthVersionAndNetworkDistinct() {
+        val auth = ConnectionStatus(ConnectionState.AuthFailed, detail = "bad creds").toConnectPhase()
+        val version = ConnectionStatus(ConnectionState.Unsupported, detail = "server=1 bridge=2").toConnectPhase()
+        val network =
+            ConnectionStatus(
+                ConnectionState.Disconnected,
+                error = ConnectionError.Transport("boom"),
+            ).toConnectPhase()
+        assertEquals(3, setOf(auth, version, network).size)
     }
 
     @Test

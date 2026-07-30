@@ -4,17 +4,22 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import magefree.model.ConnectionError
 import magefree.model.ConnectionState
+import magefree.model.ConnectionStatus
 import magefree.model.Credentials
 import magefree.model.ServerTarget
+import magefree.model.SessionEvent
 import magefree.network.di.ApplicationScope
 import magefree.network.di.IoDispatcher
 import javax.inject.Inject
@@ -59,21 +64,54 @@ class ConnectionRepository
         private val command = MutableStateFlow<Command?>(null)
 
         /**
-         * The single source of truth for connection state. Reduces the active session's
-         * [magefree.model.SessionEvent]s to their [ConnectionState]; emits [ConnectionState.Disconnected]
-         * whenever there is no active command.
+         * The single shared stream of the active session's [SessionEvent]s. One `flatMapLatest` over
+         * [command] preserves the "one active session" invariant (each command cancels the previous
+         * session's collection); a hot [shareIn] with the default SUSPEND back-pressure then multicasts
+         * those events **losslessly** to both public flows below, so the status bar and a connect
+         * screen observing at once share one bridge connection rather than opening two. When there is
+         * no active command it emits a single clean [SessionEvent.Disconnected].
          */
-        val connectionState: StateFlow<ConnectionState> =
+        private val sessionEvents: SharedFlow<SessionEvent> =
             command
                 .flatMapLatest { cmd ->
                     if (cmd == null) {
-                        flowOf(ConnectionState.Disconnected)
+                        flowOf(SessionEvent.Disconnected())
                     } else {
-                        bridgeClient
-                            .connect(cmd.server, cmd.credentials)
-                            .map { it.connectionState }
+                        bridgeClient.connect(cmd.server, cmd.credentials)
                     }
                 }.flowOn(dispatcher)
+                .shareIn(
+                    scope = scope,
+                    started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+                    replay = 1,
+                )
+
+        /**
+         * The detail-carrying source of truth (story 0019). Reduces [sessionEvents] to a
+         * [ConnectionStatus] — the **same** categorical reduction as [connectionState] but preserving
+         * each failure's diagnostic (auth message, `server=… bridge=…` version detail, a transport
+         * [ConnectionError]) so the sign-in UI can render distinct, detailed surfaces. Emits
+         * [ConnectionStatus.Disconnected] whenever there is no active command.
+         */
+        val connectionStatus: StateFlow<ConnectionStatus> =
+            sessionEvents
+                .map { it.toConnectionStatus() }
+                .stateIn(
+                    scope = scope,
+                    started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+                    initialValue = ConnectionStatus.Disconnected,
+                )
+
+        /**
+         * The single source of truth for connection state (story 0017; story 0010's status-bar
+         * dependency via `ConnectionStatusSourceImpl`). Its type and observable behaviour are
+         * **unchanged** — the same one-per-[SessionEvent] reduction to [ConnectionState], now taken
+         * from the shared [sessionEvents] so it and [connectionStatus] stay consistent over one
+         * session. Emits [ConnectionState.Disconnected] whenever there is no active command.
+         */
+        val connectionState: StateFlow<ConnectionState> =
+            sessionEvents
+                .map { it.connectionState }
                 .stateIn(
                     scope = scope,
                     started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
@@ -106,4 +144,29 @@ class ConnectionRepository
         private companion object {
             const val STOP_TIMEOUT_MILLIS = 5_000L
         }
+    }
+
+/**
+ * Reduce a [SessionEvent] to a detail-carrying [ConnectionStatus]. Mirrors
+ * [SessionEvent.connectionState] for the categorical [ConnectionStatus.state] while preserving the
+ * event's diagnostic: an [SessionEvent.AuthFailed] message, a [SessionEvent.VersionUnsupported]
+ * `server=… bridge=…` detail, a [SessionEvent.Disconnected] reason, or a [SessionEvent.Error]'s
+ * structured [ConnectionError] (a transport/protocol fault the UI renders as a network/timeout
+ * surface). The plain lifecycle events (connecting/connected/reconnecting) carry no detail.
+ */
+private fun SessionEvent.toConnectionStatus(): ConnectionStatus =
+    when (this) {
+        is SessionEvent.AuthFailed -> ConnectionStatus(ConnectionState.AuthFailed, detail = message)
+        is SessionEvent.VersionUnsupported -> ConnectionStatus(ConnectionState.Unsupported, detail = detail)
+        is SessionEvent.Disconnected -> ConnectionStatus(ConnectionState.Disconnected, detail = message)
+        is SessionEvent.Error ->
+            ConnectionStatus(ConnectionState.Disconnected, detail = error.detailMessage(), error = error)
+        else -> ConnectionStatus(connectionState)
+    }
+
+/** The human-readable reason carried by a [ConnectionError], for display in a failure surface. */
+private fun ConnectionError.detailMessage(): String =
+    when (this) {
+        is ConnectionError.Transport -> message
+        is ConnectionError.Protocol -> message
     }

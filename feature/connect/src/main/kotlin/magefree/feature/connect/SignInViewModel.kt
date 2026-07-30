@@ -25,13 +25,17 @@ private data class SignInForm(
  *
  * @param server the server being signed in to, or null before one is bound.
  * @param username / password the current form input (password is never logged/persisted).
- * @param phase the live [ConnectPhase] derived from the repository's connection state.
+ * @param phase the live [ConnectPhase] derived from the repository's connection status.
+ * @param detail the failure diagnostic for the current [phase] (e.g. `server=… bridge=…` on a version
+ *   mismatch, an auth message, or a transport reason), shown by the failure surface when present;
+ *   null in non-failure phases. Never a credential/secret.
  */
 data class SignInUiState(
     val server: ServerTarget? = null,
     val username: String = "",
     val password: String = "",
     val phase: ConnectPhase = ConnectPhase.Idle,
+    val detail: String? = null,
 ) {
     /** The form is submittable when a server is bound, a username is present, and nothing is in flight. */
     val canSubmit: Boolean
@@ -41,7 +45,8 @@ data class SignInUiState(
 /**
  * MVVM ViewModel for the sign-in surface. It drives story 0017's [ConnectionRepository]: [connect]
  * calls [ConnectionRepository.connect] with the bound server and entered [Credentials], and the UI
- * renders the resulting [ConnectPhase] observed from [ConnectionRepository.connectionState].
+ * renders the resulting [ConnectPhase] + failure [SignInUiState.detail] observed from story 0019's
+ * detail-carrying [ConnectionRepository.connectionStatus].
  *
  * The bound [ServerTarget] arrives via [bind] (the flow's coordinator seeds it) rather than a nav
  * argument, keeping the VM usable both under Hilt and directly in hermetic tests.
@@ -60,12 +65,13 @@ class SignInViewModel
         private val form = MutableStateFlow(SignInForm())
 
         val uiState: StateFlow<SignInUiState> =
-            combine(server, form, connectionRepository.connectionState) { srv, formState, connectionState ->
+            combine(server, form, connectionRepository.connectionStatus) { srv, formState, status ->
                 SignInUiState(
                     server = srv,
                     username = formState.username,
                     password = formState.password,
-                    phase = connectionState.toConnectPhase(),
+                    phase = status.toConnectPhase(),
+                    detail = status.detail,
                 )
             }.stateIn(
                 scope = viewModelScope,

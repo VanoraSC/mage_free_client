@@ -107,7 +107,9 @@ fun SignInScreen(
                 ConnectPhase.AuthFailed ->
                     AuthFailedSurface(onRetry = onRetry, onCancel = onCancel)
                 ConnectPhase.VersionUnsupported ->
-                    VersionUnsupportedSurface(onRetry = onRetry, onCancel = onCancel)
+                    VersionUnsupportedSurface(onRetry = onRetry, onCancel = onCancel, detail = uiState.detail)
+                ConnectPhase.Network ->
+                    NetworkSurface(onRetry = onRetry, onCancel = onCancel, detail = uiState.detail)
             }
         }
     }
