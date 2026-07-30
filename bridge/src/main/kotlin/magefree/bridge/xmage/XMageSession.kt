@@ -29,6 +29,13 @@ public class XMageSession(
         get() = session.isConnected
 
     /**
+     * The server-assigned session id via `SessionImpl.getSessionId()`, or `null` before the connect
+     * handshake populates it. Stable for the life of a connection — the anchor story 0023 uses to
+     * prove a resumed session is the *same* upstream session (never reconnected/re-authed).
+     */
+    public fun sessionId(): String? = session.sessionId
+
+    /**
      * Connects and authenticates against the server described by [connection], running the blocking
      * `connectStart` on [Dispatchers.IO]. `connectStart` performs the mandatory version handshake
      * and, for non-admin users, sets the user data.
@@ -75,6 +82,21 @@ public class XMageSession(
     ): Boolean =
         withContext(Dispatchers.IO) {
             session.sendChatMessage(chatId, text)
+        }
+
+    /**
+     * Keepalive probe: `SessionImpl.ping()` then report `isConnected()`. Used by story 0023's
+     * [magefree.bridge.session.SessionRegistry] to keep a **parked** session (app socket dropped)
+     * alive during its grace window and to notice if the upstream link died. `ping()` itself is
+     * best-effort (it routes failures through the connection-error path, surfacing a `disconnected`
+     * callback); the returned flag reflects liveness right after. Runs on [Dispatchers.IO].
+     *
+     * @return `true` if still connected after the probe, `false` otherwise.
+     */
+    public suspend fun ping(): Boolean =
+        withContext(Dispatchers.IO) {
+            session.ping()
+            session.isConnected
         }
 
     /**

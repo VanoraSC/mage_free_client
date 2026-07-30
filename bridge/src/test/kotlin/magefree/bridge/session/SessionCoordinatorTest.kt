@@ -24,12 +24,13 @@ import magefree.protocol.ProtocolVersion
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
@@ -37,29 +38,39 @@ import io.ktor.server.websocket.WebSockets as ServerWebSockets
 /**
  * Hermetic end-to-end coverage of the session bridge: a real Ktor WebSocket client drives the real
  * [sessionWebSocket] route + [SessionCoordinator], with a [FakeUpstreamSession] scripting each
- * `SessionStateCode` path. No XMage server involved.
+ * `SessionStateCode` path. No XMage server involved. (Resume/park/evict scenarios live in
+ * [SessionResumeTest].)
  */
 class SessionCoordinatorTest {
-    /** Boots the route with [fake] as the per-socket upstream and hands the test a WS-capable client. */
+    /** Boots the route with [fake] as the per-login upstream and a fresh [SessionRegistry]. */
     private fun scenario(
         fake: FakeUpstreamSession,
+        config: ResumeConfig = ResumeConfig(),
         block: suspend (client: HttpClient) -> Unit,
     ) = testApplicationTimed {
-        application { sessionModule { fake } }
-        val wsClient =
-            createClient {
-                install(ClientWebSockets) {
-                    contentConverter = KotlinxWebsocketSerializationConverter(ProtocolJson.json)
+        val registry = SessionRegistry(config)
+        try {
+            application { sessionModule(registry) { fake } }
+            val wsClient =
+                createClient {
+                    install(ClientWebSockets) {
+                        contentConverter = KotlinxWebsocketSerializationConverter(ProtocolJson.json)
+                    }
                 }
-            }
-        block(wsClient)
+            block(wsClient)
+        } finally {
+            registry.shutdown()
+        }
     }
 
-    private fun Application.sessionModule(newUpstream: () -> UpstreamSession) {
+    private fun Application.sessionModule(
+        registry: SessionRegistry,
+        newUpstream: () -> UpstreamSession,
+    ) {
         install(ServerWebSockets) {
             contentConverter = KotlinxWebsocketSerializationConverter(ProtocolJson.json)
         }
-        routing { sessionWebSocket(newUpstream = newUpstream) }
+        routing { sessionWebSocket(registry = registry, newUpstream = newUpstream) }
     }
 
     private suspend fun HttpClient.session(block: suspend DefaultClientWebSocketSession.() -> Unit) =
@@ -75,13 +86,16 @@ class SessionCoordinatorTest {
     private suspend fun DefaultClientWebSocketSession.nextStatus(): SessionStatus =
         assertInstanceOf(SessionStatus::class.java, receiveDeserialized<ServerMessage>())
 
+    private suspend fun DefaultClientWebSocketSession.expectResumable(): SessionResumable =
+        assertInstanceOf(SessionResumable::class.java, receiveDeserialized<ServerMessage>())
+
     private fun status(
         state: SessionStateCode,
         message: String? = null,
     ) = SessionStatus(state = state, message = message)
 
     @Test
-    fun `login yields CONNECTING then CONNECTED, requestId only on the first, and close disconnects`() {
+    fun `login yields CONNECTING then CONNECTED and a resume handle, requestId only on the first`() {
         val fake = FakeUpstreamSession(listOf(status(SessionStateCode.CONNECTING), status(SessionStateCode.CONNECTED)))
         scenario(fake) { client ->
             client.session {
@@ -95,8 +109,11 @@ class SessionCoordinatorTest {
                 val connected = nextStatus()
                 assertEquals(SessionStateCode.CONNECTED, connected.state)
                 assertNull(connected.requestId)
+
+                // Story 0023: on CONNECTED the app receives its bridge-issued resume handle.
+                val resumable = expectResumable()
+                assertNotNull(resumable.resumeId)
             }
-            withTimeout(5_000) { fake.awaitDisconnect() }
             assertEquals(Credentials("alice", "pw"), fake.lastCredentials)
         }
     }
@@ -131,8 +148,9 @@ class SessionCoordinatorTest {
 
                 val versionGap = nextStatus()
                 assertEquals(SessionStateCode.VERSION_UNSUPPORTED, versionGap.state)
-                assertTrue(versionGap.message!!.contains("server=1.4.61"), "message: ${versionGap.message}")
-                assertTrue(versionGap.message!!.contains("bridge=1.4.60"), "message: ${versionGap.message}")
+                assertNotNull(versionGap.message)
+                assertEquals(true, versionGap.message!!.contains("server=1.4.61"))
+                assertEquals(true, versionGap.message!!.contains("bridge=1.4.60"))
             }
         }
     }
@@ -154,6 +172,7 @@ class SessionCoordinatorTest {
                 sendSerialized<ClientMessage>(Login(username = "dave"))
                 assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
                 assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
                 assertEquals(SessionStateCode.RECONNECTING, nextStatus().state)
                 assertEquals(SessionStateCode.DISCONNECTED, nextStatus().state)
             }
@@ -169,6 +188,7 @@ class SessionCoordinatorTest {
                 sendSerialized<ClientMessage>(Login(username = "erin"))
                 assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
                 assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
                 sendSerialized<ClientMessage>(Logout())
                 withTimeout(5_000) { fake.awaitDisconnect() }
             }
@@ -188,6 +208,7 @@ class SessionCoordinatorTest {
                 sendSerialized<ClientMessage>(Login(username = "frank"))
                 assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
                 assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
 
                 sendSerialized<ClientMessage>(GetServerInfo(requestId = "gsi-1"))
                 val info = assertInstanceOf(ServerInfo::class.java, receiveDeserialized<ServerMessage>())

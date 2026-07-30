@@ -143,6 +143,14 @@ public class XMageUpstreamSession(
         }
     }
 
+    override suspend fun ping(): Boolean {
+        val session = current ?: return false
+        if (!session.isConnected) return false
+        return session.ping()
+    }
+
+    override suspend fun sessionId(): String? = current?.sessionId()
+
     override suspend fun disconnect() {
         current?.disconnect()
     }

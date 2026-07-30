@@ -44,6 +44,23 @@ public interface UpstreamSession {
      */
     public suspend fun serverInfo(): ServerInfo?
 
+    /**
+     * Keepalive probe used by [SessionRegistry] while a session is **parked** (app socket dropped)
+     * to keep the upstream link healthy during the grace window (story 0023). Returns `true` if the
+     * session is still connected after the probe, `false` otherwise (a `false`/throw evicts the
+     * parked entry). Backed by `SessionImpl.ping()` + `isConnected()`; a no-op returning `false` when
+     * there is no active session.
+     */
+    public suspend fun ping(): Boolean
+
+    /**
+     * The **upstream** server-assigned session id (`SessionImpl.getSessionId()`), or `null` before a
+     * session is established. Stable across an app-socket drop+resume — the resume anchor the live IT
+     * asserts is unchanged to prove the same upstream session survived (never re-authenticated). This
+     * is the XMage id, distinct from the bridge-issued resume handle the app receives.
+     */
+    public suspend fun sessionId(): String?
+
     /** Disconnects the upstream session cleanly. Idempotent; safe to call when never connected. */
     public suspend fun disconnect()
 }
