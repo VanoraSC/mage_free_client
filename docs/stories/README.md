@@ -219,6 +219,23 @@ They will be numbered when planned.
 
 ---
 
+## Epic 6 — Lobby & Game Browser
+
+Browsing rooms, open tables, and watchable games — the surface behind the home "Play" path — with
+players and table settings at a glance and client-side filters/sorting. **Read-only**; joining and
+hosting are EPIC-07. See [`../project-plan.md`](../project-plan.md) (EPIC-06).
+
+**Design note:** XMage's lobby is **poll/request-response** (`SessionImpl.getTables/getRoomUsers/
+getGameTypes`), not push — so the app requests + refreshes rather than subscribing.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0027 | Lobby data relay & contract | 0005, 0006, 0004 | Bridge request/response for open tables / room users / game types: additive `:protocol` messages + `mage.view.*`→app-schema mappers (extends 0006's mapper boundary) + `SessionCoordinator` handling. |
+| 0028 | App lobby model & data | 0027, 0016, 0017 | `:core:model` lobby types + a `:core:network` `LobbyClient` (DTO→domain) + a `LobbyRepository` exposing an observable, refreshable snapshot (load/refresh/error as state); with a `FakeLobbyClient`. |
+| 0029 | Lobby browser UI | 0028, 0018, EPIC-03 | `:feature:lobby`: browse tables (name/host/format/seats/state/flags at a glance) with loading/empty/error/non-destructive-refresh states and client-side filter/sort, behind the shell Play entry. Join deferred to EPIC-07. |
+
+---
+
 ## Build Infrastructure
 
 Containerizing the **heavy / JVM path** (the bridge build, the upstream `../mage` Maven build, and
@@ -241,5 +258,8 @@ bridge). Stories **0001–0022 are complete and merged**:
 3. **App shell / design system (Epics 2–3):** 0007–0011, 0012–0015. ✅
 4. **Epic 4 (connect):** 0016 → 0017 → 0018 → 0019. ✅ (registration deferred)
 
-**Next:** **Epic 5 resilience track** — 0023 → 0024 → 0025. (Epic 5's notifications track is
-deferred; downstream epics 06–17 are not yet broken into stories.)
+5. **Epic 5 (resilience track):** 0023 → 0024 → 0025. ✅ (notifications track deferred)
+6. **Post-audit hardening:** 0026 (six audit fixes across protocol/resilience). ✅
+
+**Next:** **Epic 6 (lobby browser)** — 0027 → 0028 → 0029. (Epic 5's notifications track is deferred;
+downstream epics 07–17 are not yet broken into stories.)
