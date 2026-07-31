@@ -56,7 +56,14 @@ class ReconnectingSession(
                 while (isActive && !isDisconnectRequested()) {
                     if (attempt == 0) send(SessionEvent.Connecting)
 
-                    val outcome = runner.runOnce(handle) { send(it) }
+                    // Track whether this session actually reached Connected so a later independent drop
+                    // restarts the back-off from the initial delay rather than a permanently-grown one.
+                    var reachedConnected = false
+                    val outcome =
+                        runner.runOnce(handle) { event ->
+                            if (event is SessionEvent.Connected) reachedConnected = true
+                            send(event)
+                        }
                     if (outcome == SessionOutcome.TERMINAL) break
                     if (outcome == SessionOutcome.CLEAN_CLOSE) {
                         send(SessionEvent.Disconnected())
@@ -65,6 +72,9 @@ class ReconnectingSession(
 
                     // SessionOutcome.RETRY: the socket dropped unexpectedly.
                     if (isDisconnectRequested()) break
+                    // F2: a successful connection resets the counter, so back-off does not climb
+                    // unbounded across independent drop→recover cycles.
+                    if (reachedConnected) attempt = 0
                     attempt++
                     val max = policy.maxAttempts
                     if (max != null && attempt > max) {

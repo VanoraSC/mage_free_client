@@ -80,6 +80,50 @@ class ReconnectingSessionTest {
         }
 
     @Test
+    fun backoffRestartsFromInitialDelayAfterEachSuccessfulReconnect() =
+        runTest {
+            // Plain geometric growth, no jitter: delayForAttempt(1)=1000ms, delayForAttempt(2)=2000ms.
+            // Foreground+online stay true (default fakes) so no rising edge cuts the wait short — each
+            // back-off elapses in full on the virtual clock, letting us measure it.
+            val policy =
+                ReconnectPolicy(initialDelayMillis = 1_000, multiplier = 2.0, maxDelayMillis = 60_000, jitterRatio = 0.0)
+            val runner =
+                ScriptedRunner(
+                    listOf(
+                        // Cycle 1: connect, then an unexpected drop.
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.RETRY
+                        },
+                        // Cycle 2: reconnect succeeds (resets back-off), then a second independent drop.
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.RETRY
+                        },
+                        // Cycle 3: reconnect succeeds and the loop ends.
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.TERMINAL
+                        },
+                    ),
+                )
+
+            session(runner, policy = policy).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected) // cycle 1 connect
+                assertEquals(SessionEvent.Reconnecting, awaitItem()) // drop 1 → waits delayForAttempt(1)=1000
+                assertTrue(awaitItem() is SessionEvent.Connected) // cycle 2 connect
+                assertEquals(SessionEvent.Reconnecting, awaitItem()) // drop 2 → with reset, again 1000 (not 2000)
+                assertTrue(awaitItem() is SessionEvent.Connected) // cycle 3 connect
+                awaitComplete()
+            }
+
+            // Two recovery waits of the initial 1000ms each = 2000ms. Without the reset the second would
+            // have grown to 2000ms, totalling 3000ms — so this pins the back-off reset.
+            assertEquals(2_000L, testScheduler.currentTime)
+        }
+
+    @Test
     fun terminalOutcomeStopsTheLoop() =
         runTest {
             val runner =

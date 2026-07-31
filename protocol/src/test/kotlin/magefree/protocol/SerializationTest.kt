@@ -1,7 +1,9 @@
 package magefree.protocol
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -154,5 +156,37 @@ class SerializationTest {
         val decoded = json.decodeFromString<ClientMessage>(futureFrame)
 
         assertEquals(ClientHello(protocolMajor = 1, protocolMinor = 0), decoded)
+    }
+
+    @Test
+    fun `an unknown ClientMessage type decodes to the sentinel instead of throwing (F1)`() {
+        // A newer peer may add an entirely new message `type`; the decoder must tolerate it (story 0026).
+        val futureFrame = """{"type":"future_client_message","someField":42}"""
+
+        val decoded = json.decodeFromString<ClientMessage>(futureFrame)
+
+        assertTrue(decoded is UnknownClientMessage, "expected an UnknownClientMessage sentinel, got $decoded")
+        assertEquals("future_client_message", (decoded as UnknownClientMessage).type)
+    }
+
+    @Test
+    fun `an unknown ServerMessage type decodes to the sentinel instead of throwing (F1)`() {
+        val futureFrame = """{"type":"future_server_message","payload":{"nested":true}}"""
+
+        val decoded = json.decodeFromString<ServerMessage>(futureFrame)
+
+        assertTrue(decoded is UnknownServerMessage, "expected an UnknownServerMessage sentinel, got $decoded")
+        assertEquals("future_server_message", (decoded as UnknownServerMessage).type)
+    }
+
+    @Test
+    fun `the unknown-type sentinels are deserialize-only and never encoded (F1)`() {
+        // The sentinels must never be put back on the wire; encoding one fails loudly.
+        assertThrows(SerializationException::class.java) {
+            json.encodeToString<ClientMessage>(UnknownClientMessage("future_client_message"))
+        }
+        assertThrows(SerializationException::class.java) {
+            json.encodeToString<ServerMessage>(UnknownServerMessage("future_server_message"))
+        }
     }
 }

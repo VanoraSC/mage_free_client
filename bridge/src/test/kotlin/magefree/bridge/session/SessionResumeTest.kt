@@ -9,6 +9,7 @@ import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.server.application.install
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import magefree.bridge.testApplicationTimed
@@ -32,6 +33,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
@@ -192,6 +195,25 @@ class SessionResumeTest {
             }
         }
     }
+
+    @Test
+    fun `resume rejects a bound (non-parked) id, preserving the one-consumer invariant`() =
+        runBlocking {
+            // F4: a Resume for an id that is still BOUND (its socket has not parked) must be rejected —
+            // otherwise two forwarders would consume the same non-broadcast outbound channel and split
+            // the stream. Exercised directly against the registry (no park() call in between).
+            val registry = SessionRegistry(ResumeConfig(ttl = 60.seconds, keepaliveInterval = 5.seconds))
+            try {
+                val fake = FakeUpstreamSession(connectedScript())
+                val live = registry.createSession(fake, Credentials("holder", null))
+                val id = registry.register(live) // registered = BOUND, never parked
+
+                assertNull(registry.resume(id), "a bound (non-parked) id must not resume")
+                assertTrue(registry.isRegistered(id), "the rejected entry stays intact, still bound")
+            } finally {
+                registry.shutdown()
+            }
+        }
 
     @Test
     fun `an unknown resume handle is rejected`() {

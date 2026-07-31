@@ -36,7 +36,7 @@ enum class ConnectionSeverity {
  * - [label] visible text,
  * - [contentDescription] a distinct, non-color-only accessibility label,
  * - [severity] semantic role → color,
- * - [showRetry] whether a (stubbed) retry affordance is offered.
+ * - [showRetry] whether a retry affordance is offered (wired to a real reconnect via [onRetry]).
  */
 data class ConnectionStatusUiState(
     val state: ConnectionState,
@@ -139,11 +139,12 @@ class ConnectionStatusViewModel
                 )
 
         /**
-         * Retry/reconnect affordance. A stub for now — the seam exists but does nothing real, per
-         * story 0010 scope. EPIC-04 wires this to the bridge session's (re)connect.
+         * Retry/reconnect affordance for the status bar. Delegates to the [ConnectionStatusSource] seam
+         * (story 0026 F3), which the real [ConnectionStatusSourceImpl] implements as a genuine reconnect
+         * via `ConnectionRepository.retry()` — so the always-visible Retry is no longer a dead control.
          */
         fun onRetry() {
-            // TODO(EPIC-04): trigger a real (re)connect through the session source.
+            source.retry()
         }
 
         private companion object {

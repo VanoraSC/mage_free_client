@@ -27,6 +27,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.UnknownClientMessage
 import org.slf4j.LoggerFactory
 
 /**
@@ -162,6 +163,13 @@ public class SessionCoordinator(
                                 bound?.live?.serverInfo()
                                     ?: ServerInfo(serverVersion = "unavailable", mainRoomId = null)
                             ws.sendSerialized<ServerMessage>(info.copy(requestId = message.requestId))
+                        }
+
+                        is UnknownClientMessage -> {
+                            // Additive forward-compat (story 0026 F1): a newer app may send a `type` this
+                            // bridge does not know. Per ProtocolVersion's minor-tolerance contract we log
+                            // and DROP it — no ProtocolError, no close — so the session is unaffected.
+                            logger.info("Dropping unknown client message type '{}' (forward-compat).", message.type)
                         }
 
                         else ->
