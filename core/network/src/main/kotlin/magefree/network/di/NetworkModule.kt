@@ -86,7 +86,7 @@ object NetworkModule {
      * lobby on an active connection without owning the session.
      */
     @Provides
-    fun provideConnectionState(connectionRepository: ConnectionRepository): StateFlow<ConnectionState> =
+    fun provideConnectionState(connectionRepository: ConnectionRepository): StateFlow<@JvmSuppressWildcards ConnectionState> =
         connectionRepository.connectionState
 
     @Provides

@@ -40,7 +40,11 @@ class LobbyRepository
     @Inject
     constructor(
         private val lobbyClient: LobbyClient,
-        private val connectionState: StateFlow<ConnectionState>,
+        // @JvmSuppressWildcards: StateFlow is declared covariant (`out T`), so Kotlin would compile this
+        // injected key to `StateFlow<? extends ConnectionState>` while the provider supplies the
+        // invariant `StateFlow<ConnectionState>` — a Dagger missing-binding. Suppressing wildcards on
+        // both ends keys them identically. (Surfaced when 0029 first assembled this into the app graph.)
+        private val connectionState: StateFlow<@JvmSuppressWildcards ConnectionState>,
         @IoDispatcher private val dispatcher: CoroutineDispatcher,
         @ApplicationScope private val scope: CoroutineScope,
     ) {
