@@ -36,4 +36,24 @@ interface BridgeClient {
 
     /** Tear down the active session, if any. */
     suspend fun disconnect()
+
+    /**
+     * Perform one **request/response** exchange over the *live* session socket (story 0028): send
+     * [message] and suspend until the correlated reply carrying [requestId] arrives, then return it.
+     * The exchange is multiplexed with the session-event/push stream on the same socket.
+     *
+     * The signature is intentionally **wire-agnostic** — `message` and the `ReplyT` reply are erased
+     * `Any` here so no `:protocol` type appears on this interface's ABI (modules above `:core:network`,
+     * e.g. `:feature:*`, implement `BridgeClient` without seeing `:protocol`). Callers *inside*
+     * `:core:network` (the `LobbyClient`) supply the concrete `:protocol` request and reply types; the
+     * implementation sends `message` as a `ClientMessage` and returns the matching `ServerMessage`.
+     *
+     * Throws if there is no active session, if the reply does not arrive before the implementation's
+     * timeout, or if the session drops while awaiting it — the caller (the repository) surfaces that as
+     * error state, never propagating it as an unhandled throw.
+     */
+    suspend fun <ReplyT : Any> request(
+        message: Any,
+        requestId: String,
+    ): ReplyT
 }

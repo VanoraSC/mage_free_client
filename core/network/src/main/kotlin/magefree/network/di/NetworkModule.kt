@@ -13,7 +13,12 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.StateFlow
+import magefree.model.ConnectionState
 import magefree.network.BridgeClient
+import magefree.network.ConnectionRepository
+import magefree.network.LobbyClient
+import magefree.network.LobbyClientImpl
 import magefree.network.ktor.KtorBridgeClient
 import magefree.network.reconnect.AndroidConnectivityObserver
 import magefree.network.reconnect.AppLifecycleObserver
@@ -65,6 +70,24 @@ object NetworkModule {
         connectivity: ConnectivityObserver,
         lifecycle: AppLifecycleObserver,
     ): BridgeClient = KtorBridgeClient(connectivity = connectivity, lifecycle = lifecycle)
+
+    /**
+     * The production [LobbyClient] (story 0028), riding the same [BridgeClient] singleton (the live
+     * session) via its request/response primitive. `LobbyClientImpl` is `@Inject`-constructed with the
+     * `:protocol`-free [BridgeClient], so nothing in the Hilt graph above `:core:network` sees a wire type.
+     */
+    @Provides
+    @Singleton
+    fun provideLobbyClient(impl: LobbyClientImpl): LobbyClient = impl
+
+    /**
+     * The app-level connection state as a plain [StateFlow], sourced from the single-source-of-truth
+     * [ConnectionRepository] (story 0017). The [magefree.network.LobbyRepository] observes it to gate the
+     * lobby on an active connection without owning the session.
+     */
+    @Provides
+    fun provideConnectionState(connectionRepository: ConnectionRepository): StateFlow<ConnectionState> =
+        connectionRepository.connectionState
 
     @Provides
     @IoDispatcher
