@@ -14,19 +14,30 @@ import magefree.bridge.testApplicationTimed
 import magefree.bridge.ws.sessionWebSocket
 import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
+import magefree.protocol.GameTypeList
+import magefree.protocol.GameTypeSummary
+import magefree.protocol.GetGameTypes
+import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
+import magefree.protocol.GetTables
 import magefree.protocol.Login
 import magefree.protocol.Logout
 import magefree.protocol.Ping
 import magefree.protocol.Pong
 import magefree.protocol.ProtocolJson
 import magefree.protocol.ProtocolVersion
+import magefree.protocol.RoomUserList
+import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableList
+import magefree.protocol.TableStateCode
+import magefree.protocol.TableSummary
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -215,6 +226,94 @@ class SessionCoordinatorTest {
                 assertEquals("1.4.60", info.serverVersion)
                 assertEquals("room-42", info.mainRoomId)
                 assertEquals("gsi-1", info.requestId)
+            }
+        }
+    }
+
+    @Test
+    fun `lobby browse requests reply correlated list messages sourced from the bound session`() {
+        val table =
+            TableSummary(
+                tableId = "table-1",
+                name = "Duel Night",
+                controllerName = "grace",
+                gameType = "Two Player Duel",
+                deckType = "Constructed - Standard",
+                state = TableStateCode.WAITING,
+                seatsFilled = 1,
+                seatsTotal = 2,
+                isTournament = false,
+                isRated = true,
+                isPassworded = false,
+                isLimited = false,
+                skillLevel = SkillLevelCode.CASUAL,
+                createdAtEpochMs = 1_700_000_000_000L,
+            )
+        val user =
+            RoomUserSummary(
+                name = "grace",
+                flag = "United States",
+                matchHistory = "3-1",
+                games = "1 games",
+                ping = "42 ms",
+                generalRating = 1500,
+            )
+        val gameType = GameTypeSummary(name = "Two Player Duel", minPlayers = 2, maxPlayers = 2)
+
+        val fake =
+            FakeUpstreamSession(
+                listOf(status(SessionStateCode.CONNECTING), status(SessionStateCode.CONNECTED)),
+                scriptedTables = listOf(table),
+                scriptedRoomUsers = listOf(user),
+                scriptedGameTypes = listOf(gameType),
+            )
+        scenario(fake) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(Login(username = "grace"))
+                assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
+                assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
+
+                sendSerialized<ClientMessage>(GetTables(requestId = "gt-1"))
+                val tables = assertInstanceOf(TableList::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(listOf(table), tables.tables)
+                assertEquals("gt-1", tables.requestId)
+
+                sendSerialized<ClientMessage>(GetRoomUsers(requestId = "gru-1"))
+                val users = assertInstanceOf(RoomUserList::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(listOf(user), users.users)
+                assertEquals("gru-1", users.requestId)
+
+                sendSerialized<ClientMessage>(GetGameTypes(requestId = "ggt-1"))
+                val gameTypes = assertInstanceOf(GameTypeList::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(listOf(gameType), gameTypes.gameTypes)
+                assertEquals("ggt-1", gameTypes.requestId)
+            }
+        }
+    }
+
+    @Test
+    fun `lobby browse before login replies well-formed empty lists`() {
+        val fake = FakeUpstreamSession(emptyList())
+        scenario(fake) { client ->
+            client.session {
+                handshake()
+
+                sendSerialized<ClientMessage>(GetTables(requestId = "gt-2"))
+                val tables = assertInstanceOf(TableList::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(emptyList<TableSummary>(), tables.tables)
+                assertEquals("gt-2", tables.requestId)
+
+                sendSerialized<ClientMessage>(GetRoomUsers(requestId = "gru-2"))
+                val users = assertInstanceOf(RoomUserList::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(emptyList<RoomUserSummary>(), users.users)
+                assertEquals("gru-2", users.requestId)
+
+                sendSerialized<ClientMessage>(GetGameTypes(requestId = "ggt-2"))
+                val gameTypes = assertInstanceOf(GameTypeList::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(emptyList<GameTypeSummary>(), gameTypes.gameTypes)
+                assertEquals("ggt-2", gameTypes.requestId)
             }
         }
     }

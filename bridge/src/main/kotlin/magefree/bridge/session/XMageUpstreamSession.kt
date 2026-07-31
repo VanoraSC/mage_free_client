@@ -12,10 +12,13 @@ import magefree.bridge.mapping.CallbackRelay
 import magefree.bridge.xmage.XMageClientEvent
 import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageSession
+import magefree.protocol.GameTypeSummary
+import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.TableSummary
 import org.slf4j.LoggerFactory
 
 /**
@@ -140,6 +143,34 @@ public class XMageUpstreamSession(
                 serverVersion = session.versionInfo(),
                 mainRoomId = session.mainRoomId()?.toString(),
             )
+        }
+    }
+
+    override suspend fun tables(): List<TableSummary> = lobbyQuery("tables") { it.tables() }
+
+    override suspend fun roomUsers(): List<RoomUserSummary> = lobbyQuery("roomUsers") { it.roomUsers() }
+
+    override suspend fun gameTypes(): List<GameTypeSummary> = lobbyQuery("gameTypes") { it.gameTypes() }
+
+    /**
+     * Runs a read-only lobby [query] against the connected [XMageSession], returning an empty list when
+     * there is no connected session or the blocking upstream read fails (e.g. a `MageRemoteException`
+     * transport error) — a browse must never surface as a stream error (story 0027). [name] labels the
+     * log line.
+     */
+    private suspend fun <T> lobbyQuery(
+        name: String,
+        query: suspend (XMageSession) -> List<T>,
+    ): List<T> {
+        val session = current ?: return emptyList()
+        if (!session.isConnected) return emptyList()
+        return try {
+            query(session)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            logger.warn("Upstream {} query failed: {}", name, failure.toString())
+            emptyList()
         }
     }
 

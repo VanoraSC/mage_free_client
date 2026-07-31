@@ -4,6 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mage.remote.Connection
 import mage.remote.SessionImpl
+import magefree.bridge.mapping.LobbyRelay
+import magefree.protocol.GameTypeSummary
+import magefree.protocol.RoomUserSummary
+import magefree.protocol.TableSummary
 import java.util.UUID
 
 /**
@@ -82,6 +86,40 @@ public class XMageSession(
     ): Boolean =
         withContext(Dispatchers.IO) {
             session.sendChatMessage(chatId, text)
+        }
+
+    /**
+     * The open/active tables in the lobby's main room, mapped to app-schema summaries (story 0027).
+     * Resolves the main room id (`getMainRoomId()`) then reads `getTables(roomId)` and maps at the
+     * `magefree.bridge.mapping` boundary (via [LobbyRelay]) — the raw `mage.view.TableView` never
+     * leaves that package. Returns an empty list when disconnected (no main room id). Runs the blocking
+     * remoting calls on [Dispatchers.IO].
+     */
+    public suspend fun tables(): List<TableSummary> =
+        withContext(Dispatchers.IO) {
+            val roomId = session.mainRoomId ?: return@withContext emptyList()
+            LobbyRelay.tables(session, roomId)
+        }
+
+    /**
+     * The users currently in the lobby's main room, mapped to app-schema summaries (story 0027).
+     * Same room-id resolution + mapper-boundary handling as [tables]; empty when disconnected. Runs on
+     * [Dispatchers.IO].
+     */
+    public suspend fun roomUsers(): List<RoomUserSummary> =
+        withContext(Dispatchers.IO) {
+            val roomId = session.mainRoomId ?: return@withContext emptyList()
+            LobbyRelay.roomUsers(session, roomId)
+        }
+
+    /**
+     * The game formats (types) the server offers, mapped to app-schema summaries (story 0027).
+     * `getGameTypes()` is room-independent. Mapped at the `magefree.bridge.mapping` boundary (via
+     * [LobbyRelay]). Runs the blocking remoting call on [Dispatchers.IO].
+     */
+    public suspend fun gameTypes(): List<GameTypeSummary> =
+        withContext(Dispatchers.IO) {
+            LobbyRelay.gameTypes(session)
         }
 
     /**

@@ -4,8 +4,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import magefree.protocol.GameTypeSummary
+import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.TableSummary
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -23,6 +26,9 @@ public class FakeUpstreamSession(
     private val script: List<ServerMessage>,
     private val scriptedServerInfo: ServerInfo? = null,
     private val scriptedSessionId: String? = "fake-session-id",
+    private val scriptedTables: List<TableSummary> = emptyList(),
+    private val scriptedRoomUsers: List<RoomUserSummary> = emptyList(),
+    private val scriptedGameTypes: List<GameTypeSummary> = emptyList(),
 ) : UpstreamSession {
     private val disconnectSignal = CompletableDeferred<Unit>()
     private val extra = Channel<ServerMessage>(capacity = Channel.UNLIMITED)
@@ -57,6 +63,12 @@ public class FakeUpstreamSession(
     }
 
     override suspend fun serverInfo(): ServerInfo? = scriptedServerInfo
+
+    override suspend fun tables(): List<TableSummary> = scriptedTables
+
+    override suspend fun roomUsers(): List<RoomUserSummary> = scriptedRoomUsers
+
+    override suspend fun gameTypes(): List<GameTypeSummary> = scriptedGameTypes
 
     override suspend fun ping(): Boolean {
         pingCount.incrementAndGet()
