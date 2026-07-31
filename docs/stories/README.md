@@ -236,6 +236,25 @@ getGameTypes`), not push — so the app requests + refreshes rather than subscri
 
 ---
 
+## Epic 10 — Card Database, Search & Inspection
+
+Sequenced **before Epic 9 (deck builder) and Epic 7 (join/host)** — the builder searches the catalog,
+and joining a table submits a deck the server validates against XMage's card pool. See
+[`../project-plan.md`](../project-plan.md) (EPIC-10).
+
+**Decisions (2026-07-31):** card data is **XMage-authoritative** (not Scryfall) and **bundled
+on-device**; only **artwork** isn't bundled — it loads **on demand** with a configurable cache
+(persistent disk / memory-only) plus an optional user-initiated bulk pre-download, reusing XMage's
+image-source URL resolution.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0030 | Card catalog data & local search | 0020–0022 | A bundled XMage card catalog generated reproducibly from the pinned version (`CardRepository`/`CardInfo`) + a `:core:cards` local `CardCatalog` (offline search/filter/lookup). No artwork. |
+| 0031 | Card artwork loading & cache | 0030, EPIC-03 | An on-demand `CardImageLoader` (Coil-backed) resolving XMage image URLs by card identity, with a cache-policy setting (persistent/session-only) + an opt-in bulk pre-download; graceful offline placeholder. |
+| 0032 | Card search UI & inspection view | 0030, 0031, 0018, EPIC-03 | `:feature:cards`: search/filter/browse + a full-bleed card inspection view (reusing 0014's card components + 0031 art). In-game inspection deferred to EPIC-11+. |
+
+---
+
 ## Build Infrastructure
 
 Containerizing the **heavy / JVM path** (the bridge build, the upstream `../mage` Maven build, and
@@ -261,5 +280,10 @@ bridge). Stories **0001–0022 are complete and merged**:
 5. **Epic 5 (resilience track):** 0023 → 0024 → 0025. ✅ (notifications track deferred)
 6. **Post-audit hardening:** 0026 (six audit fixes across protocol/resilience). ✅
 
-**Next:** **Epic 6 (lobby browser)** — 0027 → 0028 → 0029. (Epic 5's notifications track is deferred;
-downstream epics 07–17 are not yet broken into stories.)
+7. **Epic 6 (lobby browser):** 0027 → 0028 → 0029. ✅
+
+**Next:** **Epic 10 (card database)** — 0030 → 0031 → 0032 — then **Epic 9 (deck builder)**, then
+**Epic 7 (join/host tables)**. This reordering (10 → 9 → 7 ahead of Epic 7's original slot) is
+deliberate: the deck builder searches the card catalog, and joining a table submits a deck the server
+validates against XMage's card pool, so cards and decks come first. Epic 5's notifications track
+remains deferred; the other downstream epics (08, 11–17) are not yet broken into stories.
