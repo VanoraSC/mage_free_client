@@ -1,13 +1,17 @@
 package magefree.bridge.mapping
 
 import kotlinx.serialization.encodeToString
+import mage.interfaces.callback.ClientCallback
+import mage.interfaces.callback.ClientCallbackMethod
 import mage.view.ChatMessage
 import magefree.protocol.ChatKind
 import magefree.protocol.ProtocolJson
 import magefree.protocol.ServerMessage
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import java.util.Date
+import java.util.UUID
 
 /**
  * Hermetic golden test for the mapper boundary: builds a `mage.view.ChatMessage` in memory (we depend
@@ -62,5 +66,15 @@ class ChatMessageMapperTest {
         assertEquals(ChatKind.GAME, kindFor(ChatMessage.MessageType.GAME))
         assertEquals(ChatKind.STATUS, kindFor(ChatMessage.MessageType.STATUS))
         assertEquals(ChatKind.USER, kindFor(ChatMessage.MessageType.USER_INFO))
+    }
+
+    @Test
+    fun `a known-method callback with a malformed payload maps to null instead of throwing (F5)`() {
+        // F5: a CHATMESSAGE whose decompressed payload is not a ChatMessage (upstream shape drift) must
+        // be logged and dropped (mapped to null), never thrown — a bad push cannot crash the session.
+        val malformed =
+            ClientCallback(ClientCallbackMethod.CHATMESSAGE, UUID.randomUUID(), "definitely not a ChatMessage")
+
+        assertNull(CallbackMapper.map(malformed))
     }
 }

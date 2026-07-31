@@ -29,7 +29,7 @@ import magefree.model.ConnectionState as DomainConnectionState
 class ConnectionStatusSourceImpl
     @Inject
     constructor(
-        repository: ConnectionRepository,
+        private val repository: ConnectionRepository,
         dispatchers: DispatcherProvider,
     ) : ConnectionStatusSource {
         private val scope = CoroutineScope(SupervisorJob() + dispatchers.default)
@@ -42,6 +42,11 @@ class ConnectionStatusSourceImpl
                     started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
                     initialValue = repository.connectionState.value.toAppState(),
                 )
+
+        /** Story 0026 F3: a real reconnect — delegate to the repository's single-source-of-truth retry. */
+        override fun retry() {
+            repository.retry()
+        }
 
         private fun DomainConnectionState.toAppState(): ConnectionState =
             when (this) {

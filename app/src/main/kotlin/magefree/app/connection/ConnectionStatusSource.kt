@@ -13,4 +13,11 @@ import kotlinx.coroutines.flow.StateFlow
 interface ConnectionStatusSource {
     /** The current connection state, hot and always readable. */
     val state: StateFlow<ConnectionState>
+
+    /**
+     * Re-attempt the connection behind this source (story 0026 F3). Backs the status-bar Retry so it is
+     * a real reconnect rather than a dead control. The real [ConnectionStatusSourceImpl] delegates to
+     * `ConnectionRepository.retry()`; the [StubConnectionStatusSource] no-ops (nothing to reconnect).
+     */
+    fun retry()
 }

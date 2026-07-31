@@ -3,12 +3,16 @@ package magefree.network
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import magefree.model.ServerTarget
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,9 +33,19 @@ class ServerRepository
     constructor(
         private val dataStore: DataStore<Preferences>,
     ) {
-        /** The saved servers, observable and reactive to every [add] / [remove]. */
+        /**
+         * The saved servers, observable and reactive to every [add] / [remove].
+         *
+         * Story 0026 F6 — the read path degrades gracefully instead of throwing into the server-list
+         * screen: the canonical DataStore [catch] recovers a read [IOException] by emitting
+         * [emptyPreferences] (→ an empty list), and [decodeServers] tolerates a corrupt/unparseable
+         * stored value by returning `[]`.
+         */
         val servers: Flow<List<ServerTarget>> =
-            dataStore.data.map { prefs -> prefs.decodeServers() }
+            dataStore.data
+                .catch { cause ->
+                    if (cause is IOException) emit(emptyPreferences()) else throw cause
+                }.map { prefs -> prefs.decodeServers() }
 
         /** Add [target], or update the existing entry with the same (host, port). */
         suspend fun add(target: ServerTarget) {
@@ -51,8 +65,15 @@ class ServerRepository
 
         private fun Preferences.decodeServers(): List<ServerTarget> =
             this[KEY]
-                ?.let { json.decodeFromString<List<StoredServer>>(it) }
-                ?.map(StoredServer::toModel)
+                ?.let { stored ->
+                    // Story 0026 F6: a corrupt/stale value must not throw into every collector; degrade
+                    // to an empty list rather than propagating the SerializationException.
+                    try {
+                        json.decodeFromString<List<StoredServer>>(stored)
+                    } catch (failure: SerializationException) {
+                        emptyList()
+                    }
+                }?.map(StoredServer::toModel)
                 ?: emptyList()
 
         private fun ServerTarget.sameEndpoint(other: ServerTarget): Boolean = host == other.host && port == other.port

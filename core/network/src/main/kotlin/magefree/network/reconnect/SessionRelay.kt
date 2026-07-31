@@ -53,6 +53,12 @@ internal object SessionRelay {
         while (true) {
             val message = receive() ?: break
 
+            if (SessionMapper.isUnknown(message)) {
+                // Additive forward-compat (story 0026 F1): an unknown server `type` is ignored — no
+                // lifecycle change and, critically, no reconnect. The session keeps relaying.
+                continue
+            }
+
             val resumeId = SessionMapper.resumeIdOrNull(message)
             if (resumeId != null) {
                 handle.resumeId = resumeId

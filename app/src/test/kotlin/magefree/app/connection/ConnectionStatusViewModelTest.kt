@@ -4,6 +4,8 @@ import app.cash.turbine.test
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -116,5 +118,26 @@ class ConnectionStatusViewModelTest {
             viewModel.onRetry()
 
             assertEquals(ConnectionState.Disconnected, source.state.value)
+        }
+
+    @Test
+    fun onRetryDelegatesToTheSourceRetry() =
+        runTest {
+            // Story 0026 F3: the status-bar Retry must be a real reconnect through the seam, not a no-op.
+            var retries = 0
+            val source =
+                object : ConnectionStatusSource {
+                    override val state: StateFlow<ConnectionState> =
+                        MutableStateFlow(ConnectionState.Disconnected)
+
+                    override fun retry() {
+                        retries++
+                    }
+                }
+            val viewModel = ConnectionStatusViewModel(source, dispatchers)
+
+            viewModel.onRetry()
+
+            assertEquals(1, retries)
         }
 }

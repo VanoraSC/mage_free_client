@@ -254,6 +254,11 @@ public class SessionRegistry(
     public suspend fun resume(resumeId: String): LiveSession? =
         mutex.withLock {
             val entry = entries[resumeId] ?: return@withLock null
+            // One-consumer invariant (story 0026 F4): only a PARKED entry may be resumed. A Resume
+            // arriving while the entry is still bound (fast reconnect before the old socket parked, or a
+            // duplicate client) must be rejected — handing the same non-broadcast outbound channel to two
+            // forwarders would split the stream and corrupt both.
+            if (!entry.parked) return@withLock null
             entry.ttlJob?.cancel()
             entry.ttlJob = null
             entry.keepaliveJob?.cancel()

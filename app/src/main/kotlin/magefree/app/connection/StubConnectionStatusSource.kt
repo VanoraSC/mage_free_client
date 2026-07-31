@@ -26,4 +26,7 @@ class StubConnectionStatusSource
         fun emit(state: ConnectionState) {
             mutableState.value = state
         }
+
+        /** No real connection to re-attempt behind the stub (story 0026 F3); nothing to do. */
+        override fun retry() = Unit
     }

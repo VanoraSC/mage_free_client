@@ -2,13 +2,16 @@ package magefree.network
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.stringPreferencesKey
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
@@ -16,6 +19,7 @@ import magefree.model.ServerTarget
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 /**
  * Round-trip coverage for [ServerRepository]: persistence, ordering, upsert-by-endpoint, removal, and
@@ -111,6 +115,32 @@ class ServerRepositoryTest {
 
                 cancelAndIgnoreRemainingEvents()
             }
+        }
+
+    @Test
+    fun corruptStoredValueDegradesToEmptyList() =
+        runTest {
+            // F6: a corrupt/unparseable stored JSON value must degrade to an empty list, not throw into
+            // every collector (the server-list screen).
+            dataStore.edit { prefs -> prefs[stringPreferencesKey("server_targets")] = "not-valid-json {{{" }
+
+            assertEquals(emptyList<ServerTarget>(), repository.servers.first())
+        }
+
+    @Test
+    fun aReadIOExceptionDegradesToEmptyList() =
+        runTest {
+            // F6: an IOException on the DataStore read path (the canonical failure) is recovered as
+            // emptyPreferences → an empty list, rather than propagating to collectors.
+            val throwing =
+                object : DataStore<Preferences> {
+                    override val data: Flow<Preferences> = flow { throw IOException("simulated read failure") }
+
+                    override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences =
+                        throw UnsupportedOperationException("not needed for this test")
+                }
+
+            assertEquals(emptyList<ServerTarget>(), ServerRepository(throwing).servers.first())
         }
 
     /**

@@ -1,5 +1,6 @@
 package magefree.network.mapper
 
+import kotlinx.serialization.decodeFromString
 import magefree.model.ConnectionError
 import magefree.model.ConnectionState
 import magefree.model.Credentials
@@ -10,9 +11,11 @@ import magefree.protocol.ChatKind
 import magefree.protocol.Pong
 import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
+import magefree.protocol.ProtocolJson
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.ResumeRejected
 import magefree.protocol.ServerHello
+import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
@@ -163,6 +166,20 @@ class SessionMapperTest {
         // SessionResumable/ResumeRejected are handled out-of-band by the relay, never as SessionEvents.
         assertNull(SessionMapper.toSessionEvent(SessionResumable(resumeId = "r1"), target, credentials.username, null))
         assertNull(SessionMapper.toSessionEvent(ResumeRejected(reason = "expired"), target, credentials.username, null))
+    }
+
+    @Test
+    fun anUnknownServerTypeDecodesToTheSentinelAndIsIgnoredNotAReconnect() {
+        // F1 app side: a newer bridge may push an additive `type`. It must decode (via ProtocolJson's
+        // polymorphic default) to the sentinel and be ignored — no lifecycle event, no reconnect.
+        val futureFrame = """{"type":"future_server_push","payload":{"x":1}}"""
+        val decoded = ProtocolJson.json.decodeFromString<ServerMessage>(futureFrame)
+
+        assertTrue("must be recognised as the unknown-type sentinel", SessionMapper.isUnknown(decoded))
+        // Not a lifecycle transition, not a resume handle, not a rejection → the relay simply drops it.
+        assertNull(SessionMapper.toSessionEvent(decoded, target, credentials.username, null))
+        assertNull(SessionMapper.resumeIdOrNull(decoded))
+        assertFalse(SessionMapper.isResumeRejected(decoded))
     }
 
     @Test

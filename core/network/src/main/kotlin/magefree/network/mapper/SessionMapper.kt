@@ -14,6 +14,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.UnknownServerMessage
 
 /**
  * The **single coupling point** between the `:protocol` wire contract and the `:core:model` domain.
@@ -66,6 +67,14 @@ object SessionMapper {
      * [SessionResumable] this is flow-control, not a lifecycle event, so [toSessionEvent] ignores it.
      */
     fun isResumeRejected(message: ServerMessage): Boolean = message is ResumeRejected
+
+    /**
+     * `true` when [message] is the [UnknownServerMessage] sentinel — a `type` this build does not know,
+     * decoded by `ProtocolJson`'s polymorphic default (story 0026 F1). The app **ignores** it (no
+     * lifecycle event, and — crucially — no reconnect): honouring [ProtocolVersion]'s minor-tolerance
+     * promise for additive new server messages. [toSessionEvent] also maps it to `null`.
+     */
+    fun isUnknown(message: ServerMessage): Boolean = message is UnknownServerMessage
 
     /**
      * Map a server→app [ServerMessage] to a domain [SessionEvent], or `null` for messages that do
