@@ -6,10 +6,20 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import kotlinx.serialization.Serializable
 import magefree.app.screens.DecksPlaceholderScreen
 import magefree.app.screens.HomeScreen
 import magefree.app.screens.ProfilePlaceholderScreen
 import magefree.app.screens.SettingsPlaceholderScreen
+import magefree.feature.lobby.LobbyRoute as LobbyFeatureRoute
+
+/**
+ * Type-safe route for the read-only lobby browser (story 0029), reached from the home "Play" entry.
+ * It is a nested destination inside the shell — not a top-level tab — so the tab chrome and the
+ * connection strip stay visible above it and Back returns to Home.
+ */
+@Serializable
+data object LobbyRoute
 
 /**
  * The Navigation-Compose host for the top-level destinations, wired with **type-safe** routes:
@@ -44,12 +54,16 @@ fun MageNavHost(
     ) {
         composable<HomeRoute> {
             HomeScreen(
-                // Stub until EPIC-06 delivers real matchmaking/lobby. Home layout, not the play flow.
-                onPlayClick = { /* TODO(EPIC-06): enter matchmaking/lobby */ },
+                // Story 0029: the Play entry now opens the read-only lobby browser (EPIC-06). Joining
+                // a table is still EPIC-07. Kept within the Home tab's back stack so Back returns here.
+                onPlayClick = { navController.navigate(LobbyRoute) },
                 onDecksClick = { navigateToTab(DecksRoute) },
                 onProfileClick = { navigateToTab(ProfileRoute) },
                 onSettingsClick = { navigateToTab(SettingsRoute) },
             )
+        }
+        composable<LobbyRoute> {
+            LobbyFeatureRoute(onBack = { navController.popBackStack() })
         }
         composable<DecksRoute> { DecksPlaceholderScreen() }
         composable<ProfileRoute> { ProfilePlaceholderScreen() }
