@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import magefree.model.ConnectionError
@@ -32,6 +33,7 @@ import magefree.network.reconnect.AlwaysForegroundAppLifecycleObserver
 import magefree.network.reconnect.AlwaysOnlineConnectivityObserver
 import magefree.network.reconnect.AppLifecycleObserver
 import magefree.network.reconnect.ConnectivityObserver
+import magefree.network.reconnect.PendingRequests
 import magefree.network.reconnect.ReconnectPolicy
 import magefree.network.reconnect.ReconnectingSession
 import magefree.network.reconnect.ResumeHandle
@@ -67,9 +69,17 @@ class KtorBridgeClient(
     private val reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
     private val connectivity: ConnectivityObserver = AlwaysOnlineConnectivityObserver,
     private val lifecycle: AppLifecycleObserver = AlwaysForegroundAppLifecycleObserver,
+    private val requestTimeoutMillis: Long = DEFAULT_REQUEST_TIMEOUT_MILLIS,
 ) : BridgeClient {
     private val _connectionState = MutableStateFlow(ConnectionState.Disconnected)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+
+    /**
+     * The correlation registry multiplexing [request]/response over the live socket alongside the
+     * session-event stream (story 0028). One per client instance: at most one session is active at a
+     * time, and each session end fails any outstanding waiter.
+     */
+    private val pending = PendingRequests()
 
     @Volatile
     private var activeSession: DefaultClientWebSocketSession? = null
@@ -100,9 +110,31 @@ class KtorBridgeClient(
 
     override suspend fun disconnect() {
         disconnectRequested = true
+        pending.failAll(IllegalStateException("session disconnected before reply"))
         activeSession?.close(CloseReason(CloseReason.Codes.NORMAL, "client disconnect"))
         activeSession = null
         _connectionState.value = ConnectionState.Disconnected
+    }
+
+    override suspend fun <ReplyT : Any> request(
+        message: Any,
+        requestId: String,
+    ): ReplyT {
+        val session =
+            activeSession ?: throw IllegalStateException("no active session for request $requestId")
+        val clientMessage =
+            message as? ClientMessage
+                ?: throw IllegalArgumentException("request payload must be a ClientMessage, was ${message::class}")
+        val deferred = pending.register(requestId)
+        return try {
+            session.sendMessage(clientMessage)
+            @Suppress("UNCHECKED_CAST")
+            withTimeout(requestTimeoutMillis) { deferred.await() } as ReplyT
+        } catch (e: Throwable) {
+            // Timeout/cancellation/failure: drop the waiter so the registry does not leak.
+            pending.forget(requestId)
+            throw e
+        }
     }
 
     private suspend fun runSession(
@@ -139,6 +171,7 @@ class KtorBridgeClient(
                         send = { session.sendMessage(it) },
                         emit = emit,
                         isDisconnectRequested = { disconnectRequested },
+                        pending = pending,
                     )
                 }
                 null -> SessionOutcome.RETRY
@@ -157,6 +190,9 @@ class KtorBridgeClient(
             emit(SessionEvent.Error(ConnectionError.Transport("session error: ${e.message}", e)))
             SessionOutcome.RETRY
         } finally {
+            // The socket for this attempt is gone: no reply will arrive, so fail any in-flight request
+            // (a reconnect gets a fresh socket; the requester surfaces this and can refresh again).
+            pending.failAll(IllegalStateException("session ended before reply"))
             session.close()
             if (activeSession === session) activeSession = null
         }
@@ -182,6 +218,9 @@ class KtorBridgeClient(
     }
 
     companion object {
+        /** How long [request] waits for a correlated reply before failing (story 0028). */
+        private const val DEFAULT_REQUEST_TIMEOUT_MILLIS = 15_000L
+
         /** The default Android-friendly engine (OkHttp) with the WebSockets plugin installed. */
         fun defaultHttpClient(): HttpClient =
             HttpClient(OkHttp) {

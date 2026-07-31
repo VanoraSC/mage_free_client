@@ -13,6 +13,7 @@ import magefree.model.SessionEvent
 import magefree.network.BridgeClient
 import magefree.network.mapper.SessionMapper
 import magefree.network.mapper.SessionMapper.handshakeResult
+import magefree.protocol.ClientMessage
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerMessage
@@ -32,6 +33,9 @@ class FakeBridgeClient(
     private val script: List<ServerMessage> = emptyList(),
     private val serverHello: ServerHello =
         ServerHello(ProtocolVersion.MAJOR, ProtocolVersion.MINOR, "fake-bridge"),
+    private val responder: (ClientMessage) -> ServerMessage = {
+        error("FakeBridgeClient: no request/response scripted for $it")
+    },
 ) : BridgeClient {
     private val _connectionState = MutableStateFlow(ConnectionState.Disconnected)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -58,6 +62,20 @@ class FakeBridgeClient(
                 if (event.isTerminal()) break
             }
         }.onEach { _connectionState.value = it.connectionState }
+
+    /**
+     * Replay a scripted reply for a request/response exchange (story 0028). The [responder] maps the
+     * sent [ClientMessage] to its [ServerMessage] reply; the default throws so a test that does not
+     * script requests is unaffected. Mirrors the real client's correlation without a socket.
+     */
+    override suspend fun <ReplyT : Any> request(
+        message: Any,
+        requestId: String,
+    ): ReplyT {
+        val reply = responder(message as ClientMessage)
+        @Suppress("UNCHECKED_CAST")
+        return reply as ReplyT
+    }
 
     override suspend fun disconnect() {
         _connectionState.value = ConnectionState.Disconnected

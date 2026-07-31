@@ -159,5 +159,10 @@ class ConnectionStatusReductionTest {
         override suspend fun disconnect() {
             mutableState.value = ConnectionState.Disconnected
         }
+
+        override suspend fun <ReplyT : Any> request(
+            message: Any,
+            requestId: String,
+        ): ReplyT = error("request not used in this test")
     }
 }

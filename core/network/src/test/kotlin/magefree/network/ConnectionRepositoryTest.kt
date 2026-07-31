@@ -228,5 +228,10 @@ class ConnectionRepositoryTest {
         override suspend fun disconnect() {
             _connectionState.value = ConnectionState.Disconnected
         }
+
+        override suspend fun <ReplyT : Any> request(
+            message: Any,
+            requestId: String,
+        ): ReplyT = error("request not used in this test")
     }
 }
