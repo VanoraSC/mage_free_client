@@ -19,7 +19,8 @@ import magefree.protocol.ServerMessage
  *
  * Post-handshake behaviour:
  * - **Open:** if [handle] holds a `resumeId`, send `Resume(resumeId)` (a reconnect resuming the parked
- *   session, story 0023); otherwise send `Login` with the retained [credentials].
+ *   session, story 0023) and emit [SessionEvent.Restoring] while awaiting its ack; otherwise send
+ *   `Login` with the retained [credentials].
  * - **`SessionResumable`:** capture the handle; when it is the ack of a `Resume` we just sent, surface
  *   [SessionEvent.Connected] (the resume completed — recovery is over).
  * - **`ResumeRejected`:** the parked session is gone/expired — clear the handle and fall back to a fresh
@@ -40,8 +41,11 @@ internal object SessionRelay {
         var awaitingResumeAck = false
         val held = handle.resumeId
         if (held != null) {
+            // Socket is back: ask the bridge to re-attach the parked session and surface Restoring
+            // (distinct from Reconnecting) for the window until the ack turns this into Connected.
             send(Resume(held))
             awaitingResumeAck = true
+            emit(SessionEvent.Restoring)
         } else {
             send(Login(credentials.username, credentials.password))
         }

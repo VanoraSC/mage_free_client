@@ -80,7 +80,7 @@ class SessionRelayTest {
         }
 
     @Test
-    fun reconnectWithAHeldHandleSendsResumeNotLogin() =
+    fun reconnectWithAHeldHandleSendsResumeAndRestoresBeforeConnected() =
         runTest {
             val handle = ResumeHandle().apply { resumeId = "resume-123" }
             val result =
@@ -89,9 +89,13 @@ class SessionRelayTest {
                     handle = handle,
                 )
 
-            // A held handle → Resume (no re-auth); the ack surfaces Connected (recovery is over).
+            // A held handle → Resume (no re-auth). While the ack is awaited the relay surfaces
+            // Restoring (socket back, re-attaching the parked session), then the ack turns it into
+            // Connected (recovery is over) — story 0025's distinct restore signal.
             assertEquals(listOf<ClientMessage>(Resume("resume-123")), result.sent)
-            assertTrue(result.events.single() is SessionEvent.Connected)
+            assertEquals(2, result.events.size)
+            assertEquals(SessionEvent.Restoring, result.events.first())
+            assertTrue(result.events.last() is SessionEvent.Connected)
             assertEquals("resume-123", result.handle.resumeId)
         }
 

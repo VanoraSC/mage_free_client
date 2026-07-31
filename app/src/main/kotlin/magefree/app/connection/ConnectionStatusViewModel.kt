@@ -76,6 +76,15 @@ fun ConnectionState.toUiState(): ConnectionStatusUiState =
                 showRetry = false,
             )
 
+        ConnectionState.Restoring ->
+            ConnectionStatusUiState(
+                state = this,
+                label = "Restoring your session…",
+                contentDescription = "Connection status: restoring your session",
+                severity = ConnectionSeverity.Progress,
+                showRetry = false,
+            )
+
         ConnectionState.Disconnected ->
             ConnectionStatusUiState(
                 state = this,

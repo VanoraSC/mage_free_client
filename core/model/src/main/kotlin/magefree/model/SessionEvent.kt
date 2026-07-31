@@ -32,6 +32,16 @@ sealed interface SessionEvent {
         override val connectionState: ConnectionState get() = ConnectionState.Reconnecting
     }
 
+    /**
+     * The socket has reconnected and the parked session is being re-attached: a `Resume` was sent and
+     * its ack is awaited (story 0023/0024). Emitted by the relay in the window between [Reconnecting]
+     * (still reaching the bridge) and [Connected] (resume acked), so the UI can show a distinct
+     * "restoring your session" indicator. Never terminal.
+     */
+    data object Restoring : SessionEvent {
+        override val connectionState: ConnectionState get() = ConnectionState.Restoring
+    }
+
     /** The server rejected the credentials; [message] is an optional human-readable detail. */
     data class AuthFailed(
         val message: String? = null,

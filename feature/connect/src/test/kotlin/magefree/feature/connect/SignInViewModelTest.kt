@@ -244,6 +244,98 @@ class SignInViewModelTest {
         }
 
     @Test
+    fun restoringIsReflectedAndPreservesContext() =
+        runTest {
+            // 0024's resume-in-progress: Reconnecting (reaching the bridge) → Restoring (re-attaching
+            // the held session) → Connected. The transient states must NOT throw the player back to the
+            // form: the bound server is preserved throughout and the phase never becomes Idle.
+            val vm =
+                viewModel(
+                    listOf(
+                        SessionEvent.Connecting,
+                        SessionEvent.Connected(Session(target, "pete")),
+                        SessionEvent.Reconnecting,
+                        SessionEvent.Restoring,
+                        SessionEvent.Connected(Session(target, "pete")),
+                    ),
+                )
+            vm.uiState.test {
+                awaitItem()
+                vm.bind(target)
+                vm.updateUsername("pete")
+
+                vm.connect()
+                awaitPhase(ConnectPhase.Connecting)
+                awaitPhase(ConnectPhase.Connected)
+                val reconnecting = awaitPhase(ConnectPhase.Reconnecting)
+                assertEquals("context preserved on reconnect", target, reconnecting.server)
+                val restoring = awaitPhase(ConnectPhase.Restoring)
+                assertEquals("context preserved on restore", target, restoring.server)
+                assertTrue("restoring is an in-progress phase", restoring.phase.isInProgress)
+                awaitPhase(ConnectPhase.Connected)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun exhaustedRecoverySurfacesSessionLostWithoutReturningToForm() =
+        runTest {
+            // Recovery truly fails: after an established session drops and reconnects are exhausted,
+            // 0024 emits a Disconnected carrying a reason. That must surface as the terminal SessionLost
+            // recovery surface (re-authenticate CTA), NOT a silent return to the Idle form.
+            val vm =
+                viewModel(
+                    listOf(
+                        SessionEvent.Connecting,
+                        SessionEvent.Connected(Session(target, "pete")),
+                        SessionEvent.Reconnecting,
+                        SessionEvent.Disconnected("reconnect attempts exhausted"),
+                    ),
+                )
+            vm.uiState.test {
+                awaitItem()
+                vm.bind(target)
+                vm.updateUsername("pete")
+
+                vm.connect()
+                awaitPhase(ConnectPhase.Reconnecting)
+                val lost = awaitPhase(ConnectPhase.SessionLost)
+                assertEquals("reconnect attempts exhausted", lost.detail)
+                assertEquals("last server stays pre-selected for re-auth", target, lost.server)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun reauthenticateFromSessionLostReturnsToTheForm() =
+        runTest {
+            // The SessionLost re-authenticate CTA is wired to cancel(): it tears down and returns to the
+            // Idle credential form with the same server still bound (last server pre-selected).
+            val vm =
+                viewModel(
+                    listOf(
+                        SessionEvent.Connecting,
+                        SessionEvent.Connected(Session(target, "pete")),
+                        SessionEvent.Reconnecting,
+                        SessionEvent.Disconnected("reconnect attempts exhausted"),
+                    ),
+                )
+            vm.uiState.test {
+                awaitItem()
+                vm.bind(target)
+                vm.updateUsername("pete")
+
+                vm.connect()
+                awaitPhase(ConnectPhase.SessionLost)
+
+                vm.cancel()
+                val idle = awaitPhase(ConnectPhase.Idle)
+                assertEquals("server remains bound after re-auth", target, idle.server)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun connectIsNoOpWithoutUsername() =
         runTest {
             val vm = viewModel(connectedScript())

@@ -33,6 +33,9 @@ const val CONNECT_CONTINUE_LABEL: String = "Continue"
 const val AUTH_FAILED_TITLE: String = "Sign-in failed"
 const val VERSION_UNSUPPORTED_TITLE: String = "Server version unsupported"
 const val NETWORK_ERROR_TITLE: String = "Can't reach the server"
+const val SESSION_LOST_TITLE: String = "Session lost"
+const val SESSION_LOST_REAUTH_LABEL: String = "Sign in again"
+const val SESSION_LOST_BACK_LABEL: String = "Choose another server"
 
 /** In-progress surface: a spinner + message, distinct copy for a first connect vs a reconnect. */
 @Composable
@@ -48,6 +51,23 @@ fun ConnectingSurface(
             "Connecting to ${server.title}…"
         }
     LoadingState(modifier = modifier.fillMaxSize(), message = message)
+}
+
+/**
+ * Restoring surface: the socket is back and the held session is being re-attached (resume in
+ * progress). A non-destructive, spinner-backed indicator with copy distinct from [ConnectingSurface]'s
+ * reconnecting message — the player is told their session is being restored, not thrown back to the
+ * form. Clears to the shell once [ConnectPhase.Connected] follows.
+ */
+@Composable
+fun RestoringSurface(
+    server: ServerTarget,
+    modifier: Modifier = Modifier,
+) {
+    LoadingState(
+        modifier = modifier.fillMaxSize(),
+        message = "Restoring your session on ${server.title}…",
+    )
 }
 
 /**
@@ -137,6 +157,47 @@ fun NetworkSurface(
     )
 }
 
+/**
+ * Terminal **session-lost** recovery surface: shown only after 0024's reconnect/resume budget is
+ * exhausted (or the parked session is gone and a fresh login is required). Distinct copy + a
+ * re-authenticate CTA that routes back to sign-in with the last server pre-selected — visibly
+ * different from [AuthFailedSurface]/[VersionUnsupportedSurface]/[NetworkSurface]. [detail] carries an
+ * optional reason and is shown when present. Built on the design-system [EmptyState]/[DecisionPrompt].
+ */
+@Composable
+fun SessionLostSurface(
+    onReauthenticate: () -> Unit,
+    onBackToServers: () -> Unit,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+) {
+    val base =
+        "Your session ended and couldn't be restored. Sign in again to pick up where you left off."
+    Box(modifier = modifier.fillMaxSize()) {
+        EmptyState(
+            modifier = Modifier.align(Alignment.Center).padding(bottom = Spacing.extraLarge),
+            title = SESSION_LOST_TITLE,
+            message = if (detail.isNullOrBlank()) base else "$base\n\n$detail",
+            icon = Icons.Filled.Warning,
+        )
+        DecisionPrompt(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            title = SESSION_LOST_TITLE,
+            choices =
+                listOf(
+                    DecisionPromptChoice(label = SESSION_LOST_REAUTH_LABEL, emphasis = DecisionEmphasis.Primary),
+                    DecisionPromptChoice(label = SESSION_LOST_BACK_LABEL, emphasis = DecisionEmphasis.Tertiary),
+                ),
+            onChoice = { choice ->
+                when (choice.label) {
+                    SESSION_LOST_REAUTH_LABEL -> onReauthenticate()
+                    SESSION_LOST_BACK_LABEL -> onBackToServers()
+                }
+            },
+        )
+    }
+}
+
 /** Shared failure layout: a centered [EmptyState] explainer + a bottom [DecisionPrompt] for the choice. */
 @Composable
 private fun FailureSurface(
@@ -180,10 +241,40 @@ private fun ConnectingPreview() {
     MageTheme { ConnectingSurface(server = PreviewServer, reconnecting = false) }
 }
 
+@Preview(name = "Reconnecting", showBackground = true, heightDp = 480)
+@Composable
+private fun ReconnectingPreview() {
+    MageTheme { ConnectingSurface(server = PreviewServer, reconnecting = true) }
+}
+
+@Preview(name = "Restoring", showBackground = true, heightDp = 480)
+@Composable
+private fun RestoringPreview() {
+    MageTheme { RestoringSurface(server = PreviewServer) }
+}
+
 @Preview(name = "Connected", showBackground = true, heightDp = 480)
 @Composable
 private fun ConnectedPreview() {
     MageTheme { ConnectedSurface(server = PreviewServer, onContinue = {}) }
+}
+
+@Preview(name = "Session lost - light", showBackground = true, heightDp = 560)
+@Preview(
+    name = "Session lost - dark",
+    showBackground = true,
+    heightDp = 560,
+    uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun SessionLostPreview() {
+    MageTheme {
+        SessionLostSurface(
+            onReauthenticate = {},
+            onBackToServers = {},
+            detail = "reconnect attempts exhausted",
+        )
+    }
 }
 
 @Preview(name = "Auth failed - light", showBackground = true, heightDp = 560)

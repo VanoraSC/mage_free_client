@@ -102,6 +102,8 @@ fun SignInScreen(
                     server?.let { ConnectingSurface(server = it, reconnecting = false) }
                 ConnectPhase.Reconnecting ->
                     server?.let { ConnectingSurface(server = it, reconnecting = true) }
+                ConnectPhase.Restoring ->
+                    server?.let { RestoringSurface(server = it) }
                 ConnectPhase.Connected ->
                     server?.let { ConnectedSurface(server = it, onContinue = onContinue) }
                 ConnectPhase.AuthFailed ->
@@ -110,6 +112,14 @@ fun SignInScreen(
                     VersionUnsupportedSurface(onRetry = onRetry, onCancel = onCancel, detail = uiState.detail)
                 ConnectPhase.Network ->
                     NetworkSurface(onRetry = onRetry, onCancel = onCancel, detail = uiState.detail)
+                ConnectPhase.SessionLost ->
+                    SessionLostSurface(
+                        // Re-authenticate returns to the credential form with the same server still
+                        // bound (last server pre-selected); "choose another server" pops to the list.
+                        onReauthenticate = onCancel,
+                        onBackToServers = onBack,
+                        detail = uiState.detail,
+                    )
             }
         }
     }
