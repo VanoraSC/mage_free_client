@@ -31,6 +31,8 @@ dependencies {
     implementation(project(":core:designsystem"))
     // Story 0017: the real ConnectionStatusSource is backed by :core:network's ConnectionRepository.
     implementation(project(":core:network"))
+    // Story 0029: the lobby browser behind the home "Play" entry.
+    implementation(project(":feature:lobby"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
