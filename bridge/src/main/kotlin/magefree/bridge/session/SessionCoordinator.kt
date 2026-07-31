@@ -13,7 +13,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import magefree.protocol.ClientMessage
+import magefree.protocol.GameTypeList
+import magefree.protocol.GetGameTypes
+import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
+import magefree.protocol.GetTables
 import magefree.protocol.Login
 import magefree.protocol.Logout
 import magefree.protocol.Ping
@@ -22,11 +26,13 @@ import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
 import magefree.protocol.Resume
 import magefree.protocol.ResumeRejected
+import magefree.protocol.RoomUserList
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.TableList
 import magefree.protocol.UnknownClientMessage
 import org.slf4j.LoggerFactory
 
@@ -46,6 +52,9 @@ import org.slf4j.LoggerFactory
  *   upstream connect/login; on a miss it replies [ResumeRejected].
  * - `Logout` evicts (and cleanly `disconnect()`s) the session immediately.
  * - `GetServerInfo` replies with `ServerInfo` correlated by `requestId` (story 0006).
+ * - `GetTables`/`GetRoomUsers`/`GetGameTypes` reply with the correlated `TableList`/`RoomUserList`/
+ *   `GameTypeList` browsed from the bound session's main room (story 0027); an unbound socket replies
+ *   an empty list. Read-only — no join/create/watch here.
  * - A second `Login`/`Resume` while a session is bound is ignored (documented choice) with a log line.
  * - Any other/malformed frame → a non-terminal `ProtocolError(UNKNOWN_MESSAGE_TYPE)`.
  *
@@ -163,6 +172,27 @@ public class SessionCoordinator(
                                 bound?.live?.serverInfo()
                                     ?: ServerInfo(serverVersion = "unavailable", mainRoomId = null)
                             ws.sendSerialized<ServerMessage>(info.copy(requestId = message.requestId))
+                        }
+
+                        // Read-only lobby browse (story 0027): query the bound session's main room,
+                        // map at the mapper boundary, and reply the correlated list. An unbound/not-yet-
+                        // connected socket replies an empty list (never an error) — the blocking upstream
+                        // reads already ran on Dispatchers.IO inside the upstream session.
+                        is GetTables -> {
+                            val tables = bound?.live?.tables() ?: emptyList()
+                            ws.sendSerialized<ServerMessage>(TableList(tables = tables, requestId = message.requestId))
+                        }
+
+                        is GetRoomUsers -> {
+                            val users = bound?.live?.roomUsers() ?: emptyList()
+                            ws.sendSerialized<ServerMessage>(RoomUserList(users = users, requestId = message.requestId))
+                        }
+
+                        is GetGameTypes -> {
+                            val gameTypes = bound?.live?.gameTypes() ?: emptyList()
+                            ws.sendSerialized<ServerMessage>(
+                                GameTypeList(gameTypes = gameTypes, requestId = message.requestId),
+                            )
                         }
 
                         is UnknownClientMessage -> {

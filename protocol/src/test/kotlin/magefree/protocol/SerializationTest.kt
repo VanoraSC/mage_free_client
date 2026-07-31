@@ -25,6 +25,12 @@ class SerializationTest {
                 GetServerInfo(),
                 Resume(resumeId = "rsm-1"),
                 Resume(resumeId = "rsm-2", requestId = "r-6"),
+                GetTables(requestId = "r-7"),
+                GetTables(),
+                GetRoomUsers(requestId = "r-8"),
+                GetRoomUsers(),
+                GetGameTypes(requestId = "r-9"),
+                GetGameTypes(),
             )
 
         for (message in messages) {
@@ -78,6 +84,53 @@ class SerializationTest {
                 SessionResumable(resumeId = "rsm-2", requestId = "r-8"),
                 ResumeRejected(reason = "unknown or expired resume handle"),
                 ResumeRejected(reason = "expired", requestId = "r-9"),
+                TableList(tables = emptyList()),
+                TableList(
+                    tables =
+                        listOf(
+                            TableSummary(
+                                tableId = "t-1",
+                                name = "Duel Night",
+                                controllerName = "alice",
+                                gameType = "Two Player Duel",
+                                deckType = "Constructed - Standard",
+                                state = TableStateCode.WAITING,
+                                seatsFilled = 1,
+                                seatsTotal = 2,
+                                isTournament = false,
+                                isRated = true,
+                                isPassworded = false,
+                                isLimited = false,
+                                skillLevel = SkillLevelCode.CASUAL,
+                                createdAtEpochMs = 1_700_000_000_000L,
+                            ),
+                        ),
+                    requestId = "r-10",
+                ),
+                RoomUserList(users = emptyList()),
+                RoomUserList(
+                    users =
+                        listOf(
+                            RoomUserSummary(
+                                name = "alice",
+                                flag = "United States",
+                                matchHistory = "3-1",
+                                games = "1 games",
+                                ping = "42 ms",
+                                generalRating = 1500,
+                            ),
+                        ),
+                    requestId = "r-11",
+                ),
+                GameTypeList(gameTypes = emptyList()),
+                GameTypeList(
+                    gameTypes =
+                        listOf(
+                            GameTypeSummary(name = "Two Player Duel", minPlayers = 2, maxPlayers = 2),
+                            GameTypeSummary(name = "Commander Free For All", minPlayers = 2, maxPlayers = 8),
+                        ),
+                    requestId = "r-12",
+                ),
             )
 
         for (message in messages) {
@@ -131,6 +184,22 @@ class SerializationTest {
         )
         assertTrue(
             json.encodeToString<ServerMessage>(ServerHello(1, 0, "1.0.0")).contains("\"type\":\"server_hello\""),
+        )
+        assertTrue(json.encodeToString<ClientMessage>(GetTables()).contains("\"type\":\"get_tables\""))
+        assertTrue(json.encodeToString<ClientMessage>(GetRoomUsers()).contains("\"type\":\"get_room_users\""))
+        assertTrue(json.encodeToString<ClientMessage>(GetGameTypes()).contains("\"type\":\"get_game_types\""))
+        assertTrue(
+            json.encodeToString<ServerMessage>(TableList(tables = emptyList())).contains("\"type\":\"table_list\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(RoomUserList(users = emptyList()))
+                .contains("\"type\":\"room_user_list\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(GameTypeList(gameTypes = emptyList()))
+                .contains("\"type\":\"game_type_list\""),
         )
         assertTrue(json.encodeToString<ServerMessage>(Pong()).contains("\"type\":\"pong\""))
         assertTrue(

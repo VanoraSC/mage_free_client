@@ -1,9 +1,12 @@
 package magefree.bridge.session
 
 import kotlinx.coroutines.flow.Flow
+import magefree.protocol.GameTypeSummary
+import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStatus
+import magefree.protocol.TableSummary
 
 /**
  * Credentials the app supplies in a `Login`. Under the **pinned-server posture** the app never names
@@ -43,6 +46,28 @@ public interface UpstreamSession {
      * (`getVersionInfo()` == `getServerState().version`, and `getMainRoomId()`).
      */
     public suspend fun serverInfo(): ServerInfo?
+
+    /**
+     * The open/active tables in the pinned server's main lobby room, mapped to app-schema
+     * [TableSummary] (story 0027), or an **empty list** when there is no active/connected session.
+     * The blocking upstream reads run on `Dispatchers.IO`; the mapping happens at the
+     * `magefree.bridge.mapping` boundary so no `mage.view.*` type crosses this interface.
+     */
+    public suspend fun tables(): List<TableSummary>
+
+    /**
+     * The users currently in the main lobby room, mapped to app-schema [RoomUserSummary] (story 0027),
+     * or an **empty list** when there is no active/connected session. Same IO/mapping contract as
+     * [tables].
+     */
+    public suspend fun roomUsers(): List<RoomUserSummary>
+
+    /**
+     * The game formats the pinned server offers, mapped to app-schema [GameTypeSummary] (story 0027),
+     * or an **empty list** when there is no active/connected session. Same IO/mapping contract as
+     * [tables].
+     */
+    public suspend fun gameTypes(): List<GameTypeSummary>
 
     /**
      * Keepalive probe used by [SessionRegistry] while a session is **parked** (app socket dropped)

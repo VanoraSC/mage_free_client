@@ -19,8 +19,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import magefree.protocol.GameTypeSummary
+import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.TableSummary
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import kotlin.coroutines.CoroutineContext
@@ -120,6 +123,15 @@ public class LiveSession internal constructor(
 
     /** The upstream server info for a `GetServerInfo` request while this session is bound. */
     internal suspend fun serverInfo(): ServerInfo? = upstream.serverInfo()
+
+    /** The main-room open tables for a `GetTables` request while this session is bound (story 0027). */
+    internal suspend fun tables(): List<TableSummary> = upstream.tables()
+
+    /** The main-room users for a `GetRoomUsers` request while this session is bound (story 0027). */
+    internal suspend fun roomUsers(): List<RoomUserSummary> = upstream.roomUsers()
+
+    /** The server's game types for a `GetGameTypes` request while this session is bound (story 0027). */
+    internal suspend fun gameTypes(): List<GameTypeSummary> = upstream.gameTypes()
 
     /** Cancels the pump and disconnects the upstream. Idempotent. */
     internal suspend fun close() {
