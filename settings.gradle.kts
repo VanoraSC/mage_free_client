@@ -36,6 +36,8 @@ if (System.getenv("MAGE_JVM_ONLY") != "1") {
     include(":app")
     include(":core:designsystem")
     include(":core:network")
+    // Story 0030: bundled XMage card catalog + offline local search (Android lib; needs the SDK).
+    include(":core:cards")
     include(":feature:connect")
     include(":feature:lobby")
 }
