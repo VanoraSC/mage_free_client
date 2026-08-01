@@ -32,6 +32,8 @@ turbine = "1.2.0"
 robolectric = "4.14.1"
 # Story 0031: Compose-native image pipeline (memory+disk cache, de-dup) backing the card-art loader.
 coil = "3.1.0"
+# Story 0033: on-device deck library persistence (queryable relational store, Robolectric-testable).
+room = "2.7.1"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
@@ -97,6 +99,12 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 coil-core = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+
+# Story 0033: Room-backed offline deck library. room-ktx adds coroutines/Flow query support; the
+# compiler runs through KSP (already applied by the magefree.hilt convention).
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
