@@ -31,6 +31,8 @@ dependencies {
     implementation(project(":core:designsystem"))
     // Story 0017: the real ConnectionStatusSource is backed by :core:network's ConnectionRepository.
     implementation(project(":core:network"))
+    // Story 0030: bundles the offline card catalog (SQLite asset + CardCatalog DI) into the app.
+    implementation(project(":core:cards"))
     // Story 0029: the lobby browser behind the home "Play" entry.
     implementation(project(":feature:lobby"))
 

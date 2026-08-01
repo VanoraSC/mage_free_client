@@ -28,6 +28,8 @@ androidx-hilt-navigation-compose = "1.2.0"
 androidx-concurrent-futures = "1.2.0"
 androidx-datastore = "1.1.7"
 turbine = "1.2.0"
+# Story 0030: JVM-side Android SQLite for :core:cards catalog tests (no device needed).
+robolectric = "4.14.1"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
@@ -84,6 +86,7 @@ android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 hilt-gradle-plugin = { module = "com.google.dagger:hilt-android-gradle-plugin", version.ref = "hilt" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
