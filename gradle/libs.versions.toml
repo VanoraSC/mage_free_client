@@ -30,6 +30,8 @@ androidx-datastore = "1.1.7"
 turbine = "1.2.0"
 # Story 0030: JVM-side Android SQLite for :core:cards catalog tests (no device needed).
 robolectric = "4.14.1"
+# Story 0031: Compose-native image pipeline (memory+disk cache, de-dup) backing the card-art loader.
+coil = "3.1.0"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
@@ -87,6 +89,14 @@ kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", v
 hilt-gradle-plugin = { module = "com.google.dagger:hilt-android-gradle-plugin", version.ref = "hilt" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+
+# Story 0031: card-artwork loader/cache. `coil-core` = the ImageLoader (memory+disk cache, request
+# de-dup); `coil-network-okhttp` = the HTTP fetcher that resolves the URL from XMageImageSource and
+# writes bytes to the disk cache. `coil-compose` (the AsyncImage surface) is pinned here for 0032's
+# inspection UI to consume; :core:cards itself is not a Compose module and only wires the loader.
+coil-core = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
