@@ -25,7 +25,17 @@ android {
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
+    // Story 0031: on-demand card-art loader/cache. `coil-core` is the ImageLoader (memory+disk cache,
+    // request de-dup); `coil-network-okhttp` is the HTTP fetcher that GETs the resolved Scryfall URL
+    // and streams it into the disk cache. `api` because the module's Hilt surface hands out a
+    // `coil3.ImageLoader` that 0032's UI (with coil-compose) binds `AsyncImage` to.
+    api(libs.coil.core)
+    implementation(libs.coil.network.okhttp)
+    // Story 0031: cache-policy setting persisted the AGENTS.md way (DataStore for prefs).
+    implementation(libs.androidx.datastore.preferences)
+
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
 }
