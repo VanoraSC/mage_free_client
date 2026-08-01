@@ -35,6 +35,8 @@ dependencies {
     implementation(project(":core:cards"))
     // Story 0029: the lobby browser behind the home "Play" entry.
     implementation(project(":feature:lobby"))
+    // Story 0032: the card search/browse + inspection surface behind the Decks "Browse cards" entry.
+    implementation(project(":feature:cards"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
