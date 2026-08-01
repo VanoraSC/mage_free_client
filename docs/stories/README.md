@@ -255,6 +255,24 @@ image-source URL resolution.
 
 ---
 
+## Epic 9 — Deck Management & Building
+
+The deck library + touch-first builder, then **Epic 7 (join/host)** works end-to-end. See
+[`../project-plan.md`](../project-plan.md) (EPIC-09).
+
+**Decisions (2026-08-01, Pete):** **every** deck operation — view, create, construct, sideboard,
+legality — works with **no network connection**; the *only* networked thing is artwork, and its
+download is initiated **from the deck builder** per the chosen cache policy (scoped to the deck's
+cards). Format-legality data is **bundled** (generated from XMage like the card catalog).
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0033 | Deck model, storage & legality data | 0030, 0020–0022 | `:core:decks` deck model (↔ `DeckCardLists`), a local offline `DeckRepository`, bundled format-legality data (generated from XMage) + an offline `DeckLegality` checker. |
+| 0034 | Deck import & export | 0033, 0030 | Ported XMage `.dck`/plain-text/`.dec` (± MTGA) import/export over the deck model, resolving names via the catalog; offline; shareable file/text. |
+| 0035 | Deck library & builder UI | 0033, 0034, 0032, 0018, EPIC-03 | `:feature:decks`: offline library (CRUD/favorite/import) + touch-first builder (search→add/remove, sideboard, mana curve, live legality) + a deck-scoped art download from the builder. |
+
+---
+
 ## Build Infrastructure
 
 Containerizing the **heavy / JVM path** (the bridge build, the upstream `../mage` Maven build, and
@@ -282,8 +300,10 @@ bridge). Stories **0001–0022 are complete and merged**:
 
 7. **Epic 6 (lobby browser):** 0027 → 0028 → 0029. ✅
 
-**Next:** **Epic 10 (card database)** — 0030 → 0031 → 0032 — then **Epic 9 (deck builder)**, then
-**Epic 7 (join/host tables)**. This reordering (10 → 9 → 7 ahead of Epic 7's original slot) is
-deliberate: the deck builder searches the card catalog, and joining a table submits a deck the server
-validates against XMage's card pool, so cards and decks come first. Epic 5's notifications track
-remains deferred; the other downstream epics (08, 11–17) are not yet broken into stories.
+8. **Epic 10 (card database):** 0030 → 0031 → 0032. ✅
+
+**Next:** **Epic 9 (deck builder)** — 0033 → 0034 → 0035 — then **Epic 7 (join/host tables)**, which
+this unblocks (joining submits a deck the server validates against XMage's card pool). This ordering
+(10 → 9 → 7 ahead of Epic 7's original slot) is deliberate: cards and decks come first. Epic 5's
+notifications track remains deferred; the other downstream epics (08, 11–17) are not yet broken into
+stories.
