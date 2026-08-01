@@ -40,4 +40,6 @@ if (System.getenv("MAGE_JVM_ONLY") != "1") {
     include(":core:cards")
     include(":feature:connect")
     include(":feature:lobby")
+    // Story 0032: card search/browse + full-bleed inspection UI over :core:cards (Android lib).
+    include(":feature:cards")
 }

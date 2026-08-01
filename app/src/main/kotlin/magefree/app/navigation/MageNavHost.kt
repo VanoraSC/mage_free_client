@@ -11,6 +11,7 @@ import magefree.app.screens.DecksPlaceholderScreen
 import magefree.app.screens.HomeScreen
 import magefree.app.screens.ProfilePlaceholderScreen
 import magefree.app.screens.SettingsPlaceholderScreen
+import magefree.feature.cards.CardsRoute as CardsFeatureRoute
 import magefree.feature.lobby.LobbyRoute as LobbyFeatureRoute
 
 /**
@@ -20,6 +21,14 @@ import magefree.feature.lobby.LobbyRoute as LobbyFeatureRoute
  */
 @Serializable
 data object LobbyRoute
+
+/**
+ * Type-safe route for the read-only card catalog browser (story 0032), reached from the Decks
+ * destination's "Browse cards" entry. A nested destination inside the shell (not a top-level tab), so
+ * the tab chrome and connection strip stay visible above it and Back returns to Decks.
+ */
+@Serializable
+data object CardsRoute
 
 /**
  * The Navigation-Compose host for the top-level destinations, wired with **type-safe** routes:
@@ -65,7 +74,14 @@ fun MageNavHost(
         composable<LobbyRoute> {
             LobbyFeatureRoute(onBack = { navController.popBackStack() })
         }
-        composable<DecksRoute> { DecksPlaceholderScreen() }
+        composable<DecksRoute> {
+            // Story 0032: the deck builder (Epic 9) will live here; for now Decks offers a read-only
+            // entry into the card catalog browser. Kept within the Decks back stack so Back returns here.
+            DecksPlaceholderScreen(onBrowseCards = { navController.navigate(CardsRoute) })
+        }
+        composable<CardsRoute> {
+            CardsFeatureRoute(onBack = { navController.popBackStack() })
+        }
         composable<ProfileRoute> { ProfilePlaceholderScreen() }
         composable<SettingsRoute> {
             SettingsPlaceholderScreen(
