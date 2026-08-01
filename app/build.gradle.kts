@@ -33,6 +33,8 @@ dependencies {
     implementation(project(":core:network"))
     // Story 0030: bundles the offline card catalog (SQLite asset + CardCatalog DI) into the app.
     implementation(project(":core:cards"))
+    // Story 0033: bundles the offline deck library (Room) + format-legality asset + DI into the app.
+    implementation(project(":core:decks"))
     // Story 0029: the lobby browser behind the home "Play" entry.
     implementation(project(":feature:lobby"))
     // Story 0032: the card search/browse + inspection surface behind the Decks "Browse cards" entry.

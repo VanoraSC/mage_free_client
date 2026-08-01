@@ -38,6 +38,8 @@ if (System.getenv("MAGE_JVM_ONLY") != "1") {
     include(":core:network")
     // Story 0030: bundled XMage card catalog + offline local search (Android lib; needs the SDK).
     include(":core:cards")
+    // Story 0033: offline deck model, local deck library (Room) + bundled format-legality (Android lib).
+    include(":core:decks")
     include(":feature:connect")
     include(":feature:lobby")
     // Story 0032: card search/browse + full-bleed inspection UI over :core:cards (Android lib).

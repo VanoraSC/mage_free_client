@@ -53,6 +53,46 @@ Output: `core/cards/src/main/assets/cards.sqlite`. At `1.4.60` this is **~14 MB*
 91,536 printings**. The generator prints the counts; the same numbers are recorded in the bundle's
 `meta` table.
 
+## Format-legality bundle (story 0033)
+
+The same image also produces `core/decks/src/main/assets/formats.json` — the bundled per-format
+legality data the offline `DeckLegality` checker in `:core:decks` reads. `FormatGenerator.java`
+instantiates XMage's constructed-format classes and reads each one's legal set codes, banned +
+restricted card names, allowed rarities, and constraints (deck-min-size, sideboard-max, max-copies +
+the per-card copy overrides).
+
+Those format classes (`mage.deck.Standard`, `Modern`, …) are NOT in the pinned `org.mage:*` jars —
+they live only in upstream source. So the Docker build **ephemerally, blob-less sparse-clones the
+pinned `magefree/mage` ref** (the same repo + `MAGE_REF` the jvm/server images build from), fetching
+only `Mage.Server.Plugins/Mage.Deck.Constructed/src/mage/deck`, and compiles just those format sources
+against the pinned jars. No XMage source is committed into this repo — only the generated
+`formats.json` (factual legality data) is.
+
+Formats bundled: **Standard, Pioneer, Modern, Legacy, Vintage, Pauper**. At `1.4.60` the bundle is
+**~62 KB** with (legal sets / banned / restricted): Standard 21/165/0, Pioneer 69/184/0,
+Modern 114/207/0, Legacy 544/223/0, Vintage 544/156/51, Pauper 544/191/0 (Pauper also restricts
+rarities to COMMON + LAND). Banned counts include XMage's format-invariant base bans
+(conspiracy/ante/dexterity/acorn/offensive/Gleemox). Provenance (`xmageRef`, `xmageVersion`,
+`generatedAt`) is embedded in the JSON.
+
+### Regeneration command
+
+```bash
+# 1. Build the generator image (also clones the pinned format source; see above).
+docker build -t mage-free-client/card-catalog-generator:latest tools/card-catalog-generator
+
+# 2. Run FormatGenerator, writing the bundle into the :core:decks assets dir.
+docker run --rm --entrypoint sh \
+  -v "$(pwd)/core/decks/src/main/assets:/out" \
+  mage-free-client/card-catalog-generator:latest \
+  -c 'java -cp "/xmage-lib/*:/gen" FormatGenerator /out/formats.json "$MAGE_REF"'
+```
+
+The bundle reproduces **bit-for-bit** at a pinned ref **except** for `Standard`: XMage computes
+Standard's legal sets from the *current date* (rotation), so its `legalSetCodes` are date-sensitive —
+`generatedAt` records the run date, and only a fixed date reproduces Standard's list exactly. Every
+other format is date-stable at the ref.
+
 ## Test fixture
 
 `core/cards/src/test/resources/fixture-cards.sqlite` is a tiny (~110 KB) subset carved from the full
