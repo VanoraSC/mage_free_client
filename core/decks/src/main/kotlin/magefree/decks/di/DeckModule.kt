@@ -14,6 +14,8 @@ import magefree.decks.internal.DefaultDeckLegality
 import magefree.decks.internal.FormatBundleLoader
 import magefree.decks.internal.RoomDeckRepository
 import magefree.decks.internal.db.DeckDatabase
+import magefree.decks.io.DeckIO
+import magefree.decks.io.internal.DefaultDeckIO
 import magefree.decks.legality.DeckLegality
 import javax.inject.Singleton
 
@@ -49,4 +51,8 @@ object DeckModule {
             catalog = catalog,
             ioDispatcher = Dispatchers.IO,
         )
+
+    @Provides
+    @Singleton
+    fun provideDeckIO(catalog: CardCatalog): DeckIO = DefaultDeckIO(catalog = catalog, ioDispatcher = Dispatchers.IO)
 }
