@@ -39,6 +39,8 @@ dependencies {
     implementation(project(":feature:lobby"))
     // Story 0032: the card search/browse + inspection surface behind the Decks "Browse cards" entry.
     implementation(project(":feature:cards"))
+    // Story 0035: the deck library + builder hosted on the Decks tab.
+    implementation(project(":feature:decks"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
