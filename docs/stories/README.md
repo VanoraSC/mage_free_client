@@ -273,6 +273,25 @@ cards). Format-legality data is **bundled** (generated from XMage like the card 
 
 ---
 
+## Epic 7 — Hosting & Joining Tables
+
+Creating a table, joining an open table (submitting a deck), readying up, starting the match, and
+spectating — the surface the lobby (Epic 6) and deck builder (Epic 9) feed into. Ends at
+**match-start**; in-game play is EPIC-11. See [`../project-plan.md`](../project-plan.md) (EPIC-07).
+
+**Design note:** XMage's table actions are `SessionImpl.createTable/joinTable/submitDeck/leaveTable/
+startMatch/watchTable` (+ pushed table/game-start callbacks). Joining **submits a deck** (0033's
+`Deck ↔ DeckCardLists`-equivalent). The same protocol→client→feature layering as Epics 6/10/9; the
+`mage.*` boundary stays in the bridge.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0036 | Table actions: protocol & bridge relay | 0027, 0023, 0004–0006 | `:protocol` table-action messages (create/join/submit/update/leave/remove/start/watch) + `CreateTableOptions`/`DeckList` + pushed table/seat/construct/match-starting events; a `:bridge` `TableRelay` + `CallbackMapper` cases dispatching to `SessionImpl`. No UI; `mage.*` stays in the bridge. |
+| 0037 | Table client & session API | 0036, 0028, 0023–0025, 0033 | `:core:network` `TableClient` (the eight verbs → `Result`) + an observable app-schema `TableState` (seats/phase + `MatchStarting`) folded from 0036's events, seeded from create/join; maps a 0033 `Deck` to the wire; re-syncs across resume. No UI. |
+| 0038 | Host & join tables UI | 0037, 0033/0035, 0029, 0018, EPIC-03 | `:feature:tables`: host (options→create), join (pick a saved deck + legality → submit), a table room (seats/ready/start/leave over `observeTable`), and spectate; enables the lobby's deferred Join + a Host entry. Ends at a "match starting" hand-off (EPIC-11). |
+
+---
+
 ## Build Infrastructure
 
 Containerizing the **heavy / JVM path** (the bridge build, the upstream `../mage` Maven build, and
@@ -302,8 +321,13 @@ bridge). Stories **0001–0022 are complete and merged**:
 
 8. **Epic 10 (card database):** 0030 → 0031 → 0032. ✅
 
-**Next:** **Epic 9 (deck builder)** — 0033 → 0034 → 0035 — then **Epic 7 (join/host tables)**, which
-this unblocks (joining submits a deck the server validates against XMage's card pool). This ordering
-(10 → 9 → 7 ahead of Epic 7's original slot) is deliberate: cards and decks come first. Epic 5's
-notifications track remains deferred; the other downstream epics (08, 11–17) are not yet broken into
-stories.
+9. **Epic 9 (deck builder):** 0033 → 0034 → 0035. ✅ (all deck ops offline; only art is networked)
+
+10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038. ⏳ (stories ready; ends at match-start)
+
+**Next:** **Epic 7** — 0036 (table protocol + bridge relay) → 0037 (table client + `TableState`) →
+0038 (host/join/room UI), which the deck builder unblocks (joining submits a deck the server
+validates against XMage's card pool). This ordering (10 → 9 → 7 ahead of Epic 7's original slot) is
+deliberate: cards and decks come first. Epic 7 ends at **match-start**; in-game play is EPIC-11.
+Epic 5's notifications track remains deferred; the other downstream epics (08, 11–17) are not yet
+broken into stories.
