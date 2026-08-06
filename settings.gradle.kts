@@ -44,4 +44,7 @@ if (System.getenv("MAGE_JVM_ONLY") != "1") {
     include(":feature:lobby")
     // Story 0032: card search/browse + full-bleed inspection UI over :core:cards (Android lib).
     include(":feature:cards")
+    // Story 0035: deck library + touch-first builder over :core:decks (+ :core:cards art), reusing
+    // :feature:cards' search/art (Android lib; needs the SDK).
+    include(":feature:decks")
 }

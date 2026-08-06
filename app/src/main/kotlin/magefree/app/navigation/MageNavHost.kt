@@ -7,7 +7,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import kotlinx.serialization.Serializable
-import magefree.app.screens.DecksPlaceholderScreen
 import magefree.app.screens.HomeScreen
 import magefree.app.screens.ProfilePlaceholderScreen
 import magefree.app.screens.SettingsPlaceholderScreen
@@ -23,8 +22,8 @@ import magefree.feature.lobby.LobbyRoute as LobbyFeatureRoute
 data object LobbyRoute
 
 /**
- * Type-safe route for the read-only card catalog browser (story 0032), reached from the Decks
- * destination's "Browse cards" entry. A nested destination inside the shell (not a top-level tab), so
+ * Type-safe route for the read-only card catalog browser (story 0032), reached from the Decks library's
+ * "Browse cards" action (story 0035). A nested destination inside the shell (not a top-level tab), so
  * the tab chrome and connection strip stay visible above it and Back returns to Decks.
  */
 @Serializable
@@ -44,6 +43,7 @@ fun MageNavHost(
     modifier: Modifier = Modifier,
     onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
+    decksScreen: @Composable () -> Unit = {},
 ) {
     // Navigate to a top-level route while preserving each tab's own back stack/state, mirroring the
     // tab-selection behaviour in [AppShell] so the hub's secondary entries and the nav chrome stay
@@ -75,9 +75,10 @@ fun MageNavHost(
             LobbyFeatureRoute(onBack = { navController.popBackStack() })
         }
         composable<DecksRoute> {
-            // Story 0032: the deck builder (Epic 9) will live here; for now Decks offers a read-only
-            // entry into the card catalog browser. Kept within the Decks back stack so Back returns here.
-            DecksPlaceholderScreen(onBrowseCards = { navController.navigate(CardsRoute) })
+            // Story 0035: the Decks tab hosts the deck library + builder (`:feature:decks`), provided by
+            // the caller so the shell can stay Hilt-free in tests. Card browse remains reachable from the
+            // library's "Browse cards" action, which navigates to [CardsRoute] within the Decks back stack.
+            decksScreen()
         }
         composable<CardsRoute> {
             CardsFeatureRoute(onBack = { navController.popBackStack() })

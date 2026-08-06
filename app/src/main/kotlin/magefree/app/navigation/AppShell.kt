@@ -31,8 +31,10 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import magefree.app.connection.ui.ConnectionStatusBar
+import magefree.app.screens.DecksPlaceholderScreen
 import magefree.designsystem.layout.WindowWidthClass
 import magefree.designsystem.layout.windowWidthClass
+import magefree.feature.decks.DecksRoute as DecksLibraryRoute
 
 /**
  * The app shell: a [Scaffold] hosting [MageNavHost] plus adaptive primary navigation. At
@@ -56,6 +58,10 @@ fun AppShell(
     onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
+    // Story 0035: the Decks tab hosts the deck library + builder (`:feature:decks`). Built here (not in
+    // MageNavHost) so the shell can be driven Hilt-free in tests via the stateless overload's default.
+    // "Browse cards" navigates to [CardsRoute] within the Decks back stack (0032 browser stays reachable).
+    decksScreen: @Composable () -> Unit = { DecksLibraryRoute(onBrowseCards = { navController.navigate(CardsRoute) }) },
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val widthClass = windowWidthClass(DpSize(maxWidth, maxHeight))
@@ -65,6 +71,7 @@ fun AppShell(
             onEnterGame = onEnterGame,
             onOpenCatalog = onOpenCatalog,
             connectionStatusBar = connectionStatusBar,
+            decksScreen = decksScreen,
         )
     }
 }
@@ -90,6 +97,9 @@ fun AppShell(
     onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
+    // Defaults to the Hilt-free placeholder so `AppShell` can be driven without a Hilt graph in tests;
+    // production supplies the real `:feature:decks` library via the overload above.
+    decksScreen: @Composable () -> Unit = { DecksPlaceholderScreen() },
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -134,6 +144,7 @@ fun AppShell(
                     navController = navController,
                     onEnterGame = onEnterGame,
                     onOpenCatalog = onOpenCatalog,
+                    decksScreen = decksScreen,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -173,6 +184,7 @@ fun AppShell(
                     navController = navController,
                     onEnterGame = onEnterGame,
                     onOpenCatalog = onOpenCatalog,
+                    decksScreen = decksScreen,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
