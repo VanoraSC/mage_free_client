@@ -289,6 +289,9 @@ startMatch/watchTable` (+ pushed table/game-start callbacks). Joining **submits 
 | 0036 | Table actions: protocol & bridge relay | 0027, 0023, 0004–0006 | `:protocol` table-action messages (create/join/submit/update/leave/remove/start/watch) + `CreateTableOptions`/`DeckList` + pushed table/seat/construct/match-starting events; a `:bridge` `TableRelay` + `CallbackMapper` cases dispatching to `SessionImpl`. No UI; `mage.*` stays in the bridge. |
 | 0037 | Table client & session API | 0036, 0028, 0023–0025, 0033 | `:core:network` `TableClient` (the eight verbs → `Result`) + an observable app-schema `TableState` (seats/phase + `MatchStarting`) folded from 0036's events, seeded from create/join; maps a 0033 `Deck` to the wire; re-syncs across resume. No UI. |
 | 0038 | Host & join tables UI | 0037, 0033/0035, 0029, 0018, EPIC-03 | `:feature:tables`: host (options→create), join (pick a saved deck + legality → submit), a table room (seats/ready/start/leave over `observeTable`), and spectate; enables the lobby's deferred Join + a Host entry. Ends at a "match starting" hand-off (EPIC-11). |
+| 0039 | Live table-action coverage | 0036, 0022 | An env-gated `TableRelayIT` driving a real create → seat AI → seat self → start → `MatchStarting` round trip against the reference server, plus a typed-decline case. ✅ |
+| 0040 | Table seat state | 0036, 0037, 0027 | **Defect fix:** the room's seats come from `SeatView` via a targeted `GetTable` (nothing sends the `SeatUpdated` the fold expects), and start is gated on the server's own `READY_TO_START`. |
+| 0041 | Host seating flow | 0040, 0037, 0033/0035 | **Defect fix:** hosting seats the configured AI players and the host (each submitting a deck, deck picked offline with legality), removing the table if any step fails — mirroring upstream's `NewTableDialog`. |
 
 ---
 
@@ -323,12 +326,17 @@ bridge). Stories **0001–0022 are complete and merged**:
 
 9. **Epic 9 (deck builder):** 0033 → 0034 → 0035. ✅ (all deck ops offline; only art is networked)
 
-10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038. ✅ (ends at match-start)
+10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038 built; **0040 + 0041 outstanding**. ⚠️
 
-**Where this leaves the app:** a player can connect, browse the lobby, build decks fully offline,
-then **host or join a table, submit a deck, ready up, and reach match-start** — plus spectate. The
-`MatchStarting` signal is the hand-off boundary: **in-game play (EPIC-11) is the next functional
-gap**, and **EPIC-08** (tournaments / draft / sealed) is the other unstarted branch. This ordering
-(10 → 9 → 7 ahead of Epic 7's original slot) was deliberate: cards and decks came first. Epic 5's
-notifications track remains deferred; the downstream epics (08, 11–17) are not yet broken into
-stories.
+**Current state — hosting does not yet work end to end.** The protocol/bridge half (0036) is sound and
+now **proven against the real server** by 0039's live `TableRelayIT` (create → seat AI → seat self →
+start → `MatchStarting`). The app half has two confirmed defects: the room's seats are folded from a
+`SeatUpdated` push **nothing sends**, so the host's Start can never enable (**0040**); and the host
+flow calls `createTable` without ever seating itself or its AI players, so a hosted table cannot
+become ready (**0041**). Joining an already-hosted table and spectating are unaffected. Both fixes are
+specified and are the next work.
+
+**Beyond that:** **EPIC-11** (in-game play) is the next functional gap — everything above funnels into
+the `MatchStarting` hand-off — and **EPIC-08** (tournaments / draft / sealed) is the other unstarted
+branch. The 10 → 9 → 7 ordering was deliberate: cards and decks came first. Epic 5's notifications
+track remains deferred; the downstream epics (08, 11–17) are not yet broken into stories.
