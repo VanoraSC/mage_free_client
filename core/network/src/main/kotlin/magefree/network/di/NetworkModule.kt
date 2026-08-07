@@ -19,11 +19,14 @@ import magefree.network.BridgeClient
 import magefree.network.ConnectionRepository
 import magefree.network.LobbyClient
 import magefree.network.LobbyClientImpl
+import magefree.network.ServerPushSource
 import magefree.network.ktor.KtorBridgeClient
 import magefree.network.reconnect.AndroidConnectivityObserver
 import magefree.network.reconnect.AppLifecycleObserver
 import magefree.network.reconnect.ConnectivityObserver
 import magefree.network.reconnect.ProcessAppLifecycleObserver
+import magefree.network.table.DefaultTableClient
+import magefree.network.table.TableClient
 import javax.inject.Singleton
 
 /**
@@ -79,6 +82,25 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideLobbyClient(impl: LobbyClientImpl): LobbyClient = impl
+
+    /**
+     * The production [TableClient] (story 0037), riding the same [BridgeClient] singleton as the lobby.
+     * Constructed here (rather than `@Inject`) because it also needs the **internal** [ServerPushSource]
+     * side-channel — the same singleton, cast — which stays off the cross-module Hilt graph so
+     * `:protocol` never surfaces above `:core:network`. The [ConnectionState] flow it re-syncs against
+     * carries the same `@JvmSuppressWildcards` fix as the lobby's.
+     */
+    @Provides
+    @Singleton
+    fun provideTableClient(
+        bridgeClient: BridgeClient,
+        connectionState: StateFlow<@JvmSuppressWildcards ConnectionState>,
+    ): TableClient =
+        DefaultTableClient(
+            bridgeClient = bridgeClient,
+            pushSource = bridgeClient as ServerPushSource,
+            connectionState = connectionState,
+        )
 
     /**
      * The app-level connection state as a plain [StateFlow], sourced from the single-source-of-truth

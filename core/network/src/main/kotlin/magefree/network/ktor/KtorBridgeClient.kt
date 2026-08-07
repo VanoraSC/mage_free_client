@@ -11,9 +11,13 @@ import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
@@ -27,6 +31,7 @@ import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.model.SessionEvent
 import magefree.network.BridgeClient
+import magefree.network.ServerPushSource
 import magefree.network.mapper.SessionMapper
 import magefree.network.mapper.SessionMapper.handshakeResult
 import magefree.network.reconnect.AlwaysForegroundAppLifecycleObserver
@@ -70,9 +75,25 @@ class KtorBridgeClient(
     private val connectivity: ConnectivityObserver = AlwaysOnlineConnectivityObserver,
     private val lifecycle: AppLifecycleObserver = AlwaysForegroundAppLifecycleObserver,
     private val requestTimeoutMillis: Long = DEFAULT_REQUEST_TIMEOUT_MILLIS,
-) : BridgeClient {
+) : BridgeClient,
+    ServerPushSource {
     private val _connectionState = MutableStateFlow(ConnectionState.Disconnected)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+
+    /**
+     * The uncorrelated server-push side-channel (story 0037's seam (b)): the relay forwards each 0036
+     * table event (and any other spontaneous, non-lifecycle frame) here, and the table client folds the
+     * ones for its table. Hot and replay-less (`replay = 0`); a slow subscriber drops the oldest rather
+     * than back-pressuring the socket read loop. `:protocol`-typed but confined to `:core:network` via
+     * the `internal` [ServerPushSource].
+     */
+    private val _serverPushes =
+        MutableSharedFlow<ServerMessage>(
+            replay = 0,
+            extraBufferCapacity = 64,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+    override val serverPushes: SharedFlow<ServerMessage> = _serverPushes.asSharedFlow()
 
     /**
      * The correlation registry multiplexing [request]/response over the live socket alongside the
@@ -172,6 +193,7 @@ class KtorBridgeClient(
                         emit = emit,
                         isDisconnectRequested = { disconnectRequested },
                         pending = pending,
+                        featurePush = { _serverPushes.emit(it) },
                     )
                 }
                 null -> SessionOutcome.RETRY

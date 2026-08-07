@@ -1,8 +1,11 @@
 package magefree.network.fake
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
@@ -11,6 +14,7 @@ import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.model.SessionEvent
 import magefree.network.BridgeClient
+import magefree.network.ServerPushSource
 import magefree.network.mapper.SessionMapper
 import magefree.network.mapper.SessionMapper.handshakeResult
 import magefree.protocol.ClientMessage
@@ -36,9 +40,24 @@ class FakeBridgeClient(
     private val responder: (ClientMessage) -> ServerMessage = {
         error("FakeBridgeClient: no request/response scripted for $it")
     },
-) : BridgeClient {
+) : BridgeClient,
+    ServerPushSource {
     private val _connectionState = MutableStateFlow(ConnectionState.Disconnected)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+
+    /**
+     * The server-push side-channel (story 0037's seam (b)) mirrored for tests: a test drives an
+     * uncorrelated 0036 table event by [emitPush]-ing a real `:protocol` [ServerMessage] here, exactly as
+     * the production relay's `featurePush` would. Replay-less like production — a test subscribes its
+     * `observeTable` collector before emitting.
+     */
+    private val _serverPushes = MutableSharedFlow<ServerMessage>(replay = 0, extraBufferCapacity = 64)
+    override val serverPushes: SharedFlow<ServerMessage> = _serverPushes.asSharedFlow()
+
+    /** Emit a spontaneous server push, as the bridge relay's feature side-channel would. */
+    suspend fun emitPush(message: ServerMessage) {
+        _serverPushes.emit(message)
+    }
 
     override fun connect(
         server: ServerTarget,
