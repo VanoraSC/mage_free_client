@@ -323,11 +323,12 @@ bridge). Stories **0001–0022 are complete and merged**:
 
 9. **Epic 9 (deck builder):** 0033 → 0034 → 0035. ✅ (all deck ops offline; only art is networked)
 
-10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038. ⏳ (stories ready; ends at match-start)
+10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038. ✅ (ends at match-start)
 
-**Next:** **Epic 7** — 0036 (table protocol + bridge relay) → 0037 (table client + `TableState`) →
-0038 (host/join/room UI), which the deck builder unblocks (joining submits a deck the server
-validates against XMage's card pool). This ordering (10 → 9 → 7 ahead of Epic 7's original slot) is
-deliberate: cards and decks come first. Epic 7 ends at **match-start**; in-game play is EPIC-11.
-Epic 5's notifications track remains deferred; the other downstream epics (08, 11–17) are not yet
-broken into stories.
+**Where this leaves the app:** a player can connect, browse the lobby, build decks fully offline,
+then **host or join a table, submit a deck, ready up, and reach match-start** — plus spectate. The
+`MatchStarting` signal is the hand-off boundary: **in-game play (EPIC-11) is the next functional
+gap**, and **EPIC-08** (tournaments / draft / sealed) is the other unstarted branch. This ordering
+(10 → 9 → 7 ahead of Epic 7's original slot) was deliberate: cards and decks came first. Epic 5's
+notifications track remains deferred; the downstream epics (08, 11–17) are not yet broken into
+stories.
