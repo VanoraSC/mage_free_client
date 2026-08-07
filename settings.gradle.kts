@@ -47,4 +47,7 @@ if (System.getenv("MAGE_JVM_ONLY") != "1") {
     // Story 0035: deck library + touch-first builder over :core:decks (+ :core:cards art), reusing
     // :feature:cards' search/art (Android lib; needs the SDK).
     include(":feature:decks")
+    // Story 0038: host/join/room/spectate tables UI over :core:network's 0037 TableClient, reusing
+    // :core:decks for offline deck pick + legality (Android lib; needs the SDK).
+    include(":feature:tables")
 }
