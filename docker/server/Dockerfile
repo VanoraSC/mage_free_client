@@ -14,13 +14,17 @@ RUN git clone --filter=tree:0 "${MAGE_REPO}" /tmp/mage \
 # stage the unpacked distribution. Kept separate so assembly/runtime tweaks don't re-run the install.
 RUN cd /tmp/mage \
     && mvn -q -pl Mage.Server -DskipTests -B package assembly:single \
-    && mkdir -p /opt/xmage /opt/xmage/config \
-    && unzip -q Mage.Server/target/mage-server.zip -d /opt/xmage \
-    && cp Mage.Server/config/config.xml /opt/xmage/config/config.xml
+    && mkdir -p /opt/xmage \
+    && unzip -q Mage.Server/target/mage-server.zip -d /opt/xmage
 
 FROM eclipse-temurin:17-jre
 COPY --from=build /opt/xmage /opt/xmage
 # Local reference config: authentication off (sign in with any username), bind all interfaces.
+# The config comes from the distribution zip itself (the assembly's filtered `release/` fileSet), so
+# its plugin `jar=` names carry the version — matching the versioned jars the assembly stages in
+# plugins/. Do NOT overwrite it with Mage.Server/config/config.xml: that is the dev/IDE config with
+# UNversioned jar names, and every plugin load then misses (no deck validators, no Human/AI player
+# factories, no Two Player Duel), which makes createTable fail server-side.
 RUN sed -i -E 's/authenticationActivated="[^"]*"/authenticationActivated="false"/; s/serverAddress="[^"]*"/serverAddress="0.0.0.0"/' \
     /opt/xmage/config/config.xml
 WORKDIR /opt/xmage
