@@ -5,12 +5,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +50,15 @@ const val LOBBY_TITLE: String = "Lobby"
 /** Accessibility label on the refresh action (also the error-with-data retry). */
 const val LOBBY_REFRESH_CONTENT_DESCRIPTION: String = "Refresh lobby"
 
+/** Accessibility label on the host-a-table action (story 0038). */
+const val LOBBY_HOST_CONTENT_DESCRIPTION: String = "Host a table"
+
+/** Label on the (now enabled) join action in a table's detail sheet (story 0038). */
+const val LOBBY_JOIN_LABEL: String = "Join"
+
+/** Label on the spectate action in a table's detail sheet (story 0038). */
+const val LOBBY_WATCH_LABEL: String = "Watch"
+
 /** Accessibility label on the back / up control. */
 const val LOBBY_BACK_CONTENT_DESCRIPTION: String = "Back"
 
@@ -59,6 +70,9 @@ const val LOBBY_BACK_CONTENT_DESCRIPTION: String = "Back"
 fun LobbyRoute(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onHost: () -> Unit = {},
+    onJoin: (LobbyTable) -> Unit = {},
+    onWatch: (LobbyTable) -> Unit = {},
     viewModel: LobbyViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -79,6 +93,9 @@ fun LobbyRoute(
         detailTable = detailTable,
         onTableSelected = { detailTable = it },
         onDetailDismiss = { detailTable = null },
+        onHost = onHost,
+        onJoin = onJoin,
+        onWatch = onWatch,
         modifier = modifier,
     )
 }
@@ -107,6 +124,9 @@ fun LobbyScreen(
     onTableSelected: (LobbyTable) -> Unit,
     onDetailDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onHost: () -> Unit = {},
+    onJoin: (LobbyTable) -> Unit = {},
+    onWatch: (LobbyTable) -> Unit = {},
 ) {
     Scaffold(
         modifier = modifier,
@@ -122,6 +142,12 @@ fun LobbyScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onHost) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = LOBBY_HOST_CONTENT_DESCRIPTION,
+                        )
+                    }
                     IconButton(onClick = onRefresh) {
                         Icon(
                             imageVector = Icons.Filled.Refresh,
@@ -162,7 +188,12 @@ fun LobbyScreen(
     }
 
     detailTable?.let { table ->
-        TableDetailDialog(table = table, onDismiss = onDetailDismiss)
+        TableDetailDialog(
+            table = table,
+            onDismiss = onDetailDismiss,
+            onJoin = onJoin,
+            onWatch = onWatch,
+        )
     }
 }
 
@@ -255,14 +286,17 @@ private fun RefreshErrorBanner(
 }
 
 /**
- * A minimal read-only table detail: the table's settings at a glance and a **disabled** join action.
- * Joining / hosting is EPIC-07; the affordance is present but explicitly deferred here.
+ * A minimal table detail: the table's settings at a glance and the (story 0038) join / spectate actions.
+ * Join opens the deck-pick + submit flow; Watch opens a read-only room. A full table offers only Watch.
  */
 @Composable
 private fun TableDetailDialog(
     table: LobbyTable,
     onDismiss: () -> Unit,
+    onJoin: (LobbyTable) -> Unit,
+    onWatch: (LobbyTable) -> Unit,
 ) {
+    val hasOpenSeat = table.seatsFilled < table.seatsTotal
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = table.name) },
@@ -281,11 +315,27 @@ private fun TableDetailDialog(
             }
         },
         confirmButton = {
-            // Joining is EPIC-07: present but disabled so the deferral is explicit.
-            MagePrimaryButton(text = "Join — coming soon", onClick = {}, enabled = false)
+            // Story 0038: Join is live for a table with an open seat; a full table offers Watch only.
+            MagePrimaryButton(
+                text = LOBBY_JOIN_LABEL,
+                onClick = {
+                    onJoin(table)
+                    onDismiss()
+                },
+                enabled = hasOpenSeat,
+            )
         },
         dismissButton = {
-            MageTextButton(text = "Close", onClick = onDismiss)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
+                MageTextButton(
+                    text = LOBBY_WATCH_LABEL,
+                    onClick = {
+                        onWatch(table)
+                        onDismiss()
+                    },
+                )
+                MageTextButton(text = "Close", onClick = onDismiss)
+            }
         },
     )
 }

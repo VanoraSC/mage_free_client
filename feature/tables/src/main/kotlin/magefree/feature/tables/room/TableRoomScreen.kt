@@ -1,0 +1,268 @@
+package magefree.feature.tables.room
+
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import magefree.decks.model.DeckId
+import magefree.designsystem.component.LoadingState
+import magefree.designsystem.component.MageListRow
+import magefree.designsystem.component.MagePrimaryButton
+import magefree.designsystem.component.MageSecondaryButton
+import magefree.designsystem.component.MageSectionHeader
+import magefree.designsystem.component.MageTextButton
+import magefree.designsystem.component.MageTopAppBar
+import magefree.designsystem.theme.MageTheme
+import magefree.designsystem.theme.Spacing
+import magefree.feature.tables.DeckPicker
+import magefree.feature.tables.TableRole
+import magefree.network.table.Seat
+import magefree.network.table.SeatPlayerType
+import magefree.network.table.TablePhase
+import magefree.network.table.TableState
+
+/** Title of the table room; shared with tests so the two agree. */
+const val ROOM_TITLE: String = "Table room"
+
+/** The terminal "match starting" text — the Epic-11 hand-off marker; shared with tests. */
+const val MATCH_STARTING_LABEL: String = "Match starting…"
+
+/**
+ * Stateless table room. Renders the seats + ready/deck-submitted state, the format/options summary, and
+ * the role-appropriate actions (host start/remove; player submit/update/leave; spectator read-only). On
+ * the match-start signal it shows the terminal [MATCH_STARTING_LABEL] hand-off state — no gameplay. Every
+ * event is hoisted; the composable performs no I/O.
+ */
+@Composable
+fun TableRoomScreen(
+    uiState: TableRoomUiState,
+    onBack: () -> Unit,
+    onStart: () -> Unit,
+    onRemove: () -> Unit,
+    onLeave: () -> Unit,
+    onSubmitDeck: (DeckId) -> Unit,
+    onBuildDeck: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            MageTopAppBar(
+                title = ROOM_TITLE,
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        val content = Modifier.fillMaxSize().padding(innerPadding)
+        when {
+            uiState.isMatchStarting -> MatchStartingView(modifier = content)
+            uiState.isLoading && uiState.seats.isEmpty() -> LoadingState(modifier = content, message = "Joining table")
+            else ->
+                RoomContent(
+                    uiState = uiState,
+                    onStart = onStart,
+                    onRemove = onRemove,
+                    onLeave = onLeave,
+                    onSubmitDeck = onSubmitDeck,
+                    onBuildDeck = onBuildDeck,
+                    modifier = content,
+                )
+        }
+    }
+}
+
+/** The terminal hand-off surface: the game has begun on the server; Epic 11 replaces this with the board. */
+@Composable
+private fun MatchStartingView(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(Spacing.large),
+        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.medium, androidx.compose.ui.Alignment.CenterVertically),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.CheckCircle,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = MATCH_STARTING_LABEL,
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = "The match has started on the server. The in-game view arrives in a later update.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun RoomContent(
+    uiState: TableRoomUiState,
+    onStart: () -> Unit,
+    onRemove: () -> Unit,
+    onLeave: () -> Unit,
+    onSubmitDeck: (DeckId) -> Unit,
+    onBuildDeck: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Spacing.medium, vertical = Spacing.small),
+        verticalArrangement = Arrangement.spacedBy(Spacing.small),
+    ) {
+        uiState.optionsSummary?.let { summary ->
+            Text(text = summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(
+            text = "Phase: ${uiState.table.phase.label()}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        MageSectionHeader(text = "Seats (${uiState.seats.size})")
+        if (uiState.seats.isEmpty()) {
+            Text(
+                text = "Waiting for players to sit down…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            uiState.seats.forEach { seat -> SeatRow(seat) }
+        }
+
+        if (uiState.actionError != null) {
+            Text(text = uiState.actionError, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        }
+
+        if (uiState.showPlayerActions) {
+            MageSectionHeader(text = "Submit your deck")
+            DeckPicker(
+                decks = uiState.library,
+                selectedId = null,
+                onSelect = onSubmitDeck,
+                onBuildDeck = onBuildDeck,
+            )
+        }
+
+        // Role-appropriate actions.
+        when (uiState.role) {
+            TableRole.Host -> {
+                MagePrimaryButton(
+                    text = "Start match",
+                    onClick = onStart,
+                    enabled = uiState.canStart,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                MageTextButton(text = "Remove table", onClick = onRemove, modifier = Modifier.fillMaxWidth())
+            }
+            TableRole.Player ->
+                MageSecondaryButton(text = "Leave table", onClick = onLeave, modifier = Modifier.fillMaxWidth())
+            TableRole.Spectator ->
+                Text(
+                    text = "You are spectating this table.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+        }
+    }
+}
+
+/** One seat row: occupant name/type with ready + deck-submitted captions. */
+@Composable
+private fun SeatRow(seat: Seat) {
+    val name = seat.name ?: seat.playerId ?: "Open seat"
+    val type = if (seat.playerType == SeatPlayerType.Human) "Human" else seat.playerType.name
+    val status =
+        buildList {
+            add(type)
+            if (seat.isOwner) add("host")
+            add(if (seat.isReady) "ready" else "not ready")
+            if (seat.isDeckSubmitted) add("deck submitted")
+        }.joinToString(" · ")
+    MageListRow(
+        headline = name,
+        supportingText = status,
+        leadingContent = { Icon(imageVector = Icons.Filled.Person, contentDescription = null) },
+    )
+}
+
+/** A short human label for a [TablePhase]. */
+private fun TablePhase.label(): String =
+    when (this) {
+        TablePhase.Waiting -> "Waiting for players"
+        TablePhase.Constructing -> "Constructing decks"
+        TablePhase.Starting -> "Starting"
+        TablePhase.Started -> "Started"
+    }
+
+// ---- Previews ---------------------------------------------------------------------------------
+
+private fun previewSeats() =
+    listOf(
+        Seat(playerId = "p1", name = "You", isReady = true, isDeckSubmitted = true, isOwner = true),
+        Seat(playerId = "p2", name = "Rival", isReady = false),
+    )
+
+@Composable
+private fun previewScreen(uiState: TableRoomUiState) {
+    MageTheme {
+        TableRoomScreen(
+            uiState = uiState,
+            onBack = {},
+            onStart = {},
+            onRemove = {},
+            onLeave = {},
+            onSubmitDeck = {},
+            onBuildDeck = {},
+        )
+    }
+}
+
+@Preview(name = "Room - host (light)", showBackground = true, heightDp = 720)
+@Preview(name = "Room - host (dark)", showBackground = true, heightDp = 720, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun RoomHostPreview() =
+    previewScreen(
+        TableRoomUiState(
+            table = TableState(tableId = "t-1", optionsSummary = "Two Player Duel", seats = previewSeats(), phase = TablePhase.Waiting),
+            role = TableRole.Host,
+            isLoading = false,
+        ),
+    )
+
+@Preview(name = "Room - match starting", showBackground = true, heightDp = 720)
+@Composable
+private fun RoomStartingPreview() =
+    previewScreen(
+        TableRoomUiState(
+            table = TableState(tableId = "t-1", phase = TablePhase.Starting),
+            role = TableRole.Host,
+            isLoading = false,
+        ),
+    )

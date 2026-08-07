@@ -41,6 +41,8 @@ dependencies {
     implementation(project(":feature:cards"))
     // Story 0035: the deck library + builder hosted on the Decks tab.
     implementation(project(":feature:decks"))
+    // Story 0038: host/join/room/spectate tables UI behind the lobby's Join/Watch/Host entries.
+    implementation(project(":feature:tables"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
