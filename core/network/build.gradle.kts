@@ -22,6 +22,12 @@ dependencies {
     // module — nothing above `:core:network` can see them.
     implementation(project(":protocol"))
 
+    // Story 0037: the table client accepts a 0033 domain `Deck` for join/submit and maps it (via
+    // 0033's own `Deck.toDeckList()`) onto the wire `DeckList`. `api` (like `:core:model` above) because
+    // the `TableClient` ABI exposes `magefree.decks.model.Deck` in its join/submit signatures, so a
+    // consumer (0038) resolves that type transitively.
+    api(project(":core:decks"))
+
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     // Story 0024: ProcessLifecycleOwner for the whole-app foreground/background reconnect hook.

@@ -28,6 +28,10 @@ import magefree.protocol.ServerMessage
  * - **A correlated reply** (a lobby list reply matching an outstanding [pending] request, story 0028) is
  *   routed to the waiting requester and consumed here — it is *not* a lifecycle frame, so the
  *   session-event stream is untouched.
+ * - **An uncorrelated, non-lifecycle push** (a 0036 table *event* the [SessionMapper] does not map —
+ *   story 0037's seam (b)) is forwarded to [featurePush] so a feature layer (the table client) can fold
+ *   it, instead of being silently dropped. It is *not* a `SessionEvent`, so the session-event stream is
+ *   again untouched; a caller that supplies no [featurePush] (the default no-op) is unaffected.
  * - Every other server frame maps through [SessionMapper]; a terminal event ends the session.
  */
 internal object SessionRelay {
@@ -41,6 +45,7 @@ internal object SessionRelay {
         emit: suspend (SessionEvent) -> Unit,
         isDisconnectRequested: () -> Boolean,
         pending: PendingRequests = PendingRequests(),
+        featurePush: suspend (ServerMessage) -> Unit = {},
     ): SessionOutcome {
         var awaitingResumeAck = false
         val held = handle.resumeId
@@ -89,7 +94,15 @@ internal object SessionRelay {
             }
 
             val event =
-                SessionMapper.toSessionEvent(message, server, credentials.username, bridgeVersion) ?: continue
+                SessionMapper.toSessionEvent(message, server, credentials.username, bridgeVersion)
+            if (event == null) {
+                // Not a lifecycle frame and not a correlated reply: a spontaneous server push (a 0036
+                // table event, or a chat/ping/server-info the app ignores). Offer it to the feature
+                // side-channel (story 0037) — the table client folds the ones for its table; the rest
+                // are harmlessly ignored downstream. The session keeps relaying either way.
+                featurePush(message)
+                continue
+            }
             emit(event)
             when (event) {
                 is SessionEvent.AuthFailed,
