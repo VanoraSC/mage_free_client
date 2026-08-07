@@ -19,11 +19,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.JoinTable
+import magefree.protocol.LeaveTable
+import magefree.protocol.RemoveTable
 import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.StartMatch
+import magefree.protocol.SubmitDeck
+import magefree.protocol.TableActionResult
 import magefree.protocol.TableSummary
+import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchTable
 import org.slf4j.LoggerFactory
 import java.util.UUID
 import kotlin.coroutines.CoroutineContext
@@ -132,6 +141,30 @@ public class LiveSession internal constructor(
 
     /** The server's game types for a `GetGameTypes` request while this session is bound (story 0027). */
     internal suspend fun gameTypes(): List<GameTypeSummary> = upstream.gameTypes()
+
+    /** Creates a table for a `CreateTable` request while this session is bound (story 0036). */
+    internal suspend fun createTable(request: CreateTable): ServerMessage = upstream.createTable(request)
+
+    /** Joins a table for a `JoinTable` request while this session is bound (story 0036). */
+    internal suspend fun joinTable(request: JoinTable): TableActionResult = upstream.joinTable(request)
+
+    /** Submits a deck for a `SubmitDeck` request while this session is bound (story 0036). */
+    internal suspend fun submitDeck(request: SubmitDeck): TableActionResult = upstream.submitDeck(request)
+
+    /** Updates a deck for an `UpdateDeck` request while this session is bound (story 0036). */
+    internal suspend fun updateDeck(request: UpdateDeck): TableActionResult = upstream.updateDeck(request)
+
+    /** Leaves a table for a `LeaveTable` request while this session is bound (story 0036). */
+    internal suspend fun leaveTable(request: LeaveTable): TableActionResult = upstream.leaveTable(request)
+
+    /** Removes a table for a `RemoveTable` request while this session is bound (story 0036). */
+    internal suspend fun removeTable(request: RemoveTable): TableActionResult = upstream.removeTable(request)
+
+    /** Starts the match for a `StartMatch` request while this session is bound (story 0036). */
+    internal suspend fun startMatch(request: StartMatch): TableActionResult = upstream.startMatch(request)
+
+    /** Watches a table for a `WatchTable` request while this session is bound (story 0036). */
+    internal suspend fun watchTable(request: WatchTable): TableActionResult = upstream.watchTable(request)
 
     /** Cancels the pump and disconnects the upstream. Idempotent. */
     internal suspend fun close() {

@@ -3,6 +3,11 @@ package magefree.bridge.mapping
 import mage.interfaces.callback.ClientCallback
 import mage.interfaces.callback.ClientCallbackMethod
 import mage.view.ChatMessage
+import mage.view.TableClientMessage
+import magefree.bridge.mapping.table.ConstructMapper
+import magefree.bridge.mapping.table.JoinedTableMapper
+import magefree.bridge.mapping.table.MatchStartingMapper
+import magefree.bridge.mapping.table.SideboardMapper
 import magefree.protocol.ServerMessage
 import org.slf4j.LoggerFactory
 
@@ -26,6 +31,11 @@ public object CallbackMapper {
     /**
      * Dispatches [callback] by its [ClientCallbackMethod]:
      * - [ClientCallbackMethod.CHATMESSAGE] → [ChatMessageMapper] over the decompressed [ChatMessage].
+     * - the table-lifecycle methods → their per-callback table mapper over the decompressed
+     *   [TableClientMessage] (story 0036): `JOINED_TABLE` → [JoinedTableMapper] (a `TableUpdated`),
+     *   `CONSTRUCT` → [ConstructMapper] (a `ConstructPrompt`), `SIDEBOARD` → [SideboardMapper] (a
+     *   `SideboardPrompt`), and `START_GAME` → [MatchStartingMapper] (a `MatchStarting`, the Epic-11
+     *   boundary).
      * - anything else → `null` (the caller logs "unmapped callback: <method>" and drops it).
      *
      * The decompress + cast for a known method is guarded: a malformed payload is logged and mapped to
@@ -35,6 +45,14 @@ public object CallbackMapper {
         when (callback.method) {
             ClientCallbackMethod.CHATMESSAGE ->
                 mapGuarded(callback) { ChatMessageMapper.map(it.chatMessage()) }
+            ClientCallbackMethod.JOINED_TABLE ->
+                mapGuarded(callback) { JoinedTableMapper.map(it.tableClientMessage()) }
+            ClientCallbackMethod.CONSTRUCT ->
+                mapGuarded(callback) { ConstructMapper.map(it.tableClientMessage()) }
+            ClientCallbackMethod.SIDEBOARD ->
+                mapGuarded(callback) { SideboardMapper.map(it.tableClientMessage()) }
+            ClientCallbackMethod.START_GAME ->
+                mapGuarded(callback) { MatchStartingMapper.map(it.tableClientMessage()) }
             else -> null
         }
 
@@ -57,5 +75,11 @@ public object CallbackMapper {
         // The payload is compressed until decompressed; getData() returns the mage.view.* object after.
         decompressData()
         return data as ChatMessage
+    }
+
+    /** Decompresses the payload and returns it as a [TableClientMessage] (throws if the shape drifted). */
+    private fun ClientCallback.tableClientMessage(): TableClientMessage {
+        decompressData()
+        return data as TableClientMessage
     }
 }

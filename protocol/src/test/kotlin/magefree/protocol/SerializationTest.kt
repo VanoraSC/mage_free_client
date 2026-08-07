@@ -10,6 +10,63 @@ import org.junit.jupiter.api.Test
 class SerializationTest {
     private val json = ProtocolJson.json
 
+    private companion object {
+        val SAMPLE_DECK =
+            DeckList(
+                name = "Mono-U Tempo",
+                author = "alice",
+                cards =
+                    listOf(
+                        DeckListCard(cardName = "Island", setCode = "M21", collectorNumber = "123", amount = 20),
+                        DeckListCard(cardName = "Brineborn Cutthroat", setCode = "M21", collectorNumber = "50", amount = 4),
+                    ),
+                sideboard =
+                    listOf(
+                        DeckListCard(cardName = "Negate", setCode = "M21", collectorNumber = "58", amount = 3),
+                    ),
+            )
+
+        val FULL_OPTIONS =
+            CreateTableOptions(
+                name = "Duel Night",
+                gameType = "Two Player Duel",
+                deckType = "Constructed - Standard",
+                players = listOf(SeatPlayerTypeCode.HUMAN, SeatPlayerTypeCode.COMPUTER_MONTE_CARLO),
+                rated = true,
+                winsNeeded = 2,
+                freeMulligans = 1,
+                skillLevel = SkillLevelCode.SERIOUS,
+                range = RangeCode.ALL,
+                matchTimeLimitSeconds = 900,
+                matchBufferTimeSeconds = 5,
+                spectatorsAllowed = false,
+                quitRatio = 80,
+                minimumRating = 1200,
+                password = "hunter2",
+            )
+
+        val MINIMAL_OPTIONS =
+            CreateTableOptions(name = "Casual", gameType = "Two Player Duel", deckType = "Constructed - Standard")
+
+        val SAMPLE_TABLE =
+            TableSummary(
+                tableId = "t-1",
+                name = "Duel Night",
+                controllerName = "alice",
+                gameType = "Two Player Duel",
+                deckType = "Constructed - Standard",
+                state = TableStateCode.WAITING,
+                seatsFilled = 1,
+                seatsTotal = 2,
+                isTournament = false,
+                isRated = true,
+                isPassworded = false,
+                isLimited = false,
+                skillLevel = SkillLevelCode.CASUAL,
+                createdAtEpochMs = 1_700_000_000_000L,
+            )
+    }
+
     @Test
     fun `client messages round-trip through the polymorphic envelope`() {
         val messages: List<ClientMessage> =
@@ -31,6 +88,32 @@ class SerializationTest {
                 GetRoomUsers(),
                 GetGameTypes(requestId = "r-9"),
                 GetGameTypes(),
+                // Table actions (story 0036).
+                CreateTable(options = FULL_OPTIONS, roomId = "room-1", requestId = "r-13"),
+                CreateTable(options = MINIMAL_OPTIONS),
+                JoinTable(
+                    tableId = "t-1",
+                    seatName = "alice",
+                    deck = SAMPLE_DECK,
+                    roomId = "room-1",
+                    password = "hunter2",
+                    playerType = SeatPlayerTypeCode.HUMAN,
+                    skill = SkillLevelCode.SERIOUS,
+                    requestId = "r-14",
+                ),
+                JoinTable(tableId = "t-1", seatName = "bob", deck = DeckList()),
+                SubmitDeck(tableId = "t-1", deck = SAMPLE_DECK, requestId = "r-15"),
+                SubmitDeck(tableId = "t-1", deck = DeckList()),
+                UpdateDeck(tableId = "t-1", deck = SAMPLE_DECK, requestId = "r-16"),
+                UpdateDeck(tableId = "t-1", deck = DeckList()),
+                LeaveTable(tableId = "t-1", roomId = "room-1", requestId = "r-17"),
+                LeaveTable(tableId = "t-1"),
+                RemoveTable(tableId = "t-1", roomId = "room-1", requestId = "r-18"),
+                RemoveTable(tableId = "t-1"),
+                StartMatch(tableId = "t-1", roomId = "room-1", requestId = "r-19"),
+                StartMatch(tableId = "t-1"),
+                WatchTable(tableId = "t-1", roomId = "room-1", requestId = "r-20"),
+                WatchTable(tableId = "t-1"),
             )
 
         for (message in messages) {
@@ -131,6 +214,22 @@ class SerializationTest {
                         ),
                     requestId = "r-12",
                 ),
+                // Table action results + pushed events (story 0036).
+                TableCreated(table = SAMPLE_TABLE, requestId = "r-21"),
+                TableCreated(table = SAMPLE_TABLE),
+                TableActionResult(action = TableActionCode.JOIN, ok = true, requestId = "r-22"),
+                TableActionResult(action = TableActionCode.CREATE, ok = false, reason = "declined"),
+                TableActionResult(action = TableActionCode.START_MATCH, ok = false, reason = "seats not filled", requestId = "r-23"),
+                TableUpdated(tableId = "t-1", roomId = "room-1", isOwner = true),
+                TableUpdated(tableId = "t-1"),
+                SeatUpdated(tableId = "t-1", playerId = "p-1", isOwner = true),
+                SeatUpdated(tableId = "t-1"),
+                ConstructPrompt(tableId = "t-1", parentTableId = "parent-1", remainingSeconds = 600),
+                ConstructPrompt(tableId = "t-1"),
+                SideboardPrompt(tableId = "t-1", parentTableId = "parent-1", remainingSeconds = 30, isConstruct = true),
+                SideboardPrompt(tableId = "t-1"),
+                MatchStarting(gameId = "g-1", tableId = "t-1", parentTableId = "parent-1", playerId = "p-1"),
+                MatchStarting(gameId = "g-1"),
             )
 
         for (message in messages) {
@@ -207,6 +306,68 @@ class SerializationTest {
                 .encodeToString<ServerMessage>(ProtocolError(ProtocolErrorCode.INTERNAL, "x"))
                 .contains("\"type\":\"protocol_error\""),
         )
+        // Table actions (story 0036).
+        assertTrue(
+            json
+                .encodeToString<ClientMessage>(CreateTable(options = MINIMAL_OPTIONS))
+                .contains("\"type\":\"create_table\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ClientMessage>(JoinTable(tableId = "t", seatName = "a", deck = DeckList()))
+                .contains("\"type\":\"join_table\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ClientMessage>(SubmitDeck(tableId = "t", deck = DeckList()))
+                .contains("\"type\":\"submit_deck\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ClientMessage>(UpdateDeck(tableId = "t", deck = DeckList()))
+                .contains("\"type\":\"update_deck\""),
+        )
+        assertTrue(json.encodeToString<ClientMessage>(LeaveTable(tableId = "t")).contains("\"type\":\"leave_table\""))
+        assertTrue(json.encodeToString<ClientMessage>(RemoveTable(tableId = "t")).contains("\"type\":\"remove_table\""))
+        assertTrue(json.encodeToString<ClientMessage>(StartMatch(tableId = "t")).contains("\"type\":\"start_match\""))
+        assertTrue(json.encodeToString<ClientMessage>(WatchTable(tableId = "t")).contains("\"type\":\"watch_table\""))
+        assertTrue(
+            json.encodeToString<ServerMessage>(TableCreated(table = SAMPLE_TABLE)).contains("\"type\":\"table_created\""),
+        )
+        assertTrue(
+            json
+                .encodeToString<ServerMessage>(TableActionResult(action = TableActionCode.JOIN, ok = true))
+                .contains("\"type\":\"table_action_result\""),
+        )
+        assertTrue(
+            json.encodeToString<ServerMessage>(TableUpdated(tableId = "t")).contains("\"type\":\"table_updated\""),
+        )
+        assertTrue(
+            json.encodeToString<ServerMessage>(SeatUpdated(tableId = "t")).contains("\"type\":\"seat_updated\""),
+        )
+        assertTrue(
+            json.encodeToString<ServerMessage>(ConstructPrompt(tableId = "t")).contains("\"type\":\"construct_prompt\""),
+        )
+        assertTrue(
+            json.encodeToString<ServerMessage>(SideboardPrompt(tableId = "t")).contains("\"type\":\"sideboard_prompt\""),
+        )
+        assertTrue(
+            json.encodeToString<ServerMessage>(MatchStarting(gameId = "g")).contains("\"type\":\"match_starting\""),
+        )
+    }
+
+    @Test
+    fun `an unknown table message type decodes to the sentinel instead of throwing (story 0036)`() {
+        // A newer app may send a table `type` this bridge does not know; the decoder must tolerate it.
+        val futureClient = """{"type":"reserve_table","tableId":"t-1"}"""
+        val decodedClient = json.decodeFromString<ClientMessage>(futureClient)
+        assertTrue(decodedClient is UnknownClientMessage, "expected an UnknownClientMessage sentinel, got $decodedClient")
+        assertEquals("reserve_table", (decodedClient as UnknownClientMessage).type)
+
+        val futureServer = """{"type":"table_reserved","tableId":"t-1"}"""
+        val decodedServer = json.decodeFromString<ServerMessage>(futureServer)
+        assertTrue(decodedServer is UnknownServerMessage, "expected an UnknownServerMessage sentinel, got $decodedServer")
+        assertEquals("table_reserved", (decodedServer as UnknownServerMessage).type)
     }
 
     @Test

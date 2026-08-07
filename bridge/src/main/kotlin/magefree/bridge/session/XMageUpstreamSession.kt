@@ -12,14 +12,25 @@ import magefree.bridge.mapping.CallbackRelay
 import magefree.bridge.xmage.XMageClientEvent
 import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageSession
+import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.JoinTable
+import magefree.protocol.LeaveTable
+import magefree.protocol.RemoveTable
 import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.StartMatch
+import magefree.protocol.SubmitDeck
+import magefree.protocol.TableActionCode
+import magefree.protocol.TableActionResult
 import magefree.protocol.TableSummary
+import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchTable
 import org.slf4j.LoggerFactory
+import java.util.UUID
 
 /**
  * The real [UpstreamSession] over story 0003's `XMageSession`/`BridgeMageClient`/`SessionImpl`.
@@ -174,6 +185,105 @@ public class XMageUpstreamSession(
         }
     }
 
+    override suspend fun createTable(request: CreateTable): ServerMessage {
+        val session = current
+        if (session == null || !session.isConnected) return actionFailed(TableActionCode.CREATE, "no connected session")
+        return try {
+            session.createTable(parseUuid(request.roomId), request.options)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            logger.warn("Upstream createTable action failed: {}", failure.toString())
+            actionFailed(TableActionCode.CREATE, "action failed")
+        }
+    }
+
+    override suspend fun joinTable(request: JoinTable): TableActionResult =
+        tableAction(TableActionCode.JOIN) { session ->
+            val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.JOIN, INVALID_TABLE_ID)
+            session.joinTable(
+                roomId = parseUuid(request.roomId),
+                tableId = tableId,
+                seatName = request.seatName,
+                deck = request.deck,
+                playerType = request.playerType,
+                skill = request.skill,
+                password = request.password,
+            )
+        }
+
+    override suspend fun submitDeck(request: SubmitDeck): TableActionResult =
+        tableAction(TableActionCode.SUBMIT_DECK) { session ->
+            val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.SUBMIT_DECK, INVALID_TABLE_ID)
+            session.submitDeck(tableId, request.deck)
+        }
+
+    override suspend fun updateDeck(request: UpdateDeck): TableActionResult =
+        tableAction(TableActionCode.UPDATE_DECK) { session ->
+            val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.UPDATE_DECK, INVALID_TABLE_ID)
+            session.updateDeck(tableId, request.deck)
+        }
+
+    override suspend fun leaveTable(request: LeaveTable): TableActionResult =
+        tableAction(TableActionCode.LEAVE) { session ->
+            val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.LEAVE, INVALID_TABLE_ID)
+            session.leaveTable(parseUuid(request.roomId), tableId)
+        }
+
+    override suspend fun removeTable(request: RemoveTable): TableActionResult =
+        tableAction(TableActionCode.REMOVE) { session ->
+            val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.REMOVE, INVALID_TABLE_ID)
+            session.removeTable(parseUuid(request.roomId), tableId)
+        }
+
+    override suspend fun startMatch(request: StartMatch): TableActionResult =
+        tableAction(TableActionCode.START_MATCH) { session ->
+            val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.START_MATCH, INVALID_TABLE_ID)
+            session.startMatch(parseUuid(request.roomId), tableId)
+        }
+
+    override suspend fun watchTable(request: WatchTable): TableActionResult =
+        tableAction(TableActionCode.WATCH) { session ->
+            val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.WATCH, INVALID_TABLE_ID)
+            session.watchTable(parseUuid(request.roomId), tableId)
+        }
+
+    /**
+     * Runs a table [action] against the connected [XMageSession], mapping the absence of a connected
+     * session — or a transport failure — to a **typed** failed [TableActionResult] (story 0036): an
+     * action must never surface as a stream error, mirroring [lobbyQuery].
+     */
+    private suspend fun tableAction(
+        action: TableActionCode,
+        block: suspend (XMageSession) -> TableActionResult,
+    ): TableActionResult {
+        val session = current
+        if (session == null || !session.isConnected) return actionFailed(action, "no connected session")
+        return try {
+            block(session)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            logger.warn("Upstream {} action failed: {}", action, failure.toString())
+            actionFailed(action, "action failed")
+        }
+    }
+
+    private fun actionFailed(
+        action: TableActionCode,
+        reason: String,
+    ): TableActionResult = TableActionResult(action = action, ok = false, reason = reason)
+
+    /** Parses [value] to a [UUID], or `null` when absent/malformed (a null room falls back to the main room). */
+    private fun parseUuid(value: String?): UUID? =
+        value?.let {
+            try {
+                UUID.fromString(it)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        }
+
     override suspend fun ping(): Boolean {
         val session = current ?: return false
         if (!session.isConnected) return false
@@ -184,5 +294,9 @@ public class XMageUpstreamSession(
 
     override suspend fun disconnect() {
         current?.disconnect()
+    }
+
+    private companion object {
+        const val INVALID_TABLE_ID = "invalid table id"
     }
 }

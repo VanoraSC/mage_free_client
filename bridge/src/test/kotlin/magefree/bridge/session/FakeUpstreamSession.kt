@@ -4,11 +4,21 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.JoinTable
+import magefree.protocol.LeaveTable
+import magefree.protocol.RemoveTable
 import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.StartMatch
+import magefree.protocol.SubmitDeck
+import magefree.protocol.TableActionCode
+import magefree.protocol.TableActionResult
 import magefree.protocol.TableSummary
+import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchTable
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -29,7 +39,14 @@ public class FakeUpstreamSession(
     private val scriptedTables: List<TableSummary> = emptyList(),
     private val scriptedRoomUsers: List<RoomUserSummary> = emptyList(),
     private val scriptedGameTypes: List<GameTypeSummary> = emptyList(),
+    private val scriptedCreateTable: ServerMessage? = null,
+    private val scriptedActionOk: Boolean = true,
 ) : UpstreamSession {
+    /** The last table-action request the coordinator dispatched, captured for assertions (story 0036). */
+    @Volatile
+    public var lastTableRequest: Any? = null
+        private set
+
     private val disconnectSignal = CompletableDeferred<Unit>()
     private val extra = Channel<ServerMessage>(capacity = Channel.UNLIMITED)
 
@@ -69,6 +86,33 @@ public class FakeUpstreamSession(
     override suspend fun roomUsers(): List<RoomUserSummary> = scriptedRoomUsers
 
     override suspend fun gameTypes(): List<GameTypeSummary> = scriptedGameTypes
+
+    override suspend fun createTable(request: CreateTable): ServerMessage {
+        lastTableRequest = request
+        return scriptedCreateTable ?: TableActionResult(TableActionCode.CREATE, ok = scriptedActionOk)
+    }
+
+    override suspend fun joinTable(request: JoinTable): TableActionResult = recordedResult(request, TableActionCode.JOIN)
+
+    override suspend fun submitDeck(request: SubmitDeck): TableActionResult = recordedResult(request, TableActionCode.SUBMIT_DECK)
+
+    override suspend fun updateDeck(request: UpdateDeck): TableActionResult = recordedResult(request, TableActionCode.UPDATE_DECK)
+
+    override suspend fun leaveTable(request: LeaveTable): TableActionResult = recordedResult(request, TableActionCode.LEAVE)
+
+    override suspend fun removeTable(request: RemoveTable): TableActionResult = recordedResult(request, TableActionCode.REMOVE)
+
+    override suspend fun startMatch(request: StartMatch): TableActionResult = recordedResult(request, TableActionCode.START_MATCH)
+
+    override suspend fun watchTable(request: WatchTable): TableActionResult = recordedResult(request, TableActionCode.WATCH)
+
+    private fun recordedResult(
+        request: Any,
+        action: TableActionCode,
+    ): TableActionResult {
+        lastTableRequest = request
+        return TableActionResult(action = action, ok = scriptedActionOk)
+    }
 
     override suspend fun ping(): Boolean {
         pingCount.incrementAndGet()
