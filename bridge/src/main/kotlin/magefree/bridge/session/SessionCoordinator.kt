@@ -13,17 +13,21 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import magefree.protocol.ClientMessage
+import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeList
 import magefree.protocol.GetGameTypes
 import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
 import magefree.protocol.GetTables
+import magefree.protocol.JoinTable
+import magefree.protocol.LeaveTable
 import magefree.protocol.Login
 import magefree.protocol.Logout
 import magefree.protocol.Ping
 import magefree.protocol.Pong
 import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
+import magefree.protocol.RemoveTable
 import magefree.protocol.Resume
 import magefree.protocol.ResumeRejected
 import magefree.protocol.RoomUserList
@@ -32,8 +36,15 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.StartMatch
+import magefree.protocol.SubmitDeck
+import magefree.protocol.TableActionCode
+import magefree.protocol.TableActionResult
+import magefree.protocol.TableCreated
 import magefree.protocol.TableList
 import magefree.protocol.UnknownClientMessage
+import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchTable
 import org.slf4j.LoggerFactory
 
 /**
@@ -68,6 +79,18 @@ public class SessionCoordinator(
     private val newUpstream: () -> UpstreamSession,
 ) {
     private val logger = LoggerFactory.getLogger(SessionCoordinator::class.java)
+
+    /** A typed failed [TableActionResult] for a table action attempted on an unbound socket (story 0036). */
+    private fun unboundFailure(action: TableActionCode): TableActionResult =
+        TableActionResult(action = action, ok = false, reason = "no active session on this socket")
+
+    /** Stamps [id] onto a table result reply ([TableCreated]/[TableActionResult]); other messages pass through. */
+    private fun ServerMessage.withRequestId(id: String?): ServerMessage =
+        when (this) {
+            is TableCreated -> copy(requestId = id)
+            is TableActionResult -> copy(requestId = id)
+            else -> this
+        }
 
     /** The session currently bound to this socket, plus the fields the forwarder/teardown share. */
     private class Bound(
@@ -194,6 +217,60 @@ public class SessionCoordinator(
                                 GameTypeList(gameTypes = gameTypes, requestId = message.requestId),
                             )
                         }
+
+                        // Table actions (story 0036): dispatch the action to the bound session's room
+                        // via TableRelay and reply the correlated result. An unbound/not-yet-connected
+                        // socket replies a typed failure (never an error), mirroring the read side. The
+                        // create reply is a TableCreated on success or a failed TableActionResult; the
+                        // boolean verbs reply a TableActionResult.
+                        is CreateTable -> {
+                            val reply =
+                                bound?.live?.createTable(message)
+                                    ?: unboundFailure(TableActionCode.CREATE)
+                            ws.sendSerialized<ServerMessage>(reply.withRequestId(message.requestId))
+                        }
+
+                        is JoinTable ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.joinTable(message) ?: unboundFailure(TableActionCode.JOIN))
+                                    .copy(requestId = message.requestId),
+                            )
+
+                        is SubmitDeck ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.submitDeck(message) ?: unboundFailure(TableActionCode.SUBMIT_DECK))
+                                    .copy(requestId = message.requestId),
+                            )
+
+                        is UpdateDeck ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.updateDeck(message) ?: unboundFailure(TableActionCode.UPDATE_DECK))
+                                    .copy(requestId = message.requestId),
+                            )
+
+                        is LeaveTable ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.leaveTable(message) ?: unboundFailure(TableActionCode.LEAVE))
+                                    .copy(requestId = message.requestId),
+                            )
+
+                        is RemoveTable ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.removeTable(message) ?: unboundFailure(TableActionCode.REMOVE))
+                                    .copy(requestId = message.requestId),
+                            )
+
+                        is StartMatch ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.startMatch(message) ?: unboundFailure(TableActionCode.START_MATCH))
+                                    .copy(requestId = message.requestId),
+                            )
+
+                        is WatchTable ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.watchTable(message) ?: unboundFailure(TableActionCode.WATCH))
+                                    .copy(requestId = message.requestId),
+                            )
 
                         is UnknownClientMessage -> {
                             // Additive forward-compat (story 0026 F1): a newer app may send a `type` this

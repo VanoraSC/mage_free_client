@@ -5,8 +5,16 @@ import kotlinx.coroutines.withContext
 import mage.remote.Connection
 import mage.remote.SessionImpl
 import magefree.bridge.mapping.LobbyRelay
+import magefree.bridge.mapping.TableRelay
+import magefree.protocol.CreateTableOptions
+import magefree.protocol.DeckList
 import magefree.protocol.GameTypeSummary
 import magefree.protocol.RoomUserSummary
+import magefree.protocol.SeatPlayerTypeCode
+import magefree.protocol.ServerMessage
+import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableActionCode
+import magefree.protocol.TableActionResult
 import magefree.protocol.TableSummary
 import java.util.UUID
 
@@ -121,6 +129,102 @@ public class XMageSession(
         withContext(Dispatchers.IO) {
             LobbyRelay.gameTypes(session)
         }
+
+    // ------------------------------------------------------------------------------------------------
+    // Table actions (story 0036). Each resolves the room (the request's [roomId] or the main room),
+    // dispatches to the wrapped `SessionImpl` verb via [TableRelay] at the mapping boundary (so no
+    // `mage.*` shape leaves that package), and runs the blocking remoting call on [Dispatchers.IO]. A
+    // create/join/... against a disconnected session (no resolvable room) maps to a failed result.
+    // ------------------------------------------------------------------------------------------------
+
+    /** Creates a table from [options] in [roomId] (or the main room), returning `TableCreated`/failed result. */
+    public suspend fun createTable(
+        roomId: UUID?,
+        options: CreateTableOptions,
+    ): ServerMessage =
+        withContext(Dispatchers.IO) {
+            val room = roomId ?: session.mainRoomId ?: return@withContext notConnected(TableActionCode.CREATE)
+            TableRelay.createTable(session, room, options)
+        }
+
+    /** Joins the constructed table [tableId] in [roomId] (or the main room) as [seatName] with [deck]. */
+    public suspend fun joinTable(
+        roomId: UUID?,
+        tableId: UUID,
+        seatName: String,
+        deck: DeckList,
+        playerType: SeatPlayerTypeCode,
+        skill: SkillLevelCode,
+        password: String?,
+    ): TableActionResult =
+        withContext(Dispatchers.IO) {
+            val room = roomId ?: session.mainRoomId ?: return@withContext notConnected(TableActionCode.JOIN)
+            TableRelay.joinTable(session, room, tableId, seatName, deck, playerType, skill, password)
+        }
+
+    /** Submits [deck] (the binding submission) for the seat at [tableId]. */
+    public suspend fun submitDeck(
+        tableId: UUID,
+        deck: DeckList,
+    ): TableActionResult =
+        withContext(Dispatchers.IO) {
+            if (!session.isConnected) return@withContext notConnected(TableActionCode.SUBMIT_DECK)
+            TableRelay.submitDeck(session, tableId, deck)
+        }
+
+    /** Saves the in-progress [deck] for the seat at [tableId]. */
+    public suspend fun updateDeck(
+        tableId: UUID,
+        deck: DeckList,
+    ): TableActionResult =
+        withContext(Dispatchers.IO) {
+            if (!session.isConnected) return@withContext notConnected(TableActionCode.UPDATE_DECK)
+            TableRelay.updateDeck(session, tableId, deck)
+        }
+
+    /** Leaves the table [tableId] in [roomId] (or the main room). */
+    public suspend fun leaveTable(
+        roomId: UUID?,
+        tableId: UUID,
+    ): TableActionResult =
+        withContext(Dispatchers.IO) {
+            val room = roomId ?: session.mainRoomId ?: return@withContext notConnected(TableActionCode.LEAVE)
+            TableRelay.leaveTable(session, room, tableId)
+        }
+
+    /** Removes the table [tableId] in [roomId] (or the main room). */
+    public suspend fun removeTable(
+        roomId: UUID?,
+        tableId: UUID,
+    ): TableActionResult =
+        withContext(Dispatchers.IO) {
+            val room = roomId ?: session.mainRoomId ?: return@withContext notConnected(TableActionCode.REMOVE)
+            TableRelay.removeTable(session, room, tableId)
+        }
+
+    /** Starts the match at table [tableId] in [roomId] (or the main room). */
+    public suspend fun startMatch(
+        roomId: UUID?,
+        tableId: UUID,
+    ): TableActionResult =
+        withContext(Dispatchers.IO) {
+            val room = roomId ?: session.mainRoomId ?: return@withContext notConnected(TableActionCode.START_MATCH)
+            TableRelay.startMatch(session, room, tableId)
+        }
+
+    /** Watches (spectates) the table [tableId] in [roomId] (or the main room). */
+    public suspend fun watchTable(
+        roomId: UUID?,
+        tableId: UUID,
+    ): TableActionResult =
+        withContext(Dispatchers.IO) {
+            val room = roomId ?: session.mainRoomId ?: return@withContext notConnected(TableActionCode.WATCH)
+            TableRelay.watchTable(session, room, tableId)
+        }
+
+    /** A failed [TableActionResult] for an action attempted without a connected session/resolvable room. */
+    private fun notConnected(action: TableActionCode): TableActionResult =
+        TableActionResult(action = action, ok = false, reason = "no connected session")
 
     /**
      * Keepalive probe: `SessionImpl.ping()` then report `isConnected()`. Used by story 0023's

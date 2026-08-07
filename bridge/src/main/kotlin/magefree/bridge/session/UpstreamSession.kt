@@ -1,12 +1,21 @@
 package magefree.bridge.session
 
 import kotlinx.coroutines.flow.Flow
+import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.JoinTable
+import magefree.protocol.LeaveTable
+import magefree.protocol.RemoveTable
 import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStatus
+import magefree.protocol.StartMatch
+import magefree.protocol.SubmitDeck
+import magefree.protocol.TableActionResult
 import magefree.protocol.TableSummary
+import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchTable
 
 /**
  * Credentials the app supplies in a `Login`. Under the **pinned-server posture** the app never names
@@ -68,6 +77,35 @@ public interface UpstreamSession {
      * [tables].
      */
     public suspend fun gameTypes(): List<GameTypeSummary>
+
+    /**
+     * Creates (hosts) a table from [request] and replies with a `TableCreated` (the mapped new table)
+     * or a failed [TableActionResult] (story 0036). The `mage.*` construction happens at the
+     * `magefree.bridge.mapping` boundary; no upstream shape crosses this interface. A create against an
+     * unbound/disconnected session maps to a failed result. Runs the blocking upstream call on IO.
+     */
+    public suspend fun createTable(request: CreateTable): ServerMessage
+
+    /** Joins the constructed table in [request], mapping the boolean verb to a [TableActionResult]. */
+    public suspend fun joinTable(request: JoinTable): TableActionResult
+
+    /** Submits the deck in [request] (binding), mapping the boolean verb to a [TableActionResult]. */
+    public suspend fun submitDeck(request: SubmitDeck): TableActionResult
+
+    /** Saves the in-progress deck in [request], mapping the boolean verb to a [TableActionResult]. */
+    public suspend fun updateDeck(request: UpdateDeck): TableActionResult
+
+    /** Leaves the table in [request], mapping the boolean verb to a [TableActionResult]. */
+    public suspend fun leaveTable(request: LeaveTable): TableActionResult
+
+    /** Removes the table in [request], mapping the boolean verb to a [TableActionResult]. */
+    public suspend fun removeTable(request: RemoveTable): TableActionResult
+
+    /** Starts the match in [request], mapping the boolean verb to a [TableActionResult]. */
+    public suspend fun startMatch(request: StartMatch): TableActionResult
+
+    /** Watches (spectates) the table in [request], mapping the boolean verb to a [TableActionResult]. */
+    public suspend fun watchTable(request: WatchTable): TableActionResult
 
     /**
      * Keepalive probe used by [SessionRegistry] while a session is **parked** (app socket dropped)
