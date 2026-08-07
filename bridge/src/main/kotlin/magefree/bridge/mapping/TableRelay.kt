@@ -85,16 +85,14 @@ public object TableRelay {
         session: SessionImpl,
         tableId: UUID,
         deck: DeckList,
-    ): TableActionResult =
-        resultOf(TableActionCode.SUBMIT_DECK, session.submitDeck(tableId, DeckListMapper.toDeckCardLists(deck)))
+    ): TableActionResult = resultOf(TableActionCode.SUBMIT_DECK, session.submitDeck(tableId, DeckListMapper.toDeckCardLists(deck)))
 
     /** Saves the in-progress [deck] for the seat at [tableId] during construction. */
     public fun updateDeck(
         session: SessionImpl,
         tableId: UUID,
         deck: DeckList,
-    ): TableActionResult =
-        resultOf(TableActionCode.UPDATE_DECK, session.updateDeck(tableId, DeckListMapper.toDeckCardLists(deck)))
+    ): TableActionResult = resultOf(TableActionCode.UPDATE_DECK, session.updateDeck(tableId, DeckListMapper.toDeckCardLists(deck)))
 
     /** Leaves the table [tableId] in [roomId]. */
     public fun leaveTable(
@@ -131,8 +129,7 @@ public object TableRelay {
     public fun resultOf(
         action: TableActionCode,
         ok: Boolean,
-    ): TableActionResult =
-        TableActionResult(action = action, ok = ok, reason = if (ok) null else ACTION_DECLINED)
+    ): TableActionResult = TableActionResult(action = action, ok = ok, reason = if (ok) null else ACTION_DECLINED)
 
     /** Maps an app-schema skill to XMage's `int skill` join argument (BEGINNER/CASUAL/SERIOUS → 1/2/3). */
     private fun skillIntOf(skill: SkillLevelCode): Int =

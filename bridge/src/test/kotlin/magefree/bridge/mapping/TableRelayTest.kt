@@ -229,7 +229,13 @@ class TableRelayTest {
         // The deck was mapped to a DeckCardLists at the boundary.
         assertEquals("Mono-U", session.joinDeck?.name)
         assertEquals(1, session.joinDeck?.cards?.size)
-        assertEquals("123", session.joinDeck?.cards?.get(0)?.cardNumber)
+        assertEquals(
+            "123",
+            session.joinDeck
+                ?.cards
+                ?.get(0)
+                ?.cardNumber,
+        )
         assertEquals(TableActionResult(action = TableActionCode.JOIN, ok = true), result)
     }
 

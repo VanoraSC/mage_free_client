@@ -35,8 +35,7 @@ public object DeckListMapper {
         }
 
     /** Maps the app-schema card [card] to a `DeckCardInfo` (note the `cardNumber` ← `collectorNumber`). */
-    private fun infoOf(card: DeckListCard): DeckCardInfo =
-        DeckCardInfo(card.cardName, card.collectorNumber, card.setCode, card.amount)
+    private fun infoOf(card: DeckListCard): DeckCardInfo = DeckCardInfo(card.cardName, card.collectorNumber, card.setCode, card.amount)
 
     /**
      * Projects an XMage [DeckCardLists] back to the app-schema [DeckList] — the reverse of
