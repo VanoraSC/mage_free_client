@@ -295,6 +295,22 @@ startMatch/watchTable` (+ pushed table/game-start callbacks). Joining **submits 
 
 ---
 
+## Audit follow-ups (2026-08-07)
+
+A fresh-context audit of Epics 6/7/9/10, run alongside the first **live** end-to-end smoke against the
+reference server, produced 14 findings. The two Epic 7 defects became [0040](0040-table-seat-state.md)
+/ [0041](0041-host-seating-flow.md); one (an unbounded phantom-seat append) was folded into 0040. The
+rest are grouped here by theme. **Every finding listed below was verified against the merged code**
+before being written up.
+
+| Story | Title | Covers | What it fixes |
+|-------|-------|--------|---------------|
+| 0042 | Deck & catalog robustness | builder / catalog / legality | A lost-update race that silently drops added cards; a catalog read failure that crashes the app and wedges search; a latent throw for an unbundled format; and the leading-wildcard full scan run per card name on every builder tap. |
+| 0043 | Artwork pipeline fixes | `:core:cards` art | Bulk pre-download warms LARGE while the grid requests SMALL (so "download all art" leaves thumbnails blank offline); the documented `resolve()` fallback is never used; a prefetch failure crashes the app and leaves progress stuck. |
+| 0044 | Correctness & doc hygiene | lobby / options / fakes / docs | An unguarded `refreshJob` that can resurrect stale tables after a disconnect; silent loss of an unsupported match time limit (and a KDoc claiming losslessness); stale "deferred to EPIC-07" comments; a fake that diverges from production and a test whose name overpromises. |
+
+---
+
 ## Build Infrastructure
 
 Containerizing the **heavy / JVM path** (the bridge build, the upstream `../mage` Maven build, and
