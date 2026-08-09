@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -23,11 +24,14 @@ import magefree.protocol.SkillLevelCode
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
+import magefree.protocol.TableNotFound
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableUpdated
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
@@ -47,6 +51,12 @@ import java.util.concurrent.CopyOnWriteArrayList
  * `TableView` comes back and maps to a [TableCreated] with a usable table id; and that `START_GAME`
  * really reaches the app schema as a [MatchStarting]. It stops at the game-start signal — gameplay past
  * it is Epic 11.
+ *
+ * **Seat state (story 0040).** It also reads the table back through [TableRelay.tableDetail] at each
+ * stage: after the AI is seated the read shows one filled seat carrying the AI's name and mapped player
+ * type (and one still-open human seat), and after the host joins the server itself reports
+ * `READY_TO_START`. That is the regression guard the original defect lacked — the room's seats and the
+ * host's start gate both come from this read, so if it ever stops carrying seats this test fails.
  *
  * **The scenario, and why these particular choices.** The server validates every one of these, so each
  * is the least restrictive value that the real server actually accepts:
@@ -96,6 +106,12 @@ class TableRelayIT {
 
         /** How long to wait for the server to push `START_GAME` after `startMatch` was accepted. */
         const val MATCH_START_TIMEOUT_MS = 120_000L
+
+        /** How long a `GetTable` read may take to reflect a seat change (the lobby list refreshes every 2s). */
+        const val DETAIL_TIMEOUT_MS = 30_000L
+
+        /** How often to re-read while waiting for the lobby snapshot to catch up. */
+        const val DETAIL_POLL_MS = 500L
 
         /**
          * A deck the real server accepts for [DECK_TYPE]: 60 basic Forests. `Deck.load` looks each card
@@ -155,11 +171,60 @@ class TableRelayIT {
                     aiJoin,
                     "the server should seat a COMPUTER_MAD player with the mapped deck",
                 )
+                // 2a. Read the table back (story 0040): the AI is really in a seat, with its name and
+                //     mapped player type, and the human seat is still open. This is the assertion the
+                //     original defect could never have satisfied — the room had no way to see a seat.
+                val seated =
+                    awaitDetail(session, roomId, tableId, "the AI seat to be filled") { it.table.seatsFilled == 1 }
+                assertEquals(2, seated.seats.size, "a two-seat table should report two seats")
+                assertEquals(2, seated.table.seatsTotal, "the summary's seat total should agree with the seat list")
+                assertEquals(
+                    listOf(0, 1),
+                    seated.seats.map { it.index },
+                    "seats should be reported in slot order",
+                )
+                val aiSeat = seated.seats.single { it.occupied }
+                assertEquals(AI_SEAT_NAME, aiSeat.playerName, "the filled seat should name the AI we seated")
+                assertEquals(
+                    SeatPlayerTypeCode.COMPUTER_MAD,
+                    aiSeat.playerType,
+                    "the AI seat's upstream PlayerType should map back to COMPUTER_MAD",
+                )
+                val openSeat = seated.seats.single { !it.occupied }
+                assertNull(openSeat.playerName, "an empty seat has no player name")
+                assertEquals(
+                    SeatPlayerTypeCode.HUMAN,
+                    openSeat.playerType,
+                    "the still-open seat is the human one the host will take",
+                )
+                assertEquals(
+                    TableStateCode.WAITING,
+                    seated.table.state,
+                    "one seat still open, so the server is not ready to start",
+                )
+
                 val hostJoin = join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN)
                 assertEquals(
                     TableActionResult(action = TableActionCode.JOIN, ok = true),
                     hostJoin,
                     "the server should seat the host with the mapped deck",
+                )
+
+                // 2b. Both seats filled → the server itself reports READY_TO_START. That state, not any
+                //     client-invented per-seat "ready" flag, is what the host's start control is gated
+                //     on — and step 3 proves the server accepts a start in exactly this state.
+                val ready =
+                    awaitDetail(session, roomId, tableId, "the table to become READY_TO_START") {
+                        it.table.state == TableStateCode.READY_TO_START
+                    }
+                assertEquals(2, ready.table.seatsFilled, "READY_TO_START means every seat is filled")
+                assertTrue(
+                    ready.seats.all { it.occupied },
+                    "every mapped seat should be occupied once the table is ready, got ${ready.seats}",
+                )
+                assertTrue(
+                    ready.seats.any { it.playerName == username },
+                    "the host's own seat should carry the host's name, got ${ready.seats}",
                 )
 
                 // 3. Start — accepted only once every seat is filled (upstream's READY_TO_START gate).
@@ -217,8 +282,55 @@ class TableRelayIT {
             }
         }
 
+    @Test
+    fun `a GetTable for a table the room does not list maps to a typed not-found`() =
+        runBlocking {
+            val session = connect(BridgeMageClient(), uniqueUsername())
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            try {
+                // Upstream has no single-table read, so the relay filters the room's table list. A miss
+                // must be a *typed* not-found — never an empty TableDetail, which the room would render
+                // as a real table with no seats.
+                val missing = UUID.randomUUID()
+                val reply = withContext(Dispatchers.IO) { TableRelay.tableDetail(session, roomId, missing) }
+
+                assertTrue(reply is TableNotFound, "an unknown table id should map to TableNotFound, got $reply")
+                assertEquals(missing.toString(), (reply as TableNotFound).tableId)
+                assertNotNull(reply.reason, "a not-found should carry a reason")
+            } finally {
+                teardown(session, roomId, tableId = null)
+            }
+        }
+
     /** A username satisfying XMage's `[a-z0-9_]`, length 3..14 rule: `it_` + 8 hex = 11 chars. */
     private fun uniqueUsername(): String = "it_${UUID.randomUUID().toString().replace("-", "").substring(0, 8)}"
+
+    /**
+     * Reads [tableId] until [condition] holds, or fails after [DETAIL_TIMEOUT_MS] describing [what].
+     *
+     * The poll is not test flakiness padding: `GamesRoomImpl` rebuilds the lobby's table list on a
+     * **two-second** timer, so a table read straight after a join legitimately still shows the previous
+     * snapshot. That is exactly the eventual consistency the app lives with (it re-reads on each table
+     * push), so the test waits the same way rather than pretending the read is instantaneous.
+     */
+    private suspend fun awaitDetail(
+        session: SessionImpl,
+        roomId: UUID,
+        tableId: UUID,
+        what: String,
+        condition: (TableDetail) -> Boolean,
+    ): TableDetail {
+        var last: ServerMessage? = null
+        val deadline = System.currentTimeMillis() + DETAIL_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val reply = withContext(Dispatchers.IO) { TableRelay.tableDetail(session, roomId, tableId) }
+            last = reply
+            if (reply is TableDetail && condition(reply)) return reply
+            delay(DETAIL_POLL_MS)
+        }
+        throw AssertionError("timed out after ${DETAIL_TIMEOUT_MS}ms waiting for $what; last read was $last")
+    }
 
     /**
      * Connects and authenticates a real [SessionImpl] driven by [client] against the `XMAGE_SERVER`
