@@ -28,12 +28,21 @@ interface TableClient {
     /**
      * Join the constructed table [tableId] as [seatName], submitting [deck] at join. [password] is
      * required only for a passworded table. Success yields `Unit`; a decline a [TableActionFailure].
+     *
+     * [playerType] is the **kind** of occupant being seated (story 0041). It defaults to
+     * [SeatPlayerType.Human] — the ordinary "I sit down" join — but a host completing its own table also
+     * seats the AI players it configured, and upstream fills those seats with this very same call,
+     * differing only by the type: `Table.getNextAvailableSeat` matches a join to a seat **by player
+     * type**, so an AI seat is only ever filled by a join that names its AI type, and the server's
+     * "join only once" guard applies to `HUMAN` alone (which is why one session can legitimately fill
+     * an AI seat and then its own).
      */
     suspend fun joinTable(
         tableId: String,
         seatName: String,
         deck: Deck,
         password: String? = null,
+        playerType: SeatPlayerType = SeatPlayerType.Human,
     ): Result<Unit>
 
     /** Submit [deck] (the first, binding submission) for the seat at [tableId] during construction. */

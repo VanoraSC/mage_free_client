@@ -82,6 +82,7 @@ internal class DefaultTableClient(
         seatName: String,
         deck: Deck,
         password: String?,
+        playerType: SeatPlayerType,
     ): Result<Unit> =
         unitAction { id ->
             bridgeClient.request(
@@ -90,6 +91,9 @@ internal class DefaultTableClient(
                     seatName = seatName,
                     deck = deck.toProtocolDeckList(),
                     password = password,
+                    // Story 0041: the seat's kind travels with the join — 0036's `JoinTable` and the
+                    // bridge's `TableRelay` already carry it, so seating an AI needs no wire change.
+                    playerType = playerType.toCode(),
                     requestId = id,
                 ),
                 id,
