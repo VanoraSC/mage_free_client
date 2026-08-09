@@ -12,7 +12,6 @@ import kotlinx.coroutines.launch
 import magefree.cards.art.ArtDownloadManager
 import magefree.cards.art.CardArtCachePolicy
 import magefree.cards.art.CardArtCachePolicyRepository
-import magefree.cards.art.CardArtSize
 import magefree.cards.art.PrefetchProgress
 import magefree.cards.art.PrefetchScope
 import magefree.cards.art.PrefetchStatus
@@ -53,7 +52,9 @@ class DefaultArtCacheController
 
         override suspend fun setPolicy(policy: CardArtCachePolicy) = policyRepository.setPolicy(policy)
 
-        override fun startPrefetch(scope: PrefetchScope) = downloadManager.start(scope, CardArtSize.LARGE)
+        // No size argument: the manager's default warms every size the UI displays. Pinning one size
+        // here is what left the browse grid blank offline after a completed download (0043, defect A).
+        override fun startPrefetch(scope: PrefetchScope) = downloadManager.start(scope)
 
         override fun cancelPrefetch() = downloadManager.cancel()
     }

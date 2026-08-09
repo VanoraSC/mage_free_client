@@ -33,6 +33,10 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    // Story 0043: the prefetch-size coverage test constructs 0031's CardArtCachePolicyRepository over
+    // a no-op DataStore, so the real DefaultArtCacheController (the "download all art" entry point) is
+    // the thing under test rather than a stand-in.
+    testImplementation(libs.androidx.datastore.preferences)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.compose.ui.test.junit4)

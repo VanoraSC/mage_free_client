@@ -69,23 +69,27 @@ class ArtDownloadManagerTest {
     }
 
     @Test
-    fun `warms every target and completes`() =
+    fun `warms every target at every displayed size and completes`() =
         runTest {
             val warmer = FakeArtWarmer()
             val manager = newManager(FixedTargets(requests(10)), warmer)
 
+            // Default sizes: the run covers every size the UI displays, so the totals are per-size
+            // targets x sizes — not one size's worth (story 0043, defect A).
             manager.start(PrefetchScope.All)
             advanceUntilIdle()
 
+            val expected = 10 * PREFETCH_SIZES.size
             val progress = manager.progress.value
             assertEquals(PrefetchStatus.COMPLETED, progress.status)
-            assertEquals(10, progress.total)
-            assertEquals(10, progress.warmed)
+            assertEquals(expected, progress.total)
+            assertEquals(expected, progress.warmed)
             assertEquals(0, progress.skipped)
             assertEquals(0, progress.failed)
-            assertEquals(10, progress.done)
+            assertEquals(expected, progress.done)
             assertEquals(1f, progress.fraction)
-            assertEquals(10, warmer.warmCalls.size)
+            assertEquals(expected, warmer.warmCalls.size)
+            assertEquals(PREFETCH_SIZES, warmer.warmCalls.map { it.size }.toSet())
         }
 
     @Test
@@ -97,7 +101,7 @@ class ArtDownloadManagerTest {
             val manager = newManager(FixedTargets(all), warmer)
 
             // requests() default to SMALL; pre-seeded `cached` must match the size the run warms.
-            manager.start(PrefetchScope.All, CardArtSize.SMALL)
+            manager.start(PrefetchScope.All, setOf(CardArtSize.SMALL))
             advanceUntilIdle()
 
             val progress = manager.progress.value
@@ -117,7 +121,7 @@ class ArtDownloadManagerTest {
             val manager = newManager(FixedTargets(all), warmer)
 
             // requests() default to SMALL; `failFor` must match the size the run warms.
-            manager.start(PrefetchScope.All, CardArtSize.SMALL)
+            manager.start(PrefetchScope.All, setOf(CardArtSize.SMALL))
             advanceUntilIdle()
 
             val progress = manager.progress.value
@@ -141,7 +145,8 @@ class ArtDownloadManagerTest {
                 }
             val manager = newManager(FixedTargets(requests(8)), stalling)
 
-            manager.start(PrefetchScope.All)
+            // One size: this is the cancel state machine, not size coverage.
+            manager.start(PrefetchScope.All, setOf(CardArtSize.SMALL))
             advanceUntilIdle()
             assertEquals(PrefetchStatus.RUNNING, manager.progress.value.status)
             assertEquals(8, manager.progress.value.total)

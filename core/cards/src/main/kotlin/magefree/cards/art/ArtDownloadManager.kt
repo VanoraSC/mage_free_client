@@ -46,15 +46,19 @@ class ArtDownloadManager(
     private var job: Job? = null
 
     /**
-     * Start warming the cache for [scope] at [size]. A no-op if a run is already active (call [cancel]
-     * first). Returns immediately; observe [progress] for updates.
+     * Start warming the cache for [scope] at every size in [sizes]. A no-op if a run is already active
+     * (call [cancel] first). Returns immediately; observe [progress] for updates.
+     *
+     * The default, [PREFETCH_SIZES], is every size the UI displays — warming a subset would leave the
+     * surfaces that display the other sizes blank offline (story 0043, defect A). Callers should not
+     * narrow it; the parameter exists so tests can pin a single size.
      */
     fun start(
         scope: PrefetchScope,
-        size: CardArtSize = CardArtSize.LARGE,
+        sizes: Set<CardArtSize> = PREFETCH_SIZES,
     ) {
         if (job?.isActive == true) return
-        job = appScope.launch { run(scope, size) }
+        job = appScope.launch { run(scope, sizes) }
     }
 
     /** Cancel the active run, if any. Warmed art is retained; a later [start] resumes via skip. */
@@ -64,13 +68,15 @@ class ArtDownloadManager(
 
     private suspend fun run(
         scope: PrefetchScope,
-        size: CardArtSize,
+        sizes: Set<CardArtSize>,
     ) {
         _progress.value = PrefetchProgress(status = PrefetchStatus.RUNNING)
 
         val targets =
             try {
-                targetSource.requests(scope, size)
+                // One enumeration per requested size, unioned: the target *set* is per-size because a
+                // request's size is part of its cache identity. `total` therefore counts real targets.
+                sizes.flatMap { targetSource.requests(scope, it) }.distinct()
             } catch (cancellation: CancellationException) {
                 publishCancelled()
                 throw cancellation
