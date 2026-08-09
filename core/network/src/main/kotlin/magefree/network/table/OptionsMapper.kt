@@ -80,7 +80,12 @@ private fun SeatPlayerTypeCode.toSeatType(): SeatPlayerType =
         SeatPlayerTypeCode.UNKNOWN -> SeatPlayerType.Unknown
     }
 
-private fun SeatPlayerType.toCode(): SeatPlayerTypeCode =
+/**
+ * App-schema [SeatPlayerType] → wire [SeatPlayerTypeCode] (the write direction of [toSeatType]). Used by
+ * the create mapping above and — since story 0041 — by `joinTable`, which carries the seat's kind so a
+ * host can fill its configured AI seats with the same verb.
+ */
+internal fun SeatPlayerType.toCode(): SeatPlayerTypeCode =
     when (this) {
         SeatPlayerType.Human -> SeatPlayerTypeCode.HUMAN
         SeatPlayerType.ComputerMonteCarlo -> SeatPlayerTypeCode.COMPUTER_MONTE_CARLO

@@ -36,6 +36,31 @@ class FakeTableClient(
     /** The verbs invoked, in order, for assertion (`"create"`, `"join:t-1"`, …). */
     val calls: MutableList<String> = mutableListOf()
 
+    /**
+     * Every [joinTable] call, in order, with its full arguments (story 0041). [calls] records only the
+     * verb, which is enough to pin an *order*; a host completing a table issues several joins that differ
+     * only by seat name, deck, password and player type, so those are recorded here where they can be
+     * asserted.
+     */
+    val joins: MutableList<JoinCall> = mutableListOf()
+
+    /**
+     * One recorded [TableClient.joinTable] call.
+     *
+     * @property tableId the table joined.
+     * @property seatName the name the seat was taken under.
+     * @property deck the deck submitted at join.
+     * @property password the password sent, or `null` for none.
+     * @property playerType the kind of occupant seated (human vs. an AI).
+     */
+    data class JoinCall(
+        val tableId: String,
+        val seatName: String,
+        val deck: Deck,
+        val password: String?,
+        val playerType: SeatPlayerType,
+    )
+
     private val emitted = MutableSharedFlow<TableState>(replay = 0, extraBufferCapacity = 64)
 
     /** States [observeTable] replays before it forwards live [emitTableState]s (a scripted seed path). */
@@ -46,14 +71,24 @@ class FakeTableClient(
         return createResult
     }
 
+    /**
+     * Per-call override for [joinTable] (story 0041): when set, its result wins over [joinResult]. A host
+     * completing a table issues several joins, and a test needs to fail exactly one of them — the AI seat
+     * or the host's own — to exercise the two distinct cleanup paths.
+     */
+    var joinResultFor: ((JoinCall) -> Result<Unit>)? = null
+
     override suspend fun joinTable(
         tableId: String,
         seatName: String,
         deck: Deck,
         password: String?,
+        playerType: SeatPlayerType,
     ): Result<Unit> {
         calls += "join:$tableId"
-        return joinResult
+        val call = JoinCall(tableId = tableId, seatName = seatName, deck = deck, password = password, playerType = playerType)
+        joins += call
+        return joinResultFor?.invoke(call) ?: joinResult
     }
 
     override suspend fun submitDeck(

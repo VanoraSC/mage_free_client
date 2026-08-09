@@ -157,6 +157,43 @@ class TableClientTest {
         }
 
     @Test
+    fun joinTableDefaultsToSeatingAHuman() =
+        runTest {
+            val sent = mutableListOf<ClientMessage>()
+            val client = client(sent) { TableActionResult(action = TableActionCode.JOIN, ok = true) }
+
+            client.joinTable(tableId = "t-1", seatName = "pete", deck = deck)
+
+            assertEquals(SeatPlayerTypeCode.HUMAN, (sent.single() as JoinTable).playerType)
+        }
+
+    @Test
+    fun joinTableCarriesTheSeatsPlayerTypeOntoTheWire() =
+        runTest {
+            // Story 0041: a host fills its configured AI seats with this same verb, and upstream matches a
+            // join to a seat *by player type* — so the type must actually reach the wire request, not be
+            // silently pinned to HUMAN.
+            val sent = mutableListOf<ClientMessage>()
+            val client = client(sent) { TableActionResult(action = TableActionCode.JOIN, ok = true) }
+
+            val result =
+                client.joinTable(
+                    tableId = "t-1",
+                    seatName = "Computer",
+                    deck = deck,
+                    password = null,
+                    playerType = SeatPlayerType.ComputerMad,
+                )
+
+            val request = sent.single() as JoinTable
+            assertEquals(SeatPlayerTypeCode.COMPUTER_MAD, request.playerType)
+            assertEquals("Computer", request.seatName)
+            assertNull(request.password)
+            assertEquals("Mono Blue", request.deck.name)
+            assertTrue(result.isSuccess)
+        }
+
+    @Test
     fun submitAndUpdateDeckSendTheRightRequests() =
         runTest {
             val sent = mutableListOf<ClientMessage>()

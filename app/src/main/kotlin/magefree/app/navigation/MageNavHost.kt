@@ -153,6 +153,7 @@ fun MageNavHost(
                 onOpenRoom = { args ->
                     navController.navigate(args.toNavRoute()) { popUpTo(LobbyRoute) { inclusive = false } }
                 },
+                onBuildDeck = { navigateToTab(DecksRoute) },
             )
         }
         composable<JoinTableNavRoute> { entry ->

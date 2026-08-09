@@ -32,14 +32,24 @@ data class RoomArgs(
     val role: TableRole,
 )
 
-/** Host-a-table entry: on a successful create, hands the new room's [RoomArgs] to [onOpenRoom]. */
+/**
+ * Host-a-table entry: on a successful create **and seating** (story 0041 — the AI seats, then the host's
+ * own, all before the room opens), hands the new room's [RoomArgs] to [onOpenRoom]. [onBuildDeck] is the
+ * escape hatch when the deck library is empty and the host has nothing legal to sit down with.
+ *
+ * [onBuildDeck] is deliberately **not** defaulted: the shell must pass the same "go to the Decks tab"
+ * callback it already gives [JoinTableRoute] and [TableRoomRoute]. A no-op default would let a caller
+ * silently ship a dead button, which is exactly what happened while this parameter was optional.
+ */
 @Composable
 fun HostTableRoute(
     onBack: () -> Unit,
     onOpenRoom: (RoomArgs) -> Unit,
+    onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HostTableViewModel = hiltViewModel(),
 ) {
+    LaunchedEffect(Unit) { viewModel.start() }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
@@ -55,6 +65,7 @@ fun HostTableRoute(
         onGameTypeChange = viewModel::setGameType,
         onDeckTypeChange = viewModel::setDeckType,
         onSeatsChange = viewModel::setSeats,
+        onOpponentTypeChange = viewModel::setOpponentType,
         onRatedChange = viewModel::setRated,
         onFreeMulligansChange = viewModel::setFreeMulligans,
         onWinsNeededChange = viewModel::setWinsNeeded,
@@ -62,6 +73,9 @@ fun HostTableRoute(
         onRangeChange = viewModel::setRange,
         onSpectatorsChange = viewModel::setSpectatorsAllowed,
         onPasswordChange = viewModel::setPassword,
+        onSeatNameChange = viewModel::setSeatName,
+        onSelectDeck = viewModel::selectDeck,
+        onBuildDeck = onBuildDeck,
         onCreate = viewModel::create,
         modifier = modifier,
     )

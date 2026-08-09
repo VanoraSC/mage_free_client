@@ -25,13 +25,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
+import magefree.decks.legality.DeckLegalityResult
+import magefree.decks.model.DeckFormat
+import magefree.decks.model.DeckId
+import magefree.decks.model.DeckSummary
 import magefree.designsystem.component.MagePrimaryButton
 import magefree.designsystem.component.MageSectionHeader
 import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
+import magefree.feature.tables.DeckPicker
+import magefree.feature.tables.LegalitySummary
 import magefree.model.SkillLevel
 import magefree.network.table.RangeOfInfluence
+import magefree.network.table.SeatPlayerType
 
 /** Title of the host-a-table screen; shared with tests so the two agree. */
 const val HOST_TITLE: String = "Host a table"
@@ -40,9 +47,11 @@ const val HOST_TITLE: String = "Host a table"
 const val HOST_CREATE_LABEL: String = "Create table"
 
 /**
- * Stateless host-a-table form. Every field maps to a subset of 0037's `CreateTableOptions`; the single
- * dominant [HOST_CREATE_LABEL] action is enabled only when the form is valid ([HostTableUiState.canCreate]).
- * Every event is hoisted; the composable performs no I/O.
+ * Stateless host-a-table form. Every table setting maps to a subset of 0037's `CreateTableOptions`; the
+ * seat rows say who fills each non-host seat (another human, or an AI to seat at create-time), and — since
+ * story 0041 — the host picks and validates its **own deck** here, because hosting takes a seat. The
+ * single dominant [HOST_CREATE_LABEL] action is enabled only for a valid form with a picked, legal deck
+ * ([HostTableUiState.canCreate]). Every event is hoisted; the composable performs no I/O.
  */
 @Composable
 fun HostTableScreen(
@@ -52,6 +61,7 @@ fun HostTableScreen(
     onGameTypeChange: (String) -> Unit,
     onDeckTypeChange: (String) -> Unit,
     onSeatsChange: (Int) -> Unit,
+    onOpponentTypeChange: (Int, SeatPlayerType) -> Unit,
     onRatedChange: (Boolean) -> Unit,
     onFreeMulligansChange: (Int) -> Unit,
     onWinsNeededChange: (Int) -> Unit,
@@ -59,6 +69,9 @@ fun HostTableScreen(
     onRangeChange: (RangeOfInfluence) -> Unit,
     onSpectatorsChange: (Boolean) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onSeatNameChange: (String) -> Unit,
+    onSelectDeck: (DeckId) -> Unit,
+    onBuildDeck: () -> Unit,
     onCreate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -102,6 +115,40 @@ fun HostTableScreen(
 
             MageSectionHeader(text = "Seats")
             Stepper(value = form.seats, onChange = onSeatsChange, valueLabel = "${form.seats} players")
+            Text(
+                text = "Seat 1 · you",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            form.opponents.forEachIndexed { index, type ->
+                Text(text = "Seat ${index + 2}", style = MaterialTheme.typography.bodySmall)
+                ChipSelect(
+                    options = HOST_SEAT_TYPES,
+                    selected = type,
+                    label = { it.seatTypeLabel() },
+                    onSelect = { picked -> onOpponentTypeChange(index, picked) },
+                )
+            }
+
+            MageSectionHeader(text = "Your seat")
+            OutlinedTextField(
+                value = uiState.seatName,
+                onValueChange = onSeatNameChange,
+                label = { Text("Your name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            MageSectionHeader(text = "Choose your deck")
+            DeckPicker(
+                decks = uiState.library,
+                selectedId = uiState.selectedDeckId,
+                onSelect = onSelectDeck,
+                onBuildDeck = onBuildDeck,
+            )
+            if (uiState.selectedDeckId != null || uiState.format == null) {
+                LegalitySummary(format = uiState.format, result = uiState.legality)
+            }
 
             MageSectionHeader(text = "Skill level")
             ChipSelect(
@@ -142,15 +189,29 @@ fun HostTableScreen(
                 )
             }
 
-            MagePrimaryButton(
-                text = if (uiState.isSubmitting) "Creating…" else HOST_CREATE_LABEL,
-                onClick = onCreate,
-                enabled = uiState.canCreate,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // With no saved deck at all there is nothing to gate on: the picker above renders the
+            // "build a legal deck" call to action instead, exactly as the join flow does.
+            if (!uiState.hasNoDecks) {
+                MagePrimaryButton(
+                    text = if (uiState.isSubmitting) "Creating…" else HOST_CREATE_LABEL,
+                    onClick = onCreate,
+                    enabled = uiState.canCreate,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
+
+/** A short human label for a seat's occupant kind, as offered on the host form. */
+private fun SeatPlayerType.seatTypeLabel(): String =
+    when (this) {
+        SeatPlayerType.Human -> "Human"
+        SeatPlayerType.ComputerMonteCarlo -> "AI (Monte Carlo)"
+        SeatPlayerType.ComputerMad -> "AI (Mad)"
+        SeatPlayerType.ComputerDraftBot -> "AI (draft bot)"
+        SeatPlayerType.Unknown -> "Unknown"
+    }
 
 /** A single-select horizontal chip group over [options]; [label] renders each option's text. */
 @Composable
@@ -214,18 +275,23 @@ private fun SwitchRow(
 
 // ---- Previews ---------------------------------------------------------------------------------
 
-@Preview(name = "Host - light", showBackground = true, heightDp = 900)
-@Preview(name = "Host - dark", showBackground = true, heightDp = 900, uiMode = Configuration.UI_MODE_NIGHT_YES)
+private val previewDecks =
+    listOf(
+        DeckSummary(DeckId("deck-1"), "Mono-Red Aggro", null, DeckFormat.STANDARD, true, 60, 15, 0, 0),
+        DeckSummary(DeckId("deck-2"), "Azorius Control", null, DeckFormat.STANDARD, false, 60, 15, 0, 0),
+    )
+
 @Composable
-private fun HostTableScreenPreview() {
+private fun previewScreen(uiState: HostTableUiState) {
     MageTheme {
         HostTableScreen(
-            uiState = HostTableUiState(form = HostTableForm(name = "Friday duel")),
+            uiState = uiState,
             onBack = {},
             onNameChange = {},
             onGameTypeChange = {},
             onDeckTypeChange = {},
             onSeatsChange = {},
+            onOpponentTypeChange = { _, _ -> },
             onRatedChange = {},
             onFreeMulligansChange = {},
             onWinsNeededChange = {},
@@ -233,7 +299,29 @@ private fun HostTableScreenPreview() {
             onRangeChange = {},
             onSpectatorsChange = {},
             onPasswordChange = {},
+            onSeatNameChange = {},
+            onSelectDeck = {},
+            onBuildDeck = {},
             onCreate = {},
         )
     }
 }
+
+@Preview(name = "Host - light", showBackground = true, heightDp = 1400)
+@Preview(name = "Host - dark", showBackground = true, heightDp = 1400, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun HostTableScreenPreview() =
+    previewScreen(
+        HostTableUiState(
+            form = HostTableForm(name = "Friday duel", opponents = listOf(SeatPlayerType.ComputerMad)),
+            library = previewDecks,
+            format = DeckFormat.STANDARD,
+            selectedDeckId = DeckId("deck-1"),
+            legality = DeckLegalityResult(DeckFormat.STANDARD, isLegal = true, violations = emptyList()),
+        ),
+    )
+
+@Preview(name = "Host - no decks", showBackground = true, heightDp = 1400)
+@Composable
+private fun HostTableNoDecksPreview() =
+    previewScreen(HostTableUiState(form = HostTableForm(name = "Friday duel"), format = DeckFormat.STANDARD))
