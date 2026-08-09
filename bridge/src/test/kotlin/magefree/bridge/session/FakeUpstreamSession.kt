@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
 import magefree.protocol.RemoveTable
@@ -16,6 +17,7 @@ import magefree.protocol.StartMatch
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
+import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
 import magefree.protocol.WatchTable
@@ -40,6 +42,7 @@ public class FakeUpstreamSession(
     private val scriptedRoomUsers: List<RoomUserSummary> = emptyList(),
     private val scriptedGameTypes: List<GameTypeSummary> = emptyList(),
     private val scriptedCreateTable: ServerMessage? = null,
+    private val scriptedTableDetail: ServerMessage? = null,
     private val scriptedActionOk: Boolean = true,
 ) : UpstreamSession {
     /** The last table-action request the coordinator dispatched, captured for assertions (story 0036). */
@@ -105,6 +108,11 @@ public class FakeUpstreamSession(
     override suspend fun startMatch(request: StartMatch): TableActionResult = recordedResult(request, TableActionCode.START_MATCH)
 
     override suspend fun watchTable(request: WatchTable): TableActionResult = recordedResult(request, TableActionCode.WATCH)
+
+    override suspend fun tableDetail(request: GetTable): ServerMessage {
+        lastTableRequest = request
+        return scriptedTableDetail ?: TableNotFound(tableId = request.tableId, reason = "no such table in the room")
+    }
 
     private fun recordedResult(
         request: Any,

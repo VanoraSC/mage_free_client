@@ -15,6 +15,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SkillLevelCode
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
+import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import java.util.UUID
 
@@ -220,6 +221,23 @@ public class XMageSession(
         withContext(Dispatchers.IO) {
             val room = roomId ?: session.mainRoomId ?: return@withContext notConnected(TableActionCode.WATCH)
             TableRelay.watchTable(session, room, tableId)
+        }
+
+    /**
+     * Reads the detail (summary + seats) of table [tableId] in [roomId] (or the main room) for a
+     * `GetTable` (story 0040), replying [magefree.protocol.TableDetail] or a typed
+     * [magefree.protocol.TableNotFound]. Resolved from the room's table list at the [TableRelay]
+     * boundary — upstream has no single-table read — on [Dispatchers.IO].
+     */
+    public suspend fun tableDetail(
+        roomId: UUID?,
+        tableId: UUID,
+    ): ServerMessage =
+        withContext(Dispatchers.IO) {
+            val room =
+                roomId ?: session.mainRoomId
+                    ?: return@withContext TableNotFound(tableId = tableId.toString(), reason = "no connected session")
+            TableRelay.tableDetail(session, room, tableId)
         }
 
     /** A failed [TableActionResult] for an action attempted without a connected session/resolvable room. */

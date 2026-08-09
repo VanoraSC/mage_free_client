@@ -18,6 +18,7 @@ import magefree.protocol.GameTypeList
 import magefree.protocol.GetGameTypes
 import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
+import magefree.protocol.GetTable
 import magefree.protocol.GetTables
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
@@ -41,7 +42,9 @@ import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
 import magefree.protocol.TableList
+import magefree.protocol.TableNotFound
 import magefree.protocol.UnknownClientMessage
 import magefree.protocol.UpdateDeck
 import magefree.protocol.WatchTable
@@ -66,6 +69,8 @@ import org.slf4j.LoggerFactory
  * - `GetTables`/`GetRoomUsers`/`GetGameTypes` reply with the correlated `TableList`/`RoomUserList`/
  *   `GameTypeList` browsed from the bound session's main room (story 0027); an unbound socket replies
  *   an empty list. Read-only — no join/create/watch here.
+ * - `GetTable` replies the correlated `TableDetail` (summary + per-seat state) for one table, or a typed
+ *   `TableNotFound` when the room does not list it / no session is bound (story 0040).
  * - A second `Login`/`Resume` while a session is bound is ignored (documented choice) with a log line.
  * - Any other/malformed frame → a non-terminal `ProtocolError(UNKNOWN_MESSAGE_TYPE)`.
  *
@@ -84,11 +89,13 @@ public class SessionCoordinator(
     private fun unboundFailure(action: TableActionCode): TableActionResult =
         TableActionResult(action = action, ok = false, reason = "no active session on this socket")
 
-    /** Stamps [id] onto a table result reply ([TableCreated]/[TableActionResult]); other messages pass through. */
+    /** Stamps [id] onto a correlated table reply; other messages pass through unchanged. */
     private fun ServerMessage.withRequestId(id: String?): ServerMessage =
         when (this) {
             is TableCreated -> copy(requestId = id)
             is TableActionResult -> copy(requestId = id)
+            is TableDetail -> copy(requestId = id)
+            is TableNotFound -> copy(requestId = id)
             else -> this
         }
 
@@ -271,6 +278,17 @@ public class SessionCoordinator(
                                 (bound?.live?.watchTable(message) ?: unboundFailure(TableActionCode.WATCH))
                                     .copy(requestId = message.requestId),
                             )
+
+                        // Targeted single-table read (story 0040): reply the table's detail (summary +
+                        // seats) resolved from the bound session's room, or a typed not-found. An
+                        // unbound socket replies a not-found rather than an error, mirroring the other
+                        // reads — the app surfaces it as a failed refresh, never a hang.
+                        is GetTable -> {
+                            val reply =
+                                bound?.live?.tableDetail(message)
+                                    ?: TableNotFound(tableId = message.tableId, reason = "no active session on this socket")
+                            ws.sendSerialized<ServerMessage>(reply.withRequestId(message.requestId))
+                        }
 
                         is UnknownClientMessage -> {
                             // Additive forward-compat (story 0026 F1): a newer app may send a `type` this

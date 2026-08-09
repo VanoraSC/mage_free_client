@@ -1,6 +1,7 @@
 package magefree.bridge.mapping
 
 import mage.remote.SessionImpl
+import mage.view.TableView
 import magefree.protocol.CreateTableOptions
 import magefree.protocol.DeckList
 import magefree.protocol.SeatPlayerTypeCode
@@ -9,6 +10,8 @@ import magefree.protocol.SkillLevelCode
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
+import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import java.util.UUID
 
@@ -123,6 +126,46 @@ public object TableRelay {
     ): TableActionResult = resultOf(TableActionCode.WATCH, session.watchTable(roomId, tableId))
 
     /**
+     * Reads **one** table's detail — its summary plus per-seat state — for a `GetTable` (story 0040).
+     *
+     * Upstream exposes **no single-table read** on `SessionImpl`, so this resolves the table out of the
+     * room's table list (`getTables(roomId)`) filtered by [tableId], exactly as the desktop client's
+     * waiting room does. A hit maps through [TableMapper.mapDetail]; a miss replies a typed
+     * [TableNotFound] — never an empty detail, which would be indistinguishable from a seatless table.
+     *
+     * **Freshness.** `GamesRoomImpl.getTables()` returns a lobby snapshot the server rebuilds every two
+     * seconds, so a detail read immediately after a seat change may still show the previous snapshot.
+     * The read is therefore *eventually* consistent; callers re-read on the next table-lifecycle push.
+     */
+    public fun tableDetail(
+        session: SessionImpl,
+        roomId: UUID,
+        tableId: UUID,
+    ): ServerMessage {
+        val view: TableView? = firstWithId(session.getTables(roomId), tableId) { it.tableId }
+        return detailMessage(tableId.toString(), view?.let { TableMapper.mapDetail(it) })
+    }
+
+    /**
+     * The pure "pick the table with this id" filter (unit-testable without a `TableView`): the first
+     * candidate whose [idOf] equals [tableId], or `null` when the room does not list it.
+     */
+    public fun <T> firstWithId(
+        candidates: Collection<T>,
+        tableId: UUID,
+        idOf: (T) -> UUID?,
+    ): T? = candidates.firstOrNull { idOf(it) == tableId }
+
+    /**
+     * The pure detail-result decision (unit-testable without a `TableView`): a mapped [detail] is the
+     * reply as-is; a null (the room does not list [tableId]) becomes a typed [TableNotFound].
+     */
+    public fun detailMessage(
+        tableId: String,
+        detail: TableDetail?,
+    ): ServerMessage = detail ?: TableNotFound(tableId = tableId, reason = TABLE_NOT_FOUND)
+
+    /**
      * The pure boolean-verb result decision (unit-testable): a `true` → an ok [TableActionResult]; a
      * `false` → a failed one carrying [ACTION_DECLINED] — a typed failure, never a silent drop.
      */
@@ -142,4 +185,7 @@ public object TableRelay {
 
     private const val CREATE_DECLINED = "the server declined to create the table"
     private const val ACTION_DECLINED = "the server declined the action"
+
+    /** The [TableNotFound] reason for a `GetTable` whose id the room's table list does not carry. */
+    public const val TABLE_NOT_FOUND: String = "no such table in the room"
 }

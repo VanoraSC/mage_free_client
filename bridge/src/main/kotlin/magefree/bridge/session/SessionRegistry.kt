@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
 import magefree.protocol.RemoveTable
@@ -165,6 +166,9 @@ public class LiveSession internal constructor(
 
     /** Watches a table for a `WatchTable` request while this session is bound (story 0036). */
     internal suspend fun watchTable(request: WatchTable): TableActionResult = upstream.watchTable(request)
+
+    /** Reads one table's detail for a `GetTable` request while this session is bound (story 0040). */
+    internal suspend fun tableDetail(request: GetTable): ServerMessage = upstream.tableDetail(request)
 
     /** Cancels the pump and disconnects the upstream. Idempotent. */
     internal suspend fun close() {

@@ -2,8 +2,12 @@ package magefree.bridge.mapping
 
 import mage.constants.SkillLevel
 import mage.constants.TableState
+import mage.players.PlayerType
 import mage.view.TableView
+import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableDetail
+import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 import java.util.Date
@@ -29,6 +33,10 @@ import java.util.Date
  * - `seatsFilled` ← count of [mage.view.SeatView] with a non-null player id; `seatsTotal` ← seat count.
  * - `isTournament`/`isRated`/`isPassworded`/`isLimited` ← the matching getters.
  * - `createdAtEpochMs` ← [TableView.getCreateTime]`.time` (0 if the date is null).
+ *
+ * **Per-seat detail (story 0040).** [mapDetail] adds the seat list the summary form reduces to counts:
+ * each [mage.view.SeatView] becomes a [TableSeatSummary] via the pure [buildSeat]. The counting
+ * behaviour of [map]/[build] is unchanged — [mapDetail] is purely additive.
  */
 public object TableMapper {
     /** Maps [view] to its app-schema summary by extracting the browse-relevant getters into [build]. */
@@ -87,6 +95,64 @@ public object TableMapper {
             skillLevel = skillOf(skillLevel),
             createdAtEpochMs = createTime?.time ?: 0L,
         )
+
+    /**
+     * Maps [view] to a [TableDetail]: the same [TableSummary] [map] produces, plus one
+     * [TableSeatSummary] per `mage.view.SeatView` in seat order (story 0040). This is the reply to a
+     * `GetTable` — the room's real seat state, which the summary form reduces to filled/total counts.
+     */
+    public fun mapDetail(view: TableView): TableDetail =
+        TableDetail(
+            table = map(view),
+            seats =
+                view.seats.mapIndexed { index, seat ->
+                    buildSeat(
+                        index = index,
+                        playerId = seat.playerId?.toString(),
+                        playerName = seat.playerName,
+                        playerType = seat.playerType,
+                    )
+                },
+        )
+
+    /**
+     * The pure seat-mapping logic over already-extracted `SeatView` values (kept separate from
+     * [mapDetail] for the same reason [build] is separate from [map]: a `SeatView` needs a
+     * `mage.game.Seat`, which is not on the bridge classpath).
+     *
+     * - [occupied][TableSeatSummary.occupied] ← a non-null [playerId] — the same rule
+     *   [map] already uses for `seatsFilled`, so the two can never disagree.
+     * - [playerName][TableSeatSummary.playerName] ← the seat's name, normalised to `null` when blank
+     *   (upstream reports an *empty* seat's name as `""`, not null).
+     * - the seat's [playerType] is carried whether or not the seat is filled: upstream matches a join
+     *   to a seat **by player type**, so an empty seat's type is what may still sit there.
+     */
+    public fun buildSeat(
+        index: Int,
+        playerId: String?,
+        playerName: String?,
+        playerType: PlayerType?,
+    ): TableSeatSummary =
+        TableSeatSummary(
+            index = index,
+            playerName = playerName?.takeIf { it.isNotBlank() },
+            playerType = seatTypeOf(playerType),
+            occupied = playerId != null,
+        )
+
+    /**
+     * Translates an upstream [PlayerType] to its app-schema [SeatPlayerTypeCode] — the read direction of
+     * [MatchOptionsMapper.playerTypeOf]. A null (upstream drift) maps defensively to
+     * [SeatPlayerTypeCode.UNKNOWN] rather than throwing.
+     */
+    private fun seatTypeOf(type: PlayerType?): SeatPlayerTypeCode =
+        when (type) {
+            PlayerType.HUMAN -> SeatPlayerTypeCode.HUMAN
+            PlayerType.COMPUTER_MONTE_CARLO -> SeatPlayerTypeCode.COMPUTER_MONTE_CARLO
+            PlayerType.COMPUTER_MAD -> SeatPlayerTypeCode.COMPUTER_MAD
+            PlayerType.COMPUTER_DRAFT_BOT -> SeatPlayerTypeCode.COMPUTER_DRAFT_BOT
+            null -> SeatPlayerTypeCode.UNKNOWN
+        }
 
     /**
      * Translates an upstream [TableState] to its app-schema [TableStateCode]. An unknown/null state

@@ -14,6 +14,7 @@ import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageSession
 import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
 import magefree.protocol.RemoveTable
@@ -26,6 +27,7 @@ import magefree.protocol.StartMatch
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
+import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
 import magefree.protocol.WatchTable
@@ -247,6 +249,27 @@ public class XMageUpstreamSession(
             val tableId = parseUuid(request.tableId) ?: return@tableAction actionFailed(TableActionCode.WATCH, INVALID_TABLE_ID)
             session.watchTable(parseUuid(request.roomId), tableId)
         }
+
+    override suspend fun tableDetail(request: GetTable): ServerMessage {
+        val session = current
+        if (session == null || !session.isConnected) return notFound(request.tableId, "no connected session")
+        val tableId = parseUuid(request.tableId) ?: return notFound(request.tableId, INVALID_TABLE_ID)
+        return try {
+            session.tableDetail(parseUuid(request.roomId), tableId)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            // A read must never surface as a stream error (mirroring `lobbyQuery`): a transport failure
+            // becomes a typed not-found, so the app sees a result rather than a hang.
+            logger.warn("Upstream tableDetail read failed: {}", failure.toString())
+            notFound(request.tableId, "read failed")
+        }
+    }
+
+    private fun notFound(
+        tableId: String,
+        reason: String,
+    ): TableNotFound = TableNotFound(tableId = tableId, reason = reason)
 
     /**
      * Runs a table [action] against the connected [XMageSession], mapping the absence of a connected

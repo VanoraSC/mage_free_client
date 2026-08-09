@@ -3,6 +3,7 @@ package magefree.bridge.session
 import kotlinx.coroutines.flow.Flow
 import magefree.protocol.CreateTable
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
 import magefree.protocol.RemoveTable
@@ -106,6 +107,15 @@ public interface UpstreamSession {
 
     /** Watches (spectates) the table in [request], mapping the boolean verb to a [TableActionResult]. */
     public suspend fun watchTable(request: WatchTable): TableActionResult
+
+    /**
+     * Reads the detail (summary + per-seat state) of the table in [request] (story 0040), replying a
+     * [magefree.protocol.TableDetail] or a typed [magefree.protocol.TableNotFound] — including when
+     * there is no active/connected session, or the room does not list the table. Resolved from the
+     * room's table list at the `magefree.bridge.mapping` boundary (upstream has no single-table read),
+     * so no `mage.view.*` type crosses this interface. Runs the blocking upstream read on IO.
+     */
+    public suspend fun tableDetail(request: GetTable): ServerMessage
 
     /**
      * Keepalive probe used by [SessionRegistry] while a session is **parked** (app socket dropped)
