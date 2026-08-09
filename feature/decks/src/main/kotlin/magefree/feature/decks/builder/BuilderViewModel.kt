@@ -46,6 +46,12 @@ enum class BuilderPhase {
 
     /** No deck with the requested id exists. */
     NotFound,
+
+    /**
+     * The deck itself could not be read, so there is nothing to edit. Distinct from a *derived* view
+     * degrading — see [BuilderUiState.catalogUnavailable], which keeps the deck editable.
+     */
+    Error,
 }
 
 /**
@@ -53,6 +59,11 @@ enum class BuilderPhase {
  * [sideboard] as a flat list; [manaCurve] and [legality] are derived live from the (offline) catalog +
  * bundled legality. [policy] / [prefetch] surface the 0031 art cache toggle and the deck-scoped
  * pre-download so a player can make the deck viewable offline.
+ *
+ * **Degraded derivation.** The deck itself is authoritative and always survives; only the *derived*
+ * view depends on the catalog. When a catalog/legality read fails, [catalogUnavailable] is set and
+ * [errorMessage] explains it, while rows still render from the deck's own stored names, sets and
+ * quantities — the edit is never lost, and the curve/legality simply go blank until a retry succeeds.
  */
 data class BuilderUiState(
     val phase: BuilderPhase = BuilderPhase.Loading,
@@ -67,6 +78,10 @@ data class BuilderUiState(
     val availableFormats: List<DeckFormat> = DeckFormat.entries,
     val policy: CardArtCachePolicy = CardArtCachePolicy.DEFAULT,
     val prefetch: PrefetchProgress = PrefetchProgress(),
+    /** True when the last derivation could not read the catalog, so card details are missing. */
+    val catalogUnavailable: Boolean = false,
+    /** Human-readable reason for [catalogUnavailable] or [BuilderPhase.Error]. */
+    val errorMessage: String? = null,
 ) {
     val mainCount: Int get() = groups.sumOf { it.count }
 
@@ -130,11 +145,23 @@ class BuilderViewModel
                 .launchIn(viewModelScope)
         }
 
-        /** Load the deck with [id] from the offline library and derive the builder state. */
+        /**
+         * Load the deck with [id] from the offline library and derive the builder state.
+         *
+         * A read failure here means there is no deck to edit at all, so it becomes [BuilderPhase.Error]
+         * with a retry — never an escape from `viewModelScope`, whose `SupervisorJob` carries no
+         * `CoroutineExceptionHandler` (story 0042, defect B).
+         */
         fun load(id: DeckId) {
-            _uiState.update { it.copy(phase = BuilderPhase.Loading, deckId = id) }
+            _uiState.update { it.copy(phase = BuilderPhase.Loading, deckId = id, errorMessage = null) }
             viewModelScope.launch {
-                val loaded = repository.load(id)
+                val loaded =
+                    try {
+                        repository.load(id)
+                    } catch (error: Exception) {
+                        _uiState.update { it.copy(phase = BuilderPhase.Error, errorMessage = message(DECK_ERROR, error)) }
+                        return@launch
+                    }
                 mutationLock.withLock {
                     deck = loaded
                     if (loaded == null) {
@@ -146,18 +173,31 @@ class BuilderViewModel
             }
         }
 
+        /** Re-run the last [load], re-deriving the view after a catalog failure. */
+        fun retry() {
+            _uiState.value.deckId?.let { load(it) }
+        }
+
         /**
          * Add one copy of the catalog card [cardId] to [zone] (merging with an existing line).
          *
          * The catalog lookup suspends, so the deck is read **after** it, inside the serialised section —
-         * never snapshotted before the launch.
+         * never snapshotted before the launch. A failed lookup reports and adds nothing rather than
+         * crashing; the deck is left exactly as it was.
          */
         fun addCard(
             cardId: CardId,
             zone: DeckZone,
         ) {
             viewModelScope.launch {
-                val card = catalog.card(cardId) ?: return@launch
+                val card =
+                    try {
+                        catalog.card(cardId)
+                    } catch (error: Exception) {
+                        _uiState.update { it.copy(catalogUnavailable = true, errorMessage = message(CATALOG_ERROR, error)) }
+                        return@launch
+                    }
+                if (card == null) return@launch
                 mutate { it.withCardAdded(card, zone) }
             }
         }
@@ -224,6 +264,10 @@ class BuilderViewModel
          * The single serialised mutation path: take the lock, read the authoritative deck, apply
          * [transform] to *that* value, publish, persist, re-derive. Concurrent mutations queue here
          * rather than interleaving, so none is computed against a deck that has already been replaced.
+         *
+         * The order matters for the fail-soft contract: the deck is published to [deck] and persisted
+         * **before** [rebuild] runs, and `rebuild` cannot throw, so a catalog failure can only degrade
+         * the *derived* view. The user's edit is already saved and stays saved.
          */
         private suspend fun mutate(transform: (Deck) -> Deck) {
             mutationLock.withLock {
@@ -241,13 +285,37 @@ class BuilderViewModel
          * The whole deck's distinct names are resolved in one batched, indexable exact-name lookup —
          * `rebuild` runs after every edit, so a per-name substring scan here is what made a "+"/"−" tap
          * expensive (story 0042, defect D).
+         *
+         * **This never throws.** It is called from `load` and from inside the mutation lock, after the
+         * deck has been persisted. If the catalog or the legality bundle can't be read, the rows are
+         * still built — from the deck's own stored names, sets and quantities, which is all
+         * [deckCardRow] needs when it has no catalog card — and the state simply reports
+         * [BuilderUiState.catalogUnavailable]. The deck is never rolled back or left half-applied; only
+         * the mana curve, type grouping and legality degrade until a retry succeeds (0042, defect B).
          */
         private suspend fun rebuild(source: Deck) {
             val entries = source.main + source.sideboard
-            val resolved = catalog.cardsByName(entries.map { it.cardName })
+            var failure: Throwable? = null
+
+            val resolved =
+                try {
+                    catalog.cardsByName(entries.map { it.cardName })
+                } catch (error: Exception) {
+                    failure = error
+                    emptyMap()
+                }
             val mainRows = source.main.map { deckCardRow(it, DeckZone.MAIN, resolved[it.cardName.lowercase()]) }
             val sideRows = source.sideboard.map { deckCardRow(it, DeckZone.SIDEBOARD, resolved[it.cardName.lowercase()]) }
-            val legalityResult = source.format?.let { legality.check(source, it) }
+            val legalityResult =
+                source.format?.let { format ->
+                    try {
+                        legality.check(source, format)
+                    } catch (error: Exception) {
+                        if (failure == null) failure = error
+                        null
+                    }
+                }
+
             _uiState.update {
                 it.copy(
                     phase = BuilderPhase.Ready,
@@ -259,8 +327,21 @@ class BuilderViewModel
                     sideboard = sideRows,
                     manaCurve = manaCurve(mainRows),
                     legality = legalityResult,
+                    catalogUnavailable = failure != null,
+                    errorMessage = failure?.let { error -> message(CATALOG_ERROR, error) },
                 )
             }
+        }
+
+        private companion object {
+            const val DECK_ERROR = "Couldn't open that deck"
+            const val CATALOG_ERROR = "Couldn't read the card catalog"
+
+            /** "<what went wrong>: <detail>", or just the headline when there's no useful detail. */
+            fun message(
+                headline: String,
+                error: Throwable,
+            ): String = error.message?.takeIf { it.isNotBlank() }?.let { "$headline: $it" } ?: headline
         }
     }
 

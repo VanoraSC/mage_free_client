@@ -39,6 +39,7 @@ import magefree.decks.model.DeckId
 import magefree.decks.model.DeckZone
 import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.component.EmptyState
+import magefree.designsystem.component.ErrorState
 import magefree.designsystem.component.LoadingState
 import magefree.designsystem.component.MageSectionHeader
 import magefree.designsystem.component.MageTextButton
@@ -64,6 +65,7 @@ fun BuilderScreen(
     onFormatSelected: (DeckFormat?) -> Unit,
     onShare: () -> Unit,
     onOpenArtSettings: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -95,6 +97,12 @@ fun BuilderScreen(
                     message = "This deck is no longer in your library.",
                     modifier = Modifier.padding(innerPadding),
                 )
+            BuilderPhase.Error ->
+                ErrorState(
+                    message = uiState.errorMessage ?: "Couldn't open that deck",
+                    onRetry = onRetry,
+                    modifier = Modifier.padding(innerPadding),
+                )
             BuilderPhase.Ready ->
                 BuilderContent(
                     uiState = uiState,
@@ -102,6 +110,7 @@ fun BuilderScreen(
                     onChangeQuantity = onChangeQuantity,
                     onRemove = onRemove,
                     onFormatSelected = onFormatSelected,
+                    onRetry = onRetry,
                     modifier = Modifier.padding(innerPadding),
                 )
         }
@@ -115,6 +124,7 @@ private fun BuilderContent(
     onChangeQuantity: (String, DeckZone, Int) -> Unit,
     onRemove: (String, DeckZone) -> Unit,
     onFormatSelected: (DeckFormat?) -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -122,6 +132,15 @@ private fun BuilderContent(
         contentPadding = PaddingValues(bottom = Spacing.extraLarge),
         verticalArrangement = Arrangement.spacedBy(Spacing.extraSmall),
     ) {
+        // The deck is intact and still editable; only the catalog-derived detail is missing.
+        if (uiState.catalogUnavailable) {
+            item {
+                CatalogUnavailableBanner(
+                    message = uiState.errorMessage ?: "Couldn't read the card catalog",
+                    onRetry = onRetry,
+                )
+            }
+        }
         item {
             Text(
                 text = "${uiState.mainCount} main · ${uiState.sideboardCount} sideboard",
@@ -181,6 +200,34 @@ private fun BuilderContent(
                 )
             }
         }
+    }
+}
+
+/**
+ * Inline notice that the catalog-derived detail (types, mana values, legality) is missing because the
+ * catalog could not be read. Deliberately **not** a full-screen error: the deck itself is intact and
+ * every edit still works, so the builder stays usable while offering a retry.
+ */
+@Composable
+private fun CatalogUnavailableBanner(
+    message: String,
+    onRetry: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.medium, vertical = Spacing.small),
+        verticalArrangement = Arrangement.spacedBy(Spacing.extraSmall),
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Text(
+            text = "Your deck is safe and still editable — card details and legality are unavailable.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        MageTextButton(text = "Retry", onClick = onRetry)
     }
 }
 
@@ -310,6 +357,65 @@ private fun BuilderReadyPreview() {
                 onFormatSelected = {},
                 onShare = {},
                 onOpenArtSettings = {},
+                onRetry = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Builder - catalog unavailable", showBackground = true, heightDp = 900)
+@Composable
+private fun BuilderCatalogUnavailablePreview() {
+    MageTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            BuilderScreen(
+                uiState =
+                    BuilderUiState(
+                        phase = BuilderPhase.Ready,
+                        deckId = DeckId("1"),
+                        name = "Mono-Red Aggro",
+                        format = DeckFormat.STANDARD,
+                        // No catalog: rows still carry the deck's own names and quantities.
+                        groups =
+                            listOf(
+                                DeckGroup(
+                                    "Unknown",
+                                    listOf(
+                                        DeckCardRow(
+                                            key = "Goblin Guide|TST|1",
+                                            cardId = null,
+                                            cardName = "Goblin Guide",
+                                            setCode = "TST",
+                                            collectorNumber = "1",
+                                            quantity = 4,
+                                            zone = DeckZone.MAIN,
+                                            display =
+                                                CardDisplay(
+                                                    name = "Goblin Guide",
+                                                    manaCost = null,
+                                                    typeLine = null,
+                                                    oracleText = null,
+                                                ),
+                                            artRequest = null,
+                                            manaValue = null,
+                                            primaryType = "Unknown",
+                                            isDoubleFaced = false,
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        catalogUnavailable = true,
+                        errorMessage = "Couldn't read the card catalog: No space left on device",
+                    ),
+                onBack = {},
+                onAddCards = {},
+                onInspectCard = {},
+                onChangeQuantity = { _, _, _ -> },
+                onRemove = { _, _ -> },
+                onFormatSelected = {},
+                onShare = {},
+                onOpenArtSettings = {},
+                onRetry = {},
             )
         }
     }

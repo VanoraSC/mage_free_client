@@ -20,6 +20,7 @@ import magefree.cards.art.CardArtRequest
 import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.card.FullCardView
 import magefree.designsystem.component.EmptyState
+import magefree.designsystem.component.ErrorState
 import magefree.designsystem.component.LoadingState
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
@@ -38,6 +39,7 @@ fun CardInspectionScreen(
     artRenderer: CardArtRenderer,
     onClose: () -> Unit,
     onFlip: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when (uiState.phase) {
@@ -48,6 +50,13 @@ fun CardInspectionScreen(
         CardInspectionPhase.NotFound ->
             Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 EmptyState(title = "Card not found", message = "This card is not in the catalog.")
+            }
+        CardInspectionPhase.Error ->
+            Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                ErrorState(
+                    message = uiState.errorMessage ?: "Couldn't read the card catalog",
+                    onRetry = onRetry,
+                )
             }
         CardInspectionPhase.Loaded -> {
             val display = uiState.display ?: return
@@ -97,6 +106,7 @@ private fun previewScreen(uiState: CardInspectionUiState) {
             artRenderer = PlaceholderCardArtRenderer,
             onClose = {},
             onFlip = {},
+            onRetry = {},
         )
     }
 }
@@ -145,3 +155,8 @@ private fun InspectionDoubleFacePreview() = previewScreen(loadedDoubleFace)
 @Preview(name = "Inspection - not found", showBackground = true, heightDp = 780)
 @Composable
 private fun InspectionNotFoundPreview() = previewScreen(CardInspectionUiState(phase = CardInspectionPhase.NotFound))
+
+@Preview(name = "Inspection - catalog error", showBackground = true, heightDp = 780)
+@Composable
+private fun InspectionErrorPreview() =
+    previewScreen(CardInspectionUiState(phase = CardInspectionPhase.Error, errorMessage = "Couldn't read the card catalog"))

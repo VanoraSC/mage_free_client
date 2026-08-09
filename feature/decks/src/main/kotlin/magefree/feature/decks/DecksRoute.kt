@@ -115,6 +115,7 @@ fun DecksRoute(
                 onFormatSelected = builderViewModel::setFormat,
                 onShare = { builderViewModel.shareDeck() },
                 onOpenArtSettings = { showArtSheet = true },
+                onRetry = builderViewModel::retry,
                 modifier = modifier,
             )
         }
@@ -147,6 +148,7 @@ fun DecksRoute(
             artRenderer = fullArtRenderer,
             onClose = { inspecting = null },
             onFlip = inspectionViewModel::flipFace,
+            onRetry = inspectionViewModel::retry,
         )
     }
 

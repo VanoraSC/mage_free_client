@@ -175,12 +175,16 @@ class FakeDeckLegality(
 ) : DeckLegality {
     val checkedFormats: MutableList<DeckFormat> = mutableListOf()
 
+    /** When non-null, [check] throws it instead of answering — the bundled-read failure shape. */
+    var failWith: (() -> Throwable)? = null
+
     override suspend fun availableFormats(): List<FormatInfo> = DeckFormat.entries.map { FormatInfo(it.key, it.displayName) }
 
     override suspend fun check(
         deck: Deck,
         format: DeckFormat,
     ): DeckLegalityResult {
+        failWith?.let { throw it() }
         checkedFormats += format
         return resultFor(format)
     }
@@ -196,7 +200,8 @@ class FakeDeckLegality(
 class FakeCardCatalog(
     cards: List<Card> = emptyList(),
     private val cardLookupDelayMillis: Long = 0L,
-    private val failWith: (() -> Throwable)? = null,
+    /** A `var` so a test can fail once, then recover and prove the ViewModel still works. */
+    var failWith: (() -> Throwable)? = null,
 ) : CardCatalog {
     private val byId = cards.associateBy { it.id }
     private val all = cards

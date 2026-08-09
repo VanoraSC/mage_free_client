@@ -27,6 +27,13 @@ enum class CardInspectionPhase {
 
     /** No card with the requested id exists in the catalog. */
     NotFound,
+
+    /**
+     * The catalog read failed — distinct from [NotFound], which means the catalog answered and the card
+     * genuinely isn't there. A failure is environmental (typically no room for the ~14 MB asset copy on
+     * first use), so it surfaces with a retry rather than crashing the process.
+     */
+    Error,
 }
 
 /**
@@ -43,6 +50,8 @@ data class CardInspectionUiState(
     val setRarityLabel: String? = null,
     val statsLabel: String? = null,
     val faceName: String? = null,
+    /** Set only in [CardInspectionPhase.Error]; the human-readable reason the catalog read failed. */
+    val errorMessage: String? = null,
 ) {
     /** The label for the flip control, reflecting which face would be shown next. */
     val flipLabel: String
@@ -69,11 +78,29 @@ class CardInspectionViewModel
 
         private var loaded: Card? = null
 
-        /** Load the card with [id]; a re-load resets the shown face to the front. */
+        /** The last id [load] was called with, so [retry] can re-run it. */
+        private var lastRequested: CardId? = null
+
+        /**
+         * Load the card with [id]; a re-load resets the shown face to the front.
+         *
+         * This is a bare `launch` and `viewModelScope`'s `SupervisorJob` carries no
+         * `CoroutineExceptionHandler`, so an unguarded catalog failure would reach the default handler
+         * and crash the process. Fail soft instead (story 0042, defect B).
+         */
         fun load(id: CardId) {
+            lastRequested = id
             _uiState.value = CardInspectionUiState(phase = CardInspectionPhase.Loading)
             viewModelScope.launch {
-                val card = catalog.card(id)
+                val card =
+                    try {
+                        catalog.card(id)
+                    } catch (error: Exception) {
+                        loaded = null
+                        _uiState.value =
+                            CardInspectionUiState(phase = CardInspectionPhase.Error, errorMessage = message(CATALOG_ERROR, error))
+                        return@launch
+                    }
                 loaded = card
                 _uiState.value =
                     if (card == null) {
@@ -82,6 +109,11 @@ class CardInspectionViewModel
                         card.toInspectionState(CardArtFace.FRONT)
                     }
             }
+        }
+
+        /** Re-run the last [load] after a catalog failure. */
+        fun retry() {
+            lastRequested?.let { load(it) }
         }
 
         /** Flip a double-faced card between its front and back faces. A no-op when [CardInspectionUiState.canFlip] is false. */
@@ -107,6 +139,14 @@ class CardInspectionViewModel
             )
 
         private companion object {
+            const val CATALOG_ERROR = "Couldn't read the card catalog"
+
+            /** "<what went wrong>: <detail>", or just the headline when there's no useful detail. */
+            fun message(
+                headline: String,
+                error: Throwable,
+            ): String = error.message?.takeIf { it.isNotBlank() }?.let { "$headline: $it" } ?: headline
+
             /** Only transforming/modal double-faced cards have a distinct back-face image to flip to. */
             private val Card.artFlippable: Boolean
                 get() = faces.doubleFaced || faces.modalDoubleFaced

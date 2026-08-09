@@ -67,6 +67,7 @@ fun CardsRoute(
             artRenderer = fullArtRenderer,
             onClose = { selectedCard = null },
             onFlip = inspectionViewModel::flipFace,
+            onRetry = inspectionViewModel::retry,
         )
     }
 
