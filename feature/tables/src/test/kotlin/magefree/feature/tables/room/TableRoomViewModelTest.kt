@@ -195,7 +195,7 @@ class TableRoomViewModelTest {
             assertEquals("g-1", state.matchStarting?.gameId)
             // No host/player actions past the hand-off.
             assertFalse(state.showHostActions)
-            assertFalse(state.showPlayerActions)
+            assertFalse(state.showSeatActions)
             assertFalse(state.canStart)
         }
 
@@ -209,7 +209,7 @@ class TableRoomViewModelTest {
             assertTrue(client.calls.contains("watch:t-1"))
             val state = vm.uiState.value
             assertFalse(state.showHostActions)
-            assertFalse(state.showPlayerActions)
+            assertFalse(state.showSeatActions)
         }
 
     @Test
@@ -222,5 +222,36 @@ class TableRoomViewModelTest {
 
             vm.submitDeck(magefree.decks.model.DeckId("deck-1"))
             assertEquals(listOf("submit:t-1"), client.calls)
+        }
+
+    @Test
+    fun hostCanSubmitAndUpdateADeckBecauseAHostHoldsASeat() =
+        runTest {
+            // Story 0041: the host's own join is the last step of the create sequence, so it occupies a
+            // seat and has a deck to change. The room used to gate the deck surface on `role == Player`,
+            // leaving a host with no way to submit or update at all.
+            val deck = magefree.decks.model.Deck(id = magefree.decks.model.DeckId("deck-1"), name = "Aggro")
+            val client = FakeTableClient()
+            val vm = viewModel(client, FakeDeckRepository(listOf(deck)))
+            vm.observe("t-1", seed(), TableRole.Host)
+
+            val state = vm.uiState.value
+            assertTrue(state.showSeatActions)
+            // The offline library is observed for a host as well, or the picker would have nothing to show.
+            assertEquals(listOf("Aggro"), state.library.map { it.name })
+
+            vm.submitDeck(magefree.decks.model.DeckId("deck-1"))
+            vm.updateDeck(magefree.decks.model.DeckId("deck-1"))
+            assertEquals(listOf("submit:t-1", "update:t-1"), client.calls)
+        }
+
+    @Test
+    fun aSeatedPlayerAlsoSeesTheDeckSurface() =
+        runTest {
+            val vm = viewModel()
+            vm.observe("t-1", seed(), TableRole.Player)
+
+            assertTrue(vm.uiState.value.showSeatActions)
+            assertFalse(vm.uiState.value.showHostActions)
         }
 }
