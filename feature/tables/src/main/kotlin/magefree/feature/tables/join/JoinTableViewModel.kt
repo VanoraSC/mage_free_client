@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -113,7 +114,11 @@ class JoinTableViewModel
             deckRepository
                 .observeLibrary()
                 .onEach { decks -> _uiState.value = _uiState.value.copy(library = decks) }
-                .launchIn(viewModelScope)
+                // Fail soft: an unguarded throw here escapes through launchIn to viewModelScope, whose
+                // SupervisorJob has no CoroutineExceptionHandler — a process crash (story 0042, B).
+                .catch { error ->
+                    _uiState.value = _uiState.value.copy(errorMessage = message(LIBRARY_ERROR, error))
+                }.launchIn(viewModelScope)
         }
 
         fun setSeatName(name: String) {
@@ -124,13 +129,38 @@ class JoinTableViewModel
             _uiState.value = _uiState.value.copy(password = password, errorMessage = null)
         }
 
-        /** Pick [id]: load the full deck offline and (when the format is known) check its legality. */
+        /**
+         * Pick [id]: load the full deck offline and (when the format is known) check its legality.
+         *
+         * The legality check reads the bundled card catalog, and this is a bare `launch`. A catalog
+         * failure must not take the process down — it surfaces as [JoinTableUiState.errorMessage] with
+         * no legality result, which leaves [JoinTableUiState.canJoin] false (an unverified deck is not
+         * waved through) and leaves a later pick working (story 0042, defect B).
+         */
         fun selectDeck(id: DeckId) {
             viewModelScope.launch {
-                val deck = deckRepository.load(id)
+                val deck =
+                    try {
+                        deckRepository.load(id)
+                    } catch (error: Exception) {
+                        _uiState.value =
+                            _uiState.value.copy(selectedDeckId = null, legality = null, errorMessage = message(DECK_ERROR, error))
+                        return@launch
+                    }
                 selectedDeck.value = deck
                 val format = _uiState.value.format
-                val legality = if (deck != null && format != null) deckLegality.check(deck, format) else null
+                val legality =
+                    if (deck != null && format != null) {
+                        try {
+                            deckLegality.check(deck, format)
+                        } catch (error: Exception) {
+                            _uiState.value =
+                                _uiState.value.copy(selectedDeckId = id, legality = null, errorMessage = message(LEGALITY_ERROR, error))
+                            return@launch
+                        }
+                    } else {
+                        null
+                    }
                 _uiState.value =
                     _uiState.value.copy(
                         selectedDeckId = id,
@@ -168,5 +198,17 @@ class JoinTableViewModel
                     },
                 )
             }
+        }
+
+        private companion object {
+            const val LIBRARY_ERROR = "Couldn't load your decks"
+            const val DECK_ERROR = "Couldn't open that deck"
+            const val LEGALITY_ERROR = "Couldn't check that deck's legality"
+
+            /** "<what went wrong>: <detail>", or just the headline when there's no useful detail. */
+            fun message(
+                headline: String,
+                error: Throwable,
+            ): String = error.message?.takeIf { it.isNotBlank() }?.let { "$headline: $it" } ?: headline
         }
     }

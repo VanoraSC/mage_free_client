@@ -54,6 +54,7 @@ fun CardsRoute(
         onRaritySelected = searchViewModel::setRarity,
         onResetFilters = searchViewModel::resetFilters,
         onCardSelected = { selectedCard = it },
+        onRetry = searchViewModel::retry,
         onOpenArtSettings = { showArtSettings = true },
         modifier = modifier,
     )

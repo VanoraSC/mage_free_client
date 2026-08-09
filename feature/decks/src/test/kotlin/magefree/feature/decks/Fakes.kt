@@ -136,9 +136,15 @@ class FakeDeckRepository(
         )
 }
 
-/** Scriptable [DeckIO]: [import] returns [importResult]; export/share round-trip the deck's text. */
+/**
+ * Scriptable [DeckIO]: [import] returns [importResult]; export/share round-trip the deck's text.
+ *
+ * [failWith] makes [import] throw — the shape a catalog read failure takes on the library's import
+ * path. A `var` so a test can fail once, then recover and prove the ViewModel still works.
+ */
 class FakeDeckIO(
     private val importResult: DeckImportResult,
+    var failWith: (() -> Throwable)? = null,
 ) : DeckIO {
     var importCalls = 0
 
@@ -147,6 +153,7 @@ class FakeDeckIO(
         format: DeckFileFormat?,
     ): DeckImportResult {
         importCalls++
+        failWith?.let { throw it() }
         return importResult
     }
 

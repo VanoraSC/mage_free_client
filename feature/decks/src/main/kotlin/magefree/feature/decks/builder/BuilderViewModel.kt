@@ -262,7 +262,6 @@ class BuilderViewModel
                 )
             }
         }
-
     }
 
 /** Add one copy of [card] to [zone], preferring its first printing; merges with an existing line. */

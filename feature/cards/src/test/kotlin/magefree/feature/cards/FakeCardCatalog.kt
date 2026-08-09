@@ -21,7 +21,11 @@ class FakeCardCatalog(
     private val byId: Map<CardId, Card> = emptyMap(),
     private val searchResult: (String) -> List<Card> = { emptyList() },
     private val filterResult: (CardFilter) -> List<Card> = { emptyList() },
-    private val failWith: (() -> Throwable)? = null,
+    /**
+     * When non-null, every read throws it. A `var` so a test can inject a failure, observe the error
+     * state, then clear it and prove the pipeline still serves the next query.
+     */
+    var failWith: (() -> Throwable)? = null,
 ) : CardCatalog {
     val searchQueries: MutableList<String> = mutableListOf()
     val filterCriteria: MutableList<CardFilter> = mutableListOf()

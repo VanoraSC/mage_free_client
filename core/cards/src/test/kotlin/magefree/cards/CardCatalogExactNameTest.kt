@@ -121,8 +121,16 @@ class CardCatalogExactNameTest {
             // the card + printing loads.
             val names =
                 listOf(
-                    "Lightning Bolt", "Island", "Mountain", "Forest", "Plains", "Swamp",
-                    "Counterspell", "Brainstorm", "Dark Ritual", "Giant Growth",
+                    "Lightning Bolt",
+                    "Island",
+                    "Mountain",
+                    "Forest",
+                    "Plains",
+                    "Swamp",
+                    "Counterspell",
+                    "Brainstorm",
+                    "Dark Ritual",
+                    "Giant Growth",
                 )
             val resolved = catalog.cardsByName(names)
             assertEquals(names.size, resolved.size)

@@ -100,6 +100,7 @@ fun DecksRoute(
                 onToggleFavorite = libraryViewModel::setFavorite,
                 onImportDeck = libraryViewModel::importDeck,
                 onBrowseCards = onBrowseCards,
+                onRetry = libraryViewModel::retry,
                 modifier = modifier,
             )
         else -> {
@@ -132,6 +133,7 @@ fun DecksRoute(
             onManaValueSelected = searchViewModel::setManaValue,
             onRaritySelected = searchViewModel::setRarity,
             onResetFilters = searchViewModel::resetFilters,
+            onRetry = searchViewModel::retry,
             onAdd = builderViewModel::addCard,
             onInspect = { inspecting = it },
         )

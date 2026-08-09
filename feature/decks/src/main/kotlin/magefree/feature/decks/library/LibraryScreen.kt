@@ -39,6 +39,7 @@ import magefree.decks.model.DeckFormat
 import magefree.decks.model.DeckId
 import magefree.decks.model.DeckSummary
 import magefree.designsystem.component.EmptyState
+import magefree.designsystem.component.ErrorState
 import magefree.designsystem.component.LoadingState
 import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.theme.MageShapes
@@ -71,6 +72,7 @@ fun LibraryScreen(
     onToggleFavorite: (DeckId, Boolean) -> Unit,
     onImportDeck: (String) -> Unit,
     onBrowseCards: () -> Unit,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showCreate by remember { mutableStateOf(false) }
@@ -103,6 +105,11 @@ fun LibraryScreen(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when (uiState.phase) {
                 LibraryPhase.Loading -> LoadingState(message = "Loading decks")
+                LibraryPhase.Error ->
+                    ErrorState(
+                        message = uiState.errorMessage ?: "Couldn't load your decks",
+                        onRetry = onRetry,
+                    )
                 LibraryPhase.Empty ->
                     EmptyState(
                         title = "No decks yet",
@@ -296,10 +303,15 @@ private fun previewLibrary(uiState: LibraryUiState) {
                 onToggleFavorite = { _, _ -> },
                 onImportDeck = {},
                 onBrowseCards = {},
+                onRetry = {},
             )
         }
     }
 }
+
+@Preview(name = "Library - error", showBackground = true, heightDp = 640)
+@Composable
+private fun LibraryErrorPreview() = previewLibrary(LibraryUiState(phase = LibraryPhase.Error, errorMessage = "Couldn't load your decks"))
 
 @Preview(name = "Library - content (light)", showBackground = true, heightDp = 640)
 @Preview(name = "Library - content (dark)", showBackground = true, heightDp = 640, uiMode = Configuration.UI_MODE_NIGHT_YES)

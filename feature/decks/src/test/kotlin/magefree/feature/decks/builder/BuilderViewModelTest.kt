@@ -259,7 +259,14 @@ class BuilderViewModelTest {
                     ),
                 )
             val vm =
-                BuilderViewModel(repo, spy, FakeDeckLegality { legal }, FakeDeckIO(emptyImport), FakeDeckArtDownloader(), FakeArtCacheController())
+                BuilderViewModel(
+                    repo,
+                    spy,
+                    FakeDeckLegality { legal },
+                    FakeDeckIO(emptyImport),
+                    FakeDeckArtDownloader(),
+                    FakeArtCacheController(),
+                )
             vm.load(DeckId("deck-1"))
 
             assertEquals(BuilderPhase.Ready, vm.uiState.value.phase)
