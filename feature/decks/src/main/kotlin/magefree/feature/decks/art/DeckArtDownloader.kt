@@ -80,11 +80,17 @@ class DeckPrefetchTargetSource(
     ): List<CardArtRequest> {
         val current = deck ?: return emptyList()
         val entries = current.main + current.sideboard
+        // One batched, indexable exact-name lookup for the whole deck rather than a substring scan per
+        // entry (story 0042, defect D).
+        val resolved = catalog.cardsByName(entries.map { it.cardName })
         val out = LinkedHashSet<CardArtRequest>()
         for (entry in entries) {
             if (entry.setCode.isBlank() && entry.collectorNumber.isBlank()) continue
             out += entry.request(CardArtFace.FRONT, size)
-            if (entry.isDoubleFaced()) out += entry.request(CardArtFace.BACK, size)
+            val card = resolved[entry.cardName.lowercase()]
+            if (card != null && (card.faces.doubleFaced || card.faces.modalDoubleFaced)) {
+                out += entry.request(CardArtFace.BACK, size)
+            }
         }
         return out.toList()
     }
@@ -93,10 +99,4 @@ class DeckPrefetchTargetSource(
         face: CardArtFace,
         size: CardArtSize,
     ): CardArtRequest = CardArtRequest(setCode = setCode, collectorNumber = collectorNumber, face = face, size = size)
-
-    /** Whether the catalog knows this entry's card has a distinct back face worth prefetching. */
-    private suspend fun DeckEntry.isDoubleFaced(): Boolean {
-        val card = catalog.search(cardName).firstOrNull { it.name.equals(cardName, ignoreCase = true) } ?: return false
-        return card.faces.doubleFaced || card.faces.modalDoubleFaced
-    }
 }

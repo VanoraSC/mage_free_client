@@ -262,6 +262,39 @@ class DeckIOTest {
             assertTrue(share.content.contains("[MOD:60] Island"))
         }
 
+    // --- exact-name resolution (0042 defect D) ---
+
+    @Test
+    fun `import resolves names through one batched exact-name lookup, not the substring search`() =
+        runTest {
+            val text =
+                """
+                4 [M10:146] Lightning Bolt
+                20 [MOD:60] Island
+                2 [APC:128] Fire // Ice
+                SB: 3 [MMQ:68] Counterspell
+                """.trimIndent()
+            val result = io().import(text, DeckFileFormat.DCK)
+
+            assertFalse(result.hasErrors)
+            assertTrue("import must not fall back to the substring search", catalog.searchQueries.isEmpty())
+            assertEquals("one batched lookup for the whole file", 1, catalog.nameLookups.size)
+            assertEquals(
+                listOf("Counterspell", "Fire // Ice", "Island", "Lightning Bolt"),
+                catalog.nameLookups.single().sorted(),
+            )
+        }
+
+    @Test
+    fun `import resolves a name whose casing differs from the catalog`() =
+        runTest {
+            val result = io().import("4 [M10:146] lightning BOLT", DeckFileFormat.DCK)
+
+            assertFalse(result.issues.toString(), result.hasErrors)
+            // The catalog's canonical name wins, so the stored deck stays consistent.
+            assertEquals(listOf(DeckEntry("Lightning Bolt", "M10", "146", 4)), result.deck.main)
+        }
+
     // --- helpers ---
 
     /** Build a representative deck, export it, re-import, export again — the two imports must be equal. */

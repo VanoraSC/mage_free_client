@@ -23,8 +23,9 @@ import magefree.decks.model.toDeckList
  * class resolves every [RawEntry]'s name → a catalog printing and assembles the 0033 [Deck], reporting
  * unresolved / ambiguous / malformed lines. Serialization delegates back to the format objects.
  *
- * **Name resolution.** A name is matched case-insensitively against the catalog (via
- * [CardCatalog.search], which also matches split-card halves), taking the exact-name hit. When the
+ * **Name resolution.** Every distinct name in the file is resolved in a single batched, exact,
+ * case-insensitive catalog lookup ([CardCatalog.cardsByName]) — an indexable equality query, not the
+ * user-facing substring search. Split cards resolve under their full name (`Fire // Ice`). When the
  * source line already carries a set + collector number (`.dck`, MTGA-with-set) that printing is kept
  * verbatim — the file is authoritative and the printing may not even be in our bundle. When it carries
  * only a name (plain text, `.dec`), the catalog's first printing (deterministic: ordered by set code
@@ -52,8 +53,12 @@ internal class DefaultDeckIO(
             val mainCards = ArrayList<DeckListCard>()
             val sideboardCards = ArrayList<DeckListCard>()
 
+            // Resolve every distinct name in one batched, indexable exact-name lookup rather than a
+            // substring search per line (story 0042, defect D).
+            val resolvedNames = catalog.cardsByName(parsed.entries.map { it.name })
+
             for (entry in parsed.entries) {
-                val card = exactByName(entry.name)
+                val card = resolvedNames[entry.name.trim().lowercase()]
                 if (card == null) {
                     issues +=
                         DeckImportIssue(
@@ -151,9 +156,6 @@ internal class DefaultDeckIO(
         }
         return DeckListCard(card.name, chosen.setCode, chosen.collectorNumber, entry.amount)
     }
-
-    /** Exact (case-insensitive) catalog lookup by card name; `null` if the catalog doesn't know it. */
-    private suspend fun exactByName(name: String): Card? = catalog.search(name).firstOrNull { it.name.equals(name, ignoreCase = true) }
 
     /** Auto-detect the file format from content. */
     private fun detectFormat(text: String): DeckFileFormat =

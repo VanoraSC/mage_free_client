@@ -235,11 +235,18 @@ class BuilderViewModel
             }
         }
 
-        /** Resolve every line against the offline catalog and compute groups, curve, and legality. */
+        /**
+         * Resolve every line against the offline catalog and compute groups, curve, and legality.
+         *
+         * The whole deck's distinct names are resolved in one batched, indexable exact-name lookup —
+         * `rebuild` runs after every edit, so a per-name substring scan here is what made a "+"/"−" tap
+         * expensive (story 0042, defect D).
+         */
         private suspend fun rebuild(source: Deck) {
-            val cache = HashMap<String, Card?>()
-            val mainRows = source.main.map { deckCardRow(it, DeckZone.MAIN, resolve(it, cache)) }
-            val sideRows = source.sideboard.map { deckCardRow(it, DeckZone.SIDEBOARD, resolve(it, cache)) }
+            val entries = source.main + source.sideboard
+            val resolved = catalog.cardsByName(entries.map { it.cardName })
+            val mainRows = source.main.map { deckCardRow(it, DeckZone.MAIN, resolved[it.cardName.lowercase()]) }
+            val sideRows = source.sideboard.map { deckCardRow(it, DeckZone.SIDEBOARD, resolved[it.cardName.lowercase()]) }
             val legalityResult = source.format?.let { legality.check(source, it) }
             _uiState.update {
                 it.copy(
@@ -256,17 +263,6 @@ class BuilderViewModel
             }
         }
 
-        /** Resolve an entry's catalog card by exact name (cached within a rebuild); null if unknown. */
-        private suspend fun resolve(
-            entry: DeckEntry,
-            cache: MutableMap<String, Card?>,
-        ): Card? {
-            val nameKey = entry.cardName.lowercase()
-            if (cache.containsKey(nameKey)) return cache[nameKey]
-            val card = catalog.search(entry.cardName).firstOrNull { it.name.equals(entry.cardName, ignoreCase = true) }
-            cache[nameKey] = card
-            return card
-        }
     }
 
 /** Add one copy of [card] to [zone], preferring its first printing; merges with an existing line. */
