@@ -1,7 +1,9 @@
 package magefree.feature.tables.room
 
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -149,43 +151,122 @@ class TableRoomSeatSeamTest {
         return TableRoomViewModel(client, FakeDeckRepository()) to socket
     }
 
+    /**
+     * Retires the room the way leaving the screen does — Android clears the ViewModel, which cancels
+     * `viewModelScope` and with it the observation (and its re-read poll).
+     *
+     * Every test that observes **must** end with this. That is not test bookkeeping: while a room is on
+     * screen the client keeps a re-read scheduled, so a room that is never retired keeps the virtual
+     * clock permanently busy and `runTest` would never finish — which is itself a live demonstration
+     * that the poll really is bound to the collection rather than running loose.
+     */
+    private fun TableRoomViewModel.leaveScreen() {
+        viewModelScope.coroutineContext.cancelChildren()
+    }
+
     @Test
     fun theRoomShowsTheTablesRealSeatsAndTheStartGateEnablesOnTheServersReadiness() =
         runTest {
             val bridge = Bridge(listOf(waiting(), ready()))
             val (vm, socket) = room(bridge)
 
-            vm.observe(TABLE_ID, TableState(tableId = TABLE_ID, optionsSummary = "Two Player Duel"), TableRole.Host)
+            try {
+                vm.observe(TABLE_ID, TableState(tableId = TABLE_ID, optionsSummary = "Two Player Duel"), TableRole.Host)
 
-            // 1. Opening the room read the table — with no push of any kind, the seats are on screen.
-            assertEquals(listOf(TABLE_ID), bridge.tableReads)
-            val waitingState = vm.uiState.value
-            assertEquals(2, waitingState.seats.size)
-            assertEquals(listOf("pete", null), waitingState.seats.map { it.name })
-            assertEquals(listOf(true, false), waitingState.seats.map { it.isOccupied })
-            assertEquals(SeatPlayerType.ComputerMad, waitingState.seats[1].playerType)
-            assertEquals(1, waitingState.seatsFilled)
-            assertEquals(TableServerState.Waiting, waitingState.serverState)
+                // 1. Opening the room read the table — with no push of any kind, the seats are on screen.
+                assertEquals(listOf(TABLE_ID), bridge.tableReads)
+                val waitingState = vm.uiState.value
+                assertEquals(2, waitingState.seats.size)
+                assertEquals(listOf("pete", null), waitingState.seats.map { it.name })
+                assertEquals(listOf(true, false), waitingState.seats.map { it.isOccupied })
+                assertEquals(SeatPlayerType.ComputerMad, waitingState.seats[1].playerType)
+                assertEquals(1, waitingState.seatsFilled)
+                assertEquals(TableServerState.Waiting, waitingState.serverState)
 
-            // 2. A seat is still open, so the host cannot start — and pressing the control does nothing.
-            assertFalse("a half-filled table must not enable the start control", waitingState.canStart)
-            vm.startMatch()
-            assertTrue("the gate must actually block the action", bridge.started.isEmpty())
+                // 2. A seat is still open, so the host cannot start — and pressing the control does nothing.
+                assertFalse("a half-filled table must not enable the start control", waitingState.canStart)
+                vm.startMatch()
+                assertTrue("the gate must actually block the action", bridge.started.isEmpty())
 
-            // 3. The AI takes the open seat. Upstream sends no per-seat event, so the room learns it by
-            //    re-reading the table on the next table-lifecycle push it already receives.
-            socket.emitPush(TableUpdated(tableId = TABLE_ID, isOwner = true))
+                // 3. The AI takes the open seat. Upstream sends no per-seat event, so the room learns it
+                //    by re-reading the table on the next table-lifecycle push it already receives.
+                socket.emitPush(TableUpdated(tableId = TABLE_ID, isOwner = true))
 
-            assertEquals(listOf(TABLE_ID, TABLE_ID), bridge.tableReads)
-            val readyState = vm.uiState.value
-            assertEquals(listOf("pete", "Computer"), readyState.seats.map { it.name })
-            assertEquals(2, readyState.seatsFilled)
-            assertEquals(TableServerState.ReadyToStart, readyState.serverState)
+                assertEquals(listOf(TABLE_ID, TABLE_ID), bridge.tableReads)
+                val readyState = vm.uiState.value
+                assertEquals(listOf("pete", "Computer"), readyState.seats.map { it.name })
+                assertEquals(2, readyState.seatsFilled)
+                assertEquals(TableServerState.ReadyToStart, readyState.serverState)
 
-            // 4. The server says every seat is filled → the host may start, and the action reaches it.
-            assertTrue("the server reports READY_TO_START, so the host must be able to start", readyState.canStart)
-            vm.startMatch()
-            assertEquals(listOf(TABLE_ID), bridge.started)
+                // 4. The server says every seat is filled → the host may start, and the action reaches it.
+                assertTrue("the server reports READY_TO_START, so the host must be able to start", readyState.canStart)
+                vm.startMatch()
+                assertEquals(listOf(TABLE_ID), bridge.started)
+            } finally {
+                vm.leaveScreen()
+            }
+        }
+
+    @Test
+    fun aHumanTakingTheOpenSeatSurfacesWithNoPushAtAll() =
+        runTest {
+            // The case that has no push anywhere in it: upstream's `TableController.joinTable` tells
+            // already-seated players nothing when a *human* sits down, so the host's room learns it only
+            // by re-reading the table while it is open. Nothing here changes but the bridge's reply and
+            // the clock — no push is emitted at any point.
+            val bridge = Bridge(listOf(waiting(), ready()))
+            val (vm, _) = room(bridge)
+
+            try {
+                vm.observe(TABLE_ID, TableState(tableId = TABLE_ID, optionsSummary = "Two Player Duel"), TableRole.Host)
+
+                val beforeReads = bridge.tableReads.size
+                assertEquals("the room opens with a single read", 1, beforeReads)
+                assertFalse("the opponent has not sat down yet", vm.uiState.value.canStart)
+                assertEquals(1, vm.uiState.value.seatsFilled)
+
+                // Let the room sit on screen. The poll interval is a few seconds (paced to the server's
+                // 2s lobby-snapshot tick), so this covers at least one re-read.
+                testScheduler.advanceTimeBy(POLL_WINDOW_MS)
+                testScheduler.runCurrent()
+
+                val afterReads = bridge.tableReads.size
+                assertTrue("an open room must re-read the table: $beforeReads → $afterReads", afterReads > beforeReads)
+
+                val state = vm.uiState.value
+                assertEquals(listOf("pete", "Computer"), state.seats.map { it.name })
+                assertEquals(2, state.seatsFilled)
+                assertEquals(TableServerState.ReadyToStart, state.serverState)
+                assertTrue("the seat that appeared must enable the start control", state.canStart)
+
+                vm.startMatch()
+                assertEquals(listOf(TABLE_ID), bridge.started)
+            } finally {
+                vm.leaveScreen()
+            }
+        }
+
+    @Test
+    fun thePollStopsOnceTheMatchIsStarting() =
+        runTest {
+            // A table that has become a game cannot gain a player; the room must stop re-reading it
+            // rather than keep questioning the bridge for the life of the screen.
+            val bridge = Bridge(listOf(starting()))
+            val (vm, _) = room(bridge)
+
+            try {
+                vm.observe(TABLE_ID, TableState(tableId = TABLE_ID), TableRole.Host)
+                testScheduler.runCurrent()
+                assertTrue("the table has left seating", vm.uiState.value.table.isPastSeating)
+
+                val readsAtStart = bridge.tableReads.size
+                testScheduler.advanceTimeBy(10 * POLL_WINDOW_MS)
+                testScheduler.runCurrent()
+
+                assertEquals("no read may follow the table leaving seating", readsAtStart, bridge.tableReads.size)
+            } finally {
+                vm.leaveScreen()
+            }
         }
 
     @Test
@@ -199,7 +280,25 @@ class TableRoomSeatSeamTest {
             assertTrue("an unobserved room must not read the table", bridge.tableReads.isEmpty())
         }
 
+    /** The table once the server has taken it past seating — the room must stop re-reading here. */
+    private fun starting() =
+        TableDetail(
+            table = summary(TableStateCode.STARTING, filled = 2),
+            seats =
+                listOf(
+                    TableSeatSummary(index = 0, playerName = "pete", playerType = SeatPlayerTypeCode.HUMAN, occupied = true),
+                    TableSeatSummary(index = 1, playerName = "rival", playerType = SeatPlayerTypeCode.HUMAN, occupied = true),
+                ),
+        )
+
     private companion object {
         const val TABLE_ID = "t-1"
+
+        /**
+         * Virtual time to let an on-screen room sit for. Comfortably more than the client's few-second
+         * re-read interval (itself paced to the server's two-second lobby-snapshot tick), so at least
+         * one poll is due — without this test pinning the exact interval, which is the client's business.
+         */
+        const val POLL_WINDOW_MS = 10_000L
     }
 }

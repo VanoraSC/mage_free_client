@@ -48,6 +48,23 @@ data class TableState(
      */
     val isReadyToStart: Boolean get() = serverState == TableServerState.ReadyToStart
 
+    /**
+     * True once the table has left the seating stage, so re-reading it can no longer reveal a seat
+     * change: the match-start signal has landed, this client has observed the table starting/started,
+     * or the server itself reports the table starting / in a game / finished.
+     *
+     * [TableClient.observeTable] stops its while-observed refresh here — a table that has become a game
+     * is not going to gain a player, and Epic 11 owns everything past that point.
+     */
+    val isPastSeating: Boolean
+        get() =
+            matchStarting != null ||
+                phase == TablePhase.Starting ||
+                phase == TablePhase.Started ||
+                serverState == TableServerState.Starting ||
+                serverState == TableServerState.Dueling ||
+                serverState == TableServerState.Finished
+
     /** Apply a [TableDetails] read: refresh the seats and the server's lifecycle state. */
     fun withDetails(details: TableDetails): TableState = copy(seats = details.seats, serverState = details.serverState)
 }

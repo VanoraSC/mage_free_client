@@ -79,10 +79,14 @@ interface TableClient {
      * [magefree.model.ConnectionState.Connected]) the current state is re-emitted so a reconnect does not
      * strand the seat. Cold: each collection starts a fresh subscription; the caller owns its scope.
      *
-     * **Seats (story 0040).** It also [refreshTable]s — once when collection starts, again on each
-     * table-lifecycle push for this table, and again after a resume — folding each [TableDetails] into
-     * [TableState.seats]/[TableState.serverState]. Refreshes are **event-driven only**: nothing is
-     * polled on a timer, so a room that is off screen (its collection cancelled) issues no traffic.
+     * **Seats (story 0040).** It also [refreshTable]s — once when collection starts, on each
+     * table-lifecycle push for this table, after a resume, and periodically while the table is still
+     * seating — folding each [TableDetails] into [TableState.seats]/[TableState.serverState].
+     *
+     * The periodic re-read is not belt-and-braces: upstream notifies already-seated players of
+     * **nothing** when another human takes a seat, so without it a host would wait forever for a table
+     * that is in fact ready. It is scoped to the collection (a room that is off screen issues no
+     * traffic at all) and stops once [TableState.isPastSeating] — the table has become a game.
      *
      * @param seed the starting state — from a create/join [TableRef.toSeed] or a bare
      *   [TableState] for a watch; defaults to an empty [TableState] for [tableId].

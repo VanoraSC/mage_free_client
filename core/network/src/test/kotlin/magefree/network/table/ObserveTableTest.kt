@@ -159,25 +159,104 @@ class ObserveTableTest {
         }
 
     @Test
-    fun anObservedRoomNeverPollsInTheBackground() =
+    fun anUnobservedTableIssuesNoReadsAtAll() =
         runTest {
-            // Refreshes are event-driven only: with no push and no resume, time passing must not
-            // produce a second read (the story forbids background polling).
+            // The poll lives inside the flow, so it only exists while someone collects: building the
+            // client, and letting any amount of time pass, must touch the bridge zero times.
+            val reads = Reads(listOf(waitingDetail()))
+            clientOver(reads)
+
+            testScheduler.advanceTimeBy(10 * 60_000L)
+            testScheduler.runCurrent()
+
+            assertEquals("an unobserved table must never be read", 0, reads.requests.size)
+        }
+
+    @Test
+    fun anObservedTableIsReReadPeriodicallySoAHumanJoinWithNoPushStillSurfaces() =
+        runTest {
+            // Upstream tells a seated player *nothing* when another human takes a seat. With no push of
+            // any kind, only the while-observed poll can reveal it — so this drives the whole change
+            // through the clock, changing nothing but the bridge's reply between reads.
+            val reads = Reads(listOf(waitingDetail(), readyDetail()))
+            val (client, _) = clientOver(reads)
+
+            client.observeTable("t-1", seed).test {
+                assertEquals(seed, awaitItem())
+                assertFalse(awaitItem().isReadyToStart)
+                assertEquals("only the room-open read so far", 1, reads.requests.size)
+
+                // Not yet due: the interval has not elapsed, so nothing is re-read.
+                testScheduler.advanceTimeBy(DefaultTableClient.SEAT_REFRESH_INTERVAL_MS / 2)
+                testScheduler.runCurrent()
+                assertEquals(1, reads.requests.size)
+                expectNoEvents()
+
+                // One interval later the table is re-read and the opponent's seat appears.
+                testScheduler.advanceTimeBy(DefaultTableClient.SEAT_REFRESH_INTERVAL_MS)
+                testScheduler.runCurrent()
+                assertEquals(2, reads.requests.size)
+
+                val polled = awaitItem()
+                assertEquals(listOf("pete", "Computer"), polled.seats.map { it.name })
+                assertTrue("the poll must surface the server's own readiness", polled.isReadyToStart)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun thePollStopsOnceTheTableHasLeftSeating() =
+        runTest {
+            val reads = Reads(listOf(readyDetail()))
+            val (client, fake) = clientOver(reads)
+
+            client.observeTable("t-1", seed).test {
+                assertEquals(seed, awaitItem())
+                assertTrue(awaitItem().isReadyToStart)
+
+                // The match starts: a table that has become a game cannot gain a player, so re-reading
+                // it is pointless — the poll must stop for good, not merely slow down.
+                fake.emitPush(MatchStartingMessage(gameId = "g-9", tableId = "t-1", playerId = "p-1"))
+                val starting = awaitItem()
+                assertEquals(TablePhase.Starting, starting.phase)
+                assertTrue(starting.isPastSeating)
+
+                // The match-start push itself triggers one last read; nothing after it.
+                testScheduler.runCurrent()
+                val readsAtStart = reads.requests.size
+
+                testScheduler.advanceTimeBy(10 * DefaultTableClient.SEAT_REFRESH_INTERVAL_MS)
+                testScheduler.runCurrent()
+
+                assertEquals("no read may follow match-start", readsAtStart, reads.requests.size)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun thePollStopsWhenTheRoomLeavesTheScreen() =
+        runTest {
+            // "No background polling when the room is off screen": cancelling the collection (the room
+            // closing) must end the polling, not leave a timer running against the bridge.
             val reads = Reads(listOf(waitingDetail()))
             val (client, _) = clientOver(reads)
 
             client.observeTable("t-1", seed).test {
                 assertEquals(seed, awaitItem())
                 awaitItem()
-
-                testScheduler.advanceTimeBy(10 * 60_000L)
+                testScheduler.advanceTimeBy(2 * DefaultTableClient.SEAT_REFRESH_INTERVAL_MS)
                 testScheduler.runCurrent()
-
-                expectNoEvents()
                 cancelAndIgnoreRemainingEvents()
             }
+            val readsWhileObserved = reads.requests.size
+            assertTrue("the poll should have run while observed", readsWhileObserved > 1)
 
-            assertEquals("exactly one read: the one that opened the room", 1, reads.requests.size)
+            testScheduler.advanceTimeBy(20 * DefaultTableClient.SEAT_REFRESH_INTERVAL_MS)
+            testScheduler.runCurrent()
+
+            assertEquals("no read may follow the room closing", readsWhileObserved, reads.requests.size)
         }
 
     @Test
