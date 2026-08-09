@@ -14,6 +14,9 @@ import magefree.protocol.SkillLevelCode
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
+import magefree.protocol.TableNotFound
+import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -280,6 +283,61 @@ class TableRelayTest {
         assertEquals(TableActionResult(TableActionCode.WATCH, ok = true), TableRelay.watchTable(session, room, table))
         assertEquals(room, session.watchRoom)
         assertEquals(table, session.watchTableId)
+    }
+
+    @Test
+    fun `detailMessage replies the mapped detail on a hit and a typed not-found on a miss`() {
+        val detail =
+            TableDetail(
+                table =
+                    TableSummary(
+                        tableId = table.toString(),
+                        name = "Duel Night",
+                        controllerName = "alice",
+                        gameType = "Two Player Duel",
+                        deckType = "Constructed - Standard",
+                        state = TableStateCode.READY_TO_START,
+                        seatsFilled = 2,
+                        seatsTotal = 2,
+                        isTournament = false,
+                        isRated = false,
+                        isPassworded = false,
+                        isLimited = false,
+                        skillLevel = SkillLevelCode.CASUAL,
+                        createdAtEpochMs = 0L,
+                    ),
+                seats =
+                    listOf(
+                        TableSeatSummary(index = 0, playerName = "alice", playerType = SeatPlayerTypeCode.HUMAN, occupied = true),
+                        TableSeatSummary(
+                            index = 1,
+                            playerName = "Computer",
+                            playerType = SeatPlayerTypeCode.COMPUTER_MAD,
+                            occupied = true,
+                        ),
+                    ),
+            )
+
+        // A hit is the detail itself — seats included, not reduced to counts.
+        assertEquals(detail, TableRelay.detailMessage(table.toString(), detail))
+
+        // A miss is a *typed* not-found, never an empty TableDetail (which would be indistinguishable
+        // from a real table with no seats — exactly the ambiguity story 0040 exists to remove).
+        val miss = TableRelay.detailMessage(table.toString(), null)
+        assertTrue(miss is TableNotFound, "a missing table must reply TableNotFound, got $miss")
+        assertEquals(table.toString(), (miss as TableNotFound).tableId)
+        assertEquals(TableRelay.TABLE_NOT_FOUND, miss.reason)
+    }
+
+    @Test
+    fun `firstWithId picks the room's matching table and yields null when it is absent`() {
+        // The `getTables(roomId)` filter, exercised over stand-ins because a TableView cannot be built.
+        val other = UUID.randomUUID()
+        val candidates = listOf(other to "other table", table to "our table")
+
+        assertEquals("our table", TableRelay.firstWithId(candidates, table) { it.first }?.second)
+        assertNull(TableRelay.firstWithId(candidates, UUID.randomUUID()) { it.first })
+        assertNull(TableRelay.firstWithId(emptyList<Pair<UUID, String>>(), table) { it.first })
     }
 
     @Test

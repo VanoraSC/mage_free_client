@@ -137,6 +137,24 @@ public data class WatchTable(
     val requestId: String? = null,
 ) : ClientMessage
 
+/**
+ * App→bridge: read **one** table's current detail — its [TableSummary] plus the per-seat
+ * [TableSeatSummary] list (story 0040). A null [roomId] resolves to the main room.
+ *
+ * This is the *targeted read* that replaces the never-produced [SeatUpdated] push as the room's source
+ * of seat state: XMage exposes no per-seat callback before match-start and no single-table read on
+ * `SessionImpl`, so the bridge resolves the table out of `getTables(roomId)` filtered by [tableId] (the
+ * desktop client polls the same list). The reply is a [TableDetail] carrying the same [requestId], or a
+ * [TableNotFound] when the room does not list that table.
+ */
+@Serializable
+@SerialName("get_table")
+public data class GetTable(
+    val tableId: String,
+    val roomId: String? = null,
+    val requestId: String? = null,
+) : ClientMessage
+
 // ---------------------------------------------------------------------------------------------------
 // Results (bridge → app, correlated by requestId)
 // ---------------------------------------------------------------------------------------------------
@@ -165,6 +183,34 @@ public data class TableCreated(
 public data class TableActionResult(
     val action: TableActionCode,
     val ok: Boolean,
+    val reason: String? = null,
+    val requestId: String? = null,
+) : ServerMessage
+
+/**
+ * Bridge→app: the reply to a [GetTable] (story 0040). [table] is the same browse-relevant [TableSummary]
+ * a [TableList] carries — including the server's own [TableStateCode] (the readiness truth: a table is
+ * [TableStateCode.READY_TO_START] once every seat is filled) — and [seats] adds the per-seat detail the
+ * list form reduces to counts. [requestId] echoes the request's id.
+ */
+@Serializable
+@SerialName("table_detail")
+public data class TableDetail(
+    val table: TableSummary,
+    val seats: List<TableSeatSummary> = emptyList(),
+    val requestId: String? = null,
+) : ServerMessage
+
+/**
+ * Bridge→app: the typed "no such table" reply to a [GetTable] (story 0040) — the room no longer lists
+ * [tableId] (it was removed, or the match moved past the lobby list), or the socket has no bound
+ * session. A miss is a **typed result**, never a silent drop or an empty [TableDetail] that would look
+ * like a table with no seats. [reason] carries the bridge's optional human-readable detail.
+ */
+@Serializable
+@SerialName("table_not_found")
+public data class TableNotFound(
+    val tableId: String,
     val reason: String? = null,
     val requestId: String? = null,
 ) : ServerMessage
@@ -222,6 +268,11 @@ public data class TableUpdated(
  * XMage build refreshes seats via the polled room table list (story 0027) and has no seat-level
  * callback before match-start, so this carries the seat's [tableId], [playerId], and [isOwner] for
  * forward use by 0037/0038. [requestId] is unused for spontaneous pushes and left null.
+ *
+ * **This message has no producer** (story 0040): nothing in the bridge dispatches it, because upstream
+ * emits no such callback. The room's real seat state comes from [GetTable] → [TableDetail]; this stays
+ * only as the forward-compatible shape a future upstream push would map onto. Do **not** build a
+ * feature on it without a producer.
  */
 @Serializable
 @SerialName("seat_updated")
@@ -322,6 +373,29 @@ public data class CreateTableOptions(
     val quitRatio: Int = 100,
     val minimumRating: Int = 0,
     val password: String? = null,
+)
+
+/**
+ * The app-schema description of **one seat** at a table, carried by [TableDetail] (story 0040) —
+ * projected from `mage.view.SeatView` at the mapper boundary.
+ *
+ * XMage has no per-seat "ready" flag: readiness is a table-level property
+ * ([TableStateCode.READY_TO_START] once every seat is filled), so this shape deliberately carries only
+ * what a seat actually is — who sits there, of what kind, and whether it is taken.
+ *
+ * @property index the seat's position in the table's seat list (its stable slot, 0-based).
+ * @property playerName the occupant's display name, or `null` for an empty seat (upstream reports an
+ *   empty seat's name as `""`).
+ * @property playerType the kind of occupant the seat is reserved for (a seat keeps its type whether or
+ *   not it is filled — that is how upstream matches a join to a seat).
+ * @property occupied whether a player currently sits here (upstream: a non-null `SeatView.playerId`).
+ */
+@Serializable
+public data class TableSeatSummary(
+    val index: Int,
+    val playerName: String? = null,
+    val playerType: SeatPlayerTypeCode = SeatPlayerTypeCode.HUMAN,
+    val occupied: Boolean = false,
 )
 
 /**

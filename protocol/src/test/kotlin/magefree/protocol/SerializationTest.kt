@@ -65,6 +65,12 @@ class SerializationTest {
                 skillLevel = SkillLevelCode.CASUAL,
                 createdAtEpochMs = 1_700_000_000_000L,
             )
+
+        val SAMPLE_SEATS =
+            listOf(
+                TableSeatSummary(index = 0, playerName = "alice", playerType = SeatPlayerTypeCode.HUMAN, occupied = true),
+                TableSeatSummary(index = 1, playerName = null, playerType = SeatPlayerTypeCode.COMPUTER_MAD, occupied = false),
+            )
     }
 
     @Test
@@ -114,6 +120,9 @@ class SerializationTest {
                 StartMatch(tableId = "t-1"),
                 WatchTable(tableId = "t-1", roomId = "room-1", requestId = "r-20"),
                 WatchTable(tableId = "t-1"),
+                // Targeted single-table read (story 0040).
+                GetTable(tableId = "t-1", roomId = "room-1", requestId = "r-24"),
+                GetTable(tableId = "t-1"),
             )
 
         for (message in messages) {
@@ -230,6 +239,11 @@ class SerializationTest {
                 SideboardPrompt(tableId = "t-1"),
                 MatchStarting(gameId = "g-1", tableId = "t-1", parentTableId = "parent-1", playerId = "p-1"),
                 MatchStarting(gameId = "g-1"),
+                // Targeted single-table read replies (story 0040).
+                TableDetail(table = SAMPLE_TABLE, seats = SAMPLE_SEATS, requestId = "r-25"),
+                TableDetail(table = SAMPLE_TABLE),
+                TableNotFound(tableId = "t-1", reason = "no such table in the room", requestId = "r-26"),
+                TableNotFound(tableId = "t-1"),
             )
 
         for (message in messages) {
@@ -353,6 +367,37 @@ class SerializationTest {
         )
         assertTrue(
             json.encodeToString<ServerMessage>(MatchStarting(gameId = "g")).contains("\"type\":\"match_starting\""),
+        )
+        // Targeted single-table read (story 0040).
+        assertTrue(json.encodeToString<ClientMessage>(GetTable(tableId = "t")).contains("\"type\":\"get_table\""))
+        assertTrue(
+            json.encodeToString<ServerMessage>(TableDetail(table = SAMPLE_TABLE)).contains("\"type\":\"table_detail\""),
+        )
+        assertTrue(
+            json.encodeToString<ServerMessage>(TableNotFound(tableId = "t")).contains("\"type\":\"table_not_found\""),
+        )
+    }
+
+    @Test
+    fun `a TableDetail decodes when a newer peer adds a seat field (story 0040)`() {
+        // Forward-compat on the *seat* payload specifically: an added per-seat field must be ignored,
+        // and an absent `seats` array must decode to an empty list rather than throwing.
+        val futureFrame =
+            """
+            {"type":"table_detail","table":{"tableId":"t-1","name":"n","controllerName":"c","gameType":"g",
+            "deckType":"d","state":"READY_TO_START","seatsFilled":2,"seatsTotal":2,"isTournament":false,
+            "isRated":false,"isPassworded":false,"isLimited":false,"skillLevel":"CASUAL","createdAtEpochMs":0},
+            "seats":[{"index":0,"playerName":"alice","playerType":"HUMAN","occupied":true,"flag":"world"}]}
+            """.trimIndent().replace("\n", "")
+
+        val decoded = json.decodeFromString<ServerMessage>(futureFrame)
+
+        assertTrue(decoded is TableDetail, "expected a TableDetail, got $decoded")
+        val detail = decoded as TableDetail
+        assertEquals(TableStateCode.READY_TO_START, detail.table.state)
+        assertEquals(
+            listOf(TableSeatSummary(index = 0, playerName = "alice", playerType = SeatPlayerTypeCode.HUMAN, occupied = true)),
+            detail.seats,
         )
     }
 

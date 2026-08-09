@@ -6,7 +6,9 @@ import magefree.protocol.RoomUserList
 import magefree.protocol.ServerMessage
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
 import magefree.protocol.TableList
+import magefree.protocol.TableNotFound
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -17,8 +19,9 @@ import java.util.concurrent.ConcurrentHashMap
  * `SessionEvent`; and an ended/dropped session fails every outstanding waiter ([failAll]) so a blocked
  * requester surfaces the failure as state rather than hanging.
  *
- * The correlated replies are the 0027 lobby list replies ([TableList]/[RoomUserList]/[GameTypeList])
- * and the 0036 table-action replies ([TableCreated]/[TableActionResult], story 0037), each keyed by its
+ * The correlated replies are the 0027 lobby list replies ([TableList]/[RoomUserList]/[GameTypeList]),
+ * the 0036 table-action replies ([TableCreated]/[TableActionResult], story 0037) and 0040's targeted
+ * table-read replies ([TableDetail]/[TableNotFound]) — each keyed by its
  * echoed `requestId`. Resume flow-control frames, session-status pushes, and the spontaneous 0036 table
  * *events* (no `requestId` — routed to the push side-channel instead) are left untouched, so the existing
  * session-event behaviour (stories 0016/0024) is unchanged.
@@ -67,6 +70,8 @@ internal class PendingRequests {
             is GameTypeList -> requestId
             is TableCreated -> requestId
             is TableActionResult -> requestId
+            is TableDetail -> requestId
+            is TableNotFound -> requestId
             else -> null
         }
 }

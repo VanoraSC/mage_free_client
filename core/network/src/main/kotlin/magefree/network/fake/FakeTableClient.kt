@@ -5,8 +5,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.onStart
 import magefree.decks.model.Deck
 import magefree.network.table.CreateTableOptions
+import magefree.network.table.Seat
+import magefree.network.table.SeatPlayerType
 import magefree.network.table.TableClient
+import magefree.network.table.TableDetails
 import magefree.network.table.TableRef
+import magefree.network.table.TableServerState
 import magefree.network.table.TableState
 
 /**
@@ -27,6 +31,7 @@ class FakeTableClient(
     var removeResult: Result<Unit> = Result.success(Unit),
     var startResult: Result<Unit> = Result.success(Unit),
     var watchResult: Result<Unit> = Result.success(Unit),
+    var refreshResult: Result<TableDetails> = Result.success(DEFAULT_DETAILS),
 ) : TableClient {
     /** The verbs invoked, in order, for assertion (`"create"`, `"join:t-1"`, …). */
     val calls: MutableList<String> = mutableListOf()
@@ -87,6 +92,11 @@ class FakeTableClient(
         return watchResult
     }
 
+    override suspend fun refreshTable(tableId: String): Result<TableDetails> {
+        calls += "refresh:$tableId"
+        return refreshResult
+    }
+
     override fun observeTable(
         tableId: String,
         seed: TableState,
@@ -106,6 +116,21 @@ class FakeTableClient(
                 deckType = "Constructed",
                 seatsFilled = 1,
                 seatsTotal = 2,
+            )
+
+        /** A two-seat table still waiting for players — the neutral starting point for a room test. */
+        val DEFAULT_DETAILS =
+            TableDetails(
+                tableId = "t-1",
+                name = "table",
+                gameType = "Two Player Duel",
+                deckType = "Constructed",
+                serverState = TableServerState.Waiting,
+                seats =
+                    listOf(
+                        Seat(index = 0, playerType = SeatPlayerType.Human, isOccupied = false),
+                        Seat(index = 1, playerType = SeatPlayerType.Human, isOccupied = false),
+                    ),
             )
     }
 }

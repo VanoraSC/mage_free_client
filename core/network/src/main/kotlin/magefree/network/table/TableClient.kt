@@ -61,10 +61,32 @@ interface TableClient {
     suspend fun watchTable(tableId: String): Result<Unit>
 
     /**
+     * Read the current [TableDetails] of [tableId] — its seats and the **server's** lifecycle state
+     * (story 0040). This is the room's source of seat state: XMage emits no per-seat push before
+     * match-start, so the table is *read* rather than waited on.
+     *
+     * A table the server no longer lists yields a typed [TableNotFoundFailure]; a transport failure a
+     * failed [Result] — never a throw, and never an empty success that would look like a seatless table.
+     *
+     * [observeTable] calls this itself (on open, on each table-lifecycle push, and after a resume), so a
+     * caller rendering the room does not need to: this is here for a deliberate one-shot re-read.
+     */
+    suspend fun refreshTable(tableId: String): Result<TableDetails>
+
+    /**
      * Observe the evolving [TableState] of [tableId]: emit [seed] first, then a new state each time a
      * 0036 event for this table folds in ([TableEventFold]). On a 0023 resume (a return to
      * [magefree.model.ConnectionState.Connected]) the current state is re-emitted so a reconnect does not
      * strand the seat. Cold: each collection starts a fresh subscription; the caller owns its scope.
+     *
+     * **Seats (story 0040).** It also [refreshTable]s — once when collection starts, on each
+     * table-lifecycle push for this table, after a resume, and periodically while the table is still
+     * seating — folding each [TableDetails] into [TableState.seats]/[TableState.serverState].
+     *
+     * The periodic re-read is not belt-and-braces: upstream notifies already-seated players of
+     * **nothing** when another human takes a seat, so without it a host would wait forever for a table
+     * that is in fact ready. It is scoped to the collection (a room that is off screen issues no
+     * traffic at all) and stops once [TableState.isPastSeating] — the table has become a game.
      *
      * @param seed the starting state — from a create/join [TableRef.toSeed] or a bare
      *   [TableState] for a watch; defaults to an empty [TableState] for [tableId].

@@ -19,6 +19,7 @@ import magefree.protocol.GameTypeSummary
 import magefree.protocol.GetGameTypes
 import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
+import magefree.protocol.GetTable
 import magefree.protocol.GetTables
 import magefree.protocol.Login
 import magefree.protocol.Logout
@@ -35,7 +36,10 @@ import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableDetail
 import magefree.protocol.TableList
+import magefree.protocol.TableNotFound
+import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -314,6 +318,72 @@ class SessionCoordinatorTest {
                 val gameTypes = assertInstanceOf(GameTypeList::class.java, receiveDeserialized<ServerMessage>())
                 assertEquals(emptyList<GameTypeSummary>(), gameTypes.gameTypes)
                 assertEquals("ggt-2", gameTypes.requestId)
+            }
+        }
+    }
+
+    @Test
+    fun `GetTable replies the correlated table detail, and a typed not-found on an unbound socket`() {
+        // Story 0040: the room's seats travel this exchange, so the coordinator must dispatch it to the
+        // bound session and stamp the requestId — otherwise the app's read never correlates and the
+        // room never learns its seats.
+        val detail =
+            TableDetail(
+                table =
+                    TableSummary(
+                        tableId = "table-1",
+                        name = "Duel Night",
+                        controllerName = "grace",
+                        gameType = "Two Player Duel",
+                        deckType = "Constructed - Standard",
+                        state = TableStateCode.READY_TO_START,
+                        seatsFilled = 2,
+                        seatsTotal = 2,
+                        isTournament = false,
+                        isRated = false,
+                        isPassworded = false,
+                        isLimited = false,
+                        skillLevel = SkillLevelCode.CASUAL,
+                        createdAtEpochMs = 0L,
+                    ),
+                seats =
+                    listOf(
+                        TableSeatSummary(index = 0, playerName = "grace", occupied = true),
+                        TableSeatSummary(index = 1, playerName = "Computer", occupied = true),
+                    ),
+            )
+
+        val bound =
+            FakeUpstreamSession(
+                listOf(status(SessionStateCode.CONNECTING), status(SessionStateCode.CONNECTED)),
+                scriptedTableDetail = detail,
+            )
+        scenario(bound) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(Login(username = "grace"))
+                assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
+                assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
+
+                sendSerialized<ClientMessage>(GetTable(tableId = "table-1", requestId = "gt-d1"))
+                val reply = assertInstanceOf(TableDetail::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(detail.seats, reply.seats)
+                assertEquals(TableStateCode.READY_TO_START, reply.table.state)
+                assertEquals("gt-d1", reply.requestId)
+            }
+            assertEquals("table-1", (bound.lastTableRequest as GetTable).tableId)
+        }
+
+        val unbound = FakeUpstreamSession(emptyList())
+        scenario(unbound) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(GetTable(tableId = "table-9", requestId = "gt-d2"))
+                val miss = assertInstanceOf(TableNotFound::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals("table-9", miss.tableId)
+                assertNotNull(miss.reason)
+                assertEquals("gt-d2", miss.requestId)
             }
         }
     }

@@ -21,6 +21,7 @@ import magefree.network.table.MatchStarting
 import magefree.network.table.Seat
 import magefree.network.table.TableClient
 import magefree.network.table.TablePhase
+import magefree.network.table.TableServerState
 import magefree.network.table.TableState
 import javax.inject.Inject
 
@@ -29,7 +30,7 @@ import javax.inject.Inject
  * viewer's [role] and the small deck [library] the player may submit/update from. The room deliberately
  * stops at match-start: [isMatchStarting] is the terminal Epic-11 hand-off marker.
  *
- * @property table the latest observed [TableState] (seats / phase / one-shot match-start signal).
+ * @property table the latest observed [TableState] (seats / server state / phase / match-start signal).
  * @property role the viewer's [TableRole], deciding the action set.
  * @property library the saved decks a [TableRole.Player] can submit/update (offline).
  * @property isLoading no state has folded in yet (still on the seed).
@@ -57,9 +58,23 @@ data class TableRoomUiState(
     val isMatchStarting: Boolean
         get() = table.matchStarting != null || table.phase == TablePhase.Starting || table.phase == TablePhase.Started
 
-    /** True when a host may start: at least one seat, every known seat readied, not already starting. */
+    /**
+     * True when a host may start — gated on the **server's** readiness
+     * ([TableState.isReadyToStart]: every seat filled), not on any client-invented per-seat flag.
+     *
+     * Story 0040: the previous rule required every seat to have "readied", a per-seat flag XMage never
+     * sends and nothing populated, so the control could never enable. The server enforces exactly this
+     * rule for `startMatch`, so gating on it here means the button is enabled precisely when the action
+     * would be accepted.
+     */
     val canStart: Boolean
-        get() = role == TableRole.Host && seats.isNotEmpty() && seats.all { it.isReady } && !isMatchStarting
+        get() = role == TableRole.Host && table.isReadyToStart && !isMatchStarting
+
+    /** The server's own lifecycle state for the table (the source of [canStart]). */
+    val serverState: TableServerState get() = table.serverState
+
+    /** How many seats are occupied, and how many there are — as the server last reported them. */
+    val seatsFilled: Int get() = seats.count { it.isOccupied }
 
     /** True when the host's start control is shown (host role, before match-start). */
     val showHostActions: Boolean get() = role == TableRole.Host && !isMatchStarting

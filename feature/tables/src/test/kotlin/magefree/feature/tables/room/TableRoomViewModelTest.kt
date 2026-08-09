@@ -12,8 +12,10 @@ import magefree.feature.tables.TableRole
 import magefree.network.fake.FakeTableClient
 import magefree.network.table.MatchStarting
 import magefree.network.table.Seat
+import magefree.network.table.SeatPlayerType
 import magefree.network.table.TableActionFailure
 import magefree.network.table.TablePhase
+import magefree.network.table.TableServerState
 import magefree.network.table.TableState
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -24,9 +26,13 @@ import org.junit.Test
 
 /**
  * Hermetic coverage of [TableRoomViewModel] over 0037's [FakeTableClient] — no bridge, no `:protocol`. It
- * folds a scripted [TableState] (seat joins / ready toggles / phase transitions), pins host-start gating
- * by readiness, the leave/remove close signals, the match-starting terminal state, and the spectator
- * `watchTable` subscription.
+ * folds a scripted [TableState] (seats filling / phase transitions), pins host-start gating on the
+ * server's own readiness, the leave/remove close signals, the match-starting terminal state, and the
+ * spectator `watchTable` subscription.
+ *
+ * These tests inject a finished [TableState], so they verify the room's *composition* of the gate — not
+ * that the gate's input is reachable. That reachability (the story-0040 defect) is pinned separately by
+ * `TableRoomSeatSeamTest`, which drives this same ViewModel through the real client over a fake bridge.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TableRoomViewModelTest {
@@ -62,54 +68,70 @@ class TableRoomViewModelTest {
                     .isEmpty(),
             )
 
-            // A seat joins (not ready).
-            client.emitTableState(
-                TableState(tableId = "t-1", seats = listOf(Seat(playerId = "p1", name = "You", isReady = false))),
-            )
-            assertEquals(1, vm.uiState.value.seats.size)
-            assertFalse(
-                vm.uiState.value.seats
-                    .first()
-                    .isReady,
-            )
-            assertFalse(vm.uiState.value.isLoading)
-
-            // The seat readies + a second seat joins ready → construction phase.
+            // The table is read: two slots, one taken.
             client.emitTableState(
                 TableState(
                     tableId = "t-1",
                     seats =
                         listOf(
-                            Seat(playerId = "p1", name = "You", isReady = true, isDeckSubmitted = true),
-                            Seat(playerId = "p2", name = "Rival", isReady = true),
+                            Seat(index = 0, name = "You", isOccupied = true),
+                            Seat(index = 1, playerType = SeatPlayerType.ComputerMad, isOccupied = false),
                         ),
-                    phase = TablePhase.Constructing,
+                    serverState = TableServerState.Waiting,
                 ),
             )
             assertEquals(2, vm.uiState.value.seats.size)
-            assertTrue(
-                vm.uiState.value.seats
-                    .all { it.isReady },
+            assertEquals(1, vm.uiState.value.seatsFilled)
+            assertFalse(vm.uiState.value.isLoading)
+
+            // Both seats fill and construction begins.
+            client.emitTableState(
+                TableState(
+                    tableId = "t-1",
+                    seats =
+                        listOf(
+                            Seat(index = 0, name = "You", isOccupied = true),
+                            Seat(index = 1, name = "Rival", isOccupied = true),
+                        ),
+                    serverState = TableServerState.Constructing,
+                    phase = TablePhase.Constructing,
+                ),
             )
+            assertEquals(2, vm.uiState.value.seatsFilled)
             assertEquals(TablePhase.Constructing, vm.uiState.value.table.phase)
+            assertEquals(TableServerState.Constructing, vm.uiState.value.serverState)
         }
 
     @Test
-    fun hostStartIsGatedByReadiness() =
+    fun hostStartIsGatedOnTheServersOwnReadiness() =
         runTest {
             val client = FakeTableClient()
             val vm = viewModel(client)
             vm.observe("t-1", seed(), TableRole.Host)
 
-            // One seat, not ready → cannot start; startMatch is a no-op.
-            client.emitTableState(TableState(tableId = "t-1", seats = listOf(Seat(playerId = "p1", isReady = false))))
+            // A seat is still open, so the server is only WAITING → cannot start; startMatch is a no-op.
+            client.emitTableState(
+                TableState(
+                    tableId = "t-1",
+                    seats = listOf(Seat(index = 0, name = "You", isOccupied = true), Seat(index = 1, isOccupied = false)),
+                    serverState = TableServerState.Waiting,
+                ),
+            )
             assertFalse(vm.uiState.value.canStart)
             vm.startMatch()
             assertTrue(client.calls.none { it.startsWith("start") })
 
-            // All seats ready → can start; startMatch calls the client.
+            // Every seat filled → the server reports READY_TO_START → the host may start.
             client.emitTableState(
-                TableState(tableId = "t-1", seats = listOf(Seat(playerId = "p1", isReady = true), Seat(playerId = "p2", isReady = true))),
+                TableState(
+                    tableId = "t-1",
+                    seats =
+                        listOf(
+                            Seat(index = 0, name = "You", isOccupied = true),
+                            Seat(index = 1, name = "Computer", playerType = SeatPlayerType.ComputerMad, isOccupied = true),
+                        ),
+                    serverState = TableServerState.ReadyToStart,
+                ),
             )
             assertTrue(vm.uiState.value.canStart)
             vm.startMatch()

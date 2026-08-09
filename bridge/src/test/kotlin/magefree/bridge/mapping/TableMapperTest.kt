@@ -3,10 +3,14 @@ package magefree.bridge.mapping
 import kotlinx.serialization.encodeToString
 import mage.constants.SkillLevel
 import mage.constants.TableState
+import mage.players.PlayerType
 import magefree.protocol.ProtocolJson
+import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.ServerMessage
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableDetail
 import magefree.protocol.TableList
+import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -153,6 +157,78 @@ class TableMapperTest {
         assertEquals(0 to 2, seats(listOf(false, false)))
         assertEquals(2 to 2, seats(listOf(true, true)))
         assertEquals(0 to 0, seats(emptyList()))
+    }
+
+    @Test
+    fun `buildSeat maps an occupied seat, and normalises an empty seat's blank name to null`() {
+        // Occupied: upstream reports a non-null playerId and the player's name.
+        assertEquals(
+            TableSeatSummary(index = 0, playerName = "alice", playerType = SeatPlayerTypeCode.HUMAN, occupied = true),
+            TableMapper.buildSeat(
+                index = 0,
+                playerId = "0e2f1a2b-0000-0000-0000-000000000001",
+                playerName = "alice",
+                playerType = PlayerType.HUMAN,
+            ),
+        )
+
+        // Empty: `SeatView` sets the name to "" (not null) and leaves playerId null. The seat keeps its
+        // player *type* — that is what upstream matches a later join against.
+        assertEquals(
+            TableSeatSummary(index = 1, playerName = null, playerType = SeatPlayerTypeCode.COMPUTER_MAD, occupied = false),
+            TableMapper.buildSeat(index = 1, playerId = null, playerName = "", playerType = PlayerType.COMPUTER_MAD),
+        )
+    }
+
+    @Test
+    fun `every upstream PlayerType maps to its app-schema seat code`() {
+        fun typeFor(type: PlayerType?): SeatPlayerTypeCode =
+            TableMapper.buildSeat(index = 0, playerId = null, playerName = null, playerType = type).playerType
+
+        assertEquals(SeatPlayerTypeCode.HUMAN, typeFor(PlayerType.HUMAN))
+        assertEquals(SeatPlayerTypeCode.COMPUTER_MONTE_CARLO, typeFor(PlayerType.COMPUTER_MONTE_CARLO))
+        assertEquals(SeatPlayerTypeCode.COMPUTER_MAD, typeFor(PlayerType.COMPUTER_MAD))
+        assertEquals(SeatPlayerTypeCode.COMPUTER_DRAFT_BOT, typeFor(PlayerType.COMPUTER_DRAFT_BOT))
+        // Defensive: a null (upstream drift) maps to UNKNOWN rather than throwing.
+        assertEquals(SeatPlayerTypeCode.UNKNOWN, typeFor(null))
+        // Confirm exhaustiveness against the upstream enum (fails loudly if XMage adds a player type).
+        assertEquals(PlayerType.entries.size, SeatPlayerTypeCode.entries.size - 1)
+    }
+
+    @Test
+    fun `a mapped seat list round-trips inside a TableDetail`() {
+        val detail =
+            TableDetail(
+                table =
+                    TableMapper.build(
+                        tableId = "table-1",
+                        name = "Duel Night",
+                        controllerName = "alice",
+                        gameType = "Two Player Duel",
+                        deckType = "Constructed - Freeform Unlimited",
+                        state = TableState.READY_TO_START,
+                        seatsOccupied = listOf(true, true),
+                        isTournament = false,
+                        isRated = false,
+                        isPassworded = false,
+                        isLimited = false,
+                        skillLevel = SkillLevel.CASUAL,
+                        createTime = Date(0),
+                    ),
+                seats =
+                    listOf(
+                        TableMapper.buildSeat(index = 0, playerId = "p-1", playerName = "alice", playerType = PlayerType.HUMAN),
+                        TableMapper.buildSeat(
+                            index = 1,
+                            playerId = "p-2",
+                            playerName = "Computer",
+                            playerType = PlayerType.COMPUTER_MAD,
+                        ),
+                    ),
+            )
+
+        val encoded = ProtocolJson.json.encodeToString<ServerMessage>(detail)
+        assertEquals(detail, ProtocolJson.json.decodeFromString<ServerMessage>(encoded))
     }
 
     @Test

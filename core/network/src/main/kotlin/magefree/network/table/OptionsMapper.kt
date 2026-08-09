@@ -4,7 +4,9 @@ import magefree.model.SkillLevel
 import magefree.protocol.RangeCode
 import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableStateCode
 import magefree.protocol.CreateTableOptions as ProtocolCreateTableOptions
+import magefree.protocol.TableDetail as ProtocolTableDetail
 
 /**
  * The create-options half of the table client's mapper boundary (story 0037): projects the app-schema
@@ -30,6 +32,53 @@ internal fun CreateTableOptions.toProtocol(): ProtocolCreateTableOptions =
         minimumRating = minimumRating,
         password = password,
     )
+
+/**
+ * The read half of the boundary (story 0040): projects 0040's wire [ProtocolTableDetail] — the reply to
+ * a `GetTable` — onto the app-schema [TableDetails] the `TableClient` ABI exposes, so no wire shape
+ * reaches a `:feature` consumer. Seat order is preserved (it is the server's slot order).
+ */
+internal fun ProtocolTableDetail.toDetails(): TableDetails =
+    TableDetails(
+        tableId = table.tableId,
+        name = table.name,
+        gameType = table.gameType,
+        deckType = table.deckType,
+        serverState = table.state.toServerState(),
+        seats =
+            seats.map { seat ->
+                Seat(
+                    index = seat.index,
+                    name = seat.playerName,
+                    playerType = seat.playerType.toSeatType(),
+                    isOccupied = seat.occupied,
+                )
+            },
+    )
+
+/** Wire [TableStateCode] → app-schema [TableServerState]; total, so a new code cannot go unhandled. */
+private fun TableStateCode.toServerState(): TableServerState =
+    when (this) {
+        TableStateCode.WAITING -> TableServerState.Waiting
+        TableStateCode.READY_TO_START -> TableServerState.ReadyToStart
+        TableStateCode.STARTING -> TableServerState.Starting
+        TableStateCode.DRAFTING -> TableServerState.Drafting
+        TableStateCode.CONSTRUCTING -> TableServerState.Constructing
+        TableStateCode.DUELING -> TableServerState.Dueling
+        TableStateCode.SIDEBOARDING -> TableServerState.Sideboarding
+        TableStateCode.FINISHED -> TableServerState.Finished
+        TableStateCode.UNKNOWN -> TableServerState.Unknown
+    }
+
+/** Wire [SeatPlayerTypeCode] → app-schema [SeatPlayerType] (the read direction of [toCode]). */
+private fun SeatPlayerTypeCode.toSeatType(): SeatPlayerType =
+    when (this) {
+        SeatPlayerTypeCode.HUMAN -> SeatPlayerType.Human
+        SeatPlayerTypeCode.COMPUTER_MONTE_CARLO -> SeatPlayerType.ComputerMonteCarlo
+        SeatPlayerTypeCode.COMPUTER_MAD -> SeatPlayerType.ComputerMad
+        SeatPlayerTypeCode.COMPUTER_DRAFT_BOT -> SeatPlayerType.ComputerDraftBot
+        SeatPlayerTypeCode.UNKNOWN -> SeatPlayerType.Unknown
+    }
 
 private fun SeatPlayerType.toCode(): SeatPlayerTypeCode =
     when (this) {

@@ -12,6 +12,9 @@ import magefree.protocol.SkillLevelCode
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
+import magefree.protocol.TableNotFound
+import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 import magefree.protocol.TableUpdated
@@ -107,6 +110,54 @@ class TableRelaySeamsTest {
 
             assertTrue(waiter.isCompleted)
             assertSame(reply, waiter.getCompleted())
+        }
+
+    @Test
+    fun aTableDetailAndATableNotFoundAreCorrelatedToTheirWaiters() =
+        runTest {
+            // Story 0040's targeted read rides the same correlation seam: without registering these two
+            // reply types the app's `refreshTable` would hang until timeout and the room would never
+            // learn its seats — so this pins the registration, not just the transport.
+            val pending = PendingRequests()
+            val detailWaiter = pending.register("req-3")
+            val missWaiter = pending.register("req-4")
+            val detail =
+                TableDetail(
+                    table =
+                        TableSummary(
+                            tableId = "t-1",
+                            name = "n",
+                            controllerName = "pete",
+                            gameType = "Two Player Duel",
+                            deckType = "Constructed",
+                            state = TableStateCode.READY_TO_START,
+                            seatsFilled = 2,
+                            seatsTotal = 2,
+                            isTournament = false,
+                            isRated = false,
+                            isPassworded = false,
+                            isLimited = false,
+                            skillLevel = SkillLevelCode.CASUAL,
+                            createdAtEpochMs = 0L,
+                        ),
+                    seats =
+                        listOf(
+                            TableSeatSummary(index = 0, playerName = "pete", occupied = true),
+                            TableSeatSummary(index = 1, playerName = "Computer", occupied = true),
+                        ),
+                    requestId = "req-3",
+                )
+            val miss = TableNotFound(tableId = "t-1", reason = "gone", requestId = "req-4")
+
+            val captured = relay(listOf(SessionStatus(SessionStateCode.CONNECTED), detail, miss), pending)
+
+            assertTrue("the detail reply must reach its waiter", detailWaiter.isCompleted)
+            assertSame(detail, detailWaiter.getCompleted())
+            assertTrue("the not-found reply must reach its waiter", missWaiter.isCompleted)
+            assertSame(miss, missWaiter.getCompleted())
+            // Neither is a lifecycle frame nor a push: only the Connected reached the session stream.
+            assertEquals(1, captured.events.size)
+            assertTrue(captured.pushes.isEmpty())
         }
 
     @Test
