@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import magefree.cards.CardCatalog
 import magefree.cards.art.CardArtCachePolicy
 import magefree.cards.art.PrefetchProgress
@@ -44,6 +46,12 @@ enum class BuilderPhase {
 
     /** No deck with the requested id exists. */
     NotFound,
+
+    /**
+     * The deck itself could not be read, so there is nothing to edit. Distinct from a *derived* view
+     * degrading — see [BuilderUiState.catalogUnavailable], which keeps the deck editable.
+     */
+    Error,
 }
 
 /**
@@ -51,6 +59,11 @@ enum class BuilderPhase {
  * [sideboard] as a flat list; [manaCurve] and [legality] are derived live from the (offline) catalog +
  * bundled legality. [policy] / [prefetch] surface the 0031 art cache toggle and the deck-scoped
  * pre-download so a player can make the deck viewable offline.
+ *
+ * **Degraded derivation.** The deck itself is authoritative and always survives; only the *derived*
+ * view depends on the catalog. When a catalog/legality read fails, [catalogUnavailable] is set and
+ * [errorMessage] explains it, while rows still render from the deck's own stored names, sets and
+ * quantities — the edit is never lost, and the curve/legality simply go blank until a retry succeeds.
  */
 data class BuilderUiState(
     val phase: BuilderPhase = BuilderPhase.Loading,
@@ -65,6 +78,10 @@ data class BuilderUiState(
     val availableFormats: List<DeckFormat> = DeckFormat.entries,
     val policy: CardArtCachePolicy = CardArtCachePolicy.DEFAULT,
     val prefetch: PrefetchProgress = PrefetchProgress(),
+    /** True when the last derivation could not read the catalog, so card details are missing. */
+    val catalogUnavailable: Boolean = false,
+    /** Human-readable reason for [catalogUnavailable] or [BuilderPhase.Error]. */
+    val errorMessage: String? = null,
 ) {
     val mainCount: Int get() = groups.sumOf { it.count }
 
@@ -100,8 +117,24 @@ class BuilderViewModel
         /** One-shot share payloads for the route to hand to the platform share sheet. */
         val shareEvents: Flow<DeckShareContent> = shareChannel.receiveAsFlow()
 
-        /** The authoritative in-memory deck; every mutation persists it and re-derives the UI. */
+        /**
+         * The authoritative in-memory deck; every mutation persists it and re-derives the UI.
+         *
+         * Only ever read or written inside [mutationLock], so a mutation that had to suspend (a catalog
+         * lookup) cannot commit a transform computed against a deck another mutation has since replaced.
+         */
         private var deck: Deck? = null
+
+        /**
+         * Serialises `read current deck → transform → save → re-derive`.
+         *
+         * The builder's mutations are not all synchronous: `addCard` must resolve the card in the
+         * offline catalog first, and that suspends. Without this lock two taps inside that window both
+         * read the same deck and the second write silently discards the first (story 0042, defect A).
+         * Holding the lock across the whole critical section — and re-reading [deck] *inside* it, after
+         * every suspension — makes each mutation atomic with respect to the others.
+         */
+        private val mutationLock = Mutex()
 
         init {
             artDownloader.progress
@@ -112,29 +145,60 @@ class BuilderViewModel
                 .launchIn(viewModelScope)
         }
 
-        /** Load the deck with [id] from the offline library and derive the builder state. */
+        /**
+         * Load the deck with [id] from the offline library and derive the builder state.
+         *
+         * A read failure here means there is no deck to edit at all, so it becomes [BuilderPhase.Error]
+         * with a retry — never an escape from `viewModelScope`, whose `SupervisorJob` carries no
+         * `CoroutineExceptionHandler` (story 0042, defect B).
+         */
         fun load(id: DeckId) {
-            _uiState.update { it.copy(phase = BuilderPhase.Loading, deckId = id) }
+            _uiState.update { it.copy(phase = BuilderPhase.Loading, deckId = id, errorMessage = null) }
             viewModelScope.launch {
-                val loaded = repository.load(id)
-                deck = loaded
-                if (loaded == null) {
-                    _uiState.update { it.copy(phase = BuilderPhase.NotFound) }
-                } else {
-                    rebuild(loaded)
+                val loaded =
+                    try {
+                        repository.load(id)
+                    } catch (error: Exception) {
+                        _uiState.update { it.copy(phase = BuilderPhase.Error, errorMessage = message(DECK_ERROR, error)) }
+                        return@launch
+                    }
+                mutationLock.withLock {
+                    deck = loaded
+                    if (loaded == null) {
+                        _uiState.update { it.copy(phase = BuilderPhase.NotFound) }
+                    } else {
+                        rebuild(loaded)
+                    }
                 }
             }
         }
 
-        /** Add one copy of the catalog card [cardId] to [zone] (merging with an existing line). */
+        /** Re-run the last [load], re-deriving the view after a catalog failure. */
+        fun retry() {
+            _uiState.value.deckId?.let { load(it) }
+        }
+
+        /**
+         * Add one copy of the catalog card [cardId] to [zone] (merging with an existing line).
+         *
+         * The catalog lookup suspends, so the deck is read **after** it, inside the serialised section —
+         * never snapshotted before the launch. A failed lookup reports and adds nothing rather than
+         * crashing; the deck is left exactly as it was.
+         */
         fun addCard(
             cardId: CardId,
             zone: DeckZone,
         ) {
-            val current = deck ?: return
             viewModelScope.launch {
-                val card = catalog.card(cardId) ?: return@launch
-                mutate(current.withCardAdded(card, zone))
+                val card =
+                    try {
+                        catalog.card(cardId)
+                    } catch (error: Exception) {
+                        _uiState.update { it.copy(catalogUnavailable = true, errorMessage = message(CATALOG_ERROR, error)) }
+                        return@launch
+                    }
+                if (card == null) return@launch
+                mutate { it.withCardAdded(card, zone) }
             }
         }
 
@@ -144,8 +208,7 @@ class BuilderViewModel
             zone: DeckZone,
             delta: Int,
         ) {
-            val current = deck ?: return
-            mutateAsync(current.withQuantityChanged(key, zone, delta))
+            mutateAsync { it.withQuantityChanged(key, zone, delta) }
         }
 
         /** Remove the line [key] from [zone] entirely. */
@@ -153,28 +216,27 @@ class BuilderViewModel
             key: String,
             zone: DeckZone,
         ) {
-            val current = deck ?: return
-            mutateAsync(current.withRowRemoved(key, zone))
+            mutateAsync { it.withRowRemoved(key, zone) }
         }
 
         /** Pick the play format; legality feedback recomputes for it. */
         fun setFormat(format: DeckFormat?) {
-            val current = deck ?: return
-            mutateAsync(current.copy(format = format))
+            mutateAsync { it.copy(format = format) }
         }
 
         /** Rename the deck from the builder. */
         fun rename(name: String) {
-            val current = deck ?: return
             val trimmed = name.trim()
             if (trimmed.isEmpty()) return
-            mutateAsync(current.copy(name = trimmed))
+            mutateAsync { it.copy(name = trimmed) }
         }
 
         /** Produce a shareable file of the current deck in [format] for the platform share sheet. */
         fun shareDeck(format: DeckFileFormat = DeckFileFormat.DCK) {
-            val current = deck ?: return
-            viewModelScope.launch { shareChannel.send(deckIO.share(current, format)) }
+            viewModelScope.launch {
+                val current = mutationLock.withLock { deck } ?: return@launch
+                shareChannel.send(deckIO.share(current, format))
+            }
         }
 
         /** Start the opt-in, deck-scoped art pre-download for the current deck's printings. */
@@ -193,23 +255,67 @@ class BuilderViewModel
             viewModelScope.launch { artCache.setPolicy(policy) }
         }
 
-        /** Persist [next] and re-derive, off the main flow. */
-        private fun mutateAsync(next: Deck) {
-            viewModelScope.launch { mutate(next) }
+        /** Apply [transform] to the current deck, persist, and re-derive — off the main flow. */
+        private fun mutateAsync(transform: (Deck) -> Deck) {
+            viewModelScope.launch { mutate(transform) }
         }
 
-        private suspend fun mutate(next: Deck) {
-            deck = next
-            repository.save(next)
-            rebuild(next)
+        /**
+         * The single serialised mutation path: take the lock, read the authoritative deck, apply
+         * [transform] to *that* value, publish, persist, re-derive. Concurrent mutations queue here
+         * rather than interleaving, so none is computed against a deck that has already been replaced.
+         *
+         * The order matters for the fail-soft contract: the deck is published to [deck] and persisted
+         * **before** [rebuild] runs, and `rebuild` cannot throw, so a catalog failure can only degrade
+         * the *derived* view. The user's edit is already saved and stays saved.
+         */
+        private suspend fun mutate(transform: (Deck) -> Deck) {
+            mutationLock.withLock {
+                val current = deck ?: return
+                val next = transform(current)
+                deck = next
+                repository.save(next)
+                rebuild(next)
+            }
         }
 
-        /** Resolve every line against the offline catalog and compute groups, curve, and legality. */
+        /**
+         * Resolve every line against the offline catalog and compute groups, curve, and legality.
+         *
+         * The whole deck's distinct names are resolved in one batched, indexable exact-name lookup —
+         * `rebuild` runs after every edit, so a per-name substring scan here is what made a "+"/"−" tap
+         * expensive (story 0042, defect D).
+         *
+         * **This never throws.** It is called from `load` and from inside the mutation lock, after the
+         * deck has been persisted. If the catalog or the legality bundle can't be read, the rows are
+         * still built — from the deck's own stored names, sets and quantities, which is all
+         * [deckCardRow] needs when it has no catalog card — and the state simply reports
+         * [BuilderUiState.catalogUnavailable]. The deck is never rolled back or left half-applied; only
+         * the mana curve, type grouping and legality degrade until a retry succeeds (0042, defect B).
+         */
         private suspend fun rebuild(source: Deck) {
-            val cache = HashMap<String, Card?>()
-            val mainRows = source.main.map { deckCardRow(it, DeckZone.MAIN, resolve(it, cache)) }
-            val sideRows = source.sideboard.map { deckCardRow(it, DeckZone.SIDEBOARD, resolve(it, cache)) }
-            val legalityResult = source.format?.let { legality.check(source, it) }
+            val entries = source.main + source.sideboard
+            var failure: Throwable? = null
+
+            val resolved =
+                try {
+                    catalog.cardsByName(entries.map { it.cardName })
+                } catch (error: Exception) {
+                    failure = error
+                    emptyMap()
+                }
+            val mainRows = source.main.map { deckCardRow(it, DeckZone.MAIN, resolved[it.cardName.lowercase()]) }
+            val sideRows = source.sideboard.map { deckCardRow(it, DeckZone.SIDEBOARD, resolved[it.cardName.lowercase()]) }
+            val legalityResult =
+                source.format?.let { format ->
+                    try {
+                        legality.check(source, format)
+                    } catch (error: Exception) {
+                        if (failure == null) failure = error
+                        null
+                    }
+                }
+
             _uiState.update {
                 it.copy(
                     phase = BuilderPhase.Ready,
@@ -221,20 +327,21 @@ class BuilderViewModel
                     sideboard = sideRows,
                     manaCurve = manaCurve(mainRows),
                     legality = legalityResult,
+                    catalogUnavailable = failure != null,
+                    errorMessage = failure?.let { error -> message(CATALOG_ERROR, error) },
                 )
             }
         }
 
-        /** Resolve an entry's catalog card by exact name (cached within a rebuild); null if unknown. */
-        private suspend fun resolve(
-            entry: DeckEntry,
-            cache: MutableMap<String, Card?>,
-        ): Card? {
-            val nameKey = entry.cardName.lowercase()
-            if (cache.containsKey(nameKey)) return cache[nameKey]
-            val card = catalog.search(entry.cardName).firstOrNull { it.name.equals(entry.cardName, ignoreCase = true) }
-            cache[nameKey] = card
-            return card
+        private companion object {
+            const val DECK_ERROR = "Couldn't open that deck"
+            const val CATALOG_ERROR = "Couldn't read the card catalog"
+
+            /** "<what went wrong>: <detail>", or just the headline when there's no useful detail. */
+            fun message(
+                headline: String,
+                error: Throwable,
+            ): String = error.message?.takeIf { it.isNotBlank() }?.let { "$headline: $it" } ?: headline
         }
     }
 

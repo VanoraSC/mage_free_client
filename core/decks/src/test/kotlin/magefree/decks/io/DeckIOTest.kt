@@ -262,6 +262,39 @@ class DeckIOTest {
             assertTrue(share.content.contains("[MOD:60] Island"))
         }
 
+    // --- exact-name resolution (0042 defect D) ---
+
+    @Test
+    fun `import resolves names through one batched exact-name lookup, not the substring search`() =
+        runTest {
+            val text =
+                """
+                4 [M10:146] Lightning Bolt
+                20 [MOD:60] Island
+                2 [APC:128] Fire // Ice
+                SB: 3 [MMQ:68] Counterspell
+                """.trimIndent()
+            val result = io().import(text, DeckFileFormat.DCK)
+
+            assertFalse(result.hasErrors)
+            assertTrue("import must not fall back to the substring search", catalog.searchQueries.isEmpty())
+            assertEquals("one batched lookup for the whole file", 1, catalog.nameLookups.size)
+            assertEquals(
+                listOf("Counterspell", "Fire // Ice", "Island", "Lightning Bolt"),
+                catalog.nameLookups.single().sorted(),
+            )
+        }
+
+    @Test
+    fun `import resolves a name whose casing differs from the catalog`() =
+        runTest {
+            val result = io().import("4 [M10:146] lightning BOLT", DeckFileFormat.DCK)
+
+            assertFalse(result.issues.toString(), result.hasErrors)
+            // The catalog's canonical name wins, so the stored deck stays consistent.
+            assertEquals(listOf(DeckEntry("Lightning Bolt", "M10", "146", 4)), result.deck.main)
+        }
+
     // --- helpers ---
 
     /** Build a representative deck, export it, re-import, export again — the two imports must be equal. */
@@ -310,11 +343,17 @@ class DeckIOTest {
             printings = printings.map { (set, num) -> CardPrinting(set, num, Rarity.COMMON) },
         )
 
-    /** Fake catalog: substring name search (case-insensitive), mirroring the real catalog's exact-name filter path. */
+    /**
+     * Fake catalog. [search] is the broad substring match (the user-facing box); [cardsByName] is the
+     * exact case-insensitive batch the import path must use. [searchQueries] records any substring
+     * search so a test can assert import never falls back to it.
+     */
     private class FakeCardCatalog(
         vararg cards: Card,
     ) : CardCatalog {
         private val all = cards.toList()
+        val searchQueries: MutableList<String> = mutableListOf()
+        val nameLookups: MutableList<List<String>> = mutableListOf()
 
         override suspend fun card(id: CardId): Card? = all.firstOrNull { it.id == id }
 
@@ -322,9 +361,17 @@ class DeckIOTest {
             query: String,
             limit: Int,
         ): List<Card> {
+            searchQueries += query
             val q = query.trim().lowercase()
             if (q.isEmpty()) return emptyList()
             return all.filter { it.name.lowercase().contains(q) }
+        }
+
+        override suspend fun cardsByName(names: Collection<String>): Map<String, Card> {
+            nameLookups += names.toList()
+            return all
+                .filter { card -> names.any { it.equals(card.name, ignoreCase = true) } }
+                .associateBy { it.name.lowercase() }
         }
 
         override suspend fun filter(

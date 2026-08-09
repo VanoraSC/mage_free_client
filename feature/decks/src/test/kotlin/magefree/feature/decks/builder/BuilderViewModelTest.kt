@@ -245,6 +245,46 @@ class BuilderViewModelTest {
         }
 
     @Test
+    fun rebuildResolvesLinesThroughTheBatchedExactNameLookup() =
+        runTest {
+            // A fresh catalog per test so the recorded calls belong to this rebuild only.
+            val spy = FakeCardCatalog(listOf(bolt, bear, titan, forest, dfc))
+            val repo =
+                FakeDeckRepository(
+                    listOf(
+                        deck(
+                            main = listOf(DeckEntry("Lightning Bolt", "TST", "1", 4), DeckEntry("Grizzly Bears", "TST", "2", 2)),
+                            sideboard = listOf(DeckEntry("Forest", "TST", "4", 3)),
+                        ),
+                    ),
+                )
+            val vm =
+                BuilderViewModel(
+                    repo,
+                    spy,
+                    FakeDeckLegality { legal },
+                    FakeDeckIO(emptyImport),
+                    FakeDeckArtDownloader(),
+                    FakeArtCacheController(),
+                )
+            vm.load(DeckId("deck-1"))
+
+            assertEquals(BuilderPhase.Ready, vm.uiState.value.phase)
+            assertTrue("the builder must not resolve deck lines via the substring search", spy.searchQueries.isEmpty())
+            // One batch per rebuild, carrying every line's name.
+            assertEquals(1, spy.exactNameLookups.size)
+            assertEquals(
+                listOf("Forest", "Grizzly Bears", "Lightning Bolt"),
+                spy.exactNameLookups.single().sorted(),
+            )
+
+            // A subsequent edit re-derives with exactly one more batch, still no substring search.
+            vm.changeQuantity("Lightning Bolt|TST|1", DeckZone.MAIN, 1)
+            assertEquals(2, spy.exactNameLookups.size)
+            assertTrue(spy.searchQueries.isEmpty())
+        }
+
+    @Test
     fun policyToggleReachesTheCacheControllerAndState() =
         runTest {
             val artCache = FakeArtCacheController()

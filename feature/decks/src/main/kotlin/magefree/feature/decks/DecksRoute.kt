@@ -100,6 +100,7 @@ fun DecksRoute(
                 onToggleFavorite = libraryViewModel::setFavorite,
                 onImportDeck = libraryViewModel::importDeck,
                 onBrowseCards = onBrowseCards,
+                onRetry = libraryViewModel::retry,
                 modifier = modifier,
             )
         else -> {
@@ -114,6 +115,7 @@ fun DecksRoute(
                 onFormatSelected = builderViewModel::setFormat,
                 onShare = { builderViewModel.shareDeck() },
                 onOpenArtSettings = { showArtSheet = true },
+                onRetry = builderViewModel::retry,
                 modifier = modifier,
             )
         }
@@ -132,6 +134,7 @@ fun DecksRoute(
             onManaValueSelected = searchViewModel::setManaValue,
             onRaritySelected = searchViewModel::setRarity,
             onResetFilters = searchViewModel::resetFilters,
+            onRetry = searchViewModel::retry,
             onAdd = builderViewModel::addCard,
             onInspect = { inspecting = it },
         )
@@ -145,6 +148,7 @@ fun DecksRoute(
             artRenderer = fullArtRenderer,
             onClose = { inspecting = null },
             onFlip = inspectionViewModel::flipFace,
+            onRetry = inspectionViewModel::retry,
         )
     }
 

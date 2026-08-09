@@ -32,13 +32,30 @@ data class DeckLegalityResult(
     val format: DeckFormat,
     val isLegal: Boolean,
     val violations: List<LegalityViolation>,
-)
+) {
+    /**
+     * True when the bundle carries no rules for [format], so nothing was actually checked. The deck is
+     * reported illegal (the safe default — the caller must not treat "we couldn't check" as "fine"),
+     * but the reason is structured rather than a thrown exception.
+     */
+    val isFormatUnknown: Boolean
+        get() = violations.any { it is LegalityViolation.UnknownFormat }
+}
 
 /**
  * A single reason a deck is illegal in a format. Each mirrors a check XMage's `Constructed.validate`
  * performs; [cardName] is set for the card-specific ones so the UI can point at the offending card.
  */
 sealed interface LegalityViolation {
+    /**
+     * The bundled `formats.json` carries no rules for [formatKey], so the deck could not be checked at
+     * all. Not an XMage check — it is how a bundle/enum drift surfaces as a degraded result instead of
+     * a thrown exception inside whichever coroutine happened to ask.
+     */
+    data class UnknownFormat(
+        val formatKey: String,
+    ) : LegalityViolation
+
     /** Main deck has fewer than the format minimum ([required]) cards. */
     data class DeckTooSmall(
         val actual: Int,

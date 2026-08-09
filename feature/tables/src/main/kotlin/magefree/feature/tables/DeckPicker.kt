@@ -110,6 +110,7 @@ fun LegalitySummary(
 /** Human-readable rendering of a structured [LegalityViolation] (mirrors 0035's builder wording). */
 private fun LegalityViolation.describe(): String =
     when (this) {
+        is LegalityViolation.UnknownFormat -> "No bundled rules for '$formatKey' — legality can't be checked."
         is LegalityViolation.DeckTooSmall -> "Deck has $actual cards; needs at least $required."
         is LegalityViolation.SideboardTooLarge -> "Sideboard has $actual cards; max is $max."
         is LegalityViolation.BannedCard -> "$cardName is banned."

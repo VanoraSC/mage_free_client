@@ -8,6 +8,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -36,6 +37,13 @@ enum class CardSearchPhase {
 
     /** A non-blank query / active filter matched nothing — the "no matches" empty state. */
     Empty,
+
+    /**
+     * The catalog read failed. The catalog is a bundled read-only asset, so a failure here is
+     * environmental (typically no room to lay down the ~14 MB copy on first use) rather than a bad
+     * query — the surface is an error with retry, and the pipeline stays alive for the next query.
+     */
+    Error,
 }
 
 /**
@@ -48,6 +56,8 @@ data class CardSearchUiState(
     val filters: CardBrowseFilters = CardBrowseFilters(),
     val results: List<CardRow> = emptyList(),
     val phase: CardSearchPhase = CardSearchPhase.Idle,
+    /** Set only in [CardSearchPhase.Error]; the human-readable reason the catalog read failed. */
+    val errorMessage: String? = null,
 ) {
     /** The number of results shown (the "N" in "showing N"). */
     val shownCount: Int get() = results.size
@@ -92,6 +102,9 @@ class CardSearchViewModel
         private val query = MutableStateFlow("")
         private val filters = MutableStateFlow(CardBrowseFilters())
 
+        /** Bumped by [retry]; re-fires the current request without the user having to retype it. */
+        private val retries = MutableStateFlow(0)
+
         private val _uiState = MutableStateFlow(CardSearchUiState())
         val uiState: StateFlow<CardSearchUiState> = _uiState.asStateFlow()
 
@@ -103,19 +116,31 @@ class CardSearchViewModel
                     .debounce { text -> if (text.isBlank()) 0L else debounceMillis }
                     .distinctUntilChanged()
 
-            combine(debouncedQuery, filters) { text, activeFilters -> Request(text, activeFilters) }
-                .flatMapLatest { request ->
-                    if (request.isIdle) {
-                        flowOf(CardSearchUiState(query = request.query, filters = request.filters, phase = CardSearchPhase.Idle))
-                    } else {
-                        // Emit Loading first (keeping the prior results under it), then the resolved page.
-                        flow {
-                            emit(loadingState(request))
-                            emit(resolve(request))
-                        }
-                    }
-                }.onEach { state -> _uiState.value = state }
+            combine(debouncedQuery, filters, retries) { text, activeFilters, attempt ->
+                Request(text, activeFilters, attempt)
+            }.flatMapLatest { request ->
+                if (request.isIdle) {
+                    flowOf(CardSearchUiState(query = request.query, filters = request.filters, phase = CardSearchPhase.Idle))
+                } else {
+                    // Emit Loading first (keeping the prior results under it), then the resolved page.
+                    // The catch is *inside* flatMapLatest on purpose: a catalog failure ends this one
+                    // request as an error state and leaves the outer pipeline running, so the next
+                    // keystroke, filter tap, or retry is still served. Without it the throw escapes
+                    // through launchIn to viewModelScope, whose SupervisorJob has no
+                    // CoroutineExceptionHandler — the default handler crashes the process and the
+                    // combine/flatMapLatest pipeline is gone for good (story 0042, defect B).
+                    flow {
+                        emit(loadingState(request))
+                        emit(resolve(request))
+                    }.catch { error -> emit(errorState(request, error)) }
+                }
+            }.onEach { state -> _uiState.value = state }
                 .launchIn(viewModelScope)
+        }
+
+        /** Re-run the current query/filters after a catalog failure. */
+        fun retry() {
+            retries.update { it + 1 }
         }
 
         /** Update the search text; the debounced pipeline re-queries. */
@@ -149,7 +174,24 @@ class CardSearchViewModel
         }
 
         private fun loadingState(request: Request): CardSearchUiState =
-            _uiState.value.copy(query = request.query, filters = request.filters, phase = CardSearchPhase.Loading)
+            _uiState.value.copy(
+                query = request.query,
+                filters = request.filters,
+                phase = CardSearchPhase.Loading,
+                errorMessage = null,
+            )
+
+        private fun errorState(
+            request: Request,
+            error: Throwable,
+        ): CardSearchUiState =
+            CardSearchUiState(
+                query = request.query,
+                filters = request.filters,
+                results = emptyList(),
+                phase = CardSearchPhase.Error,
+                errorMessage = error.message?.takeIf { it.isNotBlank() }?.let { "$CATALOG_ERROR: $it" } ?: CATALOG_ERROR,
+            )
 
         private suspend fun resolve(request: Request): CardSearchUiState {
             val cards: List<Card> =
@@ -170,6 +212,8 @@ class CardSearchViewModel
         private data class Request(
             val query: String,
             val filters: CardBrowseFilters,
+            /** Retry counter; only there so an identical query/filter pair re-fires on [retry]. */
+            val attempt: Int = 0,
         ) {
             /** Nothing to search: blank query and no active filter. */
             val isIdle: Boolean get() = query.isBlank() && !filters.isActive
@@ -177,5 +221,6 @@ class CardSearchViewModel
 
         private companion object {
             const val DEFAULT_DEBOUNCE_MILLIS = 300L
+            const val CATALOG_ERROR = "Couldn't read the card catalog"
         }
     }

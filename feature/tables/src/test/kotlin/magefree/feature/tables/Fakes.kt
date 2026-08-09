@@ -86,11 +86,19 @@ class FakeDeckRepository(
         )
 }
 
-/** Scriptable [DeckLegality]: [check] returns whatever [resultFor] maps a format to, and records calls. */
+/**
+ * Scriptable [DeckLegality]: [check] returns whatever [resultFor] maps a format to, and records calls.
+ *
+ * [failWith] makes [check] throw — the shape a bundled-catalog read failure takes on the join path. A
+ * `var` so a test can fail once, then recover and prove the ViewModel still serves a later pick.
+ */
 class FakeDeckLegality(
     private val resultFor: (DeckFormat) -> DeckLegalityResult,
 ) : DeckLegality {
     val checkedFormats: MutableList<DeckFormat> = mutableListOf()
+
+    /** When non-null, [check] throws it instead of answering. */
+    var failWith: (() -> Throwable)? = null
 
     override suspend fun availableFormats(): List<FormatInfo> = DeckFormat.entries.map { FormatInfo(it.key, it.displayName) }
 
@@ -98,6 +106,7 @@ class FakeDeckLegality(
         deck: Deck,
         format: DeckFormat,
     ): DeckLegalityResult {
+        failWith?.let { throw it() }
         checkedFormats += format
         return resultFor(format)
     }

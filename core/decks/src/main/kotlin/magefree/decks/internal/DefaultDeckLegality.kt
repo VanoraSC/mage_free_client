@@ -5,7 +5,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import magefree.cards.CardCatalog
-import magefree.cards.model.Card
 import magefree.decks.legality.DeckLegality
 import magefree.decks.legality.DeckLegalityResult
 import magefree.decks.legality.FormatInfo
@@ -53,9 +52,15 @@ internal class DefaultDeckLegality(
         withContext(ioDispatcher) {
             val data = bundle()
             val rules =
-                requireNotNull(data.formats.firstOrNull { it.key == format.key }) {
-                    "No bundled legality data for format '${format.key}'"
-                }
+                data.formats.firstOrNull { it.key == format.key }
+                    // A format the bundle doesn't cover (bundle/enum drift) is a structured result, not
+                    // a throw: the caller is typically inside a bare `launch`, where a throw would take
+                    // the process down rather than degrade the check.
+                    ?: return@withContext DeckLegalityResult(
+                        format = format,
+                        isLegal = false,
+                        violations = listOf(LegalityViolation.UnknownFormat(format.key)),
+                    )
             val violations = ArrayList<LegalityViolation>()
 
             // Structural: deck size (main) + sideboard size.
@@ -92,10 +97,13 @@ internal class DefaultDeckLegality(
             }
 
             // Set + rarity legality, by card name across all printings, using the offline catalog.
+            // One batched, indexable exact-name lookup for the whole deck — not a substring search per
+            // distinct name (story 0042, defect D).
             val legalSets = rules.legalSetCodes.toHashSet()
             val allowedRarities = rules.allowedRarities?.toHashSet()
+            val resolved = catalog.cardsByName(names)
             for (name in names) {
-                val card = exactByName(name) ?: continue
+                val card = resolved[name.lowercase()] ?: continue
                 if (legalSets.isNotEmpty() && card.setCodes.none { it in legalSets }) {
                     violations += LegalityViolation.IllegalSet(name)
                 }
@@ -115,7 +123,4 @@ internal class DefaultDeckLegality(
         val override = data.maxCopiesOverrides[name] ?: return rules.maxCopiesDefault
         return if (override == UNLIMITED_COPIES) Int.MAX_VALUE else override
     }
-
-    /** Exact (case-insensitive) catalog lookup by card name; `null` if the catalog doesn't know it. */
-    private suspend fun exactByName(name: String): Card? = catalog.search(name).firstOrNull { it.name.equals(name, ignoreCase = true) }
 }

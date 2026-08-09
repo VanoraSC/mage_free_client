@@ -1,5 +1,6 @@
 package magefree.feature.decks
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -135,9 +136,15 @@ class FakeDeckRepository(
         )
 }
 
-/** Scriptable [DeckIO]: [import] returns [importResult]; export/share round-trip the deck's text. */
+/**
+ * Scriptable [DeckIO]: [import] returns [importResult]; export/share round-trip the deck's text.
+ *
+ * [failWith] makes [import] throw — the shape a catalog read failure takes on the library's import
+ * path. A `var` so a test can fail once, then recover and prove the ViewModel still works.
+ */
 class FakeDeckIO(
     private val importResult: DeckImportResult,
+    var failWith: (() -> Throwable)? = null,
 ) : DeckIO {
     var importCalls = 0
 
@@ -146,6 +153,7 @@ class FakeDeckIO(
         format: DeckFileFormat?,
     ): DeckImportResult {
         importCalls++
+        failWith?.let { throw it() }
         return importResult
     }
 
@@ -167,38 +175,74 @@ class FakeDeckLegality(
 ) : DeckLegality {
     val checkedFormats: MutableList<DeckFormat> = mutableListOf()
 
+    /** When non-null, [check] throws it instead of answering — the bundled-read failure shape. */
+    var failWith: (() -> Throwable)? = null
+
     override suspend fun availableFormats(): List<FormatInfo> = DeckFormat.entries.map { FormatInfo(it.key, it.displayName) }
 
     override suspend fun check(
         deck: Deck,
         format: DeckFormat,
     ): DeckLegalityResult {
+        failWith?.let { throw it() }
         checkedFormats += format
         return resultFor(format)
     }
 }
 
-/** In-memory [CardCatalog] keyed by id and name for hermetic builder tests. */
+/**
+ * In-memory [CardCatalog] keyed by id and name for hermetic builder tests.
+ *
+ * [cardLookupDelayMillis] makes [card] genuinely **suspend** (virtual time under `runTest`), which is
+ * what lets a test open the read-suspend-write window two rapid `addCard` taps race through.
+ * [failWith] makes every read throw, for the fail-soft error-injection tests.
+ */
 class FakeCardCatalog(
     cards: List<Card> = emptyList(),
+    private val cardLookupDelayMillis: Long = 0L,
+    /** A `var` so a test can fail once, then recover and prove the ViewModel still works. */
+    var failWith: (() -> Throwable)? = null,
 ) : CardCatalog {
     private val byId = cards.associateBy { it.id }
     private val all = cards
 
-    override suspend fun card(id: CardId): Card? = byId[id]
+    /** Names passed to [cardsByName] — proves the indexable exact-name path is the one taken. */
+    val exactNameLookups: MutableList<List<String>> = mutableListOf()
+
+    /** Queries passed to the substring [search] — must stay empty on the deck-resolution paths. */
+    val searchQueries: MutableList<String> = mutableListOf()
+
+    override suspend fun card(id: CardId): Card? {
+        failWith?.let { throw it() }
+        if (cardLookupDelayMillis > 0L) delay(cardLookupDelayMillis)
+        return byId[id]
+    }
 
     override suspend fun search(
         query: String,
         limit: Int,
     ): List<Card> {
+        failWith?.let { throw it() }
+        searchQueries += query
         val exact = all.filter { it.name.equals(query, ignoreCase = true) }
         return exact.ifEmpty { all.filter { it.name.contains(query, ignoreCase = true) } }
+    }
+
+    override suspend fun cardsByName(names: Collection<String>): Map<String, Card> {
+        failWith?.let { throw it() }
+        exactNameLookups += names.toList()
+        return all
+            .filter { card -> names.any { it.equals(card.name, ignoreCase = true) } }
+            .associateBy { it.name.lowercase() }
     }
 
     override suspend fun filter(
         criteria: CardFilter,
         limit: Int,
-    ): List<Card> = all
+    ): List<Card> {
+        failWith?.let { throw it() }
+        return all
+    }
 
     override suspend fun counts(): CatalogCounts = CatalogCounts(cardCount = all.size, printingCount = all.size)
 }

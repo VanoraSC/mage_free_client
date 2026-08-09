@@ -33,6 +33,7 @@ import magefree.cards.model.Rarity
 import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.card.CardTile
 import magefree.designsystem.component.EmptyState
+import magefree.designsystem.component.ErrorState
 import magefree.designsystem.component.LoadingState
 import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.theme.MageTheme
@@ -57,7 +58,8 @@ private val TileMinWidth = 150.dp
  * Stateless card search/browse screen. A debounced [OutlinedTextField] over the catalog, the
  * [CardFilters] controls, and an adaptive grid of design-system [CardTile]s (art via the injected
  * [CardArtRenderer]). Renders the idle prompt / loading / "no matches" empty surfaces via the design
- * system's [EmptyState] / [LoadingState]. Every event is hoisted; the composable fetches nothing.
+ * system's [EmptyState] / [LoadingState], and a catalog read failure via [ErrorState] with retry.
+ * Every event is hoisted; the composable fetches nothing.
  */
 @Composable
 fun CardSearchScreen(
@@ -72,6 +74,7 @@ fun CardSearchScreen(
     onRaritySelected: (Rarity?) -> Unit,
     onResetFilters: () -> Unit,
     onCardSelected: (CardId) -> Unit,
+    onRetry: () -> Unit,
     onOpenArtSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -131,6 +134,11 @@ fun CardSearchScreen(
                         message = "No cards match your search or filters.",
                         actionLabel = if (uiState.hasActiveFilters) "Reset filters" else null,
                         onAction = if (uiState.hasActiveFilters) onResetFilters else null,
+                    )
+                CardSearchPhase.Error ->
+                    ErrorState(
+                        message = uiState.errorMessage ?: "Couldn't read the card catalog",
+                        onRetry = onRetry,
                     )
                 CardSearchPhase.Results ->
                     CardResultsGrid(
@@ -236,6 +244,7 @@ private fun previewState(
                 emptyList()
             },
         phase = phase,
+        errorMessage = if (phase == CardSearchPhase.Error) "Couldn't read the card catalog" else null,
     )
 
 @Composable
@@ -253,6 +262,7 @@ private fun previewScreen(uiState: CardSearchUiState) {
             onRaritySelected = {},
             onResetFilters = {},
             onCardSelected = {},
+            onRetry = {},
             onOpenArtSettings = {},
         )
     }
@@ -275,3 +285,7 @@ private fun CardSearchEmptyPreview() =
 @Preview(name = "Card search - loading", showBackground = true, heightDp = 780)
 @Composable
 private fun CardSearchLoadingPreview() = previewScreen(previewState(CardSearchPhase.Loading, query = "bo"))
+
+@Preview(name = "Card search - catalog error", showBackground = true, heightDp = 780)
+@Composable
+private fun CardSearchErrorPreview() = previewScreen(previewState(CardSearchPhase.Error, query = "bolt"))

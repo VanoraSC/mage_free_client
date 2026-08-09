@@ -195,6 +195,66 @@ class DeckLegalityTest {
             )
         }
 
+    // --- Unknown / unbundled format (0042 defect C) ---
+
+    @Test
+    fun `a format the bundle does not cover yields a structured result rather than throwing`() =
+        runTest {
+            // The crafted bundle covers modern + pauper only; LEGACY is a DeckFormat the bundle lacks.
+            val deck = deck(DeckEntry("Legal Guy", "MOD", "2", 4))
+            val result = legality().check(deck, DeckFormat.LEGACY)
+
+            assertEquals(DeckFormat.LEGACY, result.format)
+            assertFalse("an unverifiable deck must not read as legal", result.isLegal)
+            assertTrue(result.isFormatUnknown)
+            assertEquals(
+                listOf(LegalityViolation.UnknownFormat(DeckFormat.LEGACY.key)),
+                result.violations,
+            )
+        }
+
+    @Test
+    fun `an unknown format short-circuits before any catalog read`() =
+        runTest {
+            legality().check(deck(DeckEntry("Legal Guy", "MOD", "2", 4)), DeckFormat.LEGACY)
+
+            assertTrue(catalog.nameLookups.isEmpty())
+            assertTrue(catalog.searchQueries.isEmpty())
+        }
+
+    // --- Exact-name resolution (0042 defect D) ---
+
+    @Test
+    fun `card resolution uses the batched exact-name lookup, never the substring search`() =
+        runTest {
+            val deck =
+                deck(
+                    DeckEntry("Island", "MOD", "1", 56),
+                    DeckEntry("Legal Guy", "MOD", "2", 4),
+                    DeckEntry("Old Card", "LEG", "4", 1),
+                )
+            legality().check(deck, DeckFormat.MODERN)
+
+            assertTrue("substring search must not be used for exact name resolution", catalog.searchQueries.isEmpty())
+            // One batch for the whole deck, carrying every distinct name.
+            assertEquals(1, catalog.nameLookups.size)
+            assertEquals(listOf("Island", "Legal Guy", "Old Card"), catalog.nameLookups.single().sorted())
+        }
+
+    @Test
+    fun `exact-name resolution is case-insensitive`() =
+        runTest {
+            val deck =
+                deck(
+                    DeckEntry("Island", "MOD", "1", 56),
+                    DeckEntry("old card", "LEG", "4", 4), // lower-cased in the deck, "Old Card" in the catalog
+                )
+            val result = legality().check(deck, DeckFormat.MODERN)
+
+            // Resolved despite the casing, so its (illegal) set is still caught.
+            assertTrue(result.violations.any { it is LegalityViolation.IllegalSet && it.cardName == "old card" })
+        }
+
     // --- helpers ---
 
     private fun deck(vararg main: DeckEntry): Deck = Deck(id = DeckId("d"), name = "test", main = main.toList())
@@ -219,12 +279,26 @@ class DeckLegalityTest {
     ) : CardCatalog {
         private val byName = cards.associateBy { it.name.lowercase() }
 
+        /** Substring searches seen — the legality check must never issue one. */
+        val searchQueries: MutableList<String> = mutableListOf()
+
+        /** The name batches the exact-name path asked for. */
+        val nameLookups: MutableList<List<String>> = mutableListOf()
+
         override suspend fun card(id: CardId): Card? = null
 
         override suspend fun search(
             query: String,
             limit: Int,
-        ): List<Card> = listOfNotNull(byName[query.lowercase()])
+        ): List<Card> {
+            searchQueries += query
+            return listOfNotNull(byName[query.lowercase()])
+        }
+
+        override suspend fun cardsByName(names: Collection<String>): Map<String, Card> {
+            nameLookups += names.toList()
+            return names.mapNotNull { n -> byName[n.lowercase()]?.let { n.lowercase() to it } }.toMap()
+        }
 
         override suspend fun filter(
             criteria: CardFilter,

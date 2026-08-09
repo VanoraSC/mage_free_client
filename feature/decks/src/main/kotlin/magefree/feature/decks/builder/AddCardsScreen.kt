@@ -30,6 +30,7 @@ import magefree.cards.model.Rarity
 import magefree.decks.model.DeckZone
 import magefree.designsystem.card.CardTile
 import magefree.designsystem.component.EmptyState
+import magefree.designsystem.component.ErrorState
 import magefree.designsystem.component.LoadingState
 import magefree.designsystem.component.MageSecondaryButton
 import magefree.designsystem.component.MageTopAppBar
@@ -59,6 +60,7 @@ fun AddCardsScreen(
     onManaValueSelected: (Int?) -> Unit,
     onRaritySelected: (Rarity?) -> Unit,
     onResetFilters: () -> Unit,
+    onRetry: () -> Unit,
     onAdd: (CardId, DeckZone) -> Unit,
     onInspect: (CardId) -> Unit,
     modifier: Modifier = Modifier,
@@ -118,6 +120,11 @@ fun AddCardsScreen(
                         message = "No cards match your search or filters.",
                         actionLabel = if (uiState.hasActiveFilters) "Reset filters" else null,
                         onAction = if (uiState.hasActiveFilters) onResetFilters else null,
+                    )
+                CardSearchPhase.Error ->
+                    ErrorState(
+                        message = uiState.errorMessage ?: "Couldn't read the card catalog",
+                        onRetry = onRetry,
                     )
                 CardSearchPhase.Results ->
                     AddResults(

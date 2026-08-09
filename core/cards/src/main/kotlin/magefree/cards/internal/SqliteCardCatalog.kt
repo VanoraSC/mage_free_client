@@ -85,6 +85,44 @@ internal class SqliteCardCatalog(
             loadCards(db, topIds)
         }
 
+    override suspend fun cardsByName(names: Collection<String>): Map<String, Card> =
+        onDb { db ->
+            val wanted =
+                names
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinctBy { it.lowercase() }
+            if (wanted.isEmpty()) return@onDb emptyMap()
+
+            // `name COLLATE NOCASE IN (…)` is an equality predicate served by the NOCASE name index
+            // (see CardCatalogDatabase.prepare) — no leading wildcard, no full scan, one statement per
+            // batch instead of one query per name.
+            val ids = ArrayList<Long>(wanted.size)
+            for (chunk in wanted.chunked(NAME_BATCH)) {
+                val placeholders = chunk.joinToString(",") { "?" }
+                db
+                    .rawQuery(
+                        "SELECT id FROM card WHERE name COLLATE NOCASE IN ($placeholders)",
+                        chunk.toTypedArray(),
+                    ).use { c ->
+                        while (c.moveToNext()) ids.add(c.getLong(0))
+                    }
+            }
+            if (ids.isEmpty()) return@onDb emptyMap()
+
+            val byLowerName = HashMap<String, Card>(ids.size)
+            for (card in loadCards(db, ids)) {
+                val key = card.name.lowercase()
+                if (!byLowerName.containsKey(key)) byLowerName[key] = card
+            }
+            val out = LinkedHashMap<String, Card>(wanted.size)
+            for (name in wanted) {
+                val key = name.lowercase()
+                byLowerName[key]?.let { out[key] = it }
+            }
+            out
+        }
+
     override suspend fun filter(
         criteria: CardFilter,
         limit: Int,
@@ -201,6 +239,9 @@ internal class SqliteCardCatalog(
     }
 
     private companion object {
+        /** Names per `IN (…)` statement — well under SQLite's 999 bound-variable ceiling. */
+        const val NAME_BATCH = 400
+
         /** exact=0, prefix=1, word-prefix=2, substring=3 — lower sorts first. */
         fun rank(
             name: String,
