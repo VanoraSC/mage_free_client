@@ -32,7 +32,8 @@ import javax.inject.Inject
  *
  * @property table the latest observed [TableState] (seats / server state / phase / match-start signal).
  * @property role the viewer's [TableRole], deciding the action set.
- * @property library the saved decks a [TableRole.Player] can submit/update (offline).
+ * @property library the saved decks a seated viewer — [TableRole.Host] or [TableRole.Player] — can
+ *   submit/update from (offline).
  * @property isLoading no state has folded in yet (still on the seed).
  * @property actionError a server decline / failure detail from an action, else `null`.
  * @property closed the seat was given up / the table removed — the route should pop.
@@ -79,14 +80,23 @@ data class TableRoomUiState(
     /** True when the host's start control is shown (host role, before match-start). */
     val showHostActions: Boolean get() = role == TableRole.Host && !isMatchStarting
 
-    /** True when the player's seat controls are shown (player role, before match-start). */
-    val showPlayerActions: Boolean get() = role == TableRole.Player && !isMatchStarting
+    /**
+     * True when the **seat** controls (submit / update deck) are shown — for a [TableRole.Host] as well
+     * as a [TableRole.Player], before match-start.
+     *
+     * Story 0041: a host *occupies a seat* (its own join is the last step of the create sequence), so it
+     * has a deck to submit and update exactly like anyone else. Gating this on `role == Player` alone —
+     * the previous rule — left a host with no way to change its deck from the room at all. Only a
+     * [TableRole.Spectator], who holds no seat, is excluded.
+     */
+    val showSeatActions: Boolean get() = role != TableRole.Spectator && !isMatchStarting
 }
 
 /**
  * MVVM ViewModel for the table room (story 0038). It collects [TableClient.observeTable] seeded from the
  * create/join/watch entry, folding each pushed [TableState] into [TableRoomUiState], and hoists the
- * role-appropriate actions: host [startMatch]/[removeTable]; player [submitDeck]/[updateDeck]/[leaveTable].
+ * role-appropriate actions: host [startMatch]/[removeTable]; player [leaveTable]; and — story 0041 —
+ * [submitDeck]/[updateDeck] for **either** seated role, since a host occupies a seat too.
  * It renders a terminal "match starting" state on [MatchStarting] (the Epic-11 hand-off) and never wires
  * gameplay. Deck loads for submit/update are offline; only the table verbs touch the network.
  */
@@ -134,8 +144,9 @@ class TableRoomViewModel
                 .onEach { state -> _uiState.value = _uiState.value.copy(table = state, isLoading = false) }
                 .launchIn(viewModelScope)
 
-            // A player may submit/update from the offline library.
-            if (role == TableRole.Player) {
+            // Anyone holding a seat — a host as much as a player (story 0041) — may submit/update from
+            // the offline library. Only a spectator, who has no seat, has nothing to submit.
+            if (role != TableRole.Spectator) {
                 deckRepository
                     .observeLibrary()
                     .onEach { decks -> _uiState.value = _uiState.value.copy(library = decks) }
@@ -159,10 +170,10 @@ class TableRoomViewModel
             runAction(closeOnSuccess = true) { tableClient.leaveTable(tableId) }
         }
 
-        /** Player: submit (bind) the picked deck for the seat during construction. */
+        /** Seated viewer (host or player): submit (bind) the picked deck for the seat during construction. */
         fun submitDeck(id: DeckId) = submitLoadedDeck(id) { deck -> tableClient.submitDeck(tableId, deck) }
 
-        /** Player: update the in-progress deck for the seat during construction (a save before submit). */
+        /** Seated viewer (host or player): update the in-progress deck for the seat (a save before submit). */
         fun updateDeck(id: DeckId) = submitLoadedDeck(id) { deck -> tableClient.updateDeck(tableId, deck) }
 
         private inline fun submitLoadedDeck(

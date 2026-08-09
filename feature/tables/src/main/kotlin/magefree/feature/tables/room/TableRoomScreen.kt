@@ -48,7 +48,8 @@ const val MATCH_STARTING_LABEL: String = "Match starting…"
 /**
  * Stateless table room. Renders the table's **actual** seats (who sits where, of what kind, which slots
  * are open) and the server's own table state, the format/options summary, and
- * the role-appropriate actions (host start/remove; player submit/update/leave; spectator read-only). On
+ * the role-appropriate actions (host start/remove; player leave; deck submit/update for **either** seated
+ * role, since a host occupies a seat too — story 0041; spectator read-only). On
  * the match-start signal it shows the terminal [MATCH_STARTING_LABEL] hand-off state — no gameplay. Every
  * event is hoisted; the composable performs no I/O.
  */
@@ -168,7 +169,8 @@ private fun RoomContent(
             Text(text = uiState.actionError, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
 
-        if (uiState.showPlayerActions) {
+        // A host holds a seat too (story 0041), so the deck surface is offered to either seated role.
+        if (uiState.showSeatActions) {
             MageSectionHeader(text = "Submit your deck")
             DeckPicker(
                 decks = uiState.library,
