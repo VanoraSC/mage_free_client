@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import magefree.cards.CardCatalog
 import magefree.cards.art.CardArtCachePolicy
 import magefree.cards.art.PrefetchProgress
@@ -100,8 +102,24 @@ class BuilderViewModel
         /** One-shot share payloads for the route to hand to the platform share sheet. */
         val shareEvents: Flow<DeckShareContent> = shareChannel.receiveAsFlow()
 
-        /** The authoritative in-memory deck; every mutation persists it and re-derives the UI. */
+        /**
+         * The authoritative in-memory deck; every mutation persists it and re-derives the UI.
+         *
+         * Only ever read or written inside [mutationLock], so a mutation that had to suspend (a catalog
+         * lookup) cannot commit a transform computed against a deck another mutation has since replaced.
+         */
         private var deck: Deck? = null
+
+        /**
+         * Serialises `read current deck → transform → save → re-derive`.
+         *
+         * The builder's mutations are not all synchronous: `addCard` must resolve the card in the
+         * offline catalog first, and that suspends. Without this lock two taps inside that window both
+         * read the same deck and the second write silently discards the first (story 0042, defect A).
+         * Holding the lock across the whole critical section — and re-reading [deck] *inside* it, after
+         * every suspension — makes each mutation atomic with respect to the others.
+         */
+        private val mutationLock = Mutex()
 
         init {
             artDownloader.progress
@@ -117,24 +135,30 @@ class BuilderViewModel
             _uiState.update { it.copy(phase = BuilderPhase.Loading, deckId = id) }
             viewModelScope.launch {
                 val loaded = repository.load(id)
-                deck = loaded
-                if (loaded == null) {
-                    _uiState.update { it.copy(phase = BuilderPhase.NotFound) }
-                } else {
-                    rebuild(loaded)
+                mutationLock.withLock {
+                    deck = loaded
+                    if (loaded == null) {
+                        _uiState.update { it.copy(phase = BuilderPhase.NotFound) }
+                    } else {
+                        rebuild(loaded)
+                    }
                 }
             }
         }
 
-        /** Add one copy of the catalog card [cardId] to [zone] (merging with an existing line). */
+        /**
+         * Add one copy of the catalog card [cardId] to [zone] (merging with an existing line).
+         *
+         * The catalog lookup suspends, so the deck is read **after** it, inside the serialised section —
+         * never snapshotted before the launch.
+         */
         fun addCard(
             cardId: CardId,
             zone: DeckZone,
         ) {
-            val current = deck ?: return
             viewModelScope.launch {
                 val card = catalog.card(cardId) ?: return@launch
-                mutate(current.withCardAdded(card, zone))
+                mutate { it.withCardAdded(card, zone) }
             }
         }
 
@@ -144,8 +168,7 @@ class BuilderViewModel
             zone: DeckZone,
             delta: Int,
         ) {
-            val current = deck ?: return
-            mutateAsync(current.withQuantityChanged(key, zone, delta))
+            mutateAsync { it.withQuantityChanged(key, zone, delta) }
         }
 
         /** Remove the line [key] from [zone] entirely. */
@@ -153,28 +176,27 @@ class BuilderViewModel
             key: String,
             zone: DeckZone,
         ) {
-            val current = deck ?: return
-            mutateAsync(current.withRowRemoved(key, zone))
+            mutateAsync { it.withRowRemoved(key, zone) }
         }
 
         /** Pick the play format; legality feedback recomputes for it. */
         fun setFormat(format: DeckFormat?) {
-            val current = deck ?: return
-            mutateAsync(current.copy(format = format))
+            mutateAsync { it.copy(format = format) }
         }
 
         /** Rename the deck from the builder. */
         fun rename(name: String) {
-            val current = deck ?: return
             val trimmed = name.trim()
             if (trimmed.isEmpty()) return
-            mutateAsync(current.copy(name = trimmed))
+            mutateAsync { it.copy(name = trimmed) }
         }
 
         /** Produce a shareable file of the current deck in [format] for the platform share sheet. */
         fun shareDeck(format: DeckFileFormat = DeckFileFormat.DCK) {
-            val current = deck ?: return
-            viewModelScope.launch { shareChannel.send(deckIO.share(current, format)) }
+            viewModelScope.launch {
+                val current = mutationLock.withLock { deck } ?: return@launch
+                shareChannel.send(deckIO.share(current, format))
+            }
         }
 
         /** Start the opt-in, deck-scoped art pre-download for the current deck's printings. */
@@ -193,15 +215,24 @@ class BuilderViewModel
             viewModelScope.launch { artCache.setPolicy(policy) }
         }
 
-        /** Persist [next] and re-derive, off the main flow. */
-        private fun mutateAsync(next: Deck) {
-            viewModelScope.launch { mutate(next) }
+        /** Apply [transform] to the current deck, persist, and re-derive — off the main flow. */
+        private fun mutateAsync(transform: (Deck) -> Deck) {
+            viewModelScope.launch { mutate(transform) }
         }
 
-        private suspend fun mutate(next: Deck) {
-            deck = next
-            repository.save(next)
-            rebuild(next)
+        /**
+         * The single serialised mutation path: take the lock, read the authoritative deck, apply
+         * [transform] to *that* value, publish, persist, re-derive. Concurrent mutations queue here
+         * rather than interleaving, so none is computed against a deck that has already been replaced.
+         */
+        private suspend fun mutate(transform: (Deck) -> Deck) {
+            mutationLock.withLock {
+                val current = deck ?: return
+                val next = transform(current)
+                deck = next
+                repository.save(next)
+                rebuild(next)
+            }
         }
 
         /** Resolve every line against the offline catalog and compute groups, curve, and legality. */
