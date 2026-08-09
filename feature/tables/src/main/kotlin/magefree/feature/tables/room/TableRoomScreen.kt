@@ -36,6 +36,7 @@ import magefree.feature.tables.TableRole
 import magefree.network.table.Seat
 import magefree.network.table.SeatPlayerType
 import magefree.network.table.TablePhase
+import magefree.network.table.TableServerState
 import magefree.network.table.TableState
 
 /** Title of the table room; shared with tests so the two agree. */
@@ -45,7 +46,8 @@ const val ROOM_TITLE: String = "Table room"
 const val MATCH_STARTING_LABEL: String = "Match starting…"
 
 /**
- * Stateless table room. Renders the seats + ready/deck-submitted state, the format/options summary, and
+ * Stateless table room. Renders the table's **actual** seats (who sits where, of what kind, which slots
+ * are open) and the server's own table state, the format/options summary, and
  * the role-appropriate actions (host start/remove; player submit/update/leave; spectator read-only). On
  * the match-start signal it shows the terminal [MATCH_STARTING_LABEL] hand-off state — no gameplay. Every
  * event is hoisted; the composable performs no I/O.
@@ -145,10 +147,16 @@ private fun RoomContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        MageSectionHeader(text = "Seats (${uiState.seats.size})")
+        Text(
+            text = "Table: ${uiState.serverState.label()}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        MageSectionHeader(text = "Seats (${uiState.seatsFilled}/${uiState.seats.size})")
         if (uiState.seats.isEmpty()) {
             Text(
-                text = "Waiting for players to sit down…",
+                text = "Reading the table…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -193,17 +201,21 @@ private fun RoomContent(
     }
 }
 
-/** One seat row: occupant name/type with ready + deck-submitted captions. */
+/**
+ * One seat row: who sits in the slot (or that it is open) and what kind of player it holds. There is no
+ * "ready" caption — readiness is a table-level property the server reports (story 0040), not a per-seat
+ * flag XMage exposes.
+ */
 @Composable
 private fun SeatRow(seat: Seat) {
     val name = seat.name ?: seat.playerId ?: "Open seat"
     val type = if (seat.playerType == SeatPlayerType.Human) "Human" else seat.playerType.name
     val status =
         buildList {
+            add("Seat ${seat.index + 1}")
             add(type)
             if (seat.isOwner) add("host")
-            add(if (seat.isReady) "ready" else "not ready")
-            if (seat.isDeckSubmitted) add("deck submitted")
+            if (!seat.isOccupied) add("empty")
         }.joinToString(" · ")
     MageListRow(
         headline = name,
@@ -221,12 +233,26 @@ private fun TablePhase.label(): String =
         TablePhase.Started -> "Started"
     }
 
+/** A short human label for the server's own [TableServerState]. */
+private fun TableServerState.label(): String =
+    when (this) {
+        TableServerState.Waiting -> "Waiting for players"
+        TableServerState.ReadyToStart -> "Ready to start"
+        TableServerState.Starting -> "Starting"
+        TableServerState.Drafting -> "Drafting"
+        TableServerState.Constructing -> "Constructing"
+        TableServerState.Dueling -> "In game"
+        TableServerState.Sideboarding -> "Sideboarding"
+        TableServerState.Finished -> "Finished"
+        TableServerState.Unknown -> "Reading…"
+    }
+
 // ---- Previews ---------------------------------------------------------------------------------
 
 private fun previewSeats() =
     listOf(
-        Seat(playerId = "p1", name = "You", isReady = true, isDeckSubmitted = true, isOwner = true),
-        Seat(playerId = "p2", name = "Rival", isReady = false),
+        Seat(index = 0, name = "You", isOccupied = true, isOwner = true),
+        Seat(index = 1, name = null, playerType = SeatPlayerType.ComputerMad, isOccupied = false),
     )
 
 @Composable
@@ -250,7 +276,14 @@ private fun previewScreen(uiState: TableRoomUiState) {
 private fun RoomHostPreview() =
     previewScreen(
         TableRoomUiState(
-            table = TableState(tableId = "t-1", optionsSummary = "Two Player Duel", seats = previewSeats(), phase = TablePhase.Waiting),
+            table =
+                TableState(
+                    tableId = "t-1",
+                    optionsSummary = "Two Player Duel",
+                    seats = previewSeats(),
+                    serverState = TableServerState.Waiting,
+                    phase = TablePhase.Waiting,
+                ),
             role = TableRole.Host,
             isLoading = false,
         ),

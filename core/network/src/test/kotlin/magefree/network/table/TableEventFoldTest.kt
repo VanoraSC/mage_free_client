@@ -6,6 +6,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SideboardPrompt
 import magefree.protocol.TableUpdated
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -36,6 +37,7 @@ class TableEventFoldTest {
         // A seat fills.
         state = fold(state, SeatUpdated(tableId = "t-1", playerId = "p-2"))
         assertEquals(listOf("p-2"), state.seats.map { it.playerId })
+        assertTrue(state.seats.single().isOccupied)
 
         // Construction begins.
         state = fold(state, ConstructPrompt(tableId = "t-1", remainingSeconds = 60))
@@ -74,6 +76,71 @@ class TableEventFoldTest {
         state = TableEventFold.fold(state, SeatUpdated(tableId = "t-1", playerId = "p-2", isOwner = true))!!
         assertEquals(1, state.seats.size)
         assertTrue(state.seats.single().isOwner)
+    }
+
+    @Test
+    fun aSeatUpdateWithNoPlayerIdCannotGrowAPhantomSeatList() {
+        // The defect (story 0040): a null-playerId SeatUpdated used to *append* a brand-new seat on
+        // every push, so a repeated push grew `seats` without bound. It carries no key, so it must be
+        // ignored outright — the fold returns null (no state change, nothing emitted).
+        assertNull(TableEventFold.fold(seed, SeatUpdated(tableId = "t-1", playerId = null)))
+
+        // Not just from the empty seed: it must not grow a table whose seats are already known either.
+        val seated =
+            seed.copy(
+                seats =
+                    listOf(
+                        Seat(index = 0, name = "alice", isOccupied = true),
+                        Seat(index = 1, isOccupied = false),
+                    ),
+            )
+        var state = seated
+        repeat(50) {
+            val next = TableEventFold.fold(state, SeatUpdated(tableId = "t-1", playerId = null, isOwner = true))
+            assertNull("a null-playerId seat update must not change the state", next)
+            state = next ?: state
+        }
+        assertEquals(seated, state)
+        assertEquals(2, state.seats.size)
+    }
+
+    @Test
+    fun aKeyedSeatUpdateFillsAKnownEmptySlotRatherThanAppending() {
+        // A table read (story 0040) established two slots; a push naming a player fills the free one
+        // instead of appending a third seat.
+        val known =
+            seed.copy(
+                seats =
+                    listOf(
+                        Seat(index = 0, name = "alice", isOccupied = true, playerId = "p-1"),
+                        Seat(index = 1, playerType = SeatPlayerType.ComputerMad, isOccupied = false),
+                    ),
+            )
+
+        val next = TableEventFold.fold(known, SeatUpdated(tableId = "t-1", playerId = "p-2"))!!
+
+        assertEquals(2, next.seats.size)
+        assertEquals("p-2", next.seats[1].playerId)
+        assertTrue(next.seats[1].isOccupied)
+        // The seat keeps the slot's server-declared type; the occupied seat is untouched.
+        assertEquals(SeatPlayerType.ComputerMad, next.seats[1].playerType)
+        assertEquals(known.seats[0], next.seats[0])
+    }
+
+    @Test
+    fun onlyTheTableLifecyclePushesForThisTableTriggerADetailRefresh() {
+        // These are what make a seat change visible without a per-seat push: the room re-reads the
+        // table on each of them (and on nothing else — no timer, no unrelated frame).
+        assertTrue(TableEventFold.triggersDetailRefresh("t-1", TableUpdated(tableId = "t-1")))
+        assertTrue(TableEventFold.triggersDetailRefresh("t-1", ConstructPrompt(tableId = "t-1")))
+        assertTrue(TableEventFold.triggersDetailRefresh("t-1", SideboardPrompt(tableId = "t-1")))
+        assertTrue(TableEventFold.triggersDetailRefresh("t-1", MatchStartingMessage(gameId = "g", tableId = "t-1")))
+        // A per-recipient MatchStarting may omit the table id; it still refers to our table.
+        assertTrue(TableEventFold.triggersDetailRefresh("t-1", MatchStartingMessage(gameId = "g", tableId = null)))
+
+        assertFalse(TableEventFold.triggersDetailRefresh("t-1", TableUpdated(tableId = "other")))
+        assertFalse(TableEventFold.triggersDetailRefresh("t-1", ConstructPrompt(tableId = "other")))
+        assertFalse(TableEventFold.triggersDetailRefresh("t-1", magefree.protocol.Pong()))
     }
 
     @Test

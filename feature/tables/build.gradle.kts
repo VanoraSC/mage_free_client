@@ -34,6 +34,13 @@ dependencies {
     testImplementation(libs.turbine)
     // The scriptable 0037 FakeTableClient lives in `:core:network`'s main source set; the hermetic
     // ViewModel tests here drive it directly (no bridge, no `:protocol`).
+    //
+    // Story 0040 adds one test (`TableRoomSeatSeamTest`) that instead drives the room through the *real*
+    // TableClient over a fake BridgeClient, so it can prove the room's seats are actually reachable from
+    // a bridge reply — the blind spot that let the seat defect ship green. Scripting those replies means
+    // naming wire messages, so `:protocol` is on the **test** classpath only: production code in this
+    // module still never sees a wire type (`:core:network` keeps `:protocol` as `implementation`).
+    testImplementation(project(":protocol"))
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.compose.ui.test.junit4)

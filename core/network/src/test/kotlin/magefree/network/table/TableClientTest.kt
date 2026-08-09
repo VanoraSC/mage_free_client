@@ -10,6 +10,7 @@ import magefree.model.ConnectionState
 import magefree.network.fake.FakeBridgeClient
 import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
+import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
 import magefree.protocol.RemoveTable
@@ -21,6 +22,9 @@ import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
+import magefree.protocol.TableNotFound
+import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
@@ -193,6 +197,60 @@ class TableClientTest {
 
             assertFalse(result.isSuccess)
             assertEquals("seats empty", (result.exceptionOrNull() as TableActionFailure).reason)
+        }
+
+    @Test
+    fun refreshTableSendsGetTableAndMapsTheDetailOntoAppSchemaSeats() =
+        runTest {
+            val sent = mutableListOf<ClientMessage>()
+            val client =
+                client(sent) {
+                    TableDetail(
+                        table = summary().copy(state = TableStateCode.READY_TO_START, seatsFilled = 2),
+                        seats =
+                            listOf(
+                                TableSeatSummary(index = 0, playerName = "pete", playerType = SeatPlayerTypeCode.HUMAN, occupied = true),
+                                TableSeatSummary(
+                                    index = 1,
+                                    playerName = "Computer",
+                                    playerType = SeatPlayerTypeCode.COMPUTER_MAD,
+                                    occupied = true,
+                                ),
+                            ),
+                        requestId = "req-fixed",
+                    )
+                }
+
+            val result = client.refreshTable("t-1")
+
+            val request = sent.single() as GetTable
+            assertEquals("t-1", request.tableId)
+            assertEquals("req-fixed", request.requestId)
+
+            val details = result.getOrThrow()
+            assertEquals("t-1", details.tableId)
+            assertEquals(TableServerState.ReadyToStart, details.serverState)
+            assertEquals(
+                listOf(
+                    Seat(index = 0, name = "pete", playerType = SeatPlayerType.Human, isOccupied = true),
+                    Seat(index = 1, name = "Computer", playerType = SeatPlayerType.ComputerMad, isOccupied = true),
+                ),
+                details.seats,
+            )
+        }
+
+    @Test
+    fun refreshTableSurfacesAMissingTableAsATypedNotFound() =
+        runTest {
+            val client = client { TableNotFound(tableId = "t-1", reason = "no such table in the room") }
+
+            val result = client.refreshTable("t-1")
+
+            assertFalse(result.isSuccess)
+            val failure = result.exceptionOrNull()
+            assertTrue("expected a TableNotFoundFailure, got $failure", failure is TableNotFoundFailure)
+            assertEquals("t-1", (failure as TableNotFoundFailure).tableId)
+            assertEquals("no such table in the room", failure.reason)
         }
 
     @Test

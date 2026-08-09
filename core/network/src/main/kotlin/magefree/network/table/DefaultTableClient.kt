@@ -1,6 +1,7 @@
 package magefree.network.table
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -8,13 +9,16 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import magefree.decks.model.Deck
 import magefree.model.ConnectionState
 import magefree.network.BridgeClient
 import magefree.network.ServerPushSource
 import magefree.protocol.CreateTable
+import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
 import magefree.protocol.RemoveTable
@@ -23,6 +27,8 @@ import magefree.protocol.StartMatch
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
+import magefree.protocol.TableDetail
+import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
 import magefree.protocol.WatchTable
@@ -38,10 +44,13 @@ import java.util.UUID
  * transport failure (no session / timeout / drop, thrown by `request`) is likewise captured as a failed
  * [Result] rather than propagated — the caller always gets a [Result].
  *
- * **[observeTable]** merges two sources into a single folding collector (so the held state is mutated by
- * one coroutine, race-free): the [ServerPushSource] stream folded by [TableEventFold] for this table, and
+ * **[observeTable]** merges three sources into a single folding collector (so the held state is mutated
+ * by one coroutine, race-free): the [ServerPushSource] stream folded by [TableEventFold] for this table;
  * a re-sync trigger on each return to [ConnectionState.Connected] (a 0023 resume) that re-emits the held
- * state — mirroring the lobby's non-destructive refresh so a reconnect never strands the seat.
+ * state — mirroring the lobby's non-destructive refresh so a reconnect never strands the seat; and the
+ * results of [refreshTable] reads (story 0040), which are where [TableState.seats] and the server's
+ * readiness actually come from. Reads are triggered on open, on each table-lifecycle push for this table
+ * and after a resume — never on a timer, so an unobserved room costs nothing.
  *
  * @param newRequestId how a correlation id is minted (a UUID in production; overridable so a test can
  *   assert the exact id sent).
@@ -109,6 +118,15 @@ internal class DefaultTableClient(
     override suspend fun watchTable(tableId: String): Result<Unit> =
         unitAction { id -> bridgeClient.request(WatchTable(tableId = tableId, requestId = id), id) }
 
+    override suspend fun refreshTable(tableId: String): Result<TableDetails> =
+        action { id ->
+            when (val reply = bridgeClient.request<ServerMessage>(GetTable(tableId = tableId, requestId = id), id)) {
+                is TableDetail -> Result.success(reply.toDetails())
+                is TableNotFound -> Result.failure(TableNotFoundFailure(tableId = reply.tableId, reason = reply.reason))
+                else -> unexpected(reply)
+            }
+        }
+
     override fun observeTable(
         tableId: String,
         seed: TableState,
@@ -117,12 +135,21 @@ internal class DefaultTableClient(
             var state = seed
             trySend(state)
 
-            // Feed both sources as intents into a single collector: `merge` serialises them downstream,
-            // so the held `state` is read/written by exactly one coroutine — no lock, no race.
+            // The seat/readiness re-read trigger (story 0040). Conflated: several triggers arriving
+            // while a read is in flight collapse into one follow-up read — no queue, no polling.
+            val refreshes = Channel<Unit>(Channel.CONFLATED)
+
+            // Feed every source as an intent into a single collector: `merge` serialises them
+            // downstream, so the held `state` is read/written by exactly one coroutine — no lock, no
+            // race. The detail read suspends inside its *own* branch, so a slow read never delays a push.
             val pushes = pushSource.serverPushes.map<ServerMessage, Intent> { Intent.Push(it) }
             val resyncs = connectionState.reEstablishments().map { Intent.Resync }
+            val details =
+                refreshes
+                    .receiveAsFlow()
+                    .mapNotNull { refreshTable(tableId).getOrNull()?.let { Intent.Detail(it) } }
 
-            merge(pushes, resyncs)
+            merge(pushes, resyncs, details)
                 .onEach { intent ->
                     when (intent) {
                         is Intent.Push -> {
@@ -131,23 +158,50 @@ internal class DefaultTableClient(
                                 state = next
                                 trySend(next)
                             }
+                            // The table changed on the server; re-read its seats/state. This is what
+                            // replaces the per-seat push XMage never sends.
+                            if (TableEventFold.triggersDetailRefresh(tableId, intent.message)) {
+                                refreshes.trySend(Unit)
+                            }
                         }
                         // A 0023 resume completed: re-emit the held state so the seat re-syncs (the
-                        // lobby's non-destructive-refresh analogue), even though the state is unchanged.
-                        Intent.Resync -> trySend(state)
+                        // lobby's non-destructive-refresh analogue) and re-read the table, since seats
+                        // may have moved while the socket was down.
+                        Intent.Resync -> {
+                            trySend(state)
+                            refreshes.trySend(Unit)
+                        }
+
+                        is Intent.Detail -> {
+                            val next = state.withDetails(intent.details)
+                            if (next != state) {
+                                state = next
+                                trySend(next)
+                            }
+                        }
                     }
                 }.launchIn(this)
 
-            awaitClose { }
+            // Seed the seats: read the table once as the room opens.
+            refreshes.trySend(Unit)
+
+            awaitClose { refreshes.close() }
         }
 
-    /** An `observeTable` input: a server push to fold, or a resume that re-syncs the current state. */
+    /**
+     * An `observeTable` input: a server push to fold, a resume that re-syncs the current state, or a
+     * completed table read carrying the current seats/server state.
+     */
     private sealed interface Intent {
         data class Push(
             val message: ServerMessage,
         ) : Intent
 
         data object Resync : Intent
+
+        data class Detail(
+            val details: TableDetails,
+        ) : Intent
     }
 
     // --- action plumbing -------------------------------------------------------------------------
