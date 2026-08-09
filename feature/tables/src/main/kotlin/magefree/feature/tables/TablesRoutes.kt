@@ -37,15 +37,15 @@ data class RoomArgs(
  * own, all before the room opens), hands the new room's [RoomArgs] to [onOpenRoom]. [onBuildDeck] is the
  * escape hatch when the deck library is empty and the host has nothing legal to sit down with.
  *
- * [onBuildDeck] defaults to a no-op **only** so this parameter could be added without editing the `:app`
- * navigation graph in this story's scope; the shell should pass the same "go to the Decks tab" callback it
- * already gives [JoinTableRoute] and [TableRoomRoute].
+ * [onBuildDeck] is deliberately **not** defaulted: the shell must pass the same "go to the Decks tab"
+ * callback it already gives [JoinTableRoute] and [TableRoomRoute]. A no-op default would let a caller
+ * silently ship a dead button, which is exactly what happened while this parameter was optional.
  */
 @Composable
 fun HostTableRoute(
     onBack: () -> Unit,
     onOpenRoom: (RoomArgs) -> Unit,
-    onBuildDeck: () -> Unit = {},
+    onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HostTableViewModel = hiltViewModel(),
 ) {
