@@ -310,11 +310,17 @@ class DeckIOTest {
             printings = printings.map { (set, num) -> CardPrinting(set, num, Rarity.COMMON) },
         )
 
-    /** Fake catalog: substring name search (case-insensitive), mirroring the real catalog's exact-name filter path. */
+    /**
+     * Fake catalog. [search] is the broad substring match (the user-facing box); [cardsByName] is the
+     * exact case-insensitive batch the import path must use. [searchQueries] records any substring
+     * search so a test can assert import never falls back to it.
+     */
     private class FakeCardCatalog(
         vararg cards: Card,
     ) : CardCatalog {
         private val all = cards.toList()
+        val searchQueries: MutableList<String> = mutableListOf()
+        val nameLookups: MutableList<List<String>> = mutableListOf()
 
         override suspend fun card(id: CardId): Card? = all.firstOrNull { it.id == id }
 
@@ -322,9 +328,17 @@ class DeckIOTest {
             query: String,
             limit: Int,
         ): List<Card> {
+            searchQueries += query
             val q = query.trim().lowercase()
             if (q.isEmpty()) return emptyList()
             return all.filter { it.name.lowercase().contains(q) }
+        }
+
+        override suspend fun cardsByName(names: Collection<String>): Map<String, Card> {
+            nameLookups += names.toList()
+            return all
+                .filter { card -> names.any { it.equals(card.name, ignoreCase = true) } }
+                .associateBy { it.name.lowercase() }
         }
 
         override suspend fun filter(

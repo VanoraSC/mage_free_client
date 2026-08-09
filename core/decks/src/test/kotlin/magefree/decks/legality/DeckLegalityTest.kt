@@ -219,12 +219,26 @@ class DeckLegalityTest {
     ) : CardCatalog {
         private val byName = cards.associateBy { it.name.lowercase() }
 
+        /** Substring searches seen — the legality check must never issue one. */
+        val searchQueries: MutableList<String> = mutableListOf()
+
+        /** The name batches the exact-name path asked for. */
+        val nameLookups: MutableList<List<String>> = mutableListOf()
+
         override suspend fun card(id: CardId): Card? = null
 
         override suspend fun search(
             query: String,
             limit: Int,
-        ): List<Card> = listOfNotNull(byName[query.lowercase()])
+        ): List<Card> {
+            searchQueries += query
+            return listOfNotNull(byName[query.lowercase()])
+        }
+
+        override suspend fun cardsByName(names: Collection<String>): Map<String, Card> {
+            nameLookups += names.toList()
+            return names.mapNotNull { n -> byName[n.lowercase()]?.let { n.lowercase() to it } }.toMap()
+        }
 
         override suspend fun filter(
             criteria: CardFilter,

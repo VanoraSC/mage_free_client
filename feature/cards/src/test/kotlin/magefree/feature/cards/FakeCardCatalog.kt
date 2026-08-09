@@ -21,24 +21,37 @@ class FakeCardCatalog(
     private val byId: Map<CardId, Card> = emptyMap(),
     private val searchResult: (String) -> List<Card> = { emptyList() },
     private val filterResult: (CardFilter) -> List<Card> = { emptyList() },
+    private val failWith: (() -> Throwable)? = null,
 ) : CardCatalog {
     val searchQueries: MutableList<String> = mutableListOf()
     val filterCriteria: MutableList<CardFilter> = mutableListOf()
 
-    override suspend fun card(id: CardId): Card? = byId[id]
+    override suspend fun card(id: CardId): Card? {
+        failWith?.let { throw it() }
+        return byId[id]
+    }
 
     override suspend fun search(
         query: String,
         limit: Int,
     ): List<Card> {
+        failWith?.let { throw it() }
         searchQueries += query
         return searchResult(query)
+    }
+
+    override suspend fun cardsByName(names: Collection<String>): Map<String, Card> {
+        failWith?.let { throw it() }
+        return byId.values
+            .filter { card -> names.any { it.equals(card.name, ignoreCase = true) } }
+            .associateBy { it.name.lowercase() }
     }
 
     override suspend fun filter(
         criteria: CardFilter,
         limit: Int,
     ): List<Card> {
+        failWith?.let { throw it() }
         filterCriteria += criteria
         return filterResult(criteria)
     }

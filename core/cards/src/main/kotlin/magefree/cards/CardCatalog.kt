@@ -27,6 +27,20 @@ interface CardCatalog {
         limit: Int = DEFAULT_LIMIT,
     ): List<Card>
 
+    /**
+     * **Exact** case-insensitive name resolution for a batch of [names] — the deck path's lookup, and a
+     * different query from [search]. Where [search] is a deliberately broad substring match for a human
+     * typing into a box (`LIKE '%…%'`, which no index can serve), this is an equality predicate the
+     * `card(name COLLATE NOCASE)` index answers directly, batched into one statement for a whole deck.
+     *
+     * The result maps each **lower-cased** requested name to its card; names the catalog doesn't know
+     * are simply absent. Blank names are ignored. Callers key with `name.lowercase()`.
+     */
+    suspend fun cardsByName(names: Collection<String>): Map<String, Card>
+
+    /** Single-name convenience over [cardsByName]; `null` when the catalog doesn't know the name. */
+    suspend fun cardByName(name: String): Card? = cardsByName(listOf(name))[name.lowercase()]
+
     /** Apply a conjunctive [CardFilter] across the browse/build axes. */
     suspend fun filter(
         criteria: CardFilter,
