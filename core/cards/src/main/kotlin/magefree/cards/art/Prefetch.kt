@@ -19,6 +19,18 @@ sealed interface PrefetchScope {
     ) : PrefetchScope
 }
 
+/**
+ * The image sizes a bulk pre-download warms: **every** [CardArtSize], because every one of them is a
+ * size the UI displays — SMALL is the browse/add results thumbnail, LARGE the inspection view and the
+ * builder's deck rows.
+ *
+ * This matters because the art cache is keyed by resolved URL and [XMageImageSource] appends
+ * `version=small` for SMALL, so SMALL and LARGE are **different cache entries**. Warming one size
+ * leaves every surface that displays the other blank offline, which defeats the point of the feature
+ * (story 0043, defect A). Derived from [CardArtSize.entries] so a new size cannot be silently missed.
+ */
+val PREFETCH_SIZES: Set<CardArtSize> = CardArtSize.entries.toSet()
+
 /** Lifecycle of a bulk pre-download run. */
 enum class PrefetchStatus {
     /** Nothing has run yet. */
@@ -27,13 +39,17 @@ enum class PrefetchStatus {
     /** A run is in progress. */
     RUNNING,
 
-    /** Finished warming every target. */
+    /**
+     * Every target was attempted. [PrefetchProgress.failed] `> 0` means a **partial** run — some
+     * targets could not be warmed (a 404, a corrupt cache entry, no connectivity); a re-run resumes
+     * over them, skipping what is already cached.
+     */
     COMPLETED,
 
     /** The user cancelled mid-run (already-warmed art stays cached; a re-run resumes). */
     CANCELLED,
 
-    /** The run could not enumerate its targets. */
+    /** The run could not enumerate its targets, or failed structurally before finishing them. */
     FAILED,
 }
 
@@ -54,11 +70,21 @@ data class PrefetchProgress(
 ) {
     val done: Int get() = warmed + skipped + failed
 
+    /**
+     * True once the run has stopped for good. Every run reaches one of these, so a UI bound to this
+     * flow always gets to stop showing progress (story 0043, defect C).
+     */
+    val isTerminal: Boolean
+        get() = status == PrefetchStatus.COMPLETED || status == PrefetchStatus.CANCELLED || status == PrefetchStatus.FAILED
+
     /** Progress in `[0, 1]`; `0` before a total is known. */
     val fraction: Float get() = if (total <= 0) 0f else (done.toFloat() / total).coerceIn(0f, 1f)
 }
 
-/** Resolves a [PrefetchScope] to the concrete [CardArtRequest]s to warm. */
+/**
+ * Resolves a [PrefetchScope] to the concrete [CardArtRequest]s to warm **at one [CardArtSize]**. A run
+ * that covers several sizes ([PREFETCH_SIZES]) calls this once per size and warms the union.
+ */
 interface PrefetchTargetSource {
     suspend fun requests(
         scope: PrefetchScope,

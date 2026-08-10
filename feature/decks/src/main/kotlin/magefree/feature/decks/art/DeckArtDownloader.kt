@@ -53,8 +53,11 @@ class DefaultDeckArtDownloader(
     override fun download(deck: Deck) {
         // Point the (single, reused) target source at this deck, then start. The manager enumerates the
         // deck's printings via the source at run time; the PrefetchScope argument is unused here.
+        // No size argument either: the manager's default warms every size the UI displays — the
+        // builder's rows (LARGE) *and* the add-cards results grid (SMALL). Pinning LARGE here left the
+        // add grid blank offline, which is exactly what "viewable offline" promises (0043, defect A).
         targetSource.deck = deck
-        manager.start(PrefetchScope.All, CardArtSize.LARGE)
+        manager.start(PrefetchScope.All)
     }
 
     override fun cancel() = manager.cancel()
