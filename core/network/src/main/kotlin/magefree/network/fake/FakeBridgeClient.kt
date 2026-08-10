@@ -21,6 +21,7 @@ import magefree.protocol.ClientMessage
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerMessage
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * A [BridgeClient] test double that replays a scripted sequence of **real `:protocol`
@@ -97,8 +98,33 @@ class FakeBridgeClient(
     }
 
     override suspend fun disconnect() {
+        teardowns += Teardown.DISCONNECT
         _connectionState.value = ConnectionState.Disconnected
     }
+
+    /**
+     * Mirrors the production client's deliberate sign-out (story 0046): the real
+     * [magefree.network.ktor.KtorBridgeClient] sends `Logout` before closing, which a socket-less fake
+     * cannot do — so it records the *intent* instead. Tests over this fake assert which teardown a
+     * caller chose; that `signOut` actually puts a `Logout` on the wire is pinned against a real socket
+     * by `KtorBridgeClientSignOutTest`.
+     */
+    override suspend fun signOut() {
+        teardowns += Teardown.SIGN_OUT
+        _connectionState.value = ConnectionState.Disconnected
+    }
+
+    /** The teardown entry points a caller can choose between (story 0046). */
+    enum class Teardown {
+        /** [disconnect] — close without signalling intent; the bridge parks the session. */
+        DISCONNECT,
+
+        /** [signOut] — deliberate exit; the bridge tears the upstream session down now. */
+        SIGN_OUT,
+    }
+
+    /** Every teardown this client was asked for, in order — the fake's record of caller intent. */
+    val teardowns: MutableList<Teardown> = CopyOnWriteArrayList()
 
     private fun SessionEvent.isTerminal(): Boolean =
         this is SessionEvent.AuthFailed ||

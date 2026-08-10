@@ -229,6 +229,10 @@ class ConnectionRepositoryTest {
             _connectionState.value = ConnectionState.Disconnected
         }
 
+        override suspend fun signOut() {
+            _connectionState.value = ConnectionState.Disconnected
+        }
+
         override suspend fun <ReplyT : Any> request(
             message: Any,
             requestId: String,

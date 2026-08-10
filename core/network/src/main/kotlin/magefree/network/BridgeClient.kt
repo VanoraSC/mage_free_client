@@ -34,8 +34,31 @@ interface BridgeClient {
         credentials: Credentials,
     ): Flow<SessionEvent>
 
-    /** Tear down the active session, if any. */
+    /**
+     * Tear down the active session, if any, **without telling the bridge why**: the socket simply
+     * closes. That is what a dropped connection or a lifecycle pause looks like on the wire, so the
+     * bridge *parks* the upstream session for its resume TTL (story 0023) and a later [connect]
+     * resumes it (story 0024). Use [signOut] — never this — for a deliberate sign-out.
+     */
     suspend fun disconnect()
+
+    /**
+     * Tear down the active session **deliberately** (story 0046): tell the bridge the exit is
+     * intentional so it disconnects the upstream XMage session immediately instead of parking it,
+     * then close as [disconnect] does.
+     *
+     * The bridge cannot infer intent from a socket close — that is exactly why the wire carries a
+     * dedicated message — so the intent is expressed here, by the caller choosing this entry point
+     * over [disconnect]. A separate method rather than a flag on [disconnect] because the two are
+     * different operations (one writes to the socket before closing), because the choice is then
+     * greppable and cannot be made by accident through a defaulted argument, and because it keeps
+     * every `:protocol` type off this interface's ABI.
+     *
+     * **Best effort:** signalling the bridge must never make signing out fail. If there is no live
+     * socket, or the write fails or stalls, teardown proceeds anyway — this never throws (barring
+     * cancellation of the calling coroutine) and always completes promptly.
+     */
+    suspend fun signOut()
 
     /**
      * Perform one **request/response** exchange over the *live* session socket (story 0028): send

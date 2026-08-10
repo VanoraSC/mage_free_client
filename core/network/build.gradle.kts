@@ -44,4 +44,11 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+
+    // Story 0046: KtorBridgeClientSignOutTest runs the real client against a throwaway in-process
+    // WebSocket bridge, so "sign-out puts a Logout on the wire (and a drop does not)" is asserted on
+    // actual frames rather than on a fake's idea of them. Test-only, same pinned Ktor as everywhere.
+    testImplementation(libs.ktor.server.core)
+    testImplementation(libs.ktor.server.netty)
+    testImplementation(libs.ktor.server.websockets)
 }

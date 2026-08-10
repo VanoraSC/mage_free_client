@@ -9,6 +9,7 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import magefree.model.ConnectionError
@@ -47,6 +49,7 @@ import magefree.network.reconnect.SessionRelay
 import magefree.network.reconnect.SessionRunner
 import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
+import magefree.protocol.Logout
 import magefree.protocol.ProtocolJson
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.ServerHello
@@ -135,6 +138,27 @@ class KtorBridgeClient(
         activeSession?.close(CloseReason(CloseReason.Codes.NORMAL, "client disconnect"))
         activeSession = null
         _connectionState.value = ConnectionState.Disconnected
+    }
+
+    override suspend fun signOut() {
+        // Set first: a Logout makes the bridge tear the session down, so the socket close that follows
+        // must already be understood as *requested* — otherwise the relay would read it as an
+        // unexpected drop and start reconnecting the session we just ended.
+        disconnectRequested = true
+        val session = activeSession
+        if (session != null) {
+            try {
+                // Best effort, bounded: a half-dead socket must not hold the user in a session they
+                // asked to leave. Failing to signal only costs the bridge's resume TTL — the exact
+                // cost of not signalling at all, which is what happened before story 0046.
+                withTimeoutOrNull(LOGOUT_SEND_TIMEOUT_MILLIS) { session.sendMessage(Logout()) }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                // Already closed / failed write: fall through to teardown, which is what matters.
+            }
+        }
+        disconnect()
     }
 
     override suspend fun <ReplyT : Any> request(
@@ -242,6 +266,13 @@ class KtorBridgeClient(
     companion object {
         /** How long [request] waits for a correlated reply before failing (story 0028). */
         private const val DEFAULT_REQUEST_TIMEOUT_MILLIS = 15_000L
+
+        /**
+         * How long a [signOut] will wait for its `Logout` write to land before giving up and tearing
+         * down anyway (story 0046). Deliberately short: this is one frame on an already-open socket,
+         * and the user is waiting.
+         */
+        private const val LOGOUT_SEND_TIMEOUT_MILLIS = 2_000L
 
         /** The default Android-friendly engine (OkHttp) with the WebSockets plugin installed. */
         fun defaultHttpClient(): HttpClient =

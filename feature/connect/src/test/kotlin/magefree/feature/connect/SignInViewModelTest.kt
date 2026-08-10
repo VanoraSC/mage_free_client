@@ -391,6 +391,15 @@ class SignInViewModelTest {
             mutableState.value = ConnectionState.Disconnected
         }
 
+        override suspend fun signOut() {
+            signOuts++
+            mutableState.value = ConnectionState.Disconnected
+        }
+
+        /** How many deliberate sign-outs (story 0046) this client was asked for. */
+        var signOuts: Int = 0
+            private set
+
         override suspend fun <ReplyT : Any> request(
             message: Any,
             requestId: String,
