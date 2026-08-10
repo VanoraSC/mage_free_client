@@ -32,7 +32,8 @@ docker/
 ├── bridge/Dockerfile         # the runnable bridge image (story 0045)
 └── docker-compose.yml        # services: build, xmage-server, bridge
 scripts/
-└── dev                       # thin wrapper: `./scripts/dev gradle :bridge:check`, `./scripts/dev up xmage-server`, ...
+├── dev                       # thin wrapper: `./scripts/dev gradle :bridge:check`, `./scripts/dev up xmage-server`, ...
+└── smoke-on-device.sh        # the on-device smoke: drives the installed APK against a live bridge (story 0048)
 ```
 
 ### The build image (`docker/jvm/Dockerfile`), in layers
@@ -91,6 +92,92 @@ BRIDGE_URL=localhost:8080 ./gradlew :core:network:testDebugUnitTest --tests 'mag
 
 Clean-room agents and CI invoke `./scripts/dev …` for bridge work instead of host Gradle — so the
 host JDK/`JAVA_HOME` facts are no longer needed for the bridge path.
+
+## The on-device smoke (story 0048)
+
+`scripts/smoke-on-device.sh` drives the **installed debug APK** on an emulator, against the **real
+bridge and XMage server**, through the path a player actually walks — sign in → lobby → decks (with
+the device offline) → host a table → match start → sign out — asserting on-screen content at every
+step. It exists because everything above `:core:network` had never been exercised on a device: story
+0047 found an entire epic's UI built, tested, merged and unreachable.
+
+It is **not** part of `check` and never runs in CI: it needs a device and live servers. It is the
+manual gate you run before believing an APK works. The hermetic half of story 0048 — the wiring guards
+in `:app:testDebugUnitTest` — is what runs on every build.
+
+### Prerequisites
+
+1. A running emulator (or device) visible to `adb devices`. The script uses `uiautomator` dumps and
+   `input` events, both stock.
+2. `bridge` + `xmage-server` up (`./scripts/dev up bridge`), with the bridge published on the host's
+   `localhost:8080`. **From inside the emulator the host is `10.0.2.2`**, which is the script's
+   default — a physical device needs `--host <your-LAN-ip>`.
+3. A built debug APK: `./gradlew :app:assembleDebug` (the script installs
+   `app/build/outputs/apk/debug/app-debug.apk` unless `--apk` says otherwise).
+4. `adb` on `PATH`, or `ADB=/path/to/adb`. Under Git Bash the script sets `MSYS_NO_PATHCONV=1` itself,
+   without which every on-device path (`/sdcard/...`) is silently rewritten to a Windows path.
+
+### Running it
+
+```bash
+./scripts/smoke-on-device.sh --serial emulator-5554 --out build/smoke
+```
+
+Useful flags: `--host` / `--port` (the bridge the app is pointed at), `--apk`, `--skip-install`
+(reuse the installed app, `pm clear` its data), `--keep-app`.
+
+Each run is **idempotent and cold**: it uninstalls first, and picks a fresh username and deck name, so
+runs never collide with each other or with leftover server state. Usernames stay inside XMage's
+`[a-z0-9_]{3,14}`.
+
+### What a pass looks like
+
+Every step prints `PASS:` lines naming what it checked, and drops a numbered screenshot into the
+output directory. The run ends with:
+
+```
+SMOKE PASSED — all 5 steps, signed in as smoke1424233
+evidence: build/smoke
+```
+
+and exit code 0. Evidence in `--out`: `smoke.log`, `NN-<step>.png` per step, and for anything that
+failed, the screenshot plus the raw `uiautomator` XML of that moment.
+
+### What a failure looks like
+
+A failed expectation names **what was expected and everything that was actually on screen**, and the
+run exits non-zero:
+
+```
+!! DEFECT 1 at step 3 (decks-offline): searching the catalog for 'Forest' returns matches
+   expected: a screen matching /^Showing [1-9][0-9]*$/ within 12s
+   actually on screen:
+     · Search cards to add
+     · Showing 0
+     ...
+```
+
+Expectation failures **record and continue** where the rest of the run is still worth measuring — one
+broken step must not hide every step behind it — and the summary lists all of them. Failures that make
+continuing meaningless (no device, sign-in never completes, a screen that never appears) abort at once.
+
+### Two device facts the script encodes
+
+Both were learned the hard way during story 0047's verification, and both produce convincing false
+failures if ignored:
+
+- **Dismiss the soft keyboard before tapping a bottom-anchored button.** The sign-in layout does not
+  resize for the IME, so a bottom button keeps reporting bounds that sit behind the keyboard and the
+  tap lands on the IME — no UI change, no logs, no bridge contact. Dismiss with **BACK**, not ESCAPE:
+  in Compose, ESCAPE closes the *dialog* and throws away the form you just filled in.
+- **Locate controls by visible text, not content description.** Material3's `NavigationBarItem`
+  publishes no `contentDescription` on its merged node. (uiautomator's tree *does* expose it for the
+  icon-only lobby and deck actions, which have no text at all, so those are the one exception.) This is
+  a testing-correctness concern, not an accessibility one.
+
+Two more the script works around: `adb shell input text` drops characters, so every field it fills is
+read back and retyped on a mismatch; and Compose relayouts move controls between actions, so every tap
+re-reads the screen instead of reusing a coordinate.
 
 ## How this changes the workflow
 
