@@ -40,7 +40,6 @@ import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -207,7 +206,13 @@ class KtorBridgeClientSignOutTest {
                     }
                 }
             server.start(wait = false)
-            port = runBlocking { server.engine.resolvedConnectors().first().port }
+            port =
+                runBlocking {
+                    server.engine
+                        .resolvedConnectors()
+                        .first()
+                        .port
+                }
             return server
         }
 

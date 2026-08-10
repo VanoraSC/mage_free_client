@@ -351,6 +351,34 @@ class SignInViewModelTest {
         }
 
     @Test
+    fun cancelIsADeliberateSignOut() =
+        runTest {
+            // Story 0046's reachability answer: this ViewModel's cancel() *is* the app's sign-out — the
+            // failure surfaces' Cancel, the screen's Back and the session-lost re-authenticate choice all
+            // land here. So it must take the deliberate teardown, which puts a `Logout` on the wire and
+            // frees the username immediately; the intent-free one would leave the upstream session (and
+            // the name) parked for the bridge's resume TTL.
+            val client = ScriptedBridgeClient(connectedScript())
+            val repository =
+                ConnectionRepository(bridgeClient = client, dispatcher = dispatcher, scope = backgroundScope)
+            val vm = SignInViewModel(repository)
+            vm.uiState.test {
+                awaitItem()
+                vm.bind(target)
+                vm.updateUsername("pete")
+
+                vm.connect()
+                awaitPhase(ConnectPhase.Connected)
+
+                vm.cancel()
+                awaitPhase(ConnectPhase.Idle)
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertEquals("cancel() must sign out", 1, client.signOuts)
+            assertEquals("cancel() must not take the drop/lifecycle teardown", 0, client.disconnects)
+        }
+
+    @Test
     fun cancelReturnsToIdleAfterFailure() =
         runTest {
             val vm = viewModel(listOf(SessionEvent.Connecting, SessionEvent.AuthFailed()))
@@ -388,6 +416,7 @@ class SignInViewModelTest {
             }.onEach { mutableState.value = it.connectionState }
 
         override suspend fun disconnect() {
+            disconnects++
             mutableState.value = ConnectionState.Disconnected
         }
 
@@ -398,6 +427,10 @@ class SignInViewModelTest {
 
         /** How many deliberate sign-outs (story 0046) this client was asked for. */
         var signOuts: Int = 0
+            private set
+
+        /** How many intent-free teardowns (the drop/lifecycle path) this client was asked for. */
+        var disconnects: Int = 0
             private set
 
         override suspend fun <ReplyT : Any> request(

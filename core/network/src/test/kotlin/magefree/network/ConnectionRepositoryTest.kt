@@ -170,19 +170,51 @@ class ConnectionRepositoryTest {
         }
 
     @Test
-    fun disconnectReturnsToDisconnected() =
+    fun signOutReturnsToDisconnected() =
         runTest {
-            val repository = repository(FakeBridgeClient(listOf(SessionStatus(SessionStateCode.CONNECTED))))
+            val client = FakeBridgeClient(listOf(SessionStatus(SessionStateCode.CONNECTED)))
+            val repository = repository(client)
             repository.connectionState.test {
                 assertEquals(ConnectionState.Disconnected, awaitItem())
                 repository.connect(target, credentials)
                 assertEquals(ConnectionState.Connecting, awaitItem())
                 assertEquals(ConnectionState.Connected, awaitItem())
 
-                repository.disconnect()
+                repository.signOut()
                 assertEquals(ConnectionState.Disconnected, awaitItem())
                 cancelAndIgnoreRemainingEvents()
             }
+            // Story 0046: which teardown the repository picks is the whole point — the deliberate one
+            // sends `Logout` so the bridge drops the upstream session instead of parking it. Taking the
+            // intent-free `disconnect()` here would silently restore the defect.
+            assertEquals(
+                "signing out must use the deliberate teardown, not the drop/lifecycle one",
+                listOf(FakeBridgeClient.Teardown.SIGN_OUT),
+                client.teardowns,
+            )
+        }
+
+    @Test
+    fun aCancelledSessionCollectionIsNotASignOut() =
+        runTest {
+            // The drop/lifecycle direction (stories 0023/0024): the repository shares the session flow
+            // `WhileSubscribed`, so the last collector going away ends the session by cancellation. That
+            // must never look like a sign-out, or the bridge would stop parking and a reconnect could no
+            // longer resume.
+            val client = FakeBridgeClient(listOf(SessionStatus(SessionStateCode.CONNECTED)))
+            val repository = repository(client)
+            repository.connectionState.test {
+                assertEquals(ConnectionState.Disconnected, awaitItem())
+                repository.connect(target, credentials)
+                assertEquals(ConnectionState.Connecting, awaitItem())
+                assertEquals(ConnectionState.Connected, awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertEquals(
+                "dropping the last collector must not tear the upstream session down",
+                emptyList<FakeBridgeClient.Teardown>(),
+                client.teardowns,
+            )
         }
 
     @Test
