@@ -80,9 +80,30 @@ class CardCatalogBundleTest {
         }
 
     @Test
-    fun `every printing points at a real card (no orphans in a sample)`() =
+    fun `every printing points at a real card (no orphans)`() {
+        // The whole table, not a sample: an orphaned printing (a `card_id` with no `card` row) is
+        // invisible through the catalog API — a card simply never shows the printing — so it can only
+        // be caught by asking the database directly. Story 0044: the test previously named for this
+        // check asserted only that Island had printings and was a Land, which cannot detect an orphan.
+        val (printings, orphans) =
+            db
+                .rawQuery(
+                    "SELECT COUNT(*), COUNT(CASE WHEN c.id IS NULL THEN 1 END) " +
+                        "FROM printing p LEFT JOIN card c ON p.card_id = c.id",
+                    null,
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    cursor.getLong(0) to cursor.getLong(1)
+                }
+
+        // Counted in the same pass, so a "0 orphans" that only means "0 rows" cannot pass unnoticed.
+        assertTrue("printings=$printings", printings > 80_000L)
+        assertEquals("orphaned printings", 0L, orphans)
+    }
+
+    @Test
+    fun `a broadly reprinted card resolves with its printings`() =
         runTest {
-            // Spot-check the join integrity via a common card that has a broad printing spread.
             val island: Card = catalog.search("Island").first { it.name == "Island" }
             assertTrue(island.printings.isNotEmpty())
             assertTrue(island.typeLine.hasCardType("Land"))

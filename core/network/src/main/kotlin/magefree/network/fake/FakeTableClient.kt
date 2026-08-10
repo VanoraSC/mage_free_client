@@ -16,8 +16,8 @@ import magefree.network.table.TableState
 /**
  * A scriptable [TableClient] test double (story 0037) for hermetic tests of downstream (0038) code — no
  * bridge, no `:protocol`. Each verb records its call and returns its configured [Result]; [observeTable]
- * replays [tableStates] (emitted first) and then anything pushed through [emitTableState], so a test can
- * drive a table through its lifecycle without a socket.
+ * emits its `seed` (exactly as production does), then replays [tableStates], then forwards anything
+ * pushed through [emitTableState], so a test can drive a table through its lifecycle without a socket.
  *
  * Every result defaults to success; set the matching `…Result` to a [Result.failure] (e.g. a
  * [magefree.network.table.TableActionFailure]) to exercise a caller's error path.
@@ -132,10 +132,21 @@ class FakeTableClient(
         return refreshResult
     }
 
+    /**
+     * Mirrors [magefree.network.table.DefaultTableClient.observeTable]: the [seed] is emitted **first**,
+     * before the scripted [tableStates] and any live [emitTableState]. Production emits it synchronously
+     * as the flow opens, so a collector never observes an empty/loading room it would not see on a real
+     * socket — a fake that skipped it (as this one did before story 0044) manufactures a loading state
+     * production does not have, and would hide a regression in seed emission entirely.
+     */
     override fun observeTable(
         tableId: String,
         seed: TableState,
-    ): Flow<TableState> = emitted.onStart { tableStates.forEach { emit(it) } }
+    ): Flow<TableState> =
+        emitted.onStart {
+            emit(seed)
+            tableStates.forEach { emit(it) }
+        }
 
     /** Push a [TableState] to live [observeTable] collectors, as the real fold would on a table event. */
     suspend fun emitTableState(state: TableState) {

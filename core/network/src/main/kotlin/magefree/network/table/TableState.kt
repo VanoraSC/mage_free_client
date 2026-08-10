@@ -213,8 +213,11 @@ enum class RangeOfInfluence {
  * @property freeMulligans the number of free mulligans allowed.
  * @property skillLevel the advertised skill level.
  * @property range the multiplayer range of influence.
- * @property matchTimeLimitSeconds the per-player priority time budget, in seconds (0 = none).
- * @property matchBufferTimeSeconds the per-priority buffer time, in seconds (0 = none).
+ * @property matchTimeLimitSeconds the per-player priority time budget, in seconds (0 = none). Must be
+ *   one of the budgets XMage offers: the bridge **rejects** the create with a typed failure naming the
+ *   supported values rather than quietly substituting "no clock" (story 0044).
+ * @property matchBufferTimeSeconds the per-priority buffer time, in seconds (0 = none). Validated the
+ *   same way as [matchTimeLimitSeconds].
  * @property spectatorsAllowed whether spectators may watch.
  * @property quitRatio the maximum allowed quit ratio (percent) for joiners.
  * @property minimumRating the minimum rating required to join (0 = no minimum).

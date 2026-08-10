@@ -21,9 +21,9 @@ import magefree.feature.tables.JoinTableRoute as JoinTableFeatureRoute
 import magefree.feature.tables.TableRoomRoute as TableRoomFeatureRoute
 
 /**
- * Type-safe route for the read-only lobby browser (story 0029), reached from the home "Play" entry.
- * It is a nested destination inside the shell — not a top-level tab — so the tab chrome and the
- * connection strip stay visible above it and Back returns to Home.
+ * Type-safe route for the lobby browser (story 0029), reached from the home "Play" entry. It is a
+ * nested destination inside the shell — not a top-level tab — so the tab chrome and the connection
+ * strip stay visible above it and Back returns to Home.
  */
 @Serializable
 data object LobbyRoute
@@ -79,8 +79,9 @@ private fun RoomArgs.toNavRoute(): TableRoomNavRoute =
  * each `composable<Route>` entry is keyed by a [Serializable][kotlinx.serialization.Serializable]
  * route type, not a string. [HomeRoute] is the start destination.
  *
- * Only the four top-level placeholder screens live here; nested/detail navigation within a
- * destination is added by the owning feature epics (out of scope for story 0008).
+ * It hosts the four top-level destinations plus the nested destinations reached from them — the lobby
+ * browser, the card catalog, and the host/join/room table flows — each keyed by its own route type.
+ * Deeper navigation *inside* a feature is that feature's own concern and does not surface here.
  */
 @Composable
 fun MageNavHost(
@@ -108,8 +109,8 @@ fun MageNavHost(
     ) {
         composable<HomeRoute> {
             HomeScreen(
-                // Story 0029: the Play entry now opens the read-only lobby browser (EPIC-06). Joining
-                // a table is still EPIC-07. Kept within the Home tab's back stack so Back returns here.
+                // The Play entry opens the lobby browser, from which a table can be hosted, joined or
+                // watched. Kept within the Home tab's back stack so Back returns here.
                 onPlayClick = { navController.navigate(LobbyRoute) },
                 onDecksClick = { navigateToTab(DecksRoute) },
                 onProfileClick = { navigateToTab(ProfileRoute) },
@@ -117,9 +118,8 @@ fun MageNavHost(
             )
         }
         composable<LobbyRoute> {
-            // Story 0038: the lobby's deferred Join/Watch are now live, and a Host entry is added. Each
-            // opens a nested tables destination within the lobby's back stack (chrome stays, Back returns
-            // to the lobby).
+            // Host/Join/Watch each open a nested tables destination within the lobby's back stack
+            // (chrome stays, Back returns to the lobby).
             LobbyFeatureRoute(
                 onBack = { navController.popBackStack() },
                 onHost = { navController.navigate(HostTableNavRoute) },
@@ -200,8 +200,9 @@ fun MageNavHost(
         composable<ProfileRoute> { ProfilePlaceholderScreen() }
         composable<SettingsRoute> {
             SettingsPlaceholderScreen(
-                // Stub entry into the immersive game route; real entry arrives via lobby/table
-                // flows in EPIC-06/07.
+                // Stub entry into the immersive game route. The table room does not open the board
+                // yet: the real entry is the room's match-start signal, which belongs to the in-game
+                // epic (Epic 11 — see `magefree.network.table.MatchStarting`).
                 onEnterGame = onEnterGame,
                 // Debug-only entry into the design-system component catalog (story 0015).
                 onOpenCatalog = onOpenCatalog,

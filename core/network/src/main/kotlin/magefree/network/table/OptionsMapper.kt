@@ -11,8 +11,16 @@ import magefree.protocol.TableDetail as ProtocolTableDetail
 /**
  * The create-options half of the table client's mapper boundary (story 0037): projects the app-schema
  * [CreateTableOptions] onto 0036's wire [ProtocolCreateTableOptions] so a caller passes a `:protocol`-free
- * options record to [TableClient.createTable]. The app enums mirror the wire codes one-to-one, so the
- * mapping is total and lossless.
+ * options record to [TableClient.createTable].
+ *
+ * The mapping is **total** — every app value has a wire code — but it is *not* lossless.
+ * [SkillLevel.Unknown] (what the read direction produces for a skill the server did not name) is
+ * written as `CASUAL`, not the wire's own `UNKNOWN`: the bridge resolves `UNKNOWN` to `CASUAL` when it
+ * builds the upstream `MatchOptions` anyway, so this pre-resolves it. A table read back as `Unknown`
+ * and re-created therefore lands as `Casual`; every other value round-trips one-to-one.
+ *
+ * The numeric fields (clocks, ratios, ratings) pass through unvalidated — the bridge is where a clock
+ * XMage has no value for is rejected (`MatchOptionsMapper`, story 0044).
  */
 internal fun CreateTableOptions.toProtocol(): ProtocolCreateTableOptions =
     ProtocolCreateTableOptions(
@@ -101,6 +109,7 @@ private fun RangeOfInfluence.toCode(): RangeCode =
         RangeOfInfluence.All -> RangeCode.ALL
     }
 
+/** App-schema [SkillLevel] → wire [SkillLevelCode]; `Unknown` is written as `CASUAL` (see the file KDoc). */
 private fun SkillLevel.toCode(): SkillLevelCode =
     when (this) {
         SkillLevel.Beginner -> SkillLevelCode.BEGINNER
