@@ -39,13 +39,17 @@ enum class PrefetchStatus {
     /** A run is in progress. */
     RUNNING,
 
-    /** Finished warming every target. */
+    /**
+     * Every target was attempted. [PrefetchProgress.failed] `> 0` means a **partial** run — some
+     * targets could not be warmed (a 404, a corrupt cache entry, no connectivity); a re-run resumes
+     * over them, skipping what is already cached.
+     */
     COMPLETED,
 
     /** The user cancelled mid-run (already-warmed art stays cached; a re-run resumes). */
     CANCELLED,
 
-    /** The run could not enumerate its targets. */
+    /** The run could not enumerate its targets, or failed structurally before finishing them. */
     FAILED,
 }
 
@@ -65,6 +69,13 @@ data class PrefetchProgress(
     val error: String? = null,
 ) {
     val done: Int get() = warmed + skipped + failed
+
+    /**
+     * True once the run has stopped for good. Every run reaches one of these, so a UI bound to this
+     * flow always gets to stop showing progress (story 0043, defect C).
+     */
+    val isTerminal: Boolean
+        get() = status == PrefetchStatus.COMPLETED || status == PrefetchStatus.CANCELLED || status == PrefetchStatus.FAILED
 
     /** Progress in `[0, 1]`; `0` before a total is known. */
     val fraction: Float get() = if (total <= 0) 0f else (done.toFloat() / total).coerceIn(0f, 1f)
