@@ -25,6 +25,16 @@ android {
             )
         }
     }
+
+    testOptions {
+        unitTests {
+            // Story 0047: the cold-start reachability test drives the real Navigation-Compose graph on
+            // the JVM under Robolectric, so `:app:testDebugUnitTest` (a hermetic gate) can prove the
+            // connect destination is where a launch lands — no device, no emulator.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -35,6 +45,10 @@ dependencies {
     implementation(project(":core:cards"))
     // Story 0033: bundles the offline deck library (Room) + format-legality asset + DI into the app.
     implementation(project(":core:decks"))
+    // Story 0047: the connect + sign-in flow (EPIC-04) the root graph starts on. It is the only thing
+    // in the app that calls ConnectionRepository.connect(...), so without this dependency the APK can
+    // never establish a session and every feature below is wired to data it can never receive.
+    implementation(project(":feature:connect"))
     // Story 0029: the lobby browser behind the home "Play" entry.
     implementation(project(":feature:lobby"))
     // Story 0032: the card search/browse + inspection surface behind the Decks "Browse cards" entry.
@@ -62,6 +76,16 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    // Story 0047: JVM-side Compose + Navigation UI testing for the cold-start reachability test
+    // (`src/testDebug`). Scoped to the **debug** unit-test variant because `createComposeRule` needs the
+    // host `ComponentActivity` that `compose-ui-test-manifest` contributes, and the convention plugin
+    // adds that as a `debugImplementation`. The Compose BOM is applied to `implementation` /
+    // `androidTestImplementation` by that same plugin, so this classpath needs it explicitly to keep
+    // Compose artifact versions aligned.
+    testDebugImplementation(platform(libs.compose.bom))
+    testDebugImplementation(libs.compose.ui.test.junit4)
+    testDebugImplementation(libs.androidx.navigation.testing)
+    testDebugImplementation(libs.robolectric)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)

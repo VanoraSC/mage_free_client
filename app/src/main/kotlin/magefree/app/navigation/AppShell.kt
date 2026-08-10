@@ -57,6 +57,7 @@ fun AppShell(
     navController: NavHostController = rememberNavController(),
     onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
+    onSignOut: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
     // Story 0035: the Decks tab hosts the deck library + builder (`:feature:decks`). Built here (not in
     // MageNavHost) so the shell can be driven Hilt-free in tests via the stateless overload's default.
@@ -70,6 +71,7 @@ fun AppShell(
             navController = navController,
             onEnterGame = onEnterGame,
             onOpenCatalog = onOpenCatalog,
+            onSignOut = onSignOut,
             connectionStatusBar = connectionStatusBar,
             decksScreen = decksScreen,
         )
@@ -96,6 +98,10 @@ fun AppShell(
     modifier: Modifier = Modifier,
     onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
+    // Story 0047: deliberate sign-out, surfaced on the Settings destination and hoisted to the root
+    // graph, which tears the session down and returns to the connect flow. Defaults to a no-op so the
+    // shell stays drivable without a session (and without Hilt) in tests.
+    onSignOut: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
     // Defaults to the Hilt-free placeholder so `AppShell` can be driven without a Hilt graph in tests;
     // production supplies the real `:feature:decks` library via the overload above.
@@ -144,6 +150,7 @@ fun AppShell(
                     navController = navController,
                     onEnterGame = onEnterGame,
                     onOpenCatalog = onOpenCatalog,
+                    onSignOut = onSignOut,
                     decksScreen = decksScreen,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -184,6 +191,7 @@ fun AppShell(
                     navController = navController,
                     onEnterGame = onEnterGame,
                     onOpenCatalog = onOpenCatalog,
+                    onSignOut = onSignOut,
                     decksScreen = decksScreen,
                     modifier = Modifier.fillMaxSize(),
                 )
