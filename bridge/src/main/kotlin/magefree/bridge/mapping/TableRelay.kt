@@ -29,23 +29,41 @@ import java.util.UUID
  * [TableActionResult]).
  *
  * **Result semantics.** `createTable` returns a `mage.view.TableView` (or `null`); a non-null view maps
- * to [TableCreated] (reusing [TableMapper]), a null to a failed [TableActionResult]. The boolean verbs
- * map to a structured [TableActionResult] — a `false` becomes a **typed failure**, never a silent drop.
+ * to [TableCreated] (reusing [TableMapper]), a null to a failed [TableActionResult]; options XMage has
+ * no value for are rejected as a failed [TableActionResult] before the call. The boolean verbs map to a
+ * structured [TableActionResult] — a `false` becomes a **typed failure**, never a silent drop.
  */
 public object TableRelay {
     /**
      * Creates a table in [roomId] from [options], replying [TableCreated] with the mapped new table on
      * success or a failed [TableActionResult] ([TableActionCode.CREATE]) when the server declines
      * (a null `TableView`).
+     *
+     * Options XMage cannot express — a match/buffer clock outside its closed enumerations — are
+     * rejected **before** the upstream call, as a typed failure naming the supported values (story
+     * 0044). The alternative, quietly substituting "no clock", would report success for a table whose
+     * match rules are not the ones the host asked for.
      */
     public fun createTable(
         session: SessionImpl,
         roomId: UUID,
         options: CreateTableOptions,
     ): ServerMessage {
-        val view = session.createTable(roomId, MatchOptionsMapper.toMatchOptions(options))
+        val match =
+            MatchOptionsMapper
+                .toMatchOptions(options)
+                .getOrElse { failure -> return rejectedMessage(failure.message ?: CREATE_DECLINED) }
+        val view = session.createTable(roomId, match)
         return createdMessage(view?.let { TableMapper.map(it) })
     }
+
+    /**
+     * The pure "these options cannot be honoured" reply (unit-testable): a failed
+     * [TableActionCode.CREATE] result carrying [reason], so the host is told *what* was unsupported
+     * rather than receiving a table configured differently from the one requested.
+     */
+    public fun rejectedMessage(reason: String): TableActionResult =
+        TableActionResult(action = TableActionCode.CREATE, ok = false, reason = reason)
 
     /**
      * The pure create-result decision (unit-testable without a `TableView`): a mapped [table] → a

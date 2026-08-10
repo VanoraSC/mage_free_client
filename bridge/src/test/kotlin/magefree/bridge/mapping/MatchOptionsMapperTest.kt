@@ -9,8 +9,10 @@ import magefree.protocol.CreateTableOptions
 import magefree.protocol.RangeCode
 import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableActionCode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -18,6 +20,10 @@ import org.junit.jupiter.api.Test
  * Hermetic tests for [MatchOptionsMapper]. `mage.game.match.MatchOptions` is a plain field/setter type
  * on the bridge classpath, so the mapping is asserted directly over a crafted [CreateTableOptions],
  * plus exhaustive per-enum translation.
+ *
+ * The clock cases pin story 0044's contract: a budget XMage has no value for is a typed
+ * [UnsupportedMatchOption] failure that reaches the host as a failed `CREATE` result — it is never
+ * silently downgraded to "no clock" under a successful create.
  */
 class MatchOptionsMapperTest {
     @Test
@@ -41,7 +47,7 @@ class MatchOptionsMapperTest {
                 password = "hunter2",
             )
 
-        val match = MatchOptionsMapper.toMatchOptions(options)
+        val match = MatchOptionsMapper.toMatchOptions(options).getOrThrow()
 
         assertEquals("Duel Night", match.name)
         assertEquals("Two Player Duel", match.gameType)
@@ -72,7 +78,7 @@ class MatchOptionsMapperTest {
                 password = null,
             )
 
-        val match = MatchOptionsMapper.toMatchOptions(options)
+        val match = MatchOptionsMapper.toMatchOptions(options).getOrThrow()
 
         assertTrue(match.isLimited)
         assertEquals("", match.password)
@@ -103,14 +109,95 @@ class MatchOptionsMapperTest {
     }
 
     @Test
-    fun `time limits resolve by seconds and fall back to NONE for an unmatched value`() {
+    fun `clocks resolve by exact seconds and an unsupported value resolves to null, never NONE`() {
         assertEquals(MatchTimeLimit.NONE, MatchOptionsMapper.timeLimitOf(0))
         assertEquals(MatchTimeLimit.MIN___5, MatchOptionsMapper.timeLimitOf(300))
         assertEquals(MatchTimeLimit.MIN_120, MatchOptionsMapper.timeLimitOf(7200))
-        assertEquals(MatchTimeLimit.NONE, MatchOptionsMapper.timeLimitOf(7))
+        // 7s is no XMage budget: null (unsupported), *not* NONE — which is the real "no clock" value.
+        assertNull(MatchOptionsMapper.timeLimitOf(7))
 
         assertEquals(MatchBufferTime.NONE, MatchOptionsMapper.bufferTimeOf(0))
         assertEquals(MatchBufferTime.SEC__10, MatchOptionsMapper.bufferTimeOf(10))
-        assertEquals(MatchBufferTime.NONE, MatchOptionsMapper.bufferTimeOf(7))
+        assertNull(MatchOptionsMapper.bufferTimeOf(7))
+    }
+
+    @Test
+    fun `the supported budgets are the upstream enumerations and include no-clock zero`() {
+        val timeLimits = MatchOptionsMapper.supportedTimeLimitSeconds()
+        assertEquals(MatchTimeLimit.entries.size, timeLimits.size)
+        assertTrue(timeLimits.contains(MatchTimeLimit.NONE.prioritySecs))
+        assertTrue(timeLimits.contains(MatchTimeLimit.MIN___5.prioritySecs))
+        assertEquals(timeLimits.sorted(), timeLimits)
+        assertFalse(timeLimits.contains(7))
+
+        val buffers = MatchOptionsMapper.supportedBufferSeconds()
+        assertEquals(MatchBufferTime.entries.size, buffers.size)
+        assertTrue(buffers.contains(MatchBufferTime.NONE.bufferSecs))
+        assertEquals(buffers.sorted(), buffers)
+    }
+
+    @Test
+    fun `an unsupported match time limit is rejected as a typed failure, never silently no-clock`() {
+        val options = CreateTableOptions(name = "Odd clock", gameType = "Two Player Duel", matchTimeLimitSeconds = 7)
+
+        val result = MatchOptionsMapper.toMatchOptions(options)
+
+        assertTrue(result.isFailure)
+        val failure = result.exceptionOrNull()
+        assertTrue(failure is UnsupportedMatchOption, "failure=$failure")
+        failure as UnsupportedMatchOption
+        assertEquals(MatchOptionsMapper.TIME_LIMIT, failure.field)
+        assertEquals(7, failure.seconds)
+        assertEquals(MatchOptionsMapper.supportedTimeLimitSeconds(), failure.supported)
+        // The reason the host is shown names the value and what is on offer.
+        assertTrue(failure.message!!.contains("7s"), "message=${failure.message}")
+        assertTrue(failure.message!!.contains(MatchTimeLimit.MIN___5.prioritySecs.toString()))
+    }
+
+    @Test
+    fun `an unsupported buffer time is rejected as a typed failure`() {
+        val options = CreateTableOptions(name = "Odd buffer", gameType = "Two Player Duel", matchBufferTimeSeconds = 7)
+
+        val failure = MatchOptionsMapper.toMatchOptions(options).exceptionOrNull()
+
+        assertTrue(failure is UnsupportedMatchOption, "failure=$failure")
+        failure as UnsupportedMatchOption
+        assertEquals(MatchOptionsMapper.BUFFER_TIME, failure.field)
+        assertEquals(7, failure.seconds)
+        assertEquals(MatchOptionsMapper.supportedBufferSeconds(), failure.supported)
+    }
+
+    @Test
+    fun `every supported budget maps onto the MatchOptions rather than being rejected`() {
+        MatchTimeLimit.entries.forEach { limit ->
+            val options =
+                CreateTableOptions(
+                    name = "Clocked",
+                    gameType = "Two Player Duel",
+                    matchTimeLimitSeconds = limit.prioritySecs,
+                )
+            assertEquals(limit, MatchOptionsMapper.toMatchOptions(options).getOrThrow().matchTimeLimit)
+        }
+        MatchBufferTime.entries.forEach { buffer ->
+            val options =
+                CreateTableOptions(
+                    name = "Buffered",
+                    gameType = "Two Player Duel",
+                    matchBufferTimeSeconds = buffer.bufferSecs,
+                )
+            assertEquals(buffer, MatchOptionsMapper.toMatchOptions(options).getOrThrow().matchBufferTime)
+        }
+    }
+
+    @Test
+    fun `a rejected create replies a failed CREATE result carrying the reason`() {
+        val options = CreateTableOptions(name = "Odd clock", gameType = "Two Player Duel", matchTimeLimitSeconds = 7)
+        val failure = MatchOptionsMapper.toMatchOptions(options).exceptionOrNull()!!
+
+        val reply = TableRelay.rejectedMessage(failure.message!!)
+
+        assertEquals(TableActionCode.CREATE, reply.action)
+        assertFalse(reply.ok)
+        assertEquals(failure.message, reply.reason)
     }
 }
