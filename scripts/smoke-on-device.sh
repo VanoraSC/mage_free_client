@@ -382,13 +382,39 @@ hide_ime() {
   return 0
 }
 
-# Focus the text field carrying this floating label, then type. The label is rendered *inside* the
-# field's bounds (Material3 outlined fields), so tapping the label focuses the field.
+# Focus the text field carrying this floating label, then type — and **read the value back**.
+#
+# The label is rendered *inside* the field's bounds (Material3 outlined fields), so tapping the label
+# focuses the field. The read-back is not paranoia: `adb shell input text` drops and reorders characters
+# under load, and a run that quietly signed in as a different name than it reported would make its own
+# evidence untraceable in the bridge/server logs. On a mismatch the field is cleared and retyped.
 type_into() {
   local label="$1" value="$2"
-  tap_text "$label"
-  adbx shell input text "$value" >/dev/null
-  sleep 1
+  local attempt=1
+  while [ $attempt -le 3 ]; do
+    tap_text "$label"
+    adbx shell input text "$value" >/dev/null
+    sleep 1
+    refresh_ui || fail "a readable UI dump after typing into '$label'"
+    if grep 'class="android.widget.EditText"' "$UI" | grep -Fq "text=\"$value\""; then
+      return 0
+    fi
+    note "'$label' read back as $(grep 'class="android.widget.EditText"' "$UI" |
+      grep -o 'text="[^"]*"' | paste -sd',' -) — retyping (attempt $attempt)"
+    clear_field "$label"
+    attempt=$((attempt + 1))
+  done
+  fail "'$label' to contain '$value' after typing it (adb input dropped characters three times)"
+}
+
+clear_field() {
+  tap_text "$1"
+  adbx shell input keyevent KEYCODE_MOVE_END >/dev/null
+  local i=0
+  while [ $i -lt 40 ]; do
+    adbx shell input keyevent KEYCODE_DEL >/dev/null
+    i=$((i + 1))
+  done
 }
 
 # ---------------------------------------------------------------------------------------------------
@@ -580,7 +606,10 @@ wait_for '^Search cards to add$' 20 "the offline card catalog's add-cards surfac
 
 # Search the catalog by name — the way a player finds a card they have in mind.
 log "   searching the catalog for '$CARD_SEARCH_TERM'"
-type_into "Search cards to add" "$CARD_SEARCH_TERM"
+# Typed without the read-back retry the other fields use: whether the characters arrive is precisely
+# what this step is measuring, so the assertion below owns the verdict.
+tap_text "Search cards to add"
+adbx shell input text "$CARD_SEARCH_TERM" >/dev/null
 sleep 2
 if ! check "^Showing [1-9][0-9]*$" "searching the catalog for '$CARD_SEARCH_TERM' returns matches" 12; then
   note "the search field kept the placeholder: no character reached it (IME shown=$(ime_shown && echo yes || echo no))"
