@@ -28,8 +28,8 @@ import magefree.model.TableState
 /**
  * One [LobbyTable] rendered for the browser: a design-system [MageListRow] carrying the table name,
  * host + format + seats + state, with an at-a-glance strip of flag pills (rated / passworded /
- * limited / tournament) beneath. The whole row is a tap target for the read-only detail/preview
- * (joining is deferred to EPIC-07).
+ * limited / tournament) beneath. The whole row is a tap target that opens the table's detail sheet,
+ * where the Join and Watch actions live.
  *
  * Stateless; every event is hoisted via [onClick].
  */

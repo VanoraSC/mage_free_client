@@ -159,7 +159,9 @@ internal fun LobbySnapshot.toLobbyUiState(filter: LobbyFilter): LobbyUiState {
 }
 
 /**
- * MVVM ViewModel for the read-only lobby browser (story 0029). Observes story 0028's
+ * MVVM ViewModel for the lobby browser (story 0029). It owns browsing only — the table actions the
+ * browser offers (host / join / watch) are hoisted out of the screen to `:feature:tables`, so nothing
+ * here mutates server state. Observes story 0028's
  * [LobbyRepository] `snapshot` and combines it with the client-side [LobbyFilter] into a single
  * immutable [LobbyUiState]. Filtering/sorting live entirely here (the repository exposes the raw
  * snapshot); [refresh] drives [LobbyRepository.refresh] (manual / pull-to-refresh — there is no
