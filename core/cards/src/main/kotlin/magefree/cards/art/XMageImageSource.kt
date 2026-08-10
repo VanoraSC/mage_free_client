@@ -11,12 +11,16 @@ import java.util.Locale
  */
 interface XMageImageSource {
     /**
-     * Candidate URLs for [request], most-specific first. Callers (the Coil fetcher) try them in
-     * order and fall back on a miss. Never empty for a well-formed request.
+     * Candidate URLs for [request], most-specific first. The Coil fetcher ([CardArtFetcher]) tries
+     * them in order and falls back to the next on a miss (a non-2xx). Never empty for a well-formed
+     * request.
      */
     fun resolve(request: CardArtRequest): List<String>
 
-    /** The primary (first) URL for [request] — a convenience over [resolve]. */
+    /**
+     * The primary (first) URL for [request] — a convenience over [resolve], and the **cache key** for
+     * the request: the entry is keyed on the request's identity, not on whichever candidate answered.
+     */
     fun primaryUrl(request: CardArtRequest): String = resolve(request).first()
 }
 

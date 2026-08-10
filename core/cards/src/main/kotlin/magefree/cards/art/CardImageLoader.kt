@@ -3,13 +3,11 @@ package magefree.cards.art
 import android.content.Context
 import coil3.ImageLoader
 import coil3.disk.DiskCache
-import coil3.map.Mapper
 import coil3.memory.MemoryCache
 import coil3.network.NetworkFetcher
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
-import coil3.request.Options
 import coil3.request.SuccessResult
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -38,8 +36,9 @@ interface ArtWarmer {
 
 /**
  * The on-demand card-art loader (story 0031). Callers pass a [CardArtRequest] (identity), never a URL;
- * a Coil [Mapper] resolves the URL via [XMageImageSource], and Coil provides the memory+disk cache,
- * request de-duplication, and cancellation.
+ * [CardArtFetcher] resolves the URL candidates via [XMageImageSource] and fetches the first one that
+ * answers, while Coil provides the memory+disk cache, request de-duplication, and cancellation. Every
+ * cache key — memory and disk — is the request's *primary* URL, whichever candidate served the bytes.
  *
  * ### Cache policy
  * The loader honors the active [CardArtCachePolicy]:
@@ -143,7 +142,12 @@ class CardImageLoader(
             ImageLoader
                 .Builder(context)
                 .components {
-                    add(CardArtRequestMapper(source))
+                    // The request is handed to Coil as a CardArtRequest (not a URL) and stays one all
+                    // the way to CardArtFetcher, which resolves it and walks the candidate URLs with a
+                    // stable cache key. A Mapper here would flatten it to a single URL and there would
+                    // be no fallback (story 0043, defect B).
+                    add(CardArtKeyer(source))
+                    add(CardArtFetcher.Factory(source, networkFetcherFactory))
                     add(networkFetcherFactory)
                 }.memoryCache {
                     MemoryCache.Builder().maxSizePercent(context, MEMORY_CACHE_PERCENT).build()
@@ -169,14 +173,4 @@ class CardImageLoader(
         const val DISK_CACHE_MAX_BYTES = 512L * 1024 * 1024 // 512 MB ceiling for warmed art
         const val MEMORY_CACHE_PERCENT = 0.20
     }
-}
-
-/** Coil [Mapper] resolving a [CardArtRequest] to its primary Scryfall URL via [XMageImageSource]. */
-internal class CardArtRequestMapper(
-    private val source: XMageImageSource,
-) : Mapper<CardArtRequest, String> {
-    override fun map(
-        data: CardArtRequest,
-        options: Options,
-    ): String = source.primaryUrl(data)
 }
