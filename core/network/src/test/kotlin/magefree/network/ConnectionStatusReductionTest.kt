@@ -160,6 +160,10 @@ class ConnectionStatusReductionTest {
             mutableState.value = ConnectionState.Disconnected
         }
 
+        override suspend fun signOut() {
+            mutableState.value = ConnectionState.Disconnected
+        }
+
         override suspend fun <ReplyT : Any> request(
             message: Any,
             requestId: String,

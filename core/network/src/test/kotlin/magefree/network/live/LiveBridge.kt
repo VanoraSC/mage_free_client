@@ -90,6 +90,28 @@ internal class LiveBridge(
         collector = null
     }
 
+    /**
+     * Signs out **deliberately** (story 0046): the production `signOut` puts a `Logout` on the wire
+     * before closing, so the bridge disconnects the upstream XMage session now instead of parking it for
+     * the resume TTL. Then stops collecting, as [close] does.
+     */
+    suspend fun signOut() {
+        client.signOut()
+        collector?.let { runCatching { it.cancelAndJoin() } }
+        collector = null
+    }
+
+    /**
+     * Ends the session the way a **lost connection or a backgrounded app** does: cancel the collection of
+     * the cold `connect` flow, which closes the socket with no `Logout` on it. Nothing here calls
+     * `disconnect`/`signOut` — this is the shape the bridge must read as "park it, they may be back"
+     * (stories 0023/0024).
+     */
+    suspend fun dropWithoutSigningOut() {
+        collector?.let { runCatching { it.cancelAndJoin() } }
+        collector = null
+    }
+
     companion object {
         /** How long a first connect + login may take (the upstream connect/auth handshake is not free). */
         const val CONNECT_TIMEOUT_MS: Long = 60_000L

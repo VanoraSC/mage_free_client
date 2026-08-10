@@ -108,9 +108,17 @@ class SignInViewModel
             connectionRepository.retry()
         }
 
-        /** Tear the session down and return to the [ConnectPhase.Idle] form. */
+        /**
+         * Tear the session down and return to the [ConnectPhase.Idle] form.
+         *
+         * This is the app's sign-out: every route into it is the player leaving on purpose — the
+         * failure surfaces' Cancel, the sign-in screen's Back, and the session-lost re-authenticate
+         * choice. So it takes the deliberate teardown ([ConnectionRepository.signOut]), which tells the
+         * bridge to drop the upstream XMage session now rather than park it for the resume window
+         * (story 0046); a drop or a backgrounding never comes through here.
+         */
         fun cancel() {
-            viewModelScope.launch { connectionRepository.disconnect() }
+            viewModelScope.launch { connectionRepository.signOut() }
         }
 
         private companion object {

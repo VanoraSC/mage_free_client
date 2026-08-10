@@ -32,7 +32,7 @@ import javax.inject.Singleton
  * status surface (story 0010's seam) and every future connect screen observe consistently.
  *
  * ### Lifecycle
- * [connect] / [retry] publish a [Command] into [command]; [disconnect] clears it. A single
+ * [connect] / [retry] publish a [Command] into [command]; [signOut] clears it. A single
  * `flatMapLatest` over [command] means each new command cancels the previous session's collection
  * before starting the next — enforcing the "one active session" invariant — and reconnect state from
  * the bridge ([magefree.model.SessionEvent.Reconnecting]) flows straight through.
@@ -135,10 +135,23 @@ class ConnectionRepository
             }
         }
 
-        /** Tear down the active session and return to [ConnectionState.Disconnected]. */
-        suspend fun disconnect() {
+        /**
+         * Sign out: drop the connect intent and tear the session down **deliberately**, returning to
+         * [ConnectionState.Disconnected].
+         *
+         * Every caller of this is a user leaving on purpose (the sign-in surfaces' Cancel / Back /
+         * re-authenticate), so it routes to [BridgeClient.signOut] — the bridge disconnects the upstream
+         * XMage session immediately instead of parking it for the resume TTL, and the username is free
+         * again at once (story 0046).
+         *
+         * The *other* direction is not a method here: a drop or a lifecycle pause never calls this. It
+         * ends the session by cancelling the shared collection (this class shares `sessionEvents`
+         * `WhileSubscribed`), which closes the socket without a `Logout` and leaves the bridge holding
+         * the session for a reconnect to resume — stories 0023/0024, deliberately untouched.
+         */
+        suspend fun signOut() {
             command.value = null
-            bridgeClient.disconnect()
+            bridgeClient.signOut()
         }
 
         private companion object {

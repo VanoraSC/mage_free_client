@@ -1,5 +1,6 @@
 package magefree.network.live
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import magefree.model.ConnectionState
 import magefree.model.SessionEvent
@@ -21,6 +22,10 @@ import org.junit.Test
  * stands in for, so a `requestId` correlation mismatch, an `ignoreUnknownKeys` drift, a sealed-type
  * discriminator rename or a `ServerHello` major bump would all pass hermetically and fail in production.
  * These tests are the first thing in the repo that would notice.
+ *
+ * Story 0046 added the two teardown tests at the end: they are the same kind of proof one level down —
+ * the bridge offers a capability (`Logout`) that no fake could have shown the app was failing to use,
+ * and only a real server's own view of who is logged in can tell a torn-down session from a parked one.
  *
  * The assertions are on the app's **domain** types ([magefree.model.Session],
  * [magefree.model.GameType], [magefree.model.RoomUser], [magefree.model.LobbyTable]) rather than on wire
@@ -129,8 +134,100 @@ class AppBridgeSessionIT {
         }
     }
 
+    @Test
+    fun `signing out tears the upstream session down instead of parking it`() {
+        val target = requireTarget()
+        runBlocking {
+            val observer = LiveBridge(this, target)
+            val subject = LiveBridge(this, target)
+            val username = uniqueUsername()
+            try {
+                // A second live session is the observation post: the room's user list is the *server's*
+                // own view of who is logged in, so it answers "is the upstream session still alive?"
+                // without the test needing to see inside the bridge.
+                observer.connect(uniqueUsername())
+                subject.connect(username)
+                awaitValue(
+                    what = "the room user list to include '$username' before signing out",
+                    read = { observer.lobby.roomUsers() },
+                    condition = { list -> list.any { it.name == username } },
+                )
+
+                subject.signOut()
+
+                // Before story 0046 this could not pass: sign-out closed the socket with no `Logout`, the
+                // bridge could not tell it from a dropped connection, and it parked the session — leaving
+                // this user logged in upstream for the whole resume TTL (see the sibling test below,
+                // which asserts exactly that for a real drop).
+                awaitValue(
+                    what = "'$username' to leave the room after signing out",
+                    timeoutMs = SIGN_OUT_TEARDOWN_TIMEOUT_MS,
+                    read = { observer.lobby.roomUsers() },
+                    condition = { list -> list.none { it.name == username } },
+                )
+            } finally {
+                subject.close()
+                observer.close()
+            }
+        }
+    }
+
+    @Test
+    fun `a drop without signing out still parks the session`() {
+        val target = requireTarget()
+        runBlocking {
+            val observer = LiveBridge(this, target)
+            val subject = LiveBridge(this, target)
+            val username = uniqueUsername()
+            try {
+                observer.connect(uniqueUsername())
+                subject.connect(username)
+                awaitValue(
+                    what = "the room user list to include '$username' before the drop",
+                    read = { observer.lobby.roomUsers() },
+                    condition = { list -> list.any { it.name == username } },
+                )
+
+                // The other direction, live: the socket goes away with nothing written to it — a lost
+                // connection or a backgrounded app. The upstream session must survive so a reconnect can
+                // resume it (stories 0023/0024). This is the guard that would catch 0046's fix being
+                // applied to the wrong path.
+                subject.dropWithoutSigningOut()
+
+                val deadline = System.currentTimeMillis() + PARK_OBSERVATION_MS
+                while (System.currentTimeMillis() < deadline) {
+                    val users = observer.lobby.roomUsers()
+                    assertTrue(
+                        "a dropped connection must park the session, so '$username' should still be " +
+                            "logged in upstream; the room listed ${users.map { it.name }}",
+                        users.any { it.name == username },
+                    )
+                    delay(LiveBridge.POLL_INTERVAL_MS)
+                }
+            } finally {
+                subject.close()
+                observer.close()
+            }
+        }
+    }
+
     private companion object {
         /** The two-seat, non-tournament game type the reference server offers (see its `config.xml`). */
         const val DUEL = "Two Player Duel"
+
+        /**
+         * How long a signed-out user may still be listed in the room. The room rebuilds its snapshot on
+         * a ~2s timer, so a couple of cycles is the honest floor; the ceiling matters more — this is far
+         * below the bridge's 1-minute resume TTL, so passing here means the `Logout` tore the session
+         * down, not that the park expired.
+         */
+        const val SIGN_OUT_TEARDOWN_TIMEOUT_MS = 15_000L
+
+        /**
+         * How long a *parked* session is observed as still alive. Long enough to outlast several room
+         * snapshots (so this is not just a stale read), short enough to stay well inside the 1-minute
+         * resume TTL it is asserting.
+         */
+        const val PARK_OBSERVATION_MS = 10_000L
     }
 }
