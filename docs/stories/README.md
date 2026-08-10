@@ -18,12 +18,42 @@ piece accepted — reading only that document plus the repo it links to.
 Follows the repo's [`AGENTS.md`](../../AGENTS.md) git rules:
 
 1. Branch off `main` (e.g. `feature/story-0001-bridge-scaffold`).
-2. Implement to the story's design and acceptance criteria.
+2. Implement to the story's design and acceptance criteria, **committing incrementally** (see
+   [Verification standards](#verification-standards)).
 3. `./gradlew check` (and any integration tests the story names) must pass.
-4. Open a PR into `main`; merge when green.
+4. For a story with **user-visible behaviour**, an [independent verification pass](#verification-standards)
+   runs before merge.
+5. Open a PR into `main`; merge when green.
 
 The owning agent is responsible for the whole story — creation through test and acceptance —
 against the criteria written in the document.
+
+## Verification standards
+
+These are project-wide rules, not per-story instructions. Each exists because its absence let a
+defect ship: every one of the five defects found in the 2026-08 hardening pass had the same shape —
+**something that looked complete and silently did nothing**, with green tests.
+
+1. **Prove the test fails first.** Any test for a behavioural fix must be demonstrated failing
+   against the unfixed code, then passing after — with both outputs recorded in the PR. A test that
+   passes either way is worse than no test, because it manufactures confidence. (Found: an
+   interleaving test that passed against the bug because a dispatcher masked the race.)
+2. **Reachability check.** For every piece of state the UI reads or gates on, the story must answer
+   in writing: **what produces this in production?** Not "what could", not "what does the fake do" —
+   the actual production producer. (Found: seats folded from a server push that nothing sent, so the
+   host's Start could never enable; a `Logout` message the bridge implements and the app never sends;
+   a prefetch warming a different cache key than the UI requests.)
+3. **Independent verification for user-visible work.** The agent that implements a story does not get
+   the last word on whether it works. A separate pass — cold context, or a live run against the real
+   server — answers *"does this actually work end to end?"*, distinct from *"are the units correct?"*.
+   Every defect in the hardening pass was found this way; none was found by its implementer. Unit
+   tests stay with the implementer (they benefit from implementation knowledge); it is **behavioural
+   verification** that must be independent.
+4. **Commit incrementally.** Commit per defect or per coherent step, not once at the end. Long stories
+   get interrupted; an interruption should cost minutes, not the whole story.
+
+A fake that behaves differently from production is a defect in the fake, not a convenience — fix the
+double, not the test that depends on it.
 
 ## Story document template
 
@@ -38,12 +68,18 @@ Every story uses these sections:
    merged. Default to the [Project toolchain baseline](#project-toolchain-baseline) and note
    only the deltas.
 5. **Design & approach** — the intended structure: modules, key types, protocol/schema,
-   upstream APIs to call, and how correctness is preserved.
+   upstream APIs to call, and how correctness is preserved. For any state the UI reads or gates on,
+   state the **reachability check** (standard 2): what *produces* that state in production.
 6. **Implementation steps** — an ordered, concrete path.
 7. **Testing & verification** — unit and (where relevant) integration tests, plus exact
    commands. Correctness is verified against a locally-run XMage server, never invented data.
+   Name which tests must be **proven failing first** (standard 1), and — for user-visible work —
+   what the **independent verification** pass checks (standard 3).
 8. **Acceptance criteria** — a checklist that defines done.
 9. **References** — files and docs to read.
+
+Sections 5 and 7 carry the [Verification standards](#verification-standards); a story that gates UI
+on state with no named production producer is not ready to implement.
 
 ## Project toolchain baseline
 
