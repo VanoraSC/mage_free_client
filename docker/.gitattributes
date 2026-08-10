@@ -1,0 +1,4 @@
+# The Dockerfile-scoped build-context filter is read by BuildKit inside the container build, so it
+# must keep LF endings like every other container file (the root .gitattributes covers Dockerfile
+# itself, but not this sibling name).
+Dockerfile.dockerignore text eol=lf

@@ -1,0 +1,16 @@
+# Build-context filter for docker/bridge/Dockerfile (BuildKit reads `<dockerfile>.dockerignore` in
+# preference to a context-root .dockerignore). The context is the repo root, but the bridge image only
+# needs the build definition plus :protocol, :core:model and :bridge — everything else is transfer cost
+# (the bundled card catalog under core/cards alone is tens of MB) and would invalidate layers on edits
+# that cannot affect the bridge.
+**/build
+**/.gradle
+.git
+.claude
+.idea
+app
+feature
+tools
+docs
+core/*
+!core/model
