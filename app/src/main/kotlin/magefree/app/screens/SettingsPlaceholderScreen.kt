@@ -32,6 +32,14 @@ const val ENTER_GAME_STUB_LABEL: String = "Enter game (dev stub)"
 const val OPEN_CATALOG_STUB_LABEL: String = "Component catalog (dev)"
 
 /**
+ * Visible label on the sign-out action (story 0047). Shared with tests so the two agree. This is the
+ * shell's only deliberate exit from a session: it ends the session (story 0046's `signOut()`, which
+ * sends `Logout` rather than letting the bridge park the session for a resume) and returns the player
+ * to the connect flow, from which they can sign in again.
+ */
+const val SIGN_OUT_LABEL: String = "Sign out"
+
+/**
  * Placeholder for the Settings destination. Real preferences (DataStore-backed) arrive later; story
  * 0008 only proves the shell can reach this route.
  *
@@ -45,6 +53,7 @@ fun SettingsPlaceholderScreen(
     modifier: Modifier = Modifier,
     onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -78,6 +87,19 @@ fun SettingsPlaceholderScreen(
                     .heightIn(min = 48.dp),
         ) {
             Text(text = OPEN_CATALOG_STUB_LABEL, textAlign = TextAlign.Center)
+        }
+
+        // Story 0047: the deliberate way out of a session. Real preferences will re-home this when the
+        // Settings screen stops being a placeholder; what matters is that the shell has *an* exit at
+        // all — before 0047 the app could neither sign in nor sign out from a running APK.
+        OutlinedButton(
+            onClick = onSignOut,
+            modifier =
+                Modifier
+                    .padding(top = 12.dp)
+                    .heightIn(min = 48.dp),
+        ) {
+            Text(text = SIGN_OUT_LABEL, textAlign = TextAlign.Center)
         }
     }
 }
