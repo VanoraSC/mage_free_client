@@ -29,5 +29,30 @@ services:
       - "17171:17171"
     # Startup loads the card database (~1–2 min); readiness is a TCP connect to 17171.
 
+  # The bridge itself, running (story 0045). The reference server above proves the *bridge's* half of
+  # the protocol; this service is what lets the **app's** half — `:core:network`'s KtorBridgeClient —
+  # be driven against something real. Its `/v1/session` WebSocket is published on the host at
+  # ws://localhost:8080, which is what BRIDGE_URL points at for the app-side live tests (they run on
+  # the host, since :core:network is an Android module and this image has no Android SDK).
+  bridge:
+    build:
+      # Repo root: the image assembles :bridge from source (see bridge/Dockerfile's COPYs).
+      context: ..
+      dockerfile: docker/bridge/Dockerfile
+    image: mage-free-client/bridge:latest
+    depends_on:
+      - xmage-server
+    environment:
+      # Pinned-server posture (architecture.md decision #6): the app never names an XMage host — the
+      # bridge reads its own upstream from here (UpstreamTarget.fromEnv), over the compose network.
+      XMAGE_UPSTREAM: "xmage-server:17171"
+      # Read by application.conf (`port = ${?BRIDGE_PORT}`); stated rather than implied.
+      BRIDGE_PORT: "8080"
+    ports:
+      - "8080:8080"
+    # `depends_on` waits for the container to start, not for the server to finish loading its card
+    # database — a login issued in that window fails upstream. The bridge itself is up immediately;
+    # give the server its ~1–2 min before running the live suite.
+
 volumes:
   gradle-cache:
