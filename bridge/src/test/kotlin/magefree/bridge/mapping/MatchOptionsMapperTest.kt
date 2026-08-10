@@ -138,7 +138,7 @@ class MatchOptionsMapperTest {
 
     @Test
     fun `an unsupported match time limit is rejected as a typed failure, never silently no-clock`() {
-        val options = CreateTableOptions(name = "Odd clock", gameType = "Two Player Duel", matchTimeLimitSeconds = 7)
+        val options = clocked(timeLimitSeconds = 7)
 
         val result = MatchOptionsMapper.toMatchOptions(options)
 
@@ -156,7 +156,7 @@ class MatchOptionsMapperTest {
 
     @Test
     fun `an unsupported buffer time is rejected as a typed failure`() {
-        val options = CreateTableOptions(name = "Odd buffer", gameType = "Two Player Duel", matchBufferTimeSeconds = 7)
+        val options = clocked(bufferSeconds = 7)
 
         val failure = MatchOptionsMapper.toMatchOptions(options).exceptionOrNull()
 
@@ -170,28 +170,18 @@ class MatchOptionsMapperTest {
     @Test
     fun `every supported budget maps onto the MatchOptions rather than being rejected`() {
         MatchTimeLimit.entries.forEach { limit ->
-            val options =
-                CreateTableOptions(
-                    name = "Clocked",
-                    gameType = "Two Player Duel",
-                    matchTimeLimitSeconds = limit.prioritySecs,
-                )
-            assertEquals(limit, MatchOptionsMapper.toMatchOptions(options).getOrThrow().matchTimeLimit)
+            val mapped = MatchOptionsMapper.toMatchOptions(clocked(timeLimitSeconds = limit.prioritySecs))
+            assertEquals(limit, mapped.getOrThrow().matchTimeLimit)
         }
         MatchBufferTime.entries.forEach { buffer ->
-            val options =
-                CreateTableOptions(
-                    name = "Buffered",
-                    gameType = "Two Player Duel",
-                    matchBufferTimeSeconds = buffer.bufferSecs,
-                )
-            assertEquals(buffer, MatchOptionsMapper.toMatchOptions(options).getOrThrow().matchBufferTime)
+            val mapped = MatchOptionsMapper.toMatchOptions(clocked(bufferSeconds = buffer.bufferSecs))
+            assertEquals(buffer, mapped.getOrThrow().matchBufferTime)
         }
     }
 
     @Test
     fun `a rejected create replies a failed CREATE result carrying the reason`() {
-        val options = CreateTableOptions(name = "Odd clock", gameType = "Two Player Duel", matchTimeLimitSeconds = 7)
+        val options = clocked(timeLimitSeconds = 7)
         val failure = MatchOptionsMapper.toMatchOptions(options).exceptionOrNull()!!
 
         val reply = TableRelay.rejectedMessage(failure.message!!)
@@ -200,4 +190,17 @@ class MatchOptionsMapperTest {
         assertFalse(reply.ok)
         assertEquals(failure.message, reply.reason)
     }
+
+    /** A minimal create request differing only in its clocks — the field under test in these cases. */
+    private fun clocked(
+        timeLimitSeconds: Int = 0,
+        bufferSeconds: Int = 0,
+    ): CreateTableOptions =
+        CreateTableOptions(
+            name = "Clocked",
+            gameType = "Two Player Duel",
+            deckType = "Constructed",
+            matchTimeLimitSeconds = timeLimitSeconds,
+            matchBufferTimeSeconds = bufferSeconds,
+        )
 }
