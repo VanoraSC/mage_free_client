@@ -70,6 +70,25 @@ and expensive, and the value here is confidence now plus a cheap regression floo
 - Gameplay past match-start (EPIC-11); tournaments (EPIC-08).
 - Any production behaviour change. **If the smoke finds a defect, report it — do not fix it here.**
 
+## 3a. Practical constraints (learned on-device, 2026-08-10)
+
+Both were hit during the manual run that verified 0047; the script must handle them or it will report
+false failures.
+
+- **Dismiss the soft keyboard before tapping bottom-anchored buttons.** The sign-in layout does **not**
+  resize for the IME, so a bottom button's reported bounds stay where they are while the keyboard
+  covers them — a tap silently hits the IME. This produced a convincing false "dead Connect button"
+  (no UI change, no logs, no bridge contact) until `dumpsys input_method` showed `mInputShown=true`.
+  Dismiss the IME, then tap. Where a step's expectation fails, re-check IME state before concluding.
+- **Do not locate controls by content description.** Material3 `NavigationBarItem` (and the lobby's
+  icon-only actions) expose `Role=Tab` and text but **no `ContentDescription`** in the merged semantics
+  tree, so `onNodeWithContentDescription`-style lookups match nothing. Locate by visible text, role, or
+  bounds instead. **This is a testing-correctness concern, not an accessibility one** — accessibility
+  work is deferred for this effort; fix the locator, never the semantics.
+  (Note in passing: `:app`'s existing androidTests locate tabs by content description and therefore
+  appear unable to find them. Those tests do not run pre-merge. Out of scope here — flagged only so a
+  future reader does not trust them.)
+
 ## 4. Design & approach
 
 - **The smoke is verification, not a test suite.** It should be readable, linear, and obvious about
