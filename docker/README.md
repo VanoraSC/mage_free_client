@@ -17,6 +17,10 @@ run in Docker containers. The Android `:app` build stays on the host. Full desig
 ./scripts/dev up xmage-server
 ./scripts/dev down
 
+# Start the bridge itself against that server (story 0045). Publishes /v1/session on localhost:8080.
+./scripts/dev up bridge
+curl http://localhost:8080/health          # {"status":"ok","service":"mage-bridge"}
+
 # A shell in the build container, or raw maven.
 ./scripts/dev sh
 ./scripts/dev mvn -version
@@ -34,6 +38,15 @@ handshake from the build container). It is also published to the host on `localh
   the server distribution, and runs `mage.server.Main` on 17171 with `authenticationActivated=false`
   (story 0022). Launched with `--add-opens` for the JBoss-serialization handshake — required on JDK 17
   (see the server `Dockerfile`); the `:bridge` test task mirrors the same flags.
+- **`mage-free-client/bridge`** — the runnable bridge (story 0045): a build stage on the `build` image
+  assembles `:bridge:installDist`, and an `eclipse-temurin:17-jre` runtime carries the distribution.
+  Upstream is `XMAGE_UPSTREAM=xmage-server:17171`; the port comes from `BRIDGE_PORT` (8080). Its
+  `JAVA_OPTS` carry the **same** `--add-opens` set as the server image and the `:bridge` test task —
+  keep all three in sync. The build context is the repo root, filtered by
+  `bridge/Dockerfile.dockerignore`.
+
+The app-side live integration tests (`:core:network`, story 0045) run **on the host** and take only a
+URL: `BRIDGE_URL=localhost:8080`. Unset, they skip.
 
 ## Notes
 - **First builds are slow, then cached.** The `build` image's mage layer takes minutes; the

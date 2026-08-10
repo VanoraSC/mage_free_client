@@ -29,7 +29,8 @@ This split is deliberate (see the decision log below): we containerize only the 
 docker/
 ├── jvm/Dockerfile          # the JVM build image, built in layers
 ├── server/Dockerfile         # (or a stage) the runnable Mage.Server image
-└── docker-compose.yml        # services: build, xmage-server
+├── bridge/Dockerfile         # the runnable bridge image (story 0045)
+└── docker-compose.yml        # services: build, xmage-server, bridge
 scripts/
 └── dev                       # thin wrapper: `./scripts/dev gradle :bridge:check`, `./scripts/dev up xmage-server`, ...
 ```
@@ -54,12 +55,39 @@ cache volume so downloads persist across runs. `/root/.m2` is **not** volume-mou
   config), on the compose network. The bridge's env-gated integration tests connect to it at
   `XMAGE_SERVER=xmage-server:17171` (see story 0022). **This realizes story 0002's "reference
   environment" as a container.**
+- **`bridge`** — the bridge itself, **running** (story 0045). Built by `docker/bridge/Dockerfile`: a
+  build stage on the `build` image assembles `:bridge:installDist` (mage-common resolves from the
+  image's baked `/root/.m2`), and a thin `eclipse-temurin:17-jre` runtime carries only the
+  distribution. `depends_on: xmage-server`; its upstream is pinned with `XMAGE_UPSTREAM=xmage-server:17171`
+  (the app never names an XMage host — see `architecture.md` decision #6), and its `/v1/session`
+  WebSocket is published to the host on **`localhost:8080`**.
+
+  The start script is launched with `JAVA_OPTS` carrying the JDK-17 `--add-opens` set the
+  JBoss-serialization handshake needs — the same set the `xmage-server` entrypoint and the `:bridge`
+  test task pass. **Keep all three in sync**; without them the upstream connect dies mid-handshake and
+  every login looks like an auth failure.
+
+  `depends_on` waits for the server *container*, not for it to finish loading the card database, so
+  give `xmage-server` its ~1–2 min before driving a login through the bridge.
 
 ### The helper script (`scripts/dev`)
 A thin bash wrapper over `docker compose` so nobody types raw compose commands:
 - `./scripts/dev gradle <args>` → `docker compose run --rm build ./gradlew <args>`
-- `./scripts/dev up xmage-server` / `./scripts/dev down`
+- `./scripts/dev up xmage-server` / `./scripts/dev up bridge` / `./scripts/dev down`
 - `./scripts/dev mvn <args>` (upstream/maven tasks)
+
+### Driving the app's networking stack against the bridge (story 0045)
+`:core:network` is an Android module, so its tests run **on the host** (this image has no Android SDK)
+— and they need nothing but the bridge's URL, since the module speaks pure WebSocket + JSON and has no
+`mage.*`/`:bridge` dependency. With both services up:
+
+```bash
+./scripts/dev up bridge                      # starts xmage-server + bridge; bridge lands on :8080
+BRIDGE_URL=localhost:8080 ./gradlew :core:network:testDebugUnitTest --tests 'magefree.network.live.*'
+```
+
+`BRIDGE_URL` is the app-side mirror of `XMAGE_SERVER`: **unset, the live tests report *skipped***, so
+`:core:network:check` stays hermetic and offline by default.
 
 Clean-room agents and CI invoke `./scripts/dev …` for bridge work instead of host Gradle — so the
 host JDK/`JAVA_HOME` facts are no longer needed for the bridge path.
