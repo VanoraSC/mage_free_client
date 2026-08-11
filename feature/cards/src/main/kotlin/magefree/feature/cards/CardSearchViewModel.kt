@@ -47,9 +47,15 @@ enum class CardSearchPhase {
 }
 
 /**
- * Immutable UI state for the card search/browse screen. The [CardSearchViewModel] maps the debounced
- * [query] + active [filters] through 0030's [CardCatalog] into this shape: the mapped [results], the
+ * Immutable UI state for the card search/browse screen. The [CardSearchViewModel] runs the *debounced*
+ * query + active [filters] through 0030's [CardCatalog] into this shape: the mapped [results], the
  * derived [phase], and the "showing N" [countSummary].
+ *
+ * [query] is the exception, and deliberately so: it is the text the player has typed **right now**,
+ * published synchronously by [CardSearchViewModel.onQueryChange], not the debounced text the current
+ * [results] were resolved for. It used to be the debounced text, and a field controlled on it could
+ * never accumulate a character (story 0049); nothing may publish state about the search box that is up
+ * to a debounce window out of date.
  */
 data class CardSearchUiState(
     val query: String = "",
@@ -71,8 +77,9 @@ data class CardSearchUiState(
 
 /**
  * MVVM ViewModel for the read-only card search/browse screen (story 0032). It owns a [query] and a
- * [CardBrowseFilters] flow, **debounces** the query so typing does not fire a catalog query per
- * keystroke, and runs the search on 0030's fully-offline [CardCatalog]:
+ * [CardBrowseFilters] flow, **debounces the catalog query** — not the text the field shows (story
+ * 0049) — so typing does not fire a catalog query per keystroke, and runs the search on 0030's
+ * fully-offline [CardCatalog]:
  * - blank query + no filters -> [CardSearchPhase.Idle] (no query issued);
  * - a name query with no filters -> the catalog's ranked [CardCatalog.search];
  * - any active filter -> the conjunctive [CardCatalog.filter] (name folded in).
@@ -134,8 +141,13 @@ class CardSearchViewModel
                         emit(resolve(request))
                     }.catch { error -> emit(errorState(request, error)) }
                 }
-            }.onEach { state -> _uiState.value = state }
-                .launchIn(viewModelScope)
+            }.onEach { state ->
+                // `state.query` is the *debounced* text this result was resolved for; the field must
+                // keep showing whatever the player has typed since, so the live raw query wins here.
+                // (Story 0049: publishing the debounced text as `uiState.query` is what reverted every
+                // keystroke.)
+                _uiState.value = state.copy(query = query.value)
+            }.launchIn(viewModelScope)
         }
 
         /** Re-run the current query/filters after a catalog failure. */
@@ -143,13 +155,25 @@ class CardSearchViewModel
             retries.update { it + 1 }
         }
 
-        /** Update the search text; the debounced pipeline re-queries. */
+        /**
+         * Update the search text; the debounced pipeline re-queries behind it.
+         *
+         * **Reachability (verification standard 2).** The glyph a keystroke draws is produced by
+         * [CardSearchField] itself, synchronously — this ViewModel is not in that path at all, and a
+         * field controlled on state that only arrives after the debounce is exactly what shipped dead
+         * (story 0049). What is published *here*, synchronously on the caller's thread, is
+         * [CardSearchUiState.query]: so the state describing the search box always matches what is on
+         * screen instead of trailing it by a debounce window. The debounce below still governs the one
+         * thing it was ever meant to: catalog queries.
+         */
         fun onQueryChange(text: String) {
+            _uiState.update { it.copy(query = text) }
             query.value = text
         }
 
-        /** Clear the search text (instant reset). */
+        /** Clear the search text (instant reset, no debounce delay). */
         fun clearQuery() {
+            _uiState.update { it.copy(query = "") }
             query.value = ""
         }
 
