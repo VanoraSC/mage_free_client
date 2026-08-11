@@ -166,9 +166,22 @@ public class SessionCoordinator(
                             } else {
                                 val live = registry.resume(message.resumeId)
                                 if (live == null) {
+                                    // Story 0050 defect B: the id may be refused because the entry is
+                                    // still *bound* to a socket that silently died (a radio that went
+                                    // away delivers no FIN). The app holding this handle has just shown
+                                    // it abandoned that socket, so reap the stale session — otherwise
+                                    // the `Login` it falls back to opens a second upstream login for the
+                                    // same username, which is the leak the smoke saw on every offline
+                                    // excursion.
+                                    val reaped = registry.evictIfBound(message.resumeId)
                                     ws.sendSerialized<ServerMessage>(
                                         ResumeRejected(
-                                            reason = "unknown or expired resume handle",
+                                            reason =
+                                                if (reaped) {
+                                                    "the held session was stale and has been torn down; log in again"
+                                                } else {
+                                                    "unknown or expired resume handle"
+                                                },
                                             requestId = message.requestId,
                                         ),
                                     )

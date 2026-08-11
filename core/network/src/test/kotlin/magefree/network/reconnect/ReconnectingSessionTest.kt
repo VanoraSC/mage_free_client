@@ -1,7 +1,9 @@
 package magefree.network.reconnect
 
 import app.cash.turbine.test
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import magefree.model.ServerTarget
@@ -252,6 +254,63 @@ class ReconnectingSessionTest {
                 expectNoEvents()
                 // Return to foreground → the reconnect proceeds.
                 lifecycle.set(true)
+                assertTrue(awaitItem() is SessionEvent.Connected)
+                awaitComplete()
+            }
+        }
+
+    /**
+     * Story 0050 defect B. When the radio dies there is no FIN and no socket error — the read simply
+     * never returns — so before this the loop stayed inside a "live" attempt and the app went on
+     * reporting `Connected` over a link that no longer existed. The bridge, on the other side, kept the
+     * session **bound** to that socket rather than parking it, which is what made a returning app open a
+     * *second* upstream login for the same username.
+     *
+     * The runner here is the honest shape of that: an attempt that never returns on its own. The loop
+     * must end it on the connectivity edge and surface `Reconnecting`.
+     */
+    @Test
+    fun losingConnectivityEndsTheRunningAttemptInsteadOfReportingConnected() =
+        runTest(UnconfinedTestDispatcher()) {
+            val connectivity = FakeConnectivityObserver(initial = true)
+            val ended = CompletableDeferred<Unit>()
+            val runner =
+                ScriptedRunner(
+                    listOf(
+                        // A socket that has connected and is now blocked in a read that will never
+                        // return — exactly what a vanished radio leaves behind.
+                        { _, emit ->
+                            emit(connected)
+                            try {
+                                awaitCancellation()
+                            } finally {
+                                ended.complete(Unit)
+                            }
+                        },
+                        { _, emit ->
+                            emit(connected)
+                            SessionOutcome.TERMINAL
+                        },
+                    ),
+                )
+
+            session(runner, connectivity = connectivity).events().test {
+                assertEquals(SessionEvent.Connecting, awaitItem())
+                assertTrue(awaitItem() is SessionEvent.Connected)
+
+                connectivity.set(false)
+
+                assertEquals(
+                    "losing the network must move the app off Connected at once, not when a TCP read " +
+                        "eventually times out",
+                    SessionEvent.Reconnecting,
+                    awaitItem(),
+                )
+                assertTrue("the dead attempt must actually be torn down", ended.isCompleted)
+
+                // …and the network coming back resumes rather than re-authenticating: the loop keeps the
+                // handle and the caller's runner is offered it again (stories 0023/0024, unchanged).
+                connectivity.set(true)
                 assertTrue(awaitItem() is SessionEvent.Connected)
                 awaitComplete()
             }

@@ -382,6 +382,31 @@ public class SessionRegistry(
     /** True while [resumeId] is registered (bound or parked). For assertions/diagnostics. */
     public suspend fun isRegistered(resumeId: String): Boolean = mutex.withLock { entries.containsKey(resumeId) }
 
+    /**
+     * Evicts [resumeId] **only if it is still bound** — i.e. a live socket is nominally holding it —
+     * and reports whether it did. Story 0050 defect B.
+     *
+     * [resume] deliberately refuses a bound entry (story 0026 F4: two forwarders on one non-broadcast
+     * channel would split the stream), and that refusal is right. But refusing alone left the entry
+     * there: when a phone's radio dies no FIN reaches the bridge, so the old socket is still "bound"
+     * long after it is dead, and the returning app — which is the *only* holder of that resume id, and
+     * has just proved it abandoned the old socket by presenting the handle on a new one — was pushed
+     * onto a fresh `Login`, opening a **second** upstream login for the same username.
+     *
+     * So the coordinator calls this when it rejects such a resume: refuse the re-attach (F4 intact),
+     * but tear the stale session down, so the `Login` that follows *replaces* it rather than
+     * duplicating it. An unknown or already-parked id is left alone — parked ids are resumable and are
+     * handled by [resume].
+     */
+    public suspend fun evictIfBound(resumeId: String): Boolean {
+        val bound = mutex.withLock { entries[resumeId]?.takeIf { !it.parked } != null }
+        if (bound) {
+            logger.info("Resume presented for still-bound {}; the old socket is stale — evicting", resumeId)
+            evict(resumeId)
+        }
+        return bound
+    }
+
     private suspend fun evictByLive(live: LiveSession) {
         val id = mutex.withLock { entries.values.firstOrNull { it.live === live }?.resumeId } ?: return
         evict(id)
