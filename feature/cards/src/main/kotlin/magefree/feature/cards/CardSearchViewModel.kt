@@ -53,8 +53,9 @@ enum class CardSearchPhase {
  *
  * [query] is the exception, and deliberately so: it is the text the player has typed **right now**,
  * published synchronously by [CardSearchViewModel.onQueryChange], not the debounced text the current
- * [results] were resolved for. The search field reconciles against it, so it may never lag behind the
- * keyboard (story 0049).
+ * [results] were resolved for. It used to be the debounced text, and a field controlled on it could
+ * never accumulate a character (story 0049); nothing may publish state about the search box that is up
+ * to a debounce window out of date.
  */
 data class CardSearchUiState(
     val query: String = "",
@@ -157,11 +158,13 @@ class CardSearchViewModel
         /**
          * Update the search text; the debounced pipeline re-queries behind it.
          *
-         * **Reachability (verification standard 2).** [CardSearchUiState.query] is published *here*,
-         * synchronously, on the caller's thread — never from the debounced stream. That is the fix for
-         * story 0049: the state the field reconciles against has to move with the keystroke, otherwise
-         * a controlled field is reverted to stale text 300 ms out of date and can never accumulate.
-         * The debounce below still governs the one thing it was ever meant to: catalog queries.
+         * **Reachability (verification standard 2).** The glyph a keystroke draws is produced by
+         * [CardSearchField] itself, synchronously — this ViewModel is not in that path at all, and a
+         * field controlled on state that only arrives after the debounce is exactly what shipped dead
+         * (story 0049). What is published *here*, synchronously on the caller's thread, is
+         * [CardSearchUiState.query]: so the state describing the search box always matches what is on
+         * screen instead of trailing it by a debounce window. The debounce below still governs the one
+         * thing it was ever meant to: catalog queries.
          */
         fun onQueryChange(text: String) {
             _uiState.update { it.copy(query = text) }

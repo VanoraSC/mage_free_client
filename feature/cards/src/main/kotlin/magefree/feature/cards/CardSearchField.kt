@@ -38,14 +38,18 @@ const val CARDS_CLEAR_SEARCH_CONTENT_DESCRIPTION: String = "Clear search"
  * unchanged state — reverting the character before the debounce could elapse. Text could never
  * accumulate; on-device the placeholder never even cleared.
  *
- * The hoisted [query] stays authoritative for changes the field did **not** originate — the clear
- * button, a ViewModel reset, state restoration. Those arrive here as a [query] that differs from what
- * is displayed, and the [LaunchedEffect] adopts it. Keystroke echoes never trip that branch, because
- * [onQueryChange] updates `uiState.query` immediately (see [CardSearchViewModel.onQueryChange]) and
- * `StateFlow` conflation means a value delivered late is still the newest one — the field can never be
- * clobbered by stale text it has already moved past.
+ * **Nothing writes [displayed] back from the hoisted [query], and that is deliberate.** An earlier cut
+ * of this field re-adopted [query] whenever it differed ("an external change"). Fast typing on-device
+ * showed why that is wrong: the hoisted value only ever arrives *after* the keystroke that produced it,
+ * so mid-word it is legitimately behind what the field shows, and adopting it rewrites the editing
+ * buffer under the IME — `input text "lightning"` landed `lghtnin`, losing characters for good. The
+ * field's text is therefore owned by the field for as long as it is on screen, and the only two things
+ * that can change it from outside are handled explicitly:
+ * - **clear** — the affordance lives here, so it empties [displayed] directly and reports it;
+ * - **restoration after process death** — [displayed] comes back from `rememberSaveable` while a fresh
+ *   ViewModel starts empty, so a one-shot effect re-issues it once, upward, at first composition.
  *
- * @param query the search text the ViewModel holds; the source of truth for external changes only.
+ * @param query the search text the ViewModel holds; read only to re-issue restored text (see above).
  * @param onQueryChange invoked with every edit — this is what feeds the (debounced) catalog pipeline.
  * @param onClearQuery invoked by the trailing clear affordance.
  * @param placeholder the hint shown while the field is empty (it differs per surface).
@@ -60,8 +64,10 @@ fun CardSearchField(
 ) {
     var displayed by rememberSaveable { mutableStateOf(query) }
 
-    LaunchedEffect(query) {
-        if (query != displayed) displayed = query
+    // Restored text with a fresh ViewModel behind it: re-run the search once so the results match what
+    // is on screen. Keyed on Unit, so it can never fire while the player is typing.
+    LaunchedEffect(Unit) {
+        if (displayed.isNotEmpty() && displayed != query) onQueryChange(displayed)
     }
 
     OutlinedTextField(
@@ -77,7 +83,12 @@ fun CardSearchField(
         leadingIcon = { Icon(imageVector = Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (displayed.isNotEmpty()) {
-                IconButton(onClick = onClearQuery) {
+                IconButton(
+                    onClick = {
+                        displayed = ""
+                        onClearQuery()
+                    },
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Clear,
                         contentDescription = CARDS_CLEAR_SEARCH_CONTENT_DESCRIPTION,

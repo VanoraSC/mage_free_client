@@ -2,6 +2,7 @@ package magefree.feature.cards
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
@@ -167,6 +168,34 @@ class CardSearchTypingTest {
         searchField().assert(hasText("forest"))
         composeTestRule.onNodeWithContentDescription("Forest", substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Lightning Bolt", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun aLaggingHoistedQueryNeverRewritesWhatIsOnScreen() {
+        // Found on-device: an earlier cut of the field re-adopted the hoisted query whenever it
+        // differed from what was displayed. Mid-word the hoisted value is legitimately *behind* — it
+        // can only arrive after the keystroke that produced it — so adopting it rewrote the IME's
+        // editing buffer and ate characters: `input text "lightning"` landed `lghtnin`.
+        val hoisted = mutableStateOf("")
+        val reported = mutableListOf<String>()
+        composeTestRule.setContent {
+            MageTheme {
+                CardSearchField(
+                    query = hoisted.value,
+                    onQueryChange = { reported += it },
+                    onClearQuery = {},
+                    placeholder = CARDS_SEARCH_HINT,
+                )
+            }
+        }
+
+        searchField().performTextInput("li")
+        // The producer catches up only as far as the first character.
+        hoisted.value = "l"
+        composeTestRule.waitForIdle()
+
+        searchField().assert(hasText("li"))
+        assertEquals("the pipeline must still be told what is on screen", "li", reported.last())
     }
 
     @Test
