@@ -350,6 +350,15 @@ before being written up.
 
 ---
 
+## Known issues (accepted, not scheduled)
+
+Deliberately logged rather than fixed. Each is bounded, self-healing, and has no user-visible effect;
+the fix would cost more risk than the defect does. Revisit only if the impact changes.
+
+| Issue | Observed | Why it is accepted |
+|-------|----------|--------------------|
+| **Sign-out sometimes parks instead of evicting.** Story 0046's `Logout` can lose the race with the socket close that follows — most reliably on a freshly-resumed socket — so the bridge sees a bare close and parks the session instead of tearing it down immediately. | 2026-08-11, during the lead's on-device smoke run: `11:29:54 Resumed …` → `11:30:47 Parked …` (that `Parked` was a sign-out). All nine sessions in the run did evict. | The session still goes away at the resume TTL (~60 s) and **nothing is orphaned**, so the cost is bounded and self-healing with no user-visible effect. Closing the race properly means reworking the teardown handshake, risking 0023/0024's park+resume — behaviour that is correct and load-bearing — for no observable gain. Noted in `KtorBridgeClient.signOut()`. |
+
 ## Build Infrastructure
 
 Containerizing the **heavy / JVM path** (the bridge build, the upstream `../mage` Maven build, and
