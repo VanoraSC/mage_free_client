@@ -24,6 +24,7 @@ import magefree.model.SkillLevel
 import magefree.network.table.CreateTableOptions
 import magefree.network.table.RangeOfInfluence
 import magefree.network.table.SeatPlayerType
+import magefree.network.table.SessionGoneFailure
 import magefree.network.table.TableClient
 import magefree.network.table.TableRef
 import javax.inject.Inject
@@ -364,11 +365,25 @@ class HostTableViewModel
             fail(error, fallback)
         }
 
+        /**
+         * Surface why the sequence stopped.
+         *
+         * A [SessionGoneFailure] is reported honestly (story 0050 defect A): the server was never asked,
+         * because there is no session left to ask through — so repeating the bridge's wording for a
+         * refusal ("the server declined to create the table", which is what the smoke saw after XMage had
+         * expired an idle session) would send the host off hunting a problem with their table options.
+         * What they need to know is that they are signed out, and that signing in again is the fix.
+         */
         private fun fail(
             error: Throwable,
             fallback: String,
         ) {
-            _uiState.value = _uiState.value.copy(isSubmitting = false, errorMessage = error.message ?: fallback)
+            val message =
+                when (error) {
+                    is SessionGoneFailure -> SIGNED_OUT_MESSAGE
+                    else -> error.message ?: fallback
+                }
+            _uiState.value = _uiState.value.copy(isSubmitting = false, errorMessage = message)
         }
 
         /** Re-resolve the table's format from the current labels and re-check the picked deck against it. */
@@ -397,5 +412,8 @@ class HostTableViewModel
             const val MAX_SEATS = 8
             const val MAX_FREE_MULLIGANS = 3
             const val MAX_WINS = 5
+
+            /** What the host is told when the action failed because the session is gone (story 0050). */
+            const val SIGNED_OUT_MESSAGE = "You're no longer signed in to the server. Sign in again to host a table."
         }
     }

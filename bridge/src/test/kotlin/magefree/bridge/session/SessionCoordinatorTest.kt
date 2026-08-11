@@ -14,6 +14,8 @@ import magefree.bridge.testApplicationTimed
 import magefree.bridge.ws.sessionWebSocket
 import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
+import magefree.protocol.CreateTable
+import magefree.protocol.CreateTableOptions
 import magefree.protocol.GameTypeList
 import magefree.protocol.GameTypeSummary
 import magefree.protocol.GetGameTypes
@@ -36,13 +38,16 @@ import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableActionResult
 import magefree.protocol.TableDetail
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableList
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -384,6 +389,33 @@ class SessionCoordinatorTest {
                 assertEquals("table-9", miss.tableId)
                 assertNotNull(miss.reason)
                 assertEquals("gt-d2", miss.requestId)
+            }
+        }
+    }
+
+    /**
+     * Story 0050 defect A, second half: a table action on a socket with no session must be answered with
+     * the **kind** of failure, not just prose. The app branches on
+     * [magefree.protocol.TableFailureCode.SESSION_GONE] to say "you are signed out" instead of repeating
+     * a server refusal that never happened — the server was never asked.
+     */
+    @Test
+    fun `a table action on an unbound socket fails as SESSION_GONE, not as a server refusal`() {
+        val unbound = FakeUpstreamSession(emptyList())
+        scenario(unbound) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(
+                    CreateTable(options = CreateTableOptions("t", "Two Player Duel", "Constructed"), requestId = "c-1"),
+                )
+                val reply = assertInstanceOf(TableActionResult::class.java, receiveDeserialized<ServerMessage>())
+                assertFalse(reply.ok)
+                assertEquals(
+                    TableFailureCode.SESSION_GONE,
+                    reply.failure,
+                    "an action with no session behind it is not a decline the user can act on by retrying",
+                )
+                assertEquals("c-1", reply.requestId)
             }
         }
     }

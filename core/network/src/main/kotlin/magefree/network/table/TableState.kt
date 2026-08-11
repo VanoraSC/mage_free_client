@@ -289,9 +289,23 @@ data class TableRef(
  * [magefree.protocol.TableActionResult] with `ok = false` (or an unexpected reply). The [reason] is the
  * server's optional human-readable detail: a decline is a **typed result**, never a silent drop.
  */
-class TableActionFailure(
+open class TableActionFailure(
     val reason: String?,
 ) : Exception(reason ?: "table action declined")
+
+/**
+ * The typed failure a [TableClient] verb surfaces when the action never reached the server because the
+ * **session is gone** — the bridge answered with [magefree.protocol.TableFailureCode.SESSION_GONE]
+ * (story 0050 defect A). A [TableActionFailure], so every existing caller keeps working, but a *distinct*
+ * one so a caller can tell "the server considered this and said no" from "you are not signed in any
+ * more". Retrying the action cannot help; re-authenticating can, and that is what the UI must offer.
+ *
+ * This is the failure behind the smoke's misleading *"the server declined to create the table"*: XMage
+ * had already expired the idle session, so the server was never asked at all.
+ */
+class SessionGoneFailure(
+    reason: String?,
+) : TableActionFailure(reason ?: "your session has ended; sign in again")
 
 /**
  * The typed failure [TableClient.refreshTable] surfaces when the server does not list [tableId] any

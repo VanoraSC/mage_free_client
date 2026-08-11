@@ -43,6 +43,7 @@ import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
 import magefree.protocol.TableDetail
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableList
 import magefree.protocol.TableNotFound
 import magefree.protocol.UnknownClientMessage
@@ -85,9 +86,18 @@ public class SessionCoordinator(
 ) {
     private val logger = LoggerFactory.getLogger(SessionCoordinator::class.java)
 
-    /** A typed failed [TableActionResult] for a table action attempted on an unbound socket (story 0036). */
+    /**
+     * A typed failed [TableActionResult] for a table action attempted on an unbound socket (story 0036),
+     * carrying [TableFailureCode.SESSION_GONE] so the app can say "you are not signed in" rather than
+     * "the server declined" — the server was never asked (story 0050).
+     */
     private fun unboundFailure(action: TableActionCode): TableActionResult =
-        TableActionResult(action = action, ok = false, reason = "no active session on this socket")
+        TableActionResult(
+            action = action,
+            ok = false,
+            reason = "no active session on this socket",
+            failure = TableFailureCode.SESSION_GONE,
+        )
 
     /** Stamps [id] onto a correlated table reply; other messages pass through unchanged. */
     private fun ServerMessage.withRequestId(id: String?): ServerMessage =
