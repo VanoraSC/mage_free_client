@@ -178,6 +178,16 @@ class KtorBridgeClient(
                 // Best effort, bounded: a half-dead socket must not hold the user in a session they
                 // asked to leave. Failing to signal only costs the bridge's resume TTL — the exact
                 // cost of not signalling at all, which is what happened before story 0046.
+                // KNOWN ISSUE (observed 2026-08-11, accepted — do not "fix" without a reason).
+                // This send can lose the race with the close that follows, most reliably on a
+                // freshly-resumed socket: the bridge then sees a bare close and logs
+                // `Parked session … for up to 1m` instead of `Evicted`, e.g.
+                //     11:29:54 Resumed …   11:30:47 Parked …   (that Parked was a sign-out)
+                // The session still goes away at the resume TTL (~60 s) and nothing is orphaned, so
+                // the cost is bounded and self-healing with no user-visible effect. Closing the race
+                // properly means reworking the teardown handshake, which risks story 0023/0024's
+                // park+resume — behaviour that is correct and load-bearing — for no observable gain.
+                // Deliberately logged rather than fixed; see docs/stories/README.md § Known issues.
                 withTimeoutOrNull(LOGOUT_SEND_TIMEOUT_MILLIS) { session.sendMessage(Logout()) }
             } catch (cancellation: CancellationException) {
                 throw cancellation
