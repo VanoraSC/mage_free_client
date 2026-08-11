@@ -28,6 +28,8 @@ import magefree.protocol.RemoveTable
 import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.SessionStateCode
+import magefree.protocol.SessionStatus
 import magefree.protocol.StartMatch
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionResult
@@ -46,8 +48,17 @@ import kotlin.time.Duration.Companion.seconds
  *
  * - [ttl] — the **grace window** a session is held after its app socket drops before it is evicted
  *   and disconnected. Env `RESUME_TTL_SECONDS` (the story's `RESUME_TTL`); default 60s.
- * - [keepaliveInterval] — how often a parked session is `ping`ed to keep the upstream link healthy
- *   (and to notice if it died). Env `RESUME_KEEPALIVE_SECONDS`; default 15s.
+ * - [keepaliveInterval] — how often a **registered** session is `ping`ed to keep the upstream link
+ *   healthy (and to notice if it died). Env `RESUME_KEEPALIVE_SECONDS`; default 15s.
+ *
+ * **Sizing the keepalive (story 0050 defect A).** Until 0050 the ping ran only while a session was
+ * *parked*, so a session with a live app socket was never probed at all. XMage's `UserManagerImpl`
+ * expires a user whose session has been silent for about three minutes (`disconnected due connection
+ * problems`), which meant three minutes of deck-building killed the upstream session while the app
+ * happily displayed `Connected` — nothing on either side was looking. 15s is comfortably inside that
+ * window (a dozen probes per expiry period): each ping is what the desktop client's own ping timer is,
+ * an activity touch that stops the expiry from happening at all, and a failed one is the bridge
+ * learning within ~15s that the upstream is genuinely gone.
  *
  * Non-positive or unparsable values fall back to the defaults.
  */
@@ -125,8 +136,23 @@ public class LiveSession internal constructor(
             }
         }
 
-    /** Keepalive probe delegated to the upstream; used by the registry while parked. */
+    /** Keepalive probe delegated to the upstream; used by the registry for the whole session's life. */
     internal suspend fun ping(): Boolean = upstream.ping()
+
+    /**
+     * Puts a **terminal** [SessionStatus] on the durable outbound stream saying the upstream session is
+     * gone (story 0050 defect A). Non-suspending, so it is safe to call from the registry's keepalive
+     * immediately before [close]/eviction: a `Channel.close()` still lets the current forwarder drain
+     * what is already buffered, so a *bound* socket relays this frame to the app before the stream ends.
+     * Without it the channel would simply close and the app would keep showing `Connected` — no frame,
+     * no lifecycle event, nothing to notice — which is exactly the defect.
+     *
+     * A *parked* session has no forwarder; the frame is dropped when the channel closes, which is
+     * correct — there is nobody to tell, and a later `Resume` is rejected because the entry is gone.
+     */
+    internal fun reportUpstreamLost(reason: String) {
+        outbound.trySend(SessionStatus(state = SessionStateCode.DISCONNECTED, message = reason))
+    }
 
     /** The upstream server-assigned session id (stable across resume); for the live-IT assertion. */
     public suspend fun sessionId(): String? = upstream.sessionId()
@@ -186,8 +212,9 @@ public class LiveSession internal constructor(
  * Lifecycle of an entry:
  * - [createSession] builds a [LiveSession] whose pump starts immediately on [scope]; if the upstream
  *   ever ends, the entry (if any) is evicted so a later resume is rejected.
- * - [register] (on `Login`→`CONNECTED`) mints the resume id and inserts a **bound** entry (no timer).
- * - [park] (on an unexpected app-socket close) starts the grace-window TTL + keepalive ping loop.
+ * - [register] (on `Login`→`CONNECTED`) mints the resume id, inserts a **bound** entry (no TTL) and
+ *   starts the liveness keepalive that runs until the entry is evicted (story 0050).
+ * - [park] (on an unexpected app-socket close) starts the grace-window TTL.
  * - [resume] (on a `Resume` frame) cancels those timers and hands back the still-live session to
  *   re-bind to the new socket; returns `null` on an unknown/expired id.
  * - [evict] (on `Logout`, TTL expiry, or upstream death) removes the entry and `disconnect()`s it.
@@ -246,18 +273,61 @@ public class SessionRegistry(
         return live
     }
 
-    /** Mints a resume id and inserts a bound entry (no TTL). Returns the id to hand to the app. */
+    /**
+     * Mints a resume id and inserts a bound entry (no TTL), starting the **liveness keepalive** that
+     * runs for the whole life of the entry — bound and parked alike (story 0050 defect A). Returns the
+     * id to hand to the app.
+     */
     public suspend fun register(live: LiveSession): String {
         val id = UUID.randomUUID().toString()
-        mutex.withLock { entries[id] = Entry(id, live) }
+        mutex.withLock {
+            val entry = Entry(id, live)
+            entry.keepaliveJob = startKeepalive(entry)
+            entries[id] = entry
+        }
         logger.info("Registered resumable session {}", id)
         return id
     }
 
     /**
-     * Transitions the entry for [resumeId] from bound to **parked**: records the drop, starts the TTL
-     * eviction timer and the keepalive ping loop. No-op if unknown or already parked. Safe to call
-     * under `NonCancellable` from a socket teardown.
+     * The liveness loop for a registered entry: ping the upstream every [ResumeConfig.keepaliveInterval]
+     * and, the first time a probe says the upstream is gone, **tell the app** (via
+     * [LiveSession.reportUpstreamLost], which a bound socket's forwarder relays as a terminal
+     * `DISCONNECTED`) and evict.
+     *
+     * Before story 0050 this ran only from [park], so nothing probed a session whose app socket was
+     * alive: XMage would expire an idle user after ~3 minutes and the app went on showing `Connected`
+     * until the user's *next* action failed with a generic refusal. Running it from [register] fixes
+     * both halves — the ping is an activity touch that stops the expiry, and a genuinely dead upstream
+     * is noticed within one interval instead of never.
+     */
+    private fun startKeepalive(entry: Entry): Job =
+        scope.launch {
+            while (isActive) {
+                delay(config.keepaliveInterval)
+                val alive =
+                    try {
+                        entry.live.ping()
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (failure: Exception) {
+                        logger.warn("Keepalive ping failed for {}: {}", entry.resumeId, failure.message)
+                        false
+                    }
+                if (!alive) {
+                    logger.info("Upstream {} is no longer alive; evicting", entry.resumeId)
+                    entry.live.reportUpstreamLost(UPSTREAM_LOST)
+                    evict(entry.resumeId)
+                    break
+                }
+            }
+        }
+
+    /**
+     * Transitions the entry for [resumeId] from bound to **parked**: records the drop and starts the TTL
+     * eviction timer. The keepalive ping loop is already running — it starts at [register] and covers the
+     * whole life of the entry (story 0050) — so parking only adds the grace window. No-op if unknown or
+     * already parked. Safe to call under `NonCancellable` from a socket teardown.
      */
     public suspend fun park(resumeId: String) {
         mutex.withLock {
@@ -271,34 +341,15 @@ public class SessionRegistry(
                     logger.info("Resume TTL ({}) expired for {}", config.ttl, resumeId)
                     evict(resumeId)
                 }
-            entry.keepaliveJob =
-                scope.launch {
-                    while (isActive) {
-                        delay(config.keepaliveInterval)
-                        val alive =
-                            try {
-                                entry.live.ping()
-                            } catch (cancellation: CancellationException) {
-                                throw cancellation
-                            } catch (failure: Exception) {
-                                logger.warn("Keepalive ping failed for parked {}: {}", resumeId, failure.message)
-                                false
-                            }
-                        if (!alive) {
-                            logger.info("Parked upstream {} is no longer alive; evicting", resumeId)
-                            evict(resumeId)
-                            break
-                        }
-                    }
-                }
         }
         logger.info("Parked session {} for up to {}", resumeId, config.ttl)
     }
 
     /**
-     * Transitions the entry for [resumeId] from parked back to **bound**: cancels its TTL/keepalive
-     * timers and returns the still-live session for the coordinator to re-bind. Returns `null` for an
-     * unknown or already-evicted (expired) id.
+     * Transitions the entry for [resumeId] from parked back to **bound**: cancels its TTL timer (the
+     * keepalive keeps running — it is not a parked-only concern since 0050) and returns the still-live
+     * session for the coordinator to re-bind. Returns `null` for an unknown or already-evicted (expired)
+     * id.
      */
     public suspend fun resume(resumeId: String): LiveSession? =
         mutex.withLock {
@@ -310,8 +361,6 @@ public class SessionRegistry(
             if (!entry.parked) return@withLock null
             entry.ttlJob?.cancel()
             entry.ttlJob = null
-            entry.keepaliveJob?.cancel()
-            entry.keepaliveJob = null
             entry.parked = false
             entry.lastSeen = System.currentTimeMillis()
             logger.info("Resumed session {}", resumeId)
@@ -341,5 +390,14 @@ public class SessionRegistry(
     /** Cancels all timers/pumps. Called on application shutdown (or explicitly by unit tests). */
     public fun shutdown() {
         scope.coroutineContext.job.cancel()
+    }
+
+    public companion object {
+        /**
+         * The message carried by the terminal `DISCONNECTED` the bridge relays when a keepalive probe
+         * finds the upstream session gone. Deliberately phrased for the user: this is not a transport
+         * blip the app can resume through, it is "you are no longer signed in".
+         */
+        public const val UPSTREAM_LOST: String = "your session ended on the server; sign in again"
     }
 }

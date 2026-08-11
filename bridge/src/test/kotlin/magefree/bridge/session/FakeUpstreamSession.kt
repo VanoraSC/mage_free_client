@@ -56,8 +56,17 @@ public class FakeUpstreamSession(
     /** How many times [connect] has been collected — a resume must reuse the session, so this stays 1. */
     public val connectCount: AtomicInteger = AtomicInteger(0)
 
-    /** How many times the parked keepalive [ping] has been invoked. */
+    /** How many times the registry's keepalive [ping] has been invoked. */
     public val pingCount: AtomicInteger = AtomicInteger(0)
+
+    /**
+     * Whether the upstream still answers a keepalive probe. Set to `false` to stand in for XMage having
+     * dropped the session underneath the bridge — its `UserManagerImpl` expiring an idle user, a server
+     * restart, an upstream network partition. Nothing about the app socket changes; only the upstream
+     * stops being alive, which is the one-sided failure story 0050 defect A is about.
+     */
+    @Volatile
+    public var upstreamAlive: Boolean = true
 
     /** The credentials the coordinator connected with, captured for assertions. */
     @Volatile
@@ -124,7 +133,7 @@ public class FakeUpstreamSession(
 
     override suspend fun ping(): Boolean {
         pingCount.incrementAndGet()
-        return !disconnectSignal.isCompleted
+        return upstreamAlive && !disconnectSignal.isCompleted
     }
 
     override suspend fun sessionId(): String? = scriptedSessionId
