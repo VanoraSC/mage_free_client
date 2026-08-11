@@ -12,18 +12,31 @@ import magefree.bridge.mapping.CallbackRelay
 import magefree.bridge.xmage.XMageClientEvent
 import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageSession
+import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
+import magefree.protocol.GameActionCode
+import magefree.protocol.GameActionResult
+import magefree.protocol.GameFailureCode
 import magefree.protocol.GameTypeSummary
 import magefree.protocol.GetTable
+import magefree.protocol.JoinGame
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
+import magefree.protocol.QuitMatch
 import magefree.protocol.RemoveTable
 import magefree.protocol.RoomUserSummary
+import magefree.protocol.SendPlayerAction
+import magefree.protocol.SendPlayerBoolean
+import magefree.protocol.SendPlayerInteger
+import magefree.protocol.SendPlayerManaType
+import magefree.protocol.SendPlayerString
+import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import magefree.protocol.StartMatch
+import magefree.protocol.StopWatching
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
@@ -31,6 +44,7 @@ import magefree.protocol.TableFailureCode
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchGame
 import magefree.protocol.WatchTable
 import org.slf4j.LoggerFactory
 import java.util.UUID
@@ -273,6 +287,89 @@ public class XMageUpstreamSession(
     ): TableNotFound = TableNotFound(tableId = tableId, reason = reason)
 
     /**
+     * In-game request dispatch (story 0051). The `when` is what makes the protocol's game verbs total at
+     * this seam: each message is answered by exactly one `XMageSession` call, and anything that is not a
+     * game request is a programming error the coordinator cannot produce — reported as a typed failure
+     * rather than thrown, because a game request that vanishes leaves the player waiting forever.
+     */
+    override suspend fun gameRequest(request: ClientMessage): GameActionResult {
+        val action = gameActionOf(request)
+        val session = current
+        if (session == null || !session.isConnected) return noGameSession(action)
+        val gameId = parseUuid(gameIdOf(request)) ?: return gameFailed(action, INVALID_GAME_ID)
+        return try {
+            when (request) {
+                is JoinGame -> session.joinGame(gameId)
+                is WatchGame -> session.watchGame(gameId)
+                is QuitMatch -> session.quitMatch(gameId)
+                is StopWatching -> session.stopWatching(gameId)
+                is SendPlayerBoolean -> session.sendPlayerBoolean(gameId, request.value)
+                is SendPlayerInteger -> session.sendPlayerInteger(gameId, request.value)
+                is SendPlayerString -> session.sendPlayerString(gameId, request.value)
+                is SendPlayerUuid ->
+                    parseUuid(request.value)
+                        ?.let { session.sendPlayerUuid(gameId, it) }
+                        ?: gameFailed(action, INVALID_OBJECT_ID)
+                is SendPlayerManaType ->
+                    parseUuid(request.playerId)
+                        ?.let { session.sendPlayerManaType(gameId, it, request.manaType) }
+                        ?: gameFailed(action, INVALID_PLAYER_ID)
+                is SendPlayerAction ->
+                    session.sendPlayerAction(gameId, request.action, request.dataInt ?: request.dataText)
+                else -> gameFailed(action, NOT_A_GAME_REQUEST)
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            logger.warn("Upstream {} game request failed: {}", action, failure.toString())
+            gameFailed(action, "request failed")
+        }
+    }
+
+    /** The [GameActionCode] a game request answers — the one place the message→code mapping lives. */
+    private fun gameActionOf(request: ClientMessage): GameActionCode =
+        when (request) {
+            is JoinGame -> GameActionCode.JOIN_GAME
+            is WatchGame -> GameActionCode.WATCH_GAME
+            is QuitMatch -> GameActionCode.QUIT_MATCH
+            is StopWatching -> GameActionCode.STOP_WATCHING
+            is SendPlayerUuid -> GameActionCode.SEND_UUID
+            is SendPlayerBoolean -> GameActionCode.SEND_BOOLEAN
+            is SendPlayerInteger -> GameActionCode.SEND_INTEGER
+            is SendPlayerString -> GameActionCode.SEND_STRING
+            is SendPlayerManaType -> GameActionCode.SEND_MANA_TYPE
+            is SendPlayerAction -> GameActionCode.PLAYER_ACTION
+            else -> GameActionCode.PLAYER_ACTION
+        }
+
+    /** The game id a game request addresses, or `null` when the message is not a game request. */
+    private fun gameIdOf(request: ClientMessage): String? =
+        when (request) {
+            is JoinGame -> request.gameId
+            is WatchGame -> request.gameId
+            is QuitMatch -> request.gameId
+            is StopWatching -> request.gameId
+            is SendPlayerUuid -> request.gameId
+            is SendPlayerBoolean -> request.gameId
+            is SendPlayerInteger -> request.gameId
+            is SendPlayerString -> request.gameId
+            is SendPlayerManaType -> request.gameId
+            is SendPlayerAction -> request.gameId
+            else -> null
+        }
+
+    /** A typed failed game result; [failure] defaults to a refusal (see [noGameSession] for the other kind). */
+    private fun gameFailed(
+        action: GameActionCode,
+        reason: String,
+        failure: GameFailureCode = GameFailureCode.REFUSED,
+    ): GameActionResult = GameActionResult(action = action, ok = false, reason = reason, failure = failure)
+
+    /** The failure used wherever this session has no connected upstream to run a game request against. */
+    private fun noGameSession(action: GameActionCode): GameActionResult =
+        gameFailed(action, NO_CONNECTED_SESSION, GameFailureCode.SESSION_GONE)
+
+    /**
      * Runs a table [action] against the connected [XMageSession], mapping the absence of a connected
      * session — or a transport failure — to a **typed** failed [TableActionResult] (story 0036): an
      * action must never surface as a stream error, mirroring [lobbyQuery].
@@ -336,5 +433,12 @@ public class XMageUpstreamSession(
 
         /** The reason paired with [TableFailureCode.SESSION_GONE]; the app renders its own wording. */
         const val NO_CONNECTED_SESSION = "no connected session"
+
+        const val INVALID_GAME_ID = "invalid game id"
+        const val INVALID_OBJECT_ID = "invalid object id"
+        const val INVALID_PLAYER_ID = "invalid player id"
+
+        /** Defensive: the coordinator only routes game messages here, so this is unreachable in practice. */
+        const val NOT_A_GAME_REQUEST = "not a game request"
     }
 }

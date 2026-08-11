@@ -16,6 +16,9 @@ import magefree.protocol.ClientHello
 import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
 import magefree.protocol.CreateTableOptions
+import magefree.protocol.GameActionCode
+import magefree.protocol.GameActionResult
+import magefree.protocol.GameFailureCode
 import magefree.protocol.GameTypeList
 import magefree.protocol.GameTypeSummary
 import magefree.protocol.GetGameTypes
@@ -23,14 +26,24 @@ import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
 import magefree.protocol.GetTable
 import magefree.protocol.GetTables
+import magefree.protocol.JoinGame
 import magefree.protocol.Login
 import magefree.protocol.Logout
+import magefree.protocol.ManaTypeCode
 import magefree.protocol.Ping
+import magefree.protocol.PlayerActionCode
 import magefree.protocol.Pong
 import magefree.protocol.ProtocolJson
 import magefree.protocol.ProtocolVersion
+import magefree.protocol.QuitMatch
 import magefree.protocol.RoomUserList
 import magefree.protocol.RoomUserSummary
+import magefree.protocol.SendPlayerAction
+import magefree.protocol.SendPlayerBoolean
+import magefree.protocol.SendPlayerInteger
+import magefree.protocol.SendPlayerManaType
+import magefree.protocol.SendPlayerString
+import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
@@ -38,6 +51,7 @@ import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.StopWatching
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableDetail
 import magefree.protocol.TableFailureCode
@@ -46,11 +60,13 @@ import magefree.protocol.TableNotFound
 import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
+import magefree.protocol.WatchGame
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
@@ -419,6 +435,91 @@ class SessionCoordinatorTest {
             }
         }
     }
+
+    /**
+     * Story 0051: every in-game request must reach the upstream seam and come back **correlated**. The
+     * risk this guards is specific — the game verbs share one dispatch arm in the coordinator, so a
+     * mis-wired reply would answer with the wrong [magefree.protocol.GameActionCode] (or lose the
+     * `requestId`) and the app would match a prompt answer to the wrong outstanding request.
+     */
+    @Test
+    fun `every in-game request is dispatched upstream and answered with its own action code and requestId`() {
+        val fake =
+            FakeUpstreamSession(listOf(status(SessionStateCode.CONNECTING), status(SessionStateCode.CONNECTED)))
+        val gameId = "11111111-2222-3333-4444-555555555555"
+        val requests: List<Pair<ClientMessage, GameActionCode>> =
+            listOf(
+                JoinGame(gameId = gameId, requestId = "g-1") to GameActionCode.JOIN_GAME,
+                WatchGame(gameId = gameId, requestId = "g-2") to GameActionCode.WATCH_GAME,
+                QuitMatch(gameId = gameId, requestId = "g-3") to GameActionCode.QUIT_MATCH,
+                StopWatching(gameId = gameId, requestId = "g-4") to GameActionCode.STOP_WATCHING,
+                SendPlayerUuid(gameId = gameId, value = gameId, requestId = "g-5") to GameActionCode.SEND_UUID,
+                SendPlayerBoolean(gameId = gameId, value = false, requestId = "g-6") to GameActionCode.SEND_BOOLEAN,
+                SendPlayerInteger(gameId = gameId, value = 2, requestId = "g-7") to GameActionCode.SEND_INTEGER,
+                SendPlayerString(gameId = gameId, value = "1,2", requestId = "g-8") to GameActionCode.SEND_STRING,
+                SendPlayerManaType(gameId = gameId, playerId = gameId, manaType = ManaTypeCode.GREEN, requestId = "g-9")
+                    to GameActionCode.SEND_MANA_TYPE,
+                SendPlayerAction(gameId = gameId, action = PlayerActionCode.CONCEDE, requestId = "g-10")
+                    to GameActionCode.PLAYER_ACTION,
+            )
+
+        scenario(fake) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(Login(username = "grace"))
+                assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
+                assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
+
+                requests.forEach { (request, expectedAction) ->
+                    sendSerialized(request)
+                    val reply = assertInstanceOf(GameActionResult::class.java, receiveDeserialized<ServerMessage>())
+                    assertTrue(reply.ok, "the fake upstream accepts, so $request should succeed")
+                    assertEquals(expectedAction, reply.action, "$request must be answered with its own action code")
+                    assertEquals(gameRequestIdOf(request), reply.requestId, "$request must be correlated")
+                    assertEquals(request, fake.lastGameRequest, "$request must reach the upstream seam unchanged")
+                }
+            }
+        }
+    }
+
+    /**
+     * Story 0051 + 0050: a game request on a socket with no session is answered with the **kind** of
+     * failure. A player who has been signed out must be told that, not told the server declined their
+     * pass — the server was never asked, and retrying will never work.
+     */
+    @Test
+    fun `a game request on an unbound socket fails as SESSION_GONE`() {
+        val unbound = FakeUpstreamSession(emptyList())
+        scenario(unbound) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(SendPlayerBoolean(gameId = "g", value = false, requestId = "gb-1"))
+                val reply = assertInstanceOf(GameActionResult::class.java, receiveDeserialized<ServerMessage>())
+                assertFalse(reply.ok)
+                assertEquals(GameActionCode.SEND_BOOLEAN, reply.action)
+                assertEquals(GameFailureCode.SESSION_GONE, reply.failure)
+                assertEquals("gb-1", reply.requestId)
+            }
+            assertNull(unbound.lastGameRequest, "an unbound socket must not reach the upstream at all")
+        }
+    }
+
+    /** The `requestId` a game request carries — the correlation the coordinator must echo. */
+    private fun gameRequestIdOf(request: ClientMessage): String? =
+        when (request) {
+            is JoinGame -> request.requestId
+            is WatchGame -> request.requestId
+            is QuitMatch -> request.requestId
+            is StopWatching -> request.requestId
+            is SendPlayerUuid -> request.requestId
+            is SendPlayerBoolean -> request.requestId
+            is SendPlayerInteger -> request.requestId
+            is SendPlayerString -> request.requestId
+            is SendPlayerManaType -> request.requestId
+            is SendPlayerAction -> request.requestId
+            else -> null
+        }
 
     @Test
     fun `Ping still yields Pong after the handshake`() {

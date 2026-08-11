@@ -19,7 +19,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
+import magefree.protocol.GameActionResult
 import magefree.protocol.GameTypeSummary
 import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
@@ -195,6 +197,9 @@ public class LiveSession internal constructor(
 
     /** Reads one table's detail for a `GetTable` request while this session is bound (story 0040). */
     internal suspend fun tableDetail(request: GetTable): ServerMessage = upstream.tableDetail(request)
+
+    /** Dispatches an in-game request while this session is bound (story 0051). */
+    internal suspend fun gameRequest(request: ClientMessage): GameActionResult = upstream.gameRequest(request)
 
     /** Cancels the pump and disconnects the upstream. Idempotent. */
     internal suspend fun close() {
