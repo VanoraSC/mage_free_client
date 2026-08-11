@@ -4,25 +4,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import magefree.cards.model.CardColor
 import magefree.cards.model.CardId
@@ -38,15 +32,24 @@ import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
 import magefree.feature.cards.CardFilters
 import magefree.feature.cards.CardRow
+import magefree.feature.cards.CardSearchField
 import magefree.feature.cards.CardSearchPhase
 import magefree.feature.cards.CardSearchUiState
 import magefree.feature.cards.slotFor
 
+/** Placeholder text for the builder's search field. */
+const val ADD_CARDS_SEARCH_HINT: String = "Search cards to add"
+
 /**
  * The builder's card search/add surface. It reuses story 0032's offline [CardSearchUiState] pipeline,
- * [CardFilters] controls, per-row [CardArtRenderer] art, and the design-system [CardTile] rendering —
- * layering deck-add affordances (add to main / sideboard) and tap-to-inspect on top. No card rendering
- * is hand-rolled here; only the add controls are new. Stateless; every event hoisted.
+ * the shared [CardSearchField], [CardFilters] controls, per-row [CardArtRenderer] art, and the
+ * design-system [CardTile] rendering — layering deck-add affordances (add to main / sideboard) and
+ * tap-to-inspect on top. No card rendering is hand-rolled here; only the add controls are new.
+ * Stateless; every event hoisted.
+ *
+ * The field is the same composable `:feature:cards` uses rather than a second copy of it: this surface
+ * had its own hand-rolled `OutlinedTextField` controlled on the **debounced** `uiState.query`, so it
+ * carried the identical dead-text-entry defect (story 0049) and would have had to be fixed twice.
  */
 @Composable
 fun AddCardsScreen(
@@ -82,21 +85,12 @@ fun AddCardsScreen(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             verticalArrangement = Arrangement.spacedBy(Spacing.small),
         ) {
-            OutlinedTextField(
-                value = uiState.query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.medium, vertical = Spacing.small),
-                singleLine = true,
-                placeholder = { Text("Search cards to add") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (uiState.query.isNotEmpty()) {
-                        IconButton(onClick = onClearQuery) {
-                            Icon(Icons.Filled.Clear, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            CardSearchField(
+                query = uiState.query,
+                onQueryChange = onQueryChange,
+                onClearQuery = onClearQuery,
+                placeholder = ADD_CARDS_SEARCH_HINT,
+                modifier = Modifier.padding(horizontal = Spacing.medium, vertical = Spacing.small),
             )
             CardFilters(
                 uiState = uiState,

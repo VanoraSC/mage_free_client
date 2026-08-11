@@ -6,6 +6,15 @@ plugins {
 
 android {
     namespace = "magefree.feature.decks"
+
+    testOptions {
+        unitTests {
+            // Story 0049: the add-cards typing test renders the real composable under Robolectric, so
+            // the hermetic gate needs Android resources (the design-system theme) on the JVM.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -34,6 +43,15 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+
+    // Story 0049: JVM-side Compose UI testing for the builder's own search field, so both surfaces are
+    // covered by the hermetic gate rather than only on a device. Scoped to the **debug** unit-test
+    // variant because `createComposeRule` needs the host `ComponentActivity` that
+    // `compose-ui-test-manifest` contributes as a `debugImplementation`; the Compose BOM is applied to
+    // `implementation`/`androidTestImplementation` only, so this classpath pins it explicitly.
+    testDebugImplementation(platform(libs.compose.bom))
+    testDebugImplementation(libs.compose.ui.test.junit4)
+    testDebugImplementation(libs.robolectric)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.compose.ui.test.junit4)

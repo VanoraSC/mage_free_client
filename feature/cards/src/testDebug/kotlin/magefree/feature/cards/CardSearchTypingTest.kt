@@ -29,6 +29,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.IOException
 
 /**
  * Story 0049 — the coverage whose absence let the dead search field ship (verification standards 1
@@ -166,6 +167,29 @@ class CardSearchTypingTest {
         searchField().assert(hasText("forest"))
         composeTestRule.onNodeWithContentDescription("Forest", substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Lightning Bolt", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun aCatalogFailureShowsRetryAndLeavesTheFieldTypeable() {
+        // Story 0042's fail-soft contract, observed through the rendered screen: a catalog read failure
+        // is an error + retry surface, and the pipeline behind it survives to serve the next keystroke.
+        val catalog = catalog(forest, bolt).apply { failWith = { IOException("No space left on device") } }
+        renderSearchScreen(CardSearchViewModel(catalog, debounceMillis = 300L))
+
+        searchField().performTextInput("forest")
+        settle()
+        composeTestRule.onNodeWithText("Couldn't read the card catalog", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Retry").assertIsDisplayed()
+
+        catalog.failWith = null
+        searchField().performTextInput("s")
+        searchField().assert(hasText("forests"))
+        settle()
+
+        // The next query was served, so nothing killed the pipeline. (The failed read never reaches the
+        // fake's recording, so the one entry here *is* the post-failure query.)
+        assertEquals(listOf("forests"), catalog.searchQueries)
+        composeTestRule.onNodeWithText("Couldn't read the card catalog", substring = true).assertDoesNotExist()
     }
 
     @Test

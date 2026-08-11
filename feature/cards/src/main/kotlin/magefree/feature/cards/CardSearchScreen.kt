@@ -5,25 +5,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import magefree.cards.art.CardArtRequest
@@ -55,7 +49,8 @@ const val CARDS_SEARCH_HINT: String = "Search cards"
 private val TileMinWidth = 150.dp
 
 /**
- * Stateless card search/browse screen. A debounced [OutlinedTextField] over the catalog, the
+ * Stateless card search/browse screen. The shared [CardSearchField] over the catalog — its text is
+ * immediate, only the catalog query behind it is debounced (story 0049) — the
  * [CardFilters] controls, and an adaptive grid of design-system [CardTile]s (art via the injected
  * [CardArtRenderer]). Renders the idle prompt / loading / "no matches" empty surfaces via the design
  * system's [EmptyState] / [LoadingState], and a catalog read failure via [ErrorState] with retry.
@@ -106,10 +101,11 @@ fun CardSearchScreen(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
             verticalArrangement = Arrangement.spacedBy(Spacing.small),
         ) {
-            SearchField(
+            CardSearchField(
                 query = uiState.query,
                 onQueryChange = onQueryChange,
                 onClearQuery = onClearQuery,
+                placeholder = CARDS_SEARCH_HINT,
                 modifier = Modifier.padding(horizontal = Spacing.medium, vertical = Spacing.small),
             )
             CardFilters(
@@ -149,31 +145,6 @@ fun CardSearchScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClearQuery: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth(),
-        singleLine = true,
-        placeholder = { Text(CARDS_SEARCH_HINT) },
-        leadingIcon = { Icon(imageVector = Icons.Filled.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = onClearQuery) {
-                    Icon(imageVector = Icons.Filled.Clear, contentDescription = "Clear search")
-                }
-            }
-        },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-    )
 }
 
 @Composable
