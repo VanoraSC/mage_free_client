@@ -350,6 +350,28 @@ before being written up.
 
 ---
 
+## Epic 11 — In-Game Play
+
+The actual game. Everything built so far funnels into `MatchStarting`, which today opens nothing.
+
+**Shape of the upstream contract:** XMage's in-game protocol is *"the server asks a typed question,
+the client answers with a primitive"* — `GAME_*` callbacks carry a `GameClientMessage` (a full
+`GameView` **snapshot** plus what is being asked), and the client replies with
+`sendPlayerUUID/Boolean/Integer/String/ManaType` or a `PlayerAction`. Two consequences shape the
+whole epic: state is a **snapshot, not a delta**, and **the server owns the rules** —
+`GameView.canPlayObjects` says what is legally playable, so we never reimplement Magic.
+
+**Sequencing (Pete, 2026-08-11): data first.** The data layers land and are proven against a real
+game *before* any board is drawn — the order that worked for Epic 7, and the reason 0045 caught
+defects fakes could not. UI scope is deliberately **not** committed yet; it will be decided once a
+real game's state is reaching the app and we can see what the board actually needs.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0051 | Game protocol & bridge relay | 0036, 0006 | `:protocol` game state/events/typed prompts/replies + a `:bridge` `GameRelay` and per-callback mappers. `mage.*` stays in the bridge. No app change. |
+| 0052 | Game client & state | 0051, 0037, 0045 | `:core:network` `GameClient` + observable app-schema `GameState` and current prompt, folded from 0051's events; re-syncs across resume. **Live-proven against a real game before any UI.** No UI. |
+| — | *Board & interaction* | 0052 | Deliberately unspecified until 0052 is live-verified. |
+
 ## Known issues (accepted, not scheduled)
 
 Deliberately logged rather than fixed. Each is bounded, self-healing, and has no user-visible effect;
