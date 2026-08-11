@@ -60,6 +60,26 @@ class LobbyRepositoryTest {
             scope = backgroundScope,
         )
 
+    /**
+     * The same repository, but with its **connection collector** on an unconfined dispatcher so it runs
+     * the instant `connectionState` changes — the way it does in production, where that collector lives
+     * on the application scope and is not queued behind the test body. The
+     * [connection-edge][reachingConnectedPopulatesTheLobbyWithNoUserAction] tests need that: what they
+     * assert is a reaction to a state change, not to a call.
+     */
+    private fun TestScope.liveRepository(
+        client: LobbyClient,
+        connection: MutableStateFlow<ConnectionState>,
+    ): LobbyRepository {
+        val unconfined = UnconfinedTestDispatcher(testScheduler)
+        return LobbyRepository(
+            lobbyClient = client,
+            connectionState = connection,
+            dispatcher = unconfined,
+            scope = backgroundScope + unconfined,
+        )
+    }
+
     @Test
     fun refreshWhileConnectedGoesLoadingThenLoadedWithData() =
         runTest {
@@ -212,6 +232,71 @@ class LobbyRepositoryTest {
             assertTrue("tables=${settled.tables}", settled.tables.isEmpty())
             assertTrue(settled.roomUsers.isEmpty())
             assertTrue(settled.gameTypes.isEmpty())
+        }
+
+    /**
+     * Story 0050 defect C. Reaching [ConnectionState.Connected] must populate the lobby by itself. The
+     * screen has no auto-refresh loop and there is no server push for the table list, so if the
+     * repository does not fetch on the connected edge the only thing that ever fills the lobby is a
+     * user pulling to refresh — which is how the smoke saw `Connected` on the strip beside the lobby's
+     * "Connect to browse — Sign in to a server to see open tables".
+     */
+    @Test
+    fun reachingConnectedPopulatesTheLobbyWithNoUserAction() =
+        runTest {
+            val connection = MutableStateFlow(ConnectionState.Disconnected)
+            val client = FakeLobbyClient(tables = listOf(table), roomUsers = listOf(user), gameTypes = listOf(gameType))
+            val repository = liveRepository(client, connection)
+
+            connection.value = ConnectionState.Connected
+            advanceUntilIdle()
+
+            val populated = repository.snapshot.value
+            assertEquals(
+                "connecting must fetch the lobby on its own; the UI cannot show Connected beside " +
+                    "\"sign in to browse\"",
+                LobbyLoadState.Loaded,
+                populated.status,
+            )
+            assertEquals(listOf(table), populated.tables)
+        }
+
+    /**
+     * Story 0050 defect C, the recovery direction: a transport drop resets the lobby to idle (as it
+     * must), and 0023/0024's resume brings the session back to [ConnectionState.Connected] with no user
+     * action at all. The subscription has to come back with it.
+     */
+    @Test
+    fun resumingAfterADropReSubscribesTheLobby() =
+        runTest {
+            val connection = MutableStateFlow(ConnectionState.Connected)
+            val client = FakeLobbyClient(tables = listOf(table), roomUsers = listOf(user), gameTypes = listOf(gameType))
+            val repository = liveRepository(client, connection)
+
+            repository.refresh()
+            advanceUntilIdle()
+            assertEquals(LobbyLoadState.Loaded, repository.snapshot.value.status)
+
+            // The socket drops; the reconnect loop reports Reconnecting, then Restoring while the
+            // `Resume` ack is awaited. The lobby is meaningless meanwhile, so it goes back to idle.
+            connection.value = ConnectionState.Reconnecting
+            advanceUntilIdle()
+            connection.value = ConnectionState.Restoring
+            advanceUntilIdle()
+            assertEquals(LobbyLoadState.Idle, repository.snapshot.value.status)
+
+            // The resume lands. Nothing else happens — no pull-to-refresh, no screen re-entry.
+            connection.value = ConnectionState.Connected
+            advanceUntilIdle()
+
+            val restored = repository.snapshot.value
+            assertEquals(
+                "a re-established session must restore the lobby subscription by itself",
+                LobbyLoadState.Loaded,
+                restored.status,
+            )
+            assertEquals(listOf(table), restored.tables)
+            assertEquals(listOf(user), restored.roomUsers)
         }
 
     @Test

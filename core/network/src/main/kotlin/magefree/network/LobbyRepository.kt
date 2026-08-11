@@ -65,10 +65,28 @@ class LobbyRepository
 
         init {
             // The lobby only makes sense while connected: reset to idle/empty on any non-connected state
-            // (disconnect, reconnecting, auth-failed, …), cancelling any in-flight refresh.
+            // (disconnect, reconnecting, auth-failed, …), cancelling any in-flight refresh — and fetch
+            // again the moment the session is (re-)established.
+            //
+            // Story 0050 defect C: the reset half existed on its own, so a resumed session left the lobby
+            // parked on the idle/empty snapshot the drop installed. With no auto-refresh loop and no
+            // server push for the table list, the *only* thing that repopulated it was the user pulling
+            // to refresh — which is how the smoke saw `Connected` on the status strip beside the lobby's
+            // "Connect to browse — Sign in to a server to see open tables". Re-fetching on the connected
+            // edge is the lobby's re-subscription: it costs three reads per (re)connect, and the session
+            // is by definition live at that instant.
             scope.launch {
+                var wasConnected = false
                 connectionState.collect { state ->
-                    if (state != ConnectionState.Connected) resetToIdle()
+                    val connected = state == ConnectionState.Connected
+                    when {
+                        !connected -> resetToIdle()
+                        // Only the *edge* into Connected refreshes. A StateFlow already suppresses
+                        // consecutive duplicates, so this is belt-and-braces against a repeated value
+                        // turning the lobby into a fetch loop.
+                        !wasConnected -> refresh()
+                    }
+                    wasConnected = connected
                 }
             }
         }
