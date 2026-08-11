@@ -21,6 +21,9 @@ import kotlinx.serialization.modules.polymorphic
  *   decodes any unrecognised `type` to a deserialize-only [UnknownClientMessage]/[UnknownServerMessage]
  *   sentinel (carrying the raw discriminator), which each consumer logs and ignores — honouring
  *   [ProtocolVersion]'s promise that "both sides must tolerate an unknown message `type` gracefully".
+ *   The same default is registered for [GamePrompt] (story 0051): the in-game prompt set is nested
+ *   *inside* a [GamePrompted] frame, so an unknown prompt subtype would otherwise throw even though the
+ *   envelope's own `type` is known — an app that cannot decode the prompt must still receive the state.
  */
 public object ProtocolJson {
     public val json: Json =
@@ -35,6 +38,9 @@ public object ProtocolJson {
                     }
                     polymorphic(ServerMessage::class) {
                         defaultDeserializer { type -> UnknownServerMessage.deserializerFor(type) }
+                    }
+                    polymorphic(GamePrompt::class) {
+                        defaultDeserializer { type -> UnknownGamePrompt.deserializerFor(type) }
                     }
                 }
         }
