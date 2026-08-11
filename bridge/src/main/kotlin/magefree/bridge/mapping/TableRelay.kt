@@ -11,6 +11,7 @@ import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
 import magefree.protocol.TableDetail
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import java.util.UUID
@@ -63,7 +64,12 @@ public object TableRelay {
      * rather than receiving a table configured differently from the one requested.
      */
     public fun rejectedMessage(reason: String): TableActionResult =
-        TableActionResult(action = TableActionCode.CREATE, ok = false, reason = reason)
+        TableActionResult(
+            action = TableActionCode.CREATE,
+            ok = false,
+            reason = reason,
+            failure = TableFailureCode.REFUSED,
+        )
 
     /**
      * The pure create-result decision (unit-testable without a `TableView`): a mapped [table] → a
@@ -74,7 +80,12 @@ public object TableRelay {
         if (table != null) {
             TableCreated(table = table)
         } else {
-            TableActionResult(action = TableActionCode.CREATE, ok = false, reason = CREATE_DECLINED)
+            TableActionResult(
+                action = TableActionCode.CREATE,
+                ok = false,
+                reason = CREATE_DECLINED,
+                failure = TableFailureCode.REFUSED,
+            )
         }
 
     /** Joins the constructed table [tableId] in [roomId] as [seatName], submitting [deck]. */
@@ -190,7 +201,14 @@ public object TableRelay {
     public fun resultOf(
         action: TableActionCode,
         ok: Boolean,
-    ): TableActionResult = TableActionResult(action = action, ok = ok, reason = if (ok) null else ACTION_DECLINED)
+    ): TableActionResult =
+        TableActionResult(
+            action = action,
+            ok = ok,
+            reason = if (ok) null else ACTION_DECLINED,
+            // The server was asked and said no — a refusal, not a lost session (story 0050).
+            failure = if (ok) null else TableFailureCode.REFUSED,
+        )
 
     /** Maps an app-schema skill to XMage's `int skill` join argument (BEGINNER/CASUAL/SERIOUS → 1/2/3). */
     private fun skillIntOf(skill: SkillLevelCode): Int =

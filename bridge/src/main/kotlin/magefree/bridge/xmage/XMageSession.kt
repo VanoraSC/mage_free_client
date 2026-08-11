@@ -15,6 +15,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SkillLevelCode
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import java.util.UUID
@@ -240,9 +241,18 @@ public class XMageSession(
             TableRelay.tableDetail(session, room, tableId)
         }
 
-    /** A failed [TableActionResult] for an action attempted without a connected session/resolvable room. */
+    /**
+     * A failed [TableActionResult] for an action attempted without a connected session/resolvable room.
+     * Tagged [TableFailureCode.SESSION_GONE] (story 0050): the server was never asked, so the app must
+     * say "you are no longer signed in" rather than "the server declined".
+     */
     private fun notConnected(action: TableActionCode): TableActionResult =
-        TableActionResult(action = action, ok = false, reason = "no connected session")
+        TableActionResult(
+            action = action,
+            ok = false,
+            reason = "no connected session",
+            failure = TableFailureCode.SESSION_GONE,
+        )
 
     /**
      * Keepalive probe: `SessionImpl.ping()` then report `isConnected()`. Used by story 0023's

@@ -31,6 +31,7 @@ import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
 import magefree.protocol.TableDetail
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
@@ -264,7 +265,17 @@ internal class DefaultTableClient(
 
     private fun TableActionResult.asUnit(): Result<Unit> = if (ok) Result.success(Unit) else asFailure()
 
-    private fun <T> TableActionResult.asFailure(): Result<T> = Result.failure(TableActionFailure(reason))
+    /**
+     * A declined action becomes a typed failure — and, since story 0050, the *right* typed failure: a
+     * [magefree.protocol.TableFailureCode.SESSION_GONE] reply means the bridge had no session to act
+     * through, so the action never reached the server and the caller must offer re-authentication rather
+     * than repeat the server's (non-existent) refusal. Anything else stays a plain [TableActionFailure],
+     * including a reply from an older bridge that does not send the field at all.
+     */
+    private fun <T> TableActionResult.asFailure(): Result<T> =
+        Result.failure(
+            if (failure == TableFailureCode.SESSION_GONE) SessionGoneFailure(reason) else TableActionFailure(reason),
+        )
 
     private fun <T> unexpected(reply: ServerMessage): Result<T> =
         Result.failure(TableActionFailure("table: unexpected reply ${reply::class.simpleName}"))

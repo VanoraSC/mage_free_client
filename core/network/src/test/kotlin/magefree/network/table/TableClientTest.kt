@@ -23,6 +23,7 @@ import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
 import magefree.protocol.TableDetail
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
@@ -124,6 +125,60 @@ class TableClientTest {
             val failure = result.exceptionOrNull()
             assertTrue(failure is TableActionFailure)
             assertEquals("room full", (failure as TableActionFailure).reason)
+        }
+
+    /**
+     * Story 0050 defect A, second half. The two failures arrive on the same frame shape and used to be
+     * indistinguishable, so a create attempted after XMage had quietly expired the session was reported
+     * as *"the server declined to create the table"* — sending the host off to check their table options
+     * for a problem that does not exist. `SESSION_GONE` says the server was never asked.
+     */
+    @Test
+    fun aSessionGoneDeclineIsDistinguishedFromAServerRefusal() =
+        runTest {
+            val refused =
+                client {
+                    TableActionResult(
+                        action = TableActionCode.CREATE,
+                        ok = false,
+                        reason = "the server declined to create the table",
+                        failure = TableFailureCode.REFUSED,
+                    )
+                }.createTable(CreateTableOptions("n", "g", "d"))
+                    .exceptionOrNull()
+
+            assertTrue("a refusal stays an ordinary action failure, got $refused", refused is TableActionFailure)
+            assertFalse("a refusal is not a lost session, got $refused", refused is SessionGoneFailure)
+
+            val gone =
+                client {
+                    TableActionResult(
+                        action = TableActionCode.CREATE,
+                        ok = false,
+                        reason = "no active session on this socket",
+                        failure = TableFailureCode.SESSION_GONE,
+                    )
+                }.createTable(CreateTableOptions("n", "g", "d"))
+                    .exceptionOrNull()
+
+            assertTrue(
+                "a session-gone reply must be a typed SessionGoneFailure so the caller can offer " +
+                    "re-authentication instead of repeating a refusal that never happened, got $gone",
+                gone is SessionGoneFailure,
+            )
+            assertEquals("no active session on this socket", (gone as SessionGoneFailure).reason)
+        }
+
+    /** An older bridge sends no `failure` at all: the reply must stay an ordinary decline, as before. */
+    @Test
+    fun aDeclineWithoutAFailureCodeStaysAnOrdinaryActionFailure() =
+        runTest {
+            val client = client { TableActionResult(action = TableActionCode.START_MATCH, ok = false, reason = "no") }
+
+            val failure = client.startMatch("t-1").exceptionOrNull()
+
+            assertTrue(failure is TableActionFailure)
+            assertFalse(failure is SessionGoneFailure)
         }
 
     @Test

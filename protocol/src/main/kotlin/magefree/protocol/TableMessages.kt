@@ -185,7 +185,33 @@ public data class TableActionResult(
     val ok: Boolean,
     val reason: String? = null,
     val requestId: String? = null,
+    val failure: TableFailureCode? = null,
 ) : ServerMessage
+
+/**
+ * Why a [TableActionResult] failed, as a **kind** rather than as prose (story 0050 defect A).
+ *
+ * [reason][TableActionResult.reason] is written for a human and can say anything; the app cannot branch
+ * on it. This can: the difference between "the server considered your request and said no" and "there is
+ * no session behind this socket any more" is the difference between showing *"the server declined to
+ * create the table"* — which is what the smoke saw after an idle session had already been expired
+ * upstream — and telling the user they are signed out and offering them the way back in.
+ *
+ * Optional and additive: an older peer that does not know the field ignores it (`ignoreUnknownKeys`) and
+ * behaves exactly as before, falling back to the prose reason.
+ */
+@Serializable
+public enum class TableFailureCode {
+    /** The server was asked and refused (a full table, a bad password, an illegal deck). */
+    REFUSED,
+
+    /**
+     * There is no usable session to act through: nothing is bound to this socket, or the upstream
+     * session behind it is gone. The action was never put to the server, and re-authenticating — not
+     * retrying — is what fixes it.
+     */
+    SESSION_GONE,
+}
 
 /**
  * Bridge→app: the reply to a [GetTable] (story 0040). [table] is the same browse-relevant [TableSummary]

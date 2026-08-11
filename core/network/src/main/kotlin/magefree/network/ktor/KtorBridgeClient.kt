@@ -70,6 +70,33 @@ import magefree.protocol.ServerMessage
  * All wire (`:protocol`) types are confined to this class, [SessionRelay], and the mapper — callers see
  * only `:core:model` [SessionEvent]s. Credentials are held only for the duration of a [connect] flow
  * (for the resume fallback) and never logged or persisted.
+ *
+ * ### Recorded finding — the on-device "~33 s socket close" is the platform, not this client
+ *
+ * Story 0048's smoke saw the bridge log `101 Switching Protocols: GET - /v1/session in
+ * 33099/33135/33319/33433/33516ms` on every post-offline session, each immediately followed by a
+ * successful `Resume`. Story 0050 diagnosed it before changing anything; the answer is **Android's
+ * network linger**, and there is nothing here to fix:
+ *
+ * - Neither peer runs a WebSocket pinger, so it cannot be a ping/pong timeout: Ktor 3.5.1 defaults
+ *   the server's `WebSockets.pingPeriodMillis` and the client's `WebSockets.pingIntervalMillis` to
+ *   `PINGER_DISABLED`, and neither the bridge nor [defaultHttpClient] overrides them.
+ * - It is not an idle timeout in the transport path either: a session held **idle** against the same
+ *   published bridge port closed after neither 90 s (raw socket from the container host) nor 100 s
+ *   (this client's engine from the host JVM) — the bridge logged the full `… in 90764ms` /
+ *   `… in 100520ms` and nothing closed early.
+ * - Reproduced on the emulator and traced in `ConnectivityService`: after the smoke's airplane-mode
+ *   off the emulator brings CELLULAR up first and the app connects over it; WIFI validates ~3 s later
+ *   and takes over as the default network, at which point Android logs
+ *   `Setting inactive [112 CELLULAR] for 30000ms` and then, exactly 30 s later,
+ *   `handleLingerComplete for [112 CELLULAR]` — in the same second the bridge logged
+ *   `… /v1/session in 32776ms`. The socket dies because the network it was bound to is torn down
+ *   after Android's fixed 30 s linger; ~3 s of settling plus that constant 30 s timer is the whole
+ *   ~33 s, and the fixed timer is why the number is so repeatable.
+ *
+ * So this is an ordinary transport drop on a network hand-off — **intended platform behaviour, left
+ * alone** — and stories 0023/0024's park + resume is precisely the right response to it, which is why
+ * the smoke survived it every time.
  */
 class KtorBridgeClient(
     private val httpClientFactory: () -> HttpClient = ::defaultHttpClient,

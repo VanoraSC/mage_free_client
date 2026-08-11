@@ -27,6 +27,7 @@ import magefree.protocol.StartMatch
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
@@ -189,7 +190,7 @@ public class XMageUpstreamSession(
 
     override suspend fun createTable(request: CreateTable): ServerMessage {
         val session = current
-        if (session == null || !session.isConnected) return actionFailed(TableActionCode.CREATE, "no connected session")
+        if (session == null || !session.isConnected) return noSession(TableActionCode.CREATE)
         return try {
             session.createTable(parseUuid(request.roomId), request.options)
         } catch (cancellation: CancellationException) {
@@ -281,7 +282,7 @@ public class XMageUpstreamSession(
         block: suspend (XMageSession) -> TableActionResult,
     ): TableActionResult {
         val session = current
-        if (session == null || !session.isConnected) return actionFailed(action, "no connected session")
+        if (session == null || !session.isConnected) return noSession(action)
         return try {
             block(session)
         } catch (cancellation: CancellationException) {
@@ -292,10 +293,21 @@ public class XMageUpstreamSession(
         }
     }
 
+    /**
+     * A typed failed action. [reason] is the human-readable detail; [failure] is the *kind* the app
+     * branches on (story 0050) — [TableFailureCode.SESSION_GONE] when there is no live upstream session
+     * to act through, so the app can offer re-authentication instead of reporting a server decline that
+     * never happened.
+     */
     private fun actionFailed(
         action: TableActionCode,
         reason: String,
-    ): TableActionResult = TableActionResult(action = action, ok = false, reason = reason)
+        failure: TableFailureCode = TableFailureCode.REFUSED,
+    ): TableActionResult = TableActionResult(action = action, ok = false, reason = reason, failure = failure)
+
+    /** The failure used wherever this session has no connected upstream to run an action against. */
+    private fun noSession(action: TableActionCode): TableActionResult =
+        actionFailed(action, NO_CONNECTED_SESSION, TableFailureCode.SESSION_GONE)
 
     /** Parses [value] to a [UUID], or `null` when absent/malformed (a null room falls back to the main room). */
     private fun parseUuid(value: String?): UUID? =
@@ -321,5 +333,8 @@ public class XMageUpstreamSession(
 
     private companion object {
         const val INVALID_TABLE_ID = "invalid table id"
+
+        /** The reason paired with [TableFailureCode.SESSION_GONE]; the app renders its own wording. */
+        const val NO_CONNECTED_SESSION = "no connected session"
     }
 }

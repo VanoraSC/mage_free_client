@@ -43,6 +43,7 @@ import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableCreated
 import magefree.protocol.TableDetail
+import magefree.protocol.TableFailureCode
 import magefree.protocol.TableList
 import magefree.protocol.TableNotFound
 import magefree.protocol.UnknownClientMessage
@@ -85,9 +86,18 @@ public class SessionCoordinator(
 ) {
     private val logger = LoggerFactory.getLogger(SessionCoordinator::class.java)
 
-    /** A typed failed [TableActionResult] for a table action attempted on an unbound socket (story 0036). */
+    /**
+     * A typed failed [TableActionResult] for a table action attempted on an unbound socket (story 0036),
+     * carrying [TableFailureCode.SESSION_GONE] so the app can say "you are not signed in" rather than
+     * "the server declined" — the server was never asked (story 0050).
+     */
     private fun unboundFailure(action: TableActionCode): TableActionResult =
-        TableActionResult(action = action, ok = false, reason = "no active session on this socket")
+        TableActionResult(
+            action = action,
+            ok = false,
+            reason = "no active session on this socket",
+            failure = TableFailureCode.SESSION_GONE,
+        )
 
     /** Stamps [id] onto a correlated table reply; other messages pass through unchanged. */
     private fun ServerMessage.withRequestId(id: String?): ServerMessage =
@@ -166,9 +176,22 @@ public class SessionCoordinator(
                             } else {
                                 val live = registry.resume(message.resumeId)
                                 if (live == null) {
+                                    // Story 0050 defect B: the id may be refused because the entry is
+                                    // still *bound* to a socket that silently died (a radio that went
+                                    // away delivers no FIN). The app holding this handle has just shown
+                                    // it abandoned that socket, so reap the stale session — otherwise
+                                    // the `Login` it falls back to opens a second upstream login for the
+                                    // same username, which is the leak the smoke saw on every offline
+                                    // excursion.
+                                    val reaped = registry.evictIfBound(message.resumeId)
                                     ws.sendSerialized<ServerMessage>(
                                         ResumeRejected(
-                                            reason = "unknown or expired resume handle",
+                                            reason =
+                                                if (reaped) {
+                                                    "the held session was stale and has been torn down; log in again"
+                                                } else {
+                                                    "unknown or expired resume handle"
+                                                },
                                             requestId = message.requestId,
                                         ),
                                     )

@@ -211,6 +211,61 @@ class AppBridgeSessionIT {
         }
     }
 
+    /**
+     * Story 0050 defect A, live: **`Connected` must mean connected.**
+     *
+     * XMage's `UserManagerImpl.checkExpired` drops a user whose session has been silent for about three
+     * minutes (`disconnected due connection problems`). Nothing on either side used to be looking — the
+     * bridge only pinged a session while it was *parked* — so a user who spent three minutes
+     * deck-building had a dead upstream session while the app cheerfully displayed `Connected`, and only
+     * found out when their next action failed with a generic refusal.
+     *
+     * The assertion is deliberately on the **server's own view**: the app asking the bridge to list the
+     * room users is XMage answering "here is who I think is logged in". Against the unfixed bridge this
+     * comes back without our username (the upstream session is gone, so the read short-circuits to an
+     * empty list) while `connectionState` still says `Connected` — the exact lie. It passes only when the
+     * app's idea of the session and the server's agree.
+     *
+     * Slow by nature (it has to out-wait a three-minute server timer) and, like every test here, opt-in
+     * behind `BRIDGE_URL`.
+     */
+    @Test
+    fun `a session held idle past the server's expiry is still real, not merely displayed as Connected`() {
+        val target = requireTarget()
+        runBlocking {
+            val username = uniqueUsername()
+            val bridge = LiveBridge(this, target)
+            try {
+                bridge.connect(username)
+                awaitValue(
+                    what = "the room user list to include '$username' before going idle",
+                    read = { bridge.lobby.roomUsers() },
+                    condition = { list -> list.any { it.name == username } },
+                )
+
+                // Nothing at all for longer than the server's idle expiry: no reads, no actions, no
+                // reconnects. Exactly what "I am building a deck" looks like from the server's side.
+                delay(IDLE_PAST_EXPIRY_MS)
+
+                assertEquals(
+                    "the app must still consider itself connected after an idle spell — the fix is that " +
+                        "the session survives, not that the app gives up on it",
+                    ConnectionState.Connected,
+                    bridge.client.connectionState.value,
+                )
+                val users = bridge.lobby.roomUsers()
+                assertTrue(
+                    "after ${IDLE_PAST_EXPIRY_MS}ms idle the server must still know '$username'; it " +
+                        "listed ${users.map { it.name }}. An empty or missing entry here with the app " +
+                        "still reporting Connected is the story-0050 zombie session.",
+                    users.any { it.name == username },
+                )
+            } finally {
+                bridge.close()
+            }
+        }
+    }
+
     private companion object {
         /** The two-seat, non-tournament game type the reference server offers (see its `config.xml`). */
         const val DUEL = "Two Player Duel"
@@ -229,5 +284,12 @@ class AppBridgeSessionIT {
          * resume TTL it is asserting.
          */
         const val PARK_OBSERVATION_MS = 10_000L
+
+        /**
+         * How long to sit idle before checking the session is still real. XMage's expiry sweep is on the
+         * order of three minutes, so this has to clear it with room to spare — there is no shortcut: the
+         * defect is a server-side timer, and only out-waiting it proves anything.
+         */
+        const val IDLE_PAST_EXPIRY_MS = 240_000L
     }
 }

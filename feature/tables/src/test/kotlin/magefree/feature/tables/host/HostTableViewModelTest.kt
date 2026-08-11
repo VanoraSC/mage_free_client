@@ -17,6 +17,7 @@ import magefree.feature.tables.illegal
 import magefree.feature.tables.legal
 import magefree.network.fake.FakeTableClient
 import magefree.network.table.SeatPlayerType
+import magefree.network.table.SessionGoneFailure
 import magefree.network.table.TableActionFailure
 import magefree.network.table.TableRef
 import org.junit.After
@@ -283,6 +284,32 @@ class HostTableViewModelTest {
         }
 
     // ---- the failure paths ---------------------------------------------------------------------
+
+    /**
+     * Story 0050 defect A, second half — the smoke's actual sequence: XMage expires the idle session
+     * while the host is deck-building, the create is answered `SESSION_GONE`, and the host used to be
+     * told *"the server declined to create the table"*. That reads as a problem with the table, so the
+     * host retries the one thing that cannot work. Say what happened and name the fix.
+     */
+    @Test
+    fun aCreateThatFailsBecauseTheSessionIsGoneSaysSoAndPointsAtSigningInAgain() =
+        runTest {
+            val client =
+                FakeTableClient(
+                    createResult =
+                        Result.failure(SessionGoneFailure("the server declined to create the table")),
+                )
+            val vm = readyViewModel(client)
+
+            vm.assertNoRoomOpened { create() }
+
+            assertEquals(
+                "a lost session must not be reported as a server decline",
+                "You're no longer signed in to the server. Sign in again to host a table.",
+                vm.uiState.value.errorMessage,
+            )
+            assertFalse(vm.uiState.value.isSubmitting)
+        }
 
     @Test
     fun createDeclineSurfacesTheReasonAndHasNothingToRemove() =
