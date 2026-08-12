@@ -1,7 +1,9 @@
 package magefree.bridge.session
 
 import kotlinx.coroutines.flow.Flow
+import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
+import magefree.protocol.GameActionResult
 import magefree.protocol.GameTypeSummary
 import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
@@ -116,6 +118,18 @@ public interface UpstreamSession {
      * so no `mage.view.*` type crosses this interface. Runs the blocking upstream read on IO.
      */
     public suspend fun tableDetail(request: GetTable): ServerMessage
+
+    /**
+     * Dispatches one in-game request (story 0051) — join/watch/quit/stop, one of the five `sendPlayerX`
+     * answers, or a player action — and replies a typed [GameActionResult].
+     *
+     * A single method rather than one per verb, because unlike the table actions these share exactly one
+     * shape: a game id plus a payload, answered by a bare upstream `boolean`. The [request] is the
+     * protocol message itself so the id-parsing and the `mage.*` argument construction both stay behind
+     * this seam. A request against an unbound/disconnected session, or one carrying an unparseable id,
+     * replies a failed result — never a stream error, mirroring the table side.
+     */
+    public suspend fun gameRequest(request: ClientMessage): GameActionResult
 
     /**
      * Keepalive probe used by [SessionRegistry] while a session is **parked** (app socket dropped)

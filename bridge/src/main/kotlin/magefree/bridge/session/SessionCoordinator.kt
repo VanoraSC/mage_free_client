@@ -14,12 +14,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
+import magefree.protocol.GameActionCode
+import magefree.protocol.GameActionResult
+import magefree.protocol.GameFailureCode
 import magefree.protocol.GameTypeList
 import magefree.protocol.GetGameTypes
 import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
 import magefree.protocol.GetTable
 import magefree.protocol.GetTables
+import magefree.protocol.JoinGame
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
 import magefree.protocol.Login
@@ -28,16 +32,24 @@ import magefree.protocol.Ping
 import magefree.protocol.Pong
 import magefree.protocol.ProtocolError
 import magefree.protocol.ProtocolErrorCode
+import magefree.protocol.QuitMatch
 import magefree.protocol.RemoveTable
 import magefree.protocol.Resume
 import magefree.protocol.ResumeRejected
 import magefree.protocol.RoomUserList
+import magefree.protocol.SendPlayerAction
+import magefree.protocol.SendPlayerBoolean
+import magefree.protocol.SendPlayerInteger
+import magefree.protocol.SendPlayerManaType
+import magefree.protocol.SendPlayerString
+import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
 import magefree.protocol.StartMatch
+import magefree.protocol.StopWatching
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
@@ -48,6 +60,7 @@ import magefree.protocol.TableList
 import magefree.protocol.TableNotFound
 import magefree.protocol.UnknownClientMessage
 import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchGame
 import magefree.protocol.WatchTable
 import org.slf4j.LoggerFactory
 
@@ -98,6 +111,50 @@ public class SessionCoordinator(
             reason = "no active session on this socket",
             failure = TableFailureCode.SESSION_GONE,
         )
+
+    /**
+     * A typed failed [GameActionResult] for a game request attempted on an unbound socket (story 0051),
+     * carrying [GameFailureCode.SESSION_GONE]: the server was never asked, so the app must offer
+     * re-authentication rather than report a decline that did not happen (the 0050 convention).
+     */
+    private fun unboundGameFailure(request: ClientMessage): GameActionResult =
+        GameActionResult(
+            action = gameActionCodeOf(request),
+            ok = false,
+            reason = "no active session on this socket",
+            failure = GameFailureCode.SESSION_GONE,
+        )
+
+    /** Which [GameActionCode] an unbound-socket failure should answer, per game request type. */
+    private fun gameActionCodeOf(request: ClientMessage): GameActionCode =
+        when (request) {
+            is JoinGame -> GameActionCode.JOIN_GAME
+            is WatchGame -> GameActionCode.WATCH_GAME
+            is QuitMatch -> GameActionCode.QUIT_MATCH
+            is StopWatching -> GameActionCode.STOP_WATCHING
+            is SendPlayerUuid -> GameActionCode.SEND_UUID
+            is SendPlayerBoolean -> GameActionCode.SEND_BOOLEAN
+            is SendPlayerInteger -> GameActionCode.SEND_INTEGER
+            is SendPlayerString -> GameActionCode.SEND_STRING
+            is SendPlayerManaType -> GameActionCode.SEND_MANA_TYPE
+            else -> GameActionCode.PLAYER_ACTION
+        }
+
+    /** The `requestId` a game request carries, echoed onto its [GameActionResult]. */
+    private fun gameRequestId(request: ClientMessage): String? =
+        when (request) {
+            is JoinGame -> request.requestId
+            is WatchGame -> request.requestId
+            is QuitMatch -> request.requestId
+            is StopWatching -> request.requestId
+            is SendPlayerUuid -> request.requestId
+            is SendPlayerBoolean -> request.requestId
+            is SendPlayerInteger -> request.requestId
+            is SendPlayerString -> request.requestId
+            is SendPlayerManaType -> request.requestId
+            is SendPlayerAction -> request.requestId
+            else -> null
+        }
 
     /** Stamps [id] onto a correlated table reply; other messages pass through unchanged. */
     private fun ServerMessage.withRequestId(id: String?): ServerMessage =
@@ -312,6 +369,34 @@ public class SessionCoordinator(
                                     ?: TableNotFound(tableId = message.tableId, reason = "no active session on this socket")
                             ws.sendSerialized<ServerMessage>(reply.withRequestId(message.requestId))
                         }
+
+                        // In-game requests (story 0051): join/watch/quit/stop, the five sendPlayerX
+                        // answers, and player actions. All share one shape — a game id plus a payload
+                        // answered by a bare upstream boolean — so they route through a single
+                        // `gameRequest` seam and reply the correlated GameActionResult. An unbound
+                        // socket replies a typed SESSION_GONE failure (never an error): a game request
+                        // that vanishes leaves the player waiting on a prompt no one will answer.
+                        // In-game requests (story 0051): join/watch/quit/stop, the five sendPlayerX
+                        // answers, and player actions. All share one shape — a game id plus a payload
+                        // answered by a bare upstream boolean — so they route through a single
+                        // `gameRequest` seam and reply the correlated GameActionResult. An unbound
+                        // socket replies a typed SESSION_GONE failure (never an error): a game request
+                        // that vanishes leaves the player waiting on a prompt no one will answer.
+                        is JoinGame,
+                        is WatchGame,
+                        is QuitMatch,
+                        is StopWatching,
+                        is SendPlayerUuid,
+                        is SendPlayerBoolean,
+                        is SendPlayerInteger,
+                        is SendPlayerString,
+                        is SendPlayerManaType,
+                        is SendPlayerAction,
+                        ->
+                            ws.sendSerialized<ServerMessage>(
+                                (bound?.live?.gameRequest(message) ?: unboundGameFailure(message))
+                                    .copy(requestId = gameRequestId(message)),
+                            )
 
                         is UnknownClientMessage -> {
                             // Additive forward-compat (story 0026 F1): a newer app may send a `type` this

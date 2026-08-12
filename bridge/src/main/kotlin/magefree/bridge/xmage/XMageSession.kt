@@ -4,11 +4,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mage.remote.Connection
 import mage.remote.SessionImpl
+import magefree.bridge.mapping.GameRelay
 import magefree.bridge.mapping.LobbyRelay
 import magefree.bridge.mapping.TableRelay
 import magefree.protocol.CreateTableOptions
 import magefree.protocol.DeckList
+import magefree.protocol.GameActionCode
+import magefree.protocol.GameActionResult
+import magefree.protocol.GameFailureCode
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.ManaTypeCode
+import magefree.protocol.PlayerActionCode
 import magefree.protocol.RoomUserSummary
 import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.ServerMessage
@@ -240,6 +246,90 @@ public class XMageSession(
                     ?: return@withContext TableNotFound(tableId = tableId.toString(), reason = "no connected session")
             TableRelay.tableDetail(session, room, tableId)
         }
+
+    // ------------------------------------------------------------------------------------------------
+    // In-game requests (story 0051). Room-independent: every verb is addressed by game id. Each
+    // dispatches through [GameRelay] at the mapping boundary (so no `mage.*` shape leaves that package)
+    // on [Dispatchers.IO], and a request made without a connected session maps to a typed
+    // SESSION_GONE failure rather than being attempted.
+    // ------------------------------------------------------------------------------------------------
+
+    /** Takes the seat in [gameId] — after this the server pushes this session's game callbacks. */
+    public suspend fun joinGame(gameId: UUID): GameActionResult =
+        gameAction(GameActionCode.JOIN_GAME) { GameRelay.joinGame(session, gameId) }
+
+    /** Spectates [gameId]. */
+    public suspend fun watchGame(gameId: UUID): GameActionResult =
+        gameAction(GameActionCode.WATCH_GAME) { GameRelay.watchGame(session, gameId) }
+
+    /** Quits the match [gameId] belongs to (a concession). */
+    public suspend fun quitMatch(gameId: UUID): GameActionResult =
+        gameAction(GameActionCode.QUIT_MATCH) { GameRelay.quitMatch(session, gameId) }
+
+    /** Stops spectating [gameId]. */
+    public suspend fun stopWatching(gameId: UUID): GameActionResult =
+        gameAction(GameActionCode.STOP_WATCHING) { GameRelay.stopWatching(session, gameId) }
+
+    /** Answers the outstanding prompt in [gameId] with the object id [value]. */
+    public suspend fun sendPlayerUuid(
+        gameId: UUID,
+        value: UUID,
+    ): GameActionResult = gameAction(GameActionCode.SEND_UUID) { GameRelay.sendPlayerUuid(session, gameId, value) }
+
+    /** Answers the outstanding prompt in [gameId] with the yes/no [value]. */
+    public suspend fun sendPlayerBoolean(
+        gameId: UUID,
+        value: Boolean,
+    ): GameActionResult = gameAction(GameActionCode.SEND_BOOLEAN) { GameRelay.sendPlayerBoolean(session, gameId, value) }
+
+    /** Answers the outstanding prompt in [gameId] with the number [value]. */
+    public suspend fun sendPlayerInteger(
+        gameId: UUID,
+        value: Int,
+    ): GameActionResult = gameAction(GameActionCode.SEND_INTEGER) { GameRelay.sendPlayerInteger(session, gameId, value) }
+
+    /** Answers the outstanding prompt in [gameId] with the text [value]. */
+    public suspend fun sendPlayerString(
+        gameId: UUID,
+        value: String,
+    ): GameActionResult = gameAction(GameActionCode.SEND_STRING) { GameRelay.sendPlayerString(session, gameId, value) }
+
+    /** Unlocks [manaType] from [playerId]'s mana pool in [gameId]. */
+    public suspend fun sendPlayerManaType(
+        gameId: UUID,
+        playerId: UUID,
+        manaType: ManaTypeCode,
+    ): GameActionResult = gameAction(GameActionCode.SEND_MANA_TYPE) { GameRelay.sendPlayerManaType(session, gameId, playerId, manaType) }
+
+    /** Performs the out-of-band player [action] in [gameId], with upstream's optional `Object` [data]. */
+    public suspend fun sendPlayerAction(
+        gameId: UUID,
+        action: PlayerActionCode,
+        data: Any?,
+    ): GameActionResult = gameAction(GameActionCode.PLAYER_ACTION) { GameRelay.sendPlayerAction(session, gameId, action, data) }
+
+    /**
+     * Runs a game [request] on [Dispatchers.IO] when there is a connected session, and otherwise replies
+     * a typed [GameFailureCode.SESSION_GONE] failure: upstream's verbs return a bare `false` when
+     * disconnected, which is indistinguishable from a refusal, so the distinction has to be made here —
+     * where the session's liveness is actually known (story 0050).
+     */
+    private suspend fun gameAction(
+        action: GameActionCode,
+        request: () -> GameActionResult,
+    ): GameActionResult =
+        withContext(Dispatchers.IO) {
+            if (!session.isConnected) noGameSession(action) else request()
+        }
+
+    /** The failure used wherever this session has no connected upstream to run a game request against. */
+    private fun noGameSession(action: GameActionCode): GameActionResult =
+        GameActionResult(
+            action = action,
+            ok = false,
+            reason = "no connected session",
+            failure = GameFailureCode.SESSION_GONE,
+        )
 
     /**
      * A failed [TableActionResult] for an action attempted without a connected session/resolvable room.

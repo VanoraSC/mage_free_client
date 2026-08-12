@@ -4,22 +4,34 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
+import magefree.protocol.GameActionCode
+import magefree.protocol.GameActionResult
 import magefree.protocol.GameTypeSummary
 import magefree.protocol.GetTable
+import magefree.protocol.JoinGame
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
+import magefree.protocol.QuitMatch
 import magefree.protocol.RemoveTable
 import magefree.protocol.RoomUserSummary
+import magefree.protocol.SendPlayerBoolean
+import magefree.protocol.SendPlayerInteger
+import magefree.protocol.SendPlayerManaType
+import magefree.protocol.SendPlayerString
+import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.StartMatch
+import magefree.protocol.StopWatching
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
 import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
+import magefree.protocol.WatchGame
 import magefree.protocol.WatchTable
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -48,6 +60,11 @@ public class FakeUpstreamSession(
     /** The last table-action request the coordinator dispatched, captured for assertions (story 0036). */
     @Volatile
     public var lastTableRequest: Any? = null
+        private set
+
+    /** The last in-game request the coordinator dispatched, captured for assertions (story 0051). */
+    @Volatile
+    public var lastGameRequest: ClientMessage? = null
         private set
 
     private val disconnectSignal = CompletableDeferred<Unit>()
@@ -130,6 +147,30 @@ public class FakeUpstreamSession(
         lastTableRequest = request
         return TableActionResult(action = action, ok = scriptedActionOk)
     }
+
+    override suspend fun gameRequest(request: ClientMessage): GameActionResult {
+        lastGameRequest = request
+        return GameActionResult(action = gameActionOf(request), ok = scriptedActionOk)
+    }
+
+    /**
+     * The same message→code mapping [XMageUpstreamSession] applies, so the double answers the *right*
+     * action for each verb rather than a constant — a fake that answered every game request with the
+     * same code would let a mis-routed dispatch pass unnoticed.
+     */
+    private fun gameActionOf(request: ClientMessage): GameActionCode =
+        when (request) {
+            is JoinGame -> GameActionCode.JOIN_GAME
+            is WatchGame -> GameActionCode.WATCH_GAME
+            is QuitMatch -> GameActionCode.QUIT_MATCH
+            is StopWatching -> GameActionCode.STOP_WATCHING
+            is SendPlayerUuid -> GameActionCode.SEND_UUID
+            is SendPlayerBoolean -> GameActionCode.SEND_BOOLEAN
+            is SendPlayerInteger -> GameActionCode.SEND_INTEGER
+            is SendPlayerString -> GameActionCode.SEND_STRING
+            is SendPlayerManaType -> GameActionCode.SEND_MANA_TYPE
+            else -> GameActionCode.PLAYER_ACTION
+        }
 
     override suspend fun ping(): Boolean {
         pingCount.incrementAndGet()
