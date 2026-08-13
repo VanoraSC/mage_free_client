@@ -701,3 +701,38 @@ wrong until an unrelated game event? The experiment sampled B only twice and can
 before building**, because the answer changes the design: if it self-corrects quickly, nothing is
 needed; if it persists, the board should not present the opponent's stack as authoritative between
 pushes — and story 0054's cached read gives a way to reconcile it.
+
+## 17.4 Resolved (17.3a) — the cancel really is not pushed to the opponent
+
+Pete's alternative reading of §17.3 was that a cancel followed by a *second* Forked Bolt would leave
+B correct at all times, since both spells look identical. **Tested with stack card ids, and excluded:**
+
+```
+CAST Dragon Fodder
+  A stack=[Dragon Fodder#596b18]   ||  B stack=[Dragon Fodder#596b18]   <- in sync
+  A stack=[]                       ||  B stack=[]                       <- resolves; both clear
+
+CAST Forked Bolt #1 (to be cancelled)
+  before-cancel | A stack=[Forked Bolt#572fd9] || B stack=[Forked Bolt#572fd9]
+  after-cancel  | A stack=[]                   || B stack=[Forked Bolt#572fd9]   <- SAME id
+```
+
+**The id is identical (`#572fd9`)**, so B is not showing a different, later spell — it is holding the
+very object A rewound.
+
+**The scope of the defect is now precise, and small:**
+- **Normal play is correct.** A cast appears on both boards with the same id, and clears from both when
+  it resolves. B tracked nine turns of play faithfully.
+- **Only the rewind is missed.** The server does not push the opponent a snapshot when a cast is
+  cancelled, so B keeps a spell that no longer exists.
+
+**Design consequence.** The board must not treat the opponent's stack as authoritative between pushes.
+Story 0054's cached read is the natural reconciliation: on any state the player is about to act on,
+the current snapshot can be requested rather than assumed. Worth deciding whether the board reconciles
+on a timer, on gaining priority, or only when the player looks — but it must not present a phantom
+spell as a reason to hold up a response.
+
+**Not covered by this run:** combat declaration and blocks were never reached (`combatSteps=0`) — the
+loop spent nine turns drawing lands before it had creatures, then ended at the cancel. Attacks, blocks
+and the after-cancel *different* spell remain unexercised, and are better driven by real UI logic than
+by a scripted probe.
