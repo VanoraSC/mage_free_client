@@ -79,7 +79,10 @@ is already on screen from the player list.
 
 ## 2. Orientation
 
-### 2.1 Landscape only
+### 2.1 Landscape only — ⚠️ SUPERSEDED by §16.1 (portrait)
+
+> **Superseded 2026-08-13.** Kept for the reasoning only. The board is **portrait**, like every other
+> screen — see §16.1.
 **Decision.** The board targets landscape exclusively.
 
 **Why.** Matches how Magic is physically laid out and how desktop XMage reads: battlefields run
@@ -201,7 +204,12 @@ entry even when nothing is exiled, so "is anything exiled" must come from the ca
 
 ## 6. Prompts
 
-### 6.1 Self-contained prompts are modal
+### 6.1 Self-contained prompts are modal — ⚠️ SUPERSEDED by §16.2 (floating controls)
+
+> **Superseded 2026-08-13.** Nothing is modal; prompts are answered by **floating controls over the
+> board**, which can be hidden. See §16.2. The *distinction* 6.2 drew — between prompts answered from
+> their own content and prompts answered by touching the board — still holds and is why the floating
+> model works for both.
 **Decision.** Yes/no questions, "choose a number", and "pick from a list" appear as a modal dialog
 that blocks the board.
 
@@ -542,3 +550,101 @@ Everything below is **not yet designed** and is deliberately out of the first pl
   board UI, so a reconnecting client can ask for current state instead of waiting for a push.
 - **A sideboard screen** (§12.1) — a purpose-built, timed, match-scoped surface; the
   `ConstructPrompt`/`SideboardPrompt` triggers already exist from story 0036.
+
+---
+
+# 16. Major revision — 2026-08-13
+
+A deliberate change of direction from Pete, superseding two earlier decisions and adding a
+cancellation model. Recorded as a revision rather than an edit so the reasoning that was replaced
+stays legible.
+
+## 16.1 Portrait, like every other screen (supersedes §2.1)
+
+**Decision.** The board is **portrait**.
+
+**Why this is better than the original call.** §2.1 chose landscape to mirror a physical table, and
+recorded the cost honestly: it would have made the board *the only landscape surface in the product*,
+turning "enter a game" into an orientation change. Portrait removes that seam entirely — the game is
+just another screen.
+
+**What it costs.** Vertical space is now the scarce resource, with two battlefields, a hand and the
+stack competing for it. §16.2's hideable controls and §3.2's peek-and-expand hand both become more
+load-bearing: the board must be able to get *out of its own way*.
+
+**Still true from §3.1:** opponent's battlefield above, yours below — that reads even better in
+portrait, and seats must still be located via `isViewer`, never by index.
+
+## 16.2 Floating controls, never modals (supersedes §6.1)
+
+**Decision.** Prompts are answered with **floating buttons over the board**. Nothing blocks the board.
+
+**Why.** §6.1's modal was chosen because the server genuinely blocks on an answer — but blocking the
+*player's view* is not the same as the server blocking, and §6.2 had already carved out an exception
+for the two prompt kinds that need the board visible. Floating controls make that exception the rule
+and remove the split.
+
+**§6.2's distinction survives and explains why this works:** prompts answered *from their own content*
+(ask, get-amount, choose-choice, choose-ability, choose-pile) and prompts answered *by touching the
+board* (target, play-mana, select) can now share one presentation, because the board is never hidden
+either way.
+
+## 16.3 A control-visibility toggle
+
+**Decision.** A single control that **hides and shows the floating controls**, so the player can see
+the unobstructed board, open zone views, and inspect freely.
+
+**Why.** Portrait plus floating controls means the board is often partly covered. The player must be
+able to look at the game state itself without answering anything.
+
+**Constraint (important).** Hiding the controls must **never** hide the fact that the server is waiting
+on the player. The §4.2 priority indicator, or an equivalent, must survive the toggle — otherwise a
+hidden control set becomes an invisible stall, and the game appears frozen.
+
+## 16.4 Targeting confirms before it submits
+
+**Decision.** When choosing targets, the player picks **all** targets, then **confirms**, and only then
+is the choice submitted.
+
+**How this maps to the protocol.** The server asks for targets **one at a time** and blocks on each
+answer, so "confirm then submit" means the client **holds the picks locally and sends them in order on
+confirm**. That is legitimate — the server simply waits — and gives the player a real review step.
+
+**Risk to verify before building (16.4a).** After each target the server may re-prompt with a
+**narrowed candidate list**. A client that pre-selects several targets against the *first* candidate
+list could assemble a combination the server would reject on the second pick. Before committing to
+batch-then-submit, confirm with a genuinely multi-target spell whether the candidate set changes
+between picks. If it does, the confirm step must validate incrementally (send each pick as it is made,
+but delay the final "done" until the player confirms) rather than batching blindly.
+
+## 16.5 Cancel before the spell is committed, and cascading rollback
+
+**Decision.** After modes are chosen, the player must be able to **cancel before the spell is
+committed**, and there must be **cascading cancel controls that roll the casting process back** step by
+step.
+
+**What the data supports — verified.** Declining a step rewinds: proven live (§6.4a) that beginning a
+cast and declining the mana step returns the card to hand, clears the stack and leaves lands untapped.
+The mechanism is `SendPlayerBoolean(false)` where the prompt's `required` is false.
+
+**One reality to design around.** `playObject` puts the spell on the **stack immediately**, *then* asks
+for modes/targets/costs — which is what the rules actually say (CR 601: the spell moves to the stack as
+step 1, and the whole action is rewound if it cannot be completed). So "cancel before it goes on the
+stack" is, mechanically, "cancel before the cast **completes**, and the server un-does it". The player
+experience is identical — the card comes back — but the UI should not claim the spell has not yet been
+cast when the stack briefly holds it.
+
+**Open (16.5a):** cascading rollback assumes a cancel is available at **every** step. Only the **mana**
+step is proven. Whether declining a **mode** or a **target** mid-cast rewinds the same way is
+**unverified** — and each step's `required` flag decides whether a cancel can even be offered there.
+Verify per step before promising a cascading rollback that the server may not honour at every level.
+
+## 16.6 What this revision does not change
+
+Unaffected: the interstitial and coin toss (§1, §15), opponent-above/you-below (§3.1), peek-and-expand
+hand (§3.2), the side panel for stack and phase (§4.1 — though portrait will change its shape),
+explicit priority (§4.2), tap-to-select-then-confirm (§5.1), highlight-and-tap targeting (§5.2),
+casting as one continuous act (§6.4), server-side mana narrowing (§6.5), manual priority with auto-pass
+as a named future feature (§9, §14), the bridge as the reconnect authority (§10, story 0054), inspection
+and the known-information browser (§11), match flow and separate concede/quit (§12), spectating deferred
+(§13), and everything in §11.3 about what is and is not knowable.
