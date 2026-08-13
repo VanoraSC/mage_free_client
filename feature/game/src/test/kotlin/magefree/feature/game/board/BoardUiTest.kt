@@ -197,6 +197,51 @@ class BoardUiTest {
         assertEquals("Computer has priority", board.priority.detail)
     }
 
+    @Test
+    fun `says the server is waiting on you when it asks a question you do not hold priority for`() {
+        // FOUND ON DEVICE (2026-08-13). The first thing a new game does is ask one seat to choose who
+        // goes first, and it does that before priority exists: the live snapshot was
+        // `viewerHasPriority=false, prompt=Target('Select a starting player')`, and the server's own
+        // narration on the same push was "Waiting for <font …>Player</font>" — i.e. waiting on us. The
+        // banner said "Waiting for opponent". Requirements §16.3 forbids exactly that: the player must
+        // never be unable to tell a waiting game from a frozen one.
+        val board =
+            BoardUi.from(
+                twoSeatState(viewerFirst = false).copy(
+                    viewerHasPriority = false,
+                    priorityPlayerName = null,
+                    prompt = GamePrompt.Target(message = "Select a starting player", isRequired = true),
+                ),
+            )
+
+        assertEquals(PriorityUi.Asked, board.priority)
+        assertEquals("The server is waiting on you", board.priority.headline)
+    }
+
+    @Test
+    fun `priority still wins over the question when both are true`() {
+        // A Select prompt *is* the viewer's priority window, so "Your turn to act" is the truer line.
+        val board =
+            BoardUi.from(
+                twoSeatState(viewerFirst = false).copy(
+                    viewerHasPriority = true,
+                    prompt = GamePrompt.Select(message = "Select an ability to play"),
+                ),
+            )
+
+        assertTrue(board.priority is PriorityUi.Yours)
+    }
+
+    @Test
+    fun `with no question outstanding it is plainly the opponent's moment`() {
+        val board =
+            BoardUi.from(
+                twoSeatState(viewerFirst = false).copy(viewerHasPriority = false, prompt = null),
+            )
+
+        assertEquals(PriorityUi.Opponent(playerName = "Computer"), board.priority)
+    }
+
     // ---- exile: judged by cards, never by the zone list's size --------------------------------------
 
     @Test
@@ -449,6 +494,21 @@ class BoardUiTest {
 
         assertEquals("Draw - Waiting for Computer", board.narration)
         assertEquals("Select an ability to play", board.promptNotice)
+    }
+
+    @Test
+    fun `strips the server's HTML out of the priority holder's name`() {
+        // The name is only ever shown on the opponent's line, so this is asserted with no outstanding
+        // question — which is also the only state in which that line is drawn.
+        val board =
+            BoardUi.from(
+                twoSeatState(viewerFirst = false).copy(
+                    viewerHasPriority = false,
+                    prompt = null,
+                    priorityPlayerName = "<font color='#20B2AA'>Computer</font>",
+                ),
+            )
+
         assertEquals("Computer has priority", board.priority.detail)
     }
 

@@ -33,7 +33,7 @@ import magefree.network.game.TurnPhase
  * | turn number | `GameState.turn` |
  * | phase / step | `GameState.phase` / `GameState.step` |
  * | whose turn | `GameState.activePlayerName`, `GameState.isViewerTurn` (`activePlayerId` vs `viewerPlayerId`) |
- * | the priority banner | `GameState.viewerHasPriority` — **only** that; the waiting-on detail line is `GameState.priorityPlayerName` |
+ * | the priority banner | `GameState.viewerHasPriority`, then `GameState.prompt != null` (see [PriorityUi.Asked]); the waiting-on detail line is `GameState.priorityPlayerName` |
  * | "nothing you can play" note | `GameState.playable` **while** `viewerHasPriority` (see [PriorityUi]) |
  * | the per-card "server offered this" mark | `GameState.playable` **while** `viewerHasPriority` (see [PermanentUi.isOfferedByServer]) |
  * | attacking / blocking marks | `GameState.combat[].attackerIds` / `blockerIds` |
@@ -157,6 +157,7 @@ data class BoardUi(
                     PriorityUi.of(
                         hasSnapshot = state.hasSnapshot,
                         viewerHasPriority = state.viewerHasPriority,
+                        isBeingAsked = state.prompt != null,
                         priorityPlayerName = state.priorityPlayerName,
                         anythingOffered = playableIds.isNotEmpty(),
                     ),
@@ -322,6 +323,26 @@ sealed interface PriorityUi {
     }
 
     /**
+     * The server is **waiting on the viewer** without the viewer holding priority.
+     *
+     * Found on device, and it is not a corner case: the very first thing a new game does is ask one
+     * seat to choose who goes first, and it does that *before* priority exists. On that snapshot
+     * `viewerHasPriority` is false while `prompt` is `Select a starting player` — so a banner driven by
+     * priority alone reads "Waiting for opponent" at the exact moment the whole game is waiting on
+     * **you**. Requirements §16.3 names that failure directly: whatever else is hidden, the player must
+     * never be left unable to tell a waiting game from a frozen one.
+     *
+     * Its producer is `GameState.prompt`, which 0052 defines as "**the** outstanding question, or null
+     * when the server is not waiting on the viewer" — a server fact, not an inference. It is a separate
+     * state from [Yours] because the two are genuinely different: being asked a question is not the
+     * same as holding priority, and the board should not claim otherwise.
+     */
+    data object Asked : PriorityUi {
+        override val headline: String get() = "The server is waiting on you"
+        override val detail: String? get() = "Answering arrives in a later update."
+    }
+
+    /**
      * Someone else holds priority.
      *
      * @property playerName the server's display name for the holder (`GameState.priorityPlayerName`),
@@ -338,12 +359,17 @@ sealed interface PriorityUi {
         internal fun of(
             hasSnapshot: Boolean,
             viewerHasPriority: Boolean,
+            isBeingAsked: Boolean,
             priorityPlayerName: String?,
             anythingOffered: Boolean,
         ): PriorityUi =
             when {
                 !hasSnapshot -> NotStarted
                 viewerHasPriority -> Yours(anythingOffered = anythingOffered)
+                // Ordered deliberately: priority wins when both are true (a Select prompt *is* your
+                // priority window), and an outstanding question beats "waiting for opponent" when it is
+                // not (the starting-player choice, seen live).
+                isBeingAsked -> Asked
                 else -> Opponent(playerName = priorityPlayerName?.cleanedOrNull())
             }
     }

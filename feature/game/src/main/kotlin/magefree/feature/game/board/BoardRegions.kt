@@ -274,7 +274,7 @@ private fun PriorityBanner(priority: PriorityUi) {
             fontWeight = FontWeight.Bold,
             color =
                 when (priority) {
-                    is PriorityUi.Yours -> MaterialTheme.colorScheme.primary
+                    is PriorityUi.Yours, PriorityUi.Asked -> MaterialTheme.colorScheme.primary
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
             maxLines = 1,

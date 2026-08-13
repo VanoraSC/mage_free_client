@@ -138,6 +138,24 @@ class GameBoardScreenTest {
     }
 
     @Test
+    fun `states that the server is waiting on you when it asks before priority exists`() {
+        // The live start-of-game snapshot, reproduced: the server asks this seat to choose who goes
+        // first, and no one holds priority yet. Before this was fixed the board read "Waiting for
+        // opponent" while the entire game was blocked on the player.
+        render(
+            runningGame().copy(
+                viewerHasPriority = false,
+                priorityPlayerName = null,
+                prompt = GamePrompt.Target(message = "Select a starting player", isRequired = true),
+            ),
+        )
+
+        composeTestRule.onNodeWithText("The server is waiting on you").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Waiting for opponent").assertDoesNotExist()
+        composeTestRule.onNodeWithText("$PROMPT_PREFIX Select a starting player").assertIsDisplayed()
+    }
+
+    @Test
     fun `shows the server's prompt as text, stripped of its HTML`() {
         render(
             runningGame().copy(

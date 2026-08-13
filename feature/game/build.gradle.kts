@@ -51,6 +51,14 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
 
+    // The on-device driver (`src/test/.../live/BoardOpponentDriverIT`) is the *second client* of the
+    // two-client harness: it hosts a two-human table and plays one seat while the app on the emulator
+    // renders the other. Hosting means submitting a deck, so it needs `:core:decks`' Deck model and
+    // `:core:model`'s SkillLevel on the **test** classpath only — production code on this board never
+    // sees either. It is env-gated on BRIDGE_URL, so `check` stays hermetic and offline.
+    testImplementation(project(":core:decks"))
+    testImplementation(project(":core:model"))
+
     // JVM-side Compose UI testing for the board's rendering tests. Scoped to the **debug** unit-test
     // variant because `createComposeRule` needs the host `ComponentActivity` that
     // `compose-ui-test-manifest` contributes as a `debugImplementation`; the Compose BOM is applied to
