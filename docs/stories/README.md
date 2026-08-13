@@ -379,7 +379,9 @@ real game's state is reaching the app and we can see what the board actually nee
 |-------|-------|------------|------------------|
 | 0051 | Game protocol & bridge relay | 0036, 0006 | `:protocol` game state/events/typed prompts/replies + a `:bridge` `GameRelay` and per-callback mappers. `mage.*` stays in the bridge. No app change. |
 | 0052 | Game client & state | 0051, 0037, 0045 | `:core:network` `GameClient` + observable app-schema `GameState` and current prompt, folded from 0051's events; re-syncs across resume. **Live-proven against a real game before any UI.** No UI. |
-| — | *Board & interaction* | 0052 | Deliberately unspecified until 0052 is live-verified. |
+| 0054 | Bridge game-state cache & query | 0051, 0052, 0023 | **Required for initial release, before the board UI.** Upstream has no "get game" verb and re-joining does not resync, so the board is push-only and a reconnecting client is blind until something happens. The bridge sees every snapshot and snapshots are complete, so it caches the latest **per session, per game** and answers a query with it. |
+| — | *Board & interaction* | 0054 | Shaped by the board design session (`docs/game-board-requirements.md`); story breakdown still to be written. |
+| 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
 
 ## Known issues (accepted, not scheduled)
 
