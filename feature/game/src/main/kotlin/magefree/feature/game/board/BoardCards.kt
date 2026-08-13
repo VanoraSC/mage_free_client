@@ -22,7 +22,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.card.CARD_ASPECT_RATIO
-import magefree.designsystem.card.CardArtPlaceholder
 import magefree.designsystem.theme.Corner
 import magefree.designsystem.theme.Elevation
 import magefree.designsystem.theme.Spacing
