@@ -23,6 +23,7 @@ import magefree.protocol.ClientMessage
 import magefree.protocol.CreateTable
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.GetGameState
 import magefree.protocol.GetTable
 import magefree.protocol.JoinTable
 import magefree.protocol.LeaveTable
@@ -122,18 +123,37 @@ public class LiveSession internal constructor(
     /** The durable outbound stream a socket forwarder binds to; rebindable across app-socket drops. */
     public val messages: ReceiveChannel<ServerMessage> get() = outbound
 
+    /**
+     * **This session's** latest game snapshot per game (story 0054), fed by the pump below.
+     *
+     * It lives here — one cache per [LiveSession] — because a `GameView` is built for a specific
+     * player: it carries that player's own hand and `canPlayObjects` only for the priority holder. A
+     * bridge-wide cache would serve one player another player's view, and every single-client test
+     * would still pass. See [GameStateCache].
+     */
+    private val gameStates = GameStateCache()
+
     /** Completes when the upstream link ends (clean drop, death, or [close]); watched for eviction. */
     internal val ended: CompletableDeferred<Unit> = CompletableDeferred()
 
     // The single collector of upstream.connect(...): started here on the bridge scope (NOT a socket
     // coroutine), so it survives socket drops. send() never suspends (DROP_OLDEST). On completion the
     // channel closes so the current forwarder's loop ends and the registry evicts a dead session.
+    //
+    // Story 0054: every message is offered to this session's game-state cache **before** it is queued,
+    // so a snapshot pushed while the session is parked (no socket attached, pump still running — story
+    // 0023) is cached exactly as one pushed to a bound socket is. That is what keeps the cached board
+    // advancing during a disconnection instead of freezing at the moment the socket died.
     private val pump: Job =
         scope.launch(CoroutineName("session-pump")) {
             try {
-                upstream.connect(credentials).collect { outbound.send(it) }
+                upstream.connect(credentials).collect { message ->
+                    gameStates.observe(message)
+                    outbound.send(message)
+                }
             } finally {
                 outbound.close()
+                gameStates.clear()
                 ended.complete(Unit)
             }
         }
@@ -201,9 +221,26 @@ public class LiveSession internal constructor(
     /** Dispatches an in-game request while this session is bound (story 0051). */
     internal suspend fun gameRequest(request: ClientMessage): GameActionResult = upstream.gameRequest(request)
 
-    /** Cancels the pump and disconnects the upstream. Idempotent. */
+    /**
+     * Answers a `GetGameState` for this session from [gameStates] (story 0054) — a
+     * [magefree.protocol.GameStateSnapshot] of the last snapshot **this session** was sent for that
+     * game, or a typed [magefree.protocol.GameStateUnavailable].
+     *
+     * Deliberately *not* routed through [UpstreamSession]: there is no upstream verb to route it to.
+     * The bridge is the only thing that can answer this question, and it answers it from what it
+     * already relayed rather than by asking the server anything.
+     */
+    internal fun gameState(request: GetGameState): ServerMessage = gameStates.answer(request)
+
+    /** How many games this session currently has cached (story 0054) — for assertions about eviction. */
+    internal fun cachedGameCount(): Int = gameStates.size()
+
+    /** Cancels the pump, drops the game-state cache, and disconnects the upstream. Idempotent. */
     internal suspend fun close() {
         pump.cancel()
+        // Story 0054: the cache must not outlive the session it describes. The pump's own `finally`
+        // clears it too; doing it here as well covers an eviction that races the pump's teardown.
+        gameStates.clear()
         withContext(NonCancellable) { upstream.disconnect() }
     }
 }

@@ -18,9 +18,17 @@ import magefree.protocol.CreateTable
 import magefree.protocol.CreateTableOptions
 import magefree.protocol.GameActionCode
 import magefree.protocol.GameActionResult
+import magefree.protocol.GameCardView
 import magefree.protocol.GameFailureCode
+import magefree.protocol.GamePlayerView
+import magefree.protocol.GameStarted
+import magefree.protocol.GameStateSnapshot
+import magefree.protocol.GameStateUnavailable
+import magefree.protocol.GameStateUnavailableCode
+import magefree.protocol.GameStateView
 import magefree.protocol.GameTypeList
 import magefree.protocol.GameTypeSummary
+import magefree.protocol.GetGameState
 import magefree.protocol.GetGameTypes
 import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
@@ -30,6 +38,7 @@ import magefree.protocol.JoinGame
 import magefree.protocol.Login
 import magefree.protocol.Logout
 import magefree.protocol.ManaTypeCode
+import magefree.protocol.PhaseStepCode
 import magefree.protocol.Ping
 import magefree.protocol.PlayerActionCode
 import magefree.protocol.Pong
@@ -60,6 +69,7 @@ import magefree.protocol.TableNotFound
 import magefree.protocol.TableSeatSummary
 import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
+import magefree.protocol.TurnPhaseCode
 import magefree.protocol.WatchGame
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -502,6 +512,77 @@ class SessionCoordinatorTest {
                 assertEquals("gb-1", reply.requestId)
             }
             assertNull(unbound.lastGameRequest, "an unbound socket must not reach the upstream at all")
+        }
+    }
+
+    @Test
+    fun `GetGameState replies the correlated snapshot the session was pushed, and a typed no-state before it`() {
+        // Story 0054, over the socket: the read is answered from *this session's* cache, which the
+        // outbound pump fills as the snapshot goes past. Before the first push the reply is a typed
+        // no-state — never an empty GameStateView, which the app could not tell from a real board.
+        val state =
+            GameStateView(
+                turn = 2,
+                phase = TurnPhaseCode.PRECOMBAT_MAIN,
+                step = PhaseStepCode.PRECOMBAT_MAIN,
+                activePlayerId = "p-1",
+                activePlayerName = "heidi",
+                viewerPlayerId = "p-1",
+                viewerHasPriority = true,
+                players = listOf(GamePlayerView(playerId = "p-1", name = "heidi", life = 20, viewer = true)),
+                hand = listOf(GameCardView(id = "c-1", name = "Forest", setCode = "M21", collectorNumber = "272")),
+            )
+
+        val fake = FakeUpstreamSession(listOf(status(SessionStateCode.CONNECTING), status(SessionStateCode.CONNECTED)))
+        scenario(fake) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(Login(username = "heidi"))
+                assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
+                assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
+
+                sendSerialized<ClientMessage>(GetGameState(gameId = "g-1", requestId = "gs-1"))
+                val miss = assertInstanceOf(GameStateUnavailable::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals("g-1", miss.gameId)
+                assertEquals(GameStateUnavailableCode.NO_STATE_YET, miss.reason)
+                assertEquals("gs-1", miss.requestId, "a miss must correlate too, or the app's waiter times out")
+
+                // The producer: one server push, relayed to this socket and cached on the way past.
+                fake.emit(GameStarted(gameId = "g-1", state = state))
+                val pushed = assertInstanceOf(GameStarted::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(2, pushed.state.turn)
+
+                sendSerialized<ClientMessage>(GetGameState(gameId = "g-1", requestId = "gs-2"))
+                val hit = assertInstanceOf(GameStateSnapshot::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals("gs-2", hit.requestId)
+                assertEquals(state, hit.state, "the reply is the server's own snapshot, verbatim")
+                assertNotNull(hit.capturedAtEpochMs, "the capture time makes staleness knowable rather than guessed")
+
+                // A game this session was never pushed is still a typed miss, not a blank board.
+                sendSerialized<ClientMessage>(GetGameState(gameId = "g-other", requestId = "gs-3"))
+                val other = assertInstanceOf(GameStateUnavailable::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals(GameStateUnavailableCode.NO_STATE_YET, other.reason)
+                assertEquals("gs-3", other.requestId)
+            }
+        }
+    }
+
+    @Test
+    fun `GetGameState on an unbound socket is a typed SESSION_GONE, never an empty board`() {
+        // The 0050 convention on the read side: there is no session, so there is not even a cache to
+        // look in. The app must be told to sign in again rather than shown a board with nothing on it.
+        val unbound = FakeUpstreamSession(emptyList())
+        scenario(unbound) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(GetGameState(gameId = "g-1", requestId = "gs-9"))
+                val reply = assertInstanceOf(GameStateUnavailable::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals("g-1", reply.gameId)
+                assertEquals(GameStateUnavailableCode.SESSION_GONE, reply.reason)
+                assertNotNull(reply.detail)
+                assertEquals("gs-9", reply.requestId)
+            }
         }
     }
 
