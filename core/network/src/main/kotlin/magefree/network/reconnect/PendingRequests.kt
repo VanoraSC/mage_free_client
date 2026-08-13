@@ -1,6 +1,7 @@
 package magefree.network.reconnect
 
 import kotlinx.coroutines.CompletableDeferred
+import magefree.protocol.GameActionResult
 import magefree.protocol.GameTypeList
 import magefree.protocol.RoomUserList
 import magefree.protocol.ServerMessage
@@ -20,11 +21,12 @@ import java.util.concurrent.ConcurrentHashMap
  * requester surfaces the failure as state rather than hanging.
  *
  * The correlated replies are the 0027 lobby list replies ([TableList]/[RoomUserList]/[GameTypeList]),
- * the 0036 table-action replies ([TableCreated]/[TableActionResult], story 0037) and 0040's targeted
- * table-read replies ([TableDetail]/[TableNotFound]) — each keyed by its
+ * the 0036 table-action replies ([TableCreated]/[TableActionResult], story 0037), 0040's targeted
+ * table-read replies ([TableDetail]/[TableNotFound]) and 0051's game-action replies
+ * ([GameActionResult], story 0052 — every join/watch/quit and every prompt answer) — each keyed by its
  * echoed `requestId`. Resume flow-control frames, session-status pushes, and the spontaneous 0036 table
- * *events* (no `requestId` — routed to the push side-channel instead) are left untouched, so the existing
- * session-event behaviour (stories 0016/0024) is unchanged.
+ * and 0051 game *events* (no `requestId` — routed to the push side-channel instead) are left untouched,
+ * so the existing session-event behaviour (stories 0016/0024) is unchanged.
  */
 internal class PendingRequests {
     private val waiters = ConcurrentHashMap<String, CompletableDeferred<ServerMessage>>()
@@ -72,6 +74,10 @@ internal class PendingRequests {
             is TableActionResult -> requestId
             is TableDetail -> requestId
             is TableNotFound -> requestId
+            // Story 0052: every game verb's reply — without this the game client's `request` would wait
+            // out its timeout on a reply that did in fact arrive, which is the shape of defect this
+            // registry exists to prevent.
+            is GameActionResult -> requestId
             else -> null
         }
 }
