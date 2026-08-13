@@ -13,6 +13,8 @@ import magefree.model.Session
 import magefree.model.SessionEvent
 import magefree.network.LobbyClient
 import magefree.network.LobbyClientImpl
+import magefree.network.game.GameClient
+import magefree.network.game.GameClients
 import magefree.network.ktor.KtorBridgeClient
 import magefree.network.table.TableClient
 import magefree.network.table.TableClients
@@ -48,6 +50,13 @@ internal class LiveBridge(
 
     /** The production table client over this socket (stories 0037/0040/0041). */
     val tables: TableClient by lazy { TableClients.overBridge(client, client.connectionState) }
+
+    /**
+     * The production game client over this same socket (story 0052) — assembled through the public,
+     * `:protocol`-free [GameClients] factory exactly as `NetworkModule` does, so the live game test
+     * drives the real client rather than a double.
+     */
+    val games: GameClient by lazy { GameClients.overBridge(client, client.connectionState) }
 
     private var collector: Job? = null
 

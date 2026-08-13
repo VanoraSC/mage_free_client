@@ -19,6 +19,8 @@ import magefree.network.BridgeClient
 import magefree.network.ConnectionRepository
 import magefree.network.LobbyClient
 import magefree.network.LobbyClientImpl
+import magefree.network.game.GameClient
+import magefree.network.game.GameClients
 import magefree.network.ktor.KtorBridgeClient
 import magefree.network.reconnect.AndroidConnectivityObserver
 import magefree.network.reconnect.AppLifecycleObserver
@@ -95,6 +97,20 @@ object NetworkModule {
         bridgeClient: BridgeClient,
         connectionState: StateFlow<@JvmSuppressWildcards ConnectionState>,
     ): TableClient = TableClients.overBridge(bridgeClient, connectionState)
+
+    /**
+     * The production [GameClient] (story 0052), riding the same [BridgeClient] singleton as the lobby and
+     * table clients — one socket, three feature clients. Assembled by [GameClients] for the same reason
+     * the table client is: the implementation also needs the **internal** server-push side-channel (the
+     * same singleton, cast), which stays off the cross-module Hilt graph so `:protocol` never surfaces
+     * above `:core:network`.
+     */
+    @Provides
+    @Singleton
+    fun provideGameClient(
+        bridgeClient: BridgeClient,
+        connectionState: StateFlow<@JvmSuppressWildcards ConnectionState>,
+    ): GameClient = GameClients.overBridge(bridgeClient, connectionState)
 
     /**
      * The app-level connection state as a plain [StateFlow], sourced from the single-source-of-truth
