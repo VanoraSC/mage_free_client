@@ -376,12 +376,6 @@ public class SessionCoordinator(
                         // `gameRequest` seam and reply the correlated GameActionResult. An unbound
                         // socket replies a typed SESSION_GONE failure (never an error): a game request
                         // that vanishes leaves the player waiting on a prompt no one will answer.
-                        // In-game requests (story 0051): join/watch/quit/stop, the five sendPlayerX
-                        // answers, and player actions. All share one shape — a game id plus a payload
-                        // answered by a bare upstream boolean — so they route through a single
-                        // `gameRequest` seam and reply the correlated GameActionResult. An unbound
-                        // socket replies a typed SESSION_GONE failure (never an error): a game request
-                        // that vanishes leaves the player waiting on a prompt no one will answer.
                         is JoinGame,
                         is WatchGame,
                         is QuitMatch,
