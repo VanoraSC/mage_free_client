@@ -4,7 +4,10 @@ import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import magefree.network.game.GameActionFailure
+import magefree.network.game.GameSnapshot
 import magefree.network.game.GameState
+import magefree.network.game.GameStateUnavailableFailure
+import magefree.network.game.GameStateUnavailableReason
 import magefree.network.game.ManaType
 import magefree.network.game.PassPriorityScope
 import org.junit.Assert.assertEquals
@@ -92,6 +95,35 @@ class FakeGameClientTest {
                 ),
                 fake.calls,
             )
+        }
+
+    @Test
+    fun refreshGameDefaultsToTheBridgesHonestNoStateRatherThanABlankBoard() =
+        runTest {
+            // A fake that behaves differently from production is a defect in the fake. The real bridge
+            // answers a typed "no state" until it has relayed a snapshot, so an unscripted read here must
+            // fail too — a default empty GameSnapshot would hand every downstream test an all-defaults
+            // board production never produces, and hide exactly the defect standard 5 is about.
+            val fake = FakeGameClient()
+
+            val failure = fake.refreshGame("g-1").exceptionOrNull()
+
+            assertTrue("expected a typed unavailability, got $failure", failure is GameStateUnavailableFailure)
+            assertEquals(GameStateUnavailableReason.NoStateYet, (failure as GameStateUnavailableFailure).reason)
+            assertEquals(listOf("refresh:g-1"), fake.calls)
+        }
+
+    @Test
+    fun aScriptedSnapshotIsWhatRefreshGameReturns() =
+        runTest {
+            val fake = FakeGameClient()
+            val held = GameState(gameId = "g-1", turn = 6, hasSnapshot = true)
+            fake.refreshResult = Result.success(GameSnapshot(state = held, capturedAtEpochMs = 99L))
+
+            val snapshot = fake.refreshGame("g-1").getOrThrow()
+
+            assertEquals(held, snapshot.state)
+            assertEquals(99L, snapshot.capturedAtEpochMs)
         }
 
     @Test

@@ -4,7 +4,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.onStart
 import magefree.network.game.GameClient
+import magefree.network.game.GameSnapshot
 import magefree.network.game.GameState
+import magefree.network.game.GameStateUnavailableFailure
+import magefree.network.game.GameStateUnavailableReason
 import magefree.network.game.ManaType
 import magefree.network.game.PassPriorityScope
 
@@ -38,6 +41,19 @@ class FakeGameClient(
 
     /** States [observeGame] replays after the seed and before any live [emitGameState]. */
     var gameStates: List<GameState> = emptyList()
+
+    /**
+     * What [refreshGame] returns (story 0054). Defaults to the bridge's honest "nothing yet" rather than
+     * to an empty board — see [refreshGame].
+     */
+    var refreshResult: Result<GameSnapshot> =
+        Result.failure(
+            GameStateUnavailableFailure(
+                gameId = "",
+                reason = GameStateUnavailableReason.NoStateYet,
+                detail = "FakeGameClient: no snapshot scripted",
+            ),
+        )
 
     private val emitted = MutableSharedFlow<GameState>(replay = 0, extraBufferCapacity = 64)
 
@@ -118,6 +134,19 @@ class FakeGameClient(
     ): Result<Unit> = record("passUntil:$gameId:$scope")
 
     override suspend fun concede(gameId: String): Result<Unit> = record("concede:$gameId")
+
+    /**
+     * Records the read and returns [refreshResult] (story 0054).
+     *
+     * The default is a **failure** — [GameStateUnavailableReason.NoStateYet] — because that is what the
+     * real bridge answers until it has relayed a snapshot for the game, and a fake that handed back an
+     * empty board by default would manufacture exactly the state production never produces: an all-
+     * defaults [GameState] a caller cannot tell from a real one. A test that wants a hit sets it.
+     */
+    override suspend fun refreshGame(gameId: String): Result<GameSnapshot> {
+        calls += "refresh:$gameId"
+        return refreshResult
+    }
 
     override fun observeGame(
         gameId: String,

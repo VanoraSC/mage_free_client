@@ -400,6 +400,59 @@ enum class PassPriorityScope {
 }
 
 /**
+ * The result of [GameClient.refreshGame] (story 0054): the bridge's held snapshot of a game, plus when
+ * it was captured.
+ *
+ * **This is a replay, not a reconstruction.** [state] is the server's own most recent `GameView` for
+ * *this session*, mapped exactly as a pushed one is — nothing is merged with an older snapshot, and
+ * nothing about a card the server has stopped showing is remembered (that is story 0053, deliberately
+ * not this one). It is a standalone [GameState]: only the fields a snapshot owns are set, so
+ * [GameState.prompt], [GameState.lastMessage], [GameState.lastError] and [GameState.result] are null —
+ * a read tells you what the board looks like, never that the server is waiting on you.
+ *
+ * @property capturedAtEpochMs when the **bridge** captured the snapshot (wall clock). The board is
+ *   current as of the last push the bridge saw, and this says when that was, so a caller can reason
+ *   about staleness instead of guessing. Null only against a bridge older than story 0054.
+ */
+data class GameSnapshot(
+    val state: GameState,
+    val capturedAtEpochMs: Long? = null,
+)
+
+/**
+ * The typed failure [GameClient.refreshGame] surfaces when the bridge has **no state** to give (story
+ * 0054) — 0054's `GameStateUnavailable`.
+ *
+ * It exists so that "there is nothing to show" can never arrive as an empty board. An all-defaults
+ * [GameState] is a legal snapshot (a spectator of a game that has not started has exactly that), so a
+ * caller could not tell it from the truth and would render it — which is the whole failure mode the
+ * story is about. A failed [Result] cannot be mistaken for a board.
+ *
+ * @property reason which kind of absence it is; the two demand different responses.
+ */
+class GameStateUnavailableFailure(
+    val gameId: String,
+    val reason: GameStateUnavailableReason,
+    val detail: String? = null,
+) : Exception(detail ?: "no game state available for $gameId")
+
+/** Why a [GameStateUnavailableFailure] carries no state — the app-schema mirror of 0054's wire code. */
+enum class GameStateUnavailableReason {
+    /**
+     * The bridge holds no snapshot for that game on this session: nothing has been pushed yet, the id
+     * names a game this session is not in, or the game ended and its entry was dropped. Waiting fixes
+     * the first; the caller keeps whatever it already holds meanwhile.
+     */
+    NoStateYet,
+
+    /**
+     * There is no session behind the socket, so there was not even a cache to look in. Re-authenticating
+     * — not retrying — is what fixes it (story 0050's distinction, on the read side).
+     */
+    SessionGone,
+}
+
+/**
  * The typed failure a [GameClient] verb surfaces when the server declines a game action — 0051's
  * `GameActionResult` with `ok = false`, or an unexpected reply. [reason] is the server's optional
  * human-readable detail: a decline is a **typed result**, never a silent drop.

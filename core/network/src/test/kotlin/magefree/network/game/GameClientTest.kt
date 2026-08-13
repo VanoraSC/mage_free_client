@@ -8,9 +8,18 @@ import magefree.network.fake.FakeBridgeClient
 import magefree.protocol.ClientMessage
 import magefree.protocol.GameActionCode
 import magefree.protocol.GameActionResult
+import magefree.protocol.GameCardView
 import magefree.protocol.GameFailureCode
+import magefree.protocol.GamePlayableObject
+import magefree.protocol.GamePlayerView
+import magefree.protocol.GameStateSnapshot
+import magefree.protocol.GameStateUnavailable
+import magefree.protocol.GameStateUnavailableCode
+import magefree.protocol.GameStateView
+import magefree.protocol.GetGameState
 import magefree.protocol.JoinGame
 import magefree.protocol.ManaTypeCode
+import magefree.protocol.PhaseStepCode
 import magefree.protocol.PlayerActionCode
 import magefree.protocol.QuitMatch
 import magefree.protocol.SendPlayerAction
@@ -23,6 +32,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.StopWatching
 import magefree.protocol.TableActionCode
 import magefree.protocol.TableActionResult
+import magefree.protocol.TurnPhaseCode
 import magefree.protocol.WatchGame
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -351,6 +361,98 @@ class GameClientTest {
             val client = client { error("no active session") }
 
             val result = client.joinGame(GAME)
+
+            assertTrue("the client must never throw at its caller", result.isFailure)
+            assertEquals("no active session", result.exceptionOrNull()?.message)
+        }
+
+    // --- the targeted read (story 0054) ---------------------------------------------------------------
+
+    @Test
+    fun refreshGameSendsGetGameStateAndMapsTheSnapshotOntoAppSchemaState() =
+        runTest {
+            val view =
+                GameStateView(
+                    turn = 4,
+                    phase = TurnPhaseCode.PRECOMBAT_MAIN,
+                    step = PhaseStepCode.PRECOMBAT_MAIN,
+                    activePlayerId = "p-1",
+                    activePlayerName = "pete",
+                    viewerPlayerId = "p-1",
+                    viewerHasPriority = true,
+                    players = listOf(GamePlayerView(playerId = "p-1", name = "pete", life = 18, viewer = true)),
+                    hand = listOf(GameCardView(id = "c-1", name = "Forest", setCode = "M21", collectorNumber = "272")),
+                    playable = listOf(GamePlayableObject(objectId = "c-1", abilityIds = listOf("a-1"))),
+                )
+            val client =
+                client {
+                    GameStateSnapshot(gameId = GAME, state = view, capturedAtEpochMs = 1_700L, requestId = REQUEST_ID)
+                }
+
+            val snapshot = client.refreshGame(GAME).getOrThrow()
+
+            assertEquals(GetGameState(gameId = GAME, requestId = REQUEST_ID), sent.single())
+            assertEquals(1_700L, snapshot.capturedAtEpochMs)
+            assertEquals(4, snapshot.state.turn)
+            val seat = snapshot.state.players.first()
+            assertEquals(18, seat.life)
+            assertEquals(listOf("c-1"), snapshot.state.hand.map { it.id })
+            assertTrue("the server's own canPlayObjects must survive the read", snapshot.state.isPlayable("c-1"))
+            assertTrue("a read that produced a state must say so", snapshot.state.hasSnapshot)
+            assertEquals("a read carries a GameView, so it never carries a question", null, snapshot.state.prompt)
+        }
+
+    @Test
+    fun refreshGameSurfacesNoStateAsATypedFailureRatherThanAnEmptyBoard() =
+        runTest {
+            // The acceptance criterion, on the client side: an all-defaults GameState is a legal board,
+            // so "nothing to show" has to be a different *shape* from "here is the board" or every
+            // caller renders the absence as truth.
+            val client =
+                client {
+                    GameStateUnavailable(
+                        gameId = GAME,
+                        reason = GameStateUnavailableCode.NO_STATE_YET,
+                        detail = "no snapshot for this game on this session yet",
+                        requestId = REQUEST_ID,
+                    )
+                }
+
+            val failure = client.refreshGame(GAME).exceptionOrNull()
+
+            assertTrue("expected a typed unavailability, got $failure", failure is GameStateUnavailableFailure)
+            val unavailable = failure as GameStateUnavailableFailure
+            assertEquals(GAME, unavailable.gameId)
+            assertEquals(GameStateUnavailableReason.NoStateYet, unavailable.reason)
+            assertEquals("no snapshot for this game on this session yet", unavailable.detail)
+        }
+
+    @Test
+    fun refreshGameDistinguishesALostSessionFromAGameWithNoStateYet() =
+        runTest {
+            // Story 0050's distinction on the read side: "wait, nothing yet" and "you are signed out"
+            // demand opposite responses, and prose cannot be branched on.
+            val client =
+                client {
+                    GameStateUnavailable(
+                        gameId = GAME,
+                        reason = GameStateUnavailableCode.SESSION_GONE,
+                        detail = "no active session on this socket",
+                        requestId = REQUEST_ID,
+                    )
+                }
+
+            val failure = client.refreshGame(GAME).exceptionOrNull() as? GameStateUnavailableFailure
+
+            assertEquals(GameStateUnavailableReason.SessionGone, failure?.reason)
+        }
+
+    @Test
+    fun refreshGameCapturesATransportFailureRatherThanThrowing() =
+        runTest {
+            val client = client { error("no active session") }
+
+            val result = client.refreshGame(GAME)
 
             assertTrue("the client must never throw at its caller", result.isFailure)
             assertEquals("no active session", result.exceptionOrNull()?.message)

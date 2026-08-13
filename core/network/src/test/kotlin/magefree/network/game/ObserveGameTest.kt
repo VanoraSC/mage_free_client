@@ -7,16 +7,22 @@ import kotlinx.coroutines.test.runTest
 import magefree.model.ConnectionState
 import magefree.network.fake.FakeBridgeClient
 import magefree.protocol.AskPrompt
+import magefree.protocol.ClientMessage
 import magefree.protocol.GameCardView
 import magefree.protocol.GameOver
 import magefree.protocol.GamePlayableObject
 import magefree.protocol.GamePlayerView
 import magefree.protocol.GamePrompted
 import magefree.protocol.GameStarted
+import magefree.protocol.GameStateSnapshot
+import magefree.protocol.GameStateUnavailable
+import magefree.protocol.GameStateUnavailableCode
 import magefree.protocol.GameStateUpdated
 import magefree.protocol.GameStateView
+import magefree.protocol.GetGameState
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.SelectPrompt
+import magefree.protocol.ServerMessage
 import magefree.protocol.TurnPhaseCode
 import magefree.protocol.WatchingGame
 import org.junit.Assert.assertEquals
@@ -28,13 +34,19 @@ import org.junit.Test
 /**
  * Hermetic Turbine coverage of [DefaultGameClient.observeGame]: it seeds current state, folds the 0051
  * game events pushed through the [FakeBridgeClient]'s server-push side-channel into successive
- * [GameState]s (start → hand → a prompt appears → the prompt clears → game over), and re-emits the held
- * state on a 0023/0024 resume so a reconnect does not strand the board. No socket.
+ * [GameState]s (start → hand → a prompt appears → the prompt clears → game over), re-emits the held
+ * state on a 0023/0024 resume so a reconnect does not strand the board, and — since story 0054 — **reads**
+ * the board from the bridge on open and after each resume. No socket.
  *
- * Note what is deliberately **absent** compared with `ObserveTableTest`: there is no read-on-open, no
- * read-after-resume and no while-observed poll, because upstream exposes no verb that reads a `GameView`.
- * Game state is push-only. `observeGameNeverIssuesARequestOfItsOwn` pins that, so a later change cannot
- * quietly add a poll against a request the bridge does not have.
+ * **The invariant that changed, and why it was there.** Story 0052 pinned
+ * `observeGameNeverIssuesARequestOfItsOwn`: game state was push-only, because upstream exposes no verb
+ * that reads a `GameView`, so anything the observer sent would have been a request the bridge could not
+ * answer — and a *poll* of it would have been an unbounded stream of unanswerable requests. Story 0054
+ * gives the bridge an answer (from its own per-session cache), so the read is now deliberate. The test
+ * is therefore **updated rather than deleted**, to
+ * [observeGameReadsOnOpenAndAfterEachResumeAndStillNeverPolls]: it now asserts *exactly* the two reads
+ * that are intended, and — the half of the original constraint that still stands — that no timer ever
+ * adds a third.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ObserveGameTest {
@@ -44,6 +56,27 @@ class ObserveGameTest {
         fake: FakeBridgeClient,
         connection: MutableStateFlow<ConnectionState> = MutableStateFlow(ConnectionState.Connected),
     ) = DefaultGameClient(bridgeClient = fake, pushSource = fake, connectionState = connection)
+
+    /**
+     * A scripted responder for the 0054 read that records every request `observeGame` issues.
+     *
+     * It **fails loudly on anything that is not a `GetGameState`** — the surviving half of the original
+     * never-reads constraint. An observer is allowed exactly one kind of request now, and a test that
+     * merely counted requests would not notice a different one appearing.
+     */
+    private class Reads(
+        private val replies: Iterator<ServerMessage>,
+    ) : (ClientMessage) -> ServerMessage {
+        constructor(vararg replies: ServerMessage) : this(replies.toList().iterator())
+
+        val requests: MutableList<GetGameState> = mutableListOf()
+
+        override fun invoke(message: ClientMessage): ServerMessage {
+            val read = message as? GetGameState ?: error("observeGame must issue no request but the game read; got $message")
+            requests += read
+            return if (replies.hasNext()) replies.next() else noState(read.gameId, read.requestId)
+        }
+    }
 
     @Test
     fun observeGameSeedsThenFoldsAWholeGameIntoStateTransitions() =
@@ -224,18 +257,174 @@ class ObserveGameTest {
         }
 
     @Test
-    fun observeGameNeverIssuesARequestOfItsOwn() =
+    fun observeGameReadsOnOpenAndAfterEachResumeAndStillNeverPolls() =
         runTest {
-            // Game state is push-only: there is no upstream verb that reads a GameView, so an observer
-            // that issued a request would be sending something the bridge cannot answer. The fake's
-            // default responder throws, so any request at all fails this.
-            val fake = FakeBridgeClient()
+            // **The updated 0052 invariant.** It used to read "never issues a request of its own",
+            // because there was no request the bridge could answer and a poll of one would have been an
+            // unbounded stream of unanswerable requests. Story 0054 gives the bridge an answer, so the
+            // read is now intended — but only at the two moments where the answer can have changed
+            // without the app hearing about it: the board opening, and the socket coming back. Nothing
+            // else changes it, so a timer would ask forever for no new answer. This asserts both halves:
+            // the reads that must happen, and the poll that must not.
+            val reads = Reads()
+            val fake = FakeBridgeClient(responder = reads)
+            val connection = MutableStateFlow(ConnectionState.Connected)
+
+            clientOver(fake, connection).observeGame(GAME, seed).test {
+                assertEquals(seed, awaitItem())
+                testScheduler.runCurrent()
+                assertEquals("the board is read once as it opens", 1, reads.requests.size)
+                assertEquals(GAME, reads.requests.single().gameId)
+
+                testScheduler.advanceTimeBy(10 * 60_000L)
+                testScheduler.runCurrent()
+                assertEquals("ten minutes of observing must add no read at all — there is no poll", 1, reads.requests.size)
+
+                connection.value = ConnectionState.Reconnecting
+                testScheduler.runCurrent()
+                connection.value = ConnectionState.Connected
+                testScheduler.runCurrent()
+                assertEquals("a resume reads again: the board may have moved while we were away", 2, reads.requests.size)
+
+                testScheduler.advanceTimeBy(10 * 60_000L)
+                testScheduler.runCurrent()
+                assertEquals("and still no poll after the resume", 2, reads.requests.size)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun observeGameShowsTheBridgesHeldBoardOnOpenWithoutWaitingForAPush() =
+        runTest {
+            // Re-opening a running game used to show nothing until the server happened to push — which,
+            // while an opponent thinks, can be minutes or never. The read fixes that.
+            val reads = Reads(snapshot(view(turn = 4, hand = 7)))
+            val fake = FakeBridgeClient(responder = reads)
 
             clientOver(fake).observeGame(GAME, seed).test {
                 assertEquals(seed, awaitItem())
-                testScheduler.advanceTimeBy(10 * 60_000L)
+
+                val read = awaitItem()
+                assertTrue("the read fills the board with no push involved", read.hasSnapshot)
+                assertEquals(4, read.turn)
+                assertEquals(7, read.hand.size)
+                assertNull("a read says what the board looks like, never that the server is waiting on us", read.prompt)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun aResumeReadsTheBoardSoAReconnectDoesNotWaitForTheOpponentToAct() =
+        runTest {
+            // **The scenario the story exists for.** The socket drops mid-game; while it is down the
+            // game moves on; the app reconnects and the opponent is thinking, so nothing is pushed. The
+            // post-resume read is the only thing that can put a board on screen — this asserts a fresh
+            // state arrives with no push at all after the reconnect.
+            val reads = Reads(snapshot(view(turn = 1, hand = 7)), snapshot(view(turn = 9, hand = 5)))
+            val fake = FakeBridgeClient(responder = reads)
+            val connection = MutableStateFlow(ConnectionState.Connected)
+
+            clientOver(fake, connection).observeGame(GAME, seed).test {
+                assertEquals(seed, awaitItem())
+                assertEquals(1, awaitItem().turn)
+
+                connection.value = ConnectionState.Reconnecting
+                testScheduler.runCurrent()
+                connection.value = ConnectionState.Connected
+                testScheduler.runCurrent()
+
+                assertEquals("the resume re-emits the held state first (0037's non-destructive re-sync)", 1, awaitItem().turn)
+                val afterReconnect = awaitItem()
+                assertEquals("and then the read lands, with no push in between", 9, afterReconnect.turn)
+                assertEquals(5, afterReconnect.hand.size)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun aNoStateReplyLeavesTheHeldBoardExactlyAsItWas() =
+        runTest {
+            // The typed "no state" must never be rendered as a board. Here the bridge has nothing (the
+            // join has not produced its GAME_INIT yet), and the observer must emit nothing rather than
+            // an all-defaults state a consumer could not tell from a real one.
+            val reads = Reads(noState(GAME, "r-1"), noState(GAME, "r-2"))
+            val fake = FakeBridgeClient(responder = reads)
+            val held = GameState(gameId = GAME, turn = 7, hasSnapshot = true)
+
+            clientOver(fake).observeGame(GAME, held).test {
+                assertEquals(held, awaitItem())
+                testScheduler.advanceTimeBy(1_000L)
                 testScheduler.runCurrent()
                 expectNoEvents()
+                assertEquals(1, reads.requests.size)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun aReadNeverOverwritesTheOutstandingPromptOrARunningGamesResult() =
+        runTest {
+            // A read carries a `GameView` and nothing else, so it must move exactly the fields a snapshot
+            // owns. A prompt that survived a resume would be answerable after the read; a prompt the read
+            // *cleared* would leave the server waiting forever for an answer the UI no longer offers.
+            val reads = Reads(noState(GAME, "r-1"), snapshot(view(turn = 5)))
+            val fake = FakeBridgeClient(responder = reads)
+            val connection = MutableStateFlow(ConnectionState.Connected)
+
+            clientOver(fake, connection).observeGame(GAME, seed).test {
+                assertEquals(seed, awaitItem())
+
+                fake.emitPush(GamePrompted(gameId = GAME, state = view(turn = 4), prompt = AskPrompt("Mulligan?")))
+                assertEquals(GamePrompt.Ask("Mulligan?"), awaitItem().prompt)
+
+                connection.value = ConnectionState.Reconnecting
+                testScheduler.runCurrent()
+                connection.value = ConnectionState.Connected
+                testScheduler.runCurrent()
+                awaitItem() // the non-destructive re-sync
+
+                val afterRead = awaitItem()
+                assertEquals(5, afterRead.turn)
+                assertEquals(
+                    "the question the server is still waiting on must survive a read",
+                    GamePrompt.Ask("Mulligan?"),
+                    afterRead.prompt,
+                )
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun aReadAfterTheGameEndedDoesNotResurrectTheBoard() =
+        runTest {
+            // A finished game is finished. Applying a board to it would show a live game that no longer
+            // exists — the bridge drops its cache at GAME_OVER, but a late reply must be inert too.
+            val reads = Reads(noState(GAME, "r-1"), snapshot(view(turn = 12)))
+            val fake = FakeBridgeClient(responder = reads)
+            val connection = MutableStateFlow(ConnectionState.Connected)
+
+            clientOver(fake, connection).observeGame(GAME, seed).test {
+                assertEquals(seed, awaitItem())
+
+                fake.emitPush(GameOver(gameId = GAME, message = "pete has won the game", state = view(turn = 8)))
+                val over = awaitItem()
+                assertTrue(over.isOver)
+
+                connection.value = ConnectionState.Reconnecting
+                testScheduler.runCurrent()
+                connection.value = ConnectionState.Connected
+                testScheduler.runCurrent()
+                assertEquals("the resume still re-emits the terminal state", over, awaitItem())
+
+                testScheduler.advanceTimeBy(1_000L)
+                testScheduler.runCurrent()
+                expectNoEvents()
+
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -304,5 +493,23 @@ class ObserveGameTest {
 
     private companion object {
         const val GAME = "g-1"
+
+        /** The bridge's hit: a held snapshot, stamped with when it was captured. */
+        fun snapshot(
+            state: GameStateView,
+            capturedAtEpochMs: Long = 1_700_000_000_000L,
+        ): ServerMessage = GameStateSnapshot(gameId = GAME, state = state, capturedAtEpochMs = capturedAtEpochMs)
+
+        /** The bridge's typed miss — the reply that must never be rendered as a board. */
+        fun noState(
+            gameId: String,
+            requestId: String?,
+        ): ServerMessage =
+            GameStateUnavailable(
+                gameId = gameId,
+                reason = GameStateUnavailableCode.NO_STATE_YET,
+                detail = "no snapshot for this game on this session yet",
+                requestId = requestId,
+            )
     }
 }
