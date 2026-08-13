@@ -25,7 +25,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -364,23 +363,39 @@ class AppBridgeGameIT {
         priority: GameState,
         advanced: GameState,
         observed: Observed,
-    ): String =
-        buildString {
+    ): String {
+        val card = opening.hand.first()
+        val printings = opening.hand.map { "${it.name}(${it.setCode} #${it.collectorNumber})" }.distinct()
+        val seats =
+            priority.players.map { p ->
+                "${p.name}(life=${p.life} lib=${p.libraryCount} hand=${p.handCount} gy=${p.graveyardCount} " +
+                    "exile=${p.exileCount} human=${p.isHuman} wins=${p.wins}/${p.winsNeeded} " +
+                    "pool=${p.manaPool.total} battlefield=${p.battlefield.size})"
+            }
+        return buildString {
             appendLine("AppBridgeGameIT — what a live GameState actually contained:")
             appendLine("  answered=${observed.answered} promptKinds=${observed.prompts.summary()}")
-            appendLine("  opening hand: ${opening.hand.size} x ${opening.hand.map { "${it.name}(${it.setCode} #${it.collectorNumber})" }.distinct()}")
-            appendLine("    card fields: manaCost=${opening.hand.first().manaCost} typeLine=${opening.hand.first().typeLine} rules=${opening.hand.first().rules}")
+            appendLine("  opening hand: ${opening.hand.size} x $printings")
+            appendLine("    card fields: manaCost=${card.manaCost} typeLine=${card.typeLine} rules=${card.rules}")
             appendLine("  at our priority: turn=${priority.turn} phase=${priority.phase} step=${priority.step}")
-            appendLine("    viewerPlayerId=${priority.viewerPlayerId} viewerHasPriority=${priority.viewerHasPriority} isViewerTurn=${priority.isViewerTurn}")
+            appendLine("    viewerPlayerId=${priority.viewerPlayerId} viewerHasPriority=${priority.viewerHasPriority}")
+            appendLine("    isViewerTurn=${priority.isViewerTurn} isSpectator=${priority.isSpectator}")
             appendLine("    activePlayer=${priority.activePlayerName} priorityPlayerName=${priority.priorityPlayerName}")
-            appendLine("    players=${priority.players.map { "${it.name}(life=${it.life} lib=${it.libraryCount} hand=${it.handCount} gy=${it.graveyardCount} exile=${it.exileCount} human=${it.isHuman} wins=${it.wins}/${it.winsNeeded} pool=${it.manaPool.total} battlefield=${it.battlefield.size})" }}")
-            appendLine("    playable=${priority.playable.size} entries, abilities per entry=${priority.playable.map { it.abilityIds.size }}")
-            appendLine("    stack=${priority.stack.size} exileZones=${priority.exile.size} revealedZones=${priority.revealed.size} combatGroups=${priority.combat.size}")
-            appendLine("    specialActionsAvailable=${priority.specialActionsAvailable} priorityTime=${priority.priorityTimeSeconds}s bufferTime=${priority.bufferTimeSeconds}s")
-            appendLine("    prompt=${priority.prompt} lastMessage=${priority.lastMessage} lastError=${priority.lastError}")
-            appendLine("  after passing: turn=${advanced.turn} phase=${advanced.phase} step=${advanced.step} viewerHasPriority=${advanced.viewerHasPriority} playable=${advanced.playable.size} prompt=${advanced.prompt?.let { it::class.simpleName }}")
-            appendLine("    battlefields after pass=${advanced.players.map { "${it.name}=${it.battlefield.size}" }} stack=${advanced.stack.size} combat=${advanced.combat.size}")
+            appendLine("    players=$seats")
+            appendLine("    playable=${priority.playable.size} abilitiesPerEntry=${priority.playable.map { it.abilityIds.size }}")
+            appendLine("    stack=${priority.stack.size} exileZones=${priority.exile.size}")
+            appendLine("    revealedZones=${priority.revealed.size} combatGroups=${priority.combat.size}")
+            appendLine("    specialActions=${priority.specialActionsAvailable} priorityTime=${priority.priorityTimeSeconds}s")
+            appendLine("    bufferTime=${priority.bufferTimeSeconds}s")
+            appendLine("    prompt=${priority.prompt}")
+            appendLine("    lastMessage=${priority.lastMessage} lastError=${priority.lastError}")
+            appendLine("  after passing: turn=${advanced.turn} phase=${advanced.phase} step=${advanced.step}")
+            appendLine("    viewerHasPriority=${advanced.viewerHasPriority} playable=${advanced.playable.size}")
+            appendLine("    prompt=${advanced.prompt?.let { it::class.simpleName }}")
+            appendLine("    battlefields=${advanced.players.map { "${it.name}=${it.battlefield.size}" }}")
+            appendLine("    stack=${advanced.stack.size} combat=${advanced.combat.size}")
         }
+    }
 
     private fun List<String>.summary(): String = groupingBy { it }.eachCount().toString()
 

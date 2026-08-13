@@ -309,9 +309,21 @@ class GameEventFoldTest {
 
         assertEquals(listOf("Forest"), folded.hand.map { it.name })
         assertEquals(listOf("Shock"), folded.stack.map { it.name })
-        assertEquals(listOf("Bolt"), folded.exile.single().cards.map { it.name })
+        assertEquals(
+            listOf("Bolt"),
+            folded.exile
+                .single()
+                .cards
+                .map { it.name },
+        )
         assertEquals("z-1", folded.exile.single().zoneId)
-        assertEquals(listOf("Island"), folded.revealed.single().cards.map { it.name })
+        assertEquals(
+            listOf("Island"),
+            folded.revealed
+                .single()
+                .cards
+                .map { it.name },
+        )
 
         val group = folded.combat.single()
         assertEquals("Computer", group.defenderName)

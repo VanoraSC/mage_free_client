@@ -60,8 +60,7 @@ class GameClientTest {
     }
 
     /** A success for whatever verb was sent — the request itself is what each test asserts on. */
-    private fun ok(message: ClientMessage): ServerMessage =
-        GameActionResult(action = codeOf(message), ok = true, requestId = REQUEST_ID)
+    private fun ok(message: ClientMessage): ServerMessage = GameActionResult(action = codeOf(message), ok = true, requestId = REQUEST_ID)
 
     private fun codeOf(message: ClientMessage): GameActionCode =
         when (message) {

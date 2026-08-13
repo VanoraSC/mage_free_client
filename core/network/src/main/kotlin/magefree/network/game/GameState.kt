@@ -128,8 +128,7 @@ data class GameState(
      * The specific abilities of [objectId] the server says are playable (a land with two mana abilities
      * has two), or an empty list when the object is not playable at all.
      */
-    fun playableAbilitiesOf(objectId: String): List<String> =
-        playable.firstOrNull { it.objectId == objectId }?.abilityIds.orEmpty()
+    fun playableAbilitiesOf(objectId: String): List<String> = playable.firstOrNull { it.objectId == objectId }?.abilityIds.orEmpty()
 }
 
 /**
