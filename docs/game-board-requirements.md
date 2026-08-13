@@ -325,4 +325,196 @@ building feel on inference the data does not support.
 
 ---
 
-*Still to cover: spectating, the mana readout (6.3a), and 6.4a's live verification.*
+### 6.5 Mana payment — the server already proposes the solution
+**Question raised (Pete).** The UI should propose a tapping solution the player can accept, updating
+continuously as they tap manually, with special handling for restricted sources (Cavern of Souls) and
+conditional bonuses.
+
+**Finding — the server already does this, and we neither need nor are able to reimplement it.**
+
+- `HumanPlayer` (server-side) computes the useable mana abilities, then calls
+  `ManaUtil.tryToAutoPay(unpaid, useableAbilities)` — *"eliminates other abilities if one fits
+  perfectly"* — **before** prompting. The `PlayMana` prompt we receive is therefore the **ambiguous
+  residue after server-side narrowing**, not a raw "pay this somehow".
+- It **deliberately skips auto-pay when the spell cares about mana colour**
+  (`caresAboutManaColor`, added upstream for issue #9070) — precisely the restricted/conditional cases
+  that motivated the question. The server declines to guess exactly where guessing would be wrong.
+
+**Why we cannot add a bridge query for it (asked and answered).** `ManaUtil` lives in `Mage/`, the
+game **engine inside the server process**, and takes live engine objects (`ManaCost`,
+`ActivatedManaAbilityImpl`) that are not serializable view types. The bridge wraps `SessionImpl` —
+XMage's **client** API — which exposes no such call. Surfacing it would mean patching the server, not
+the bridge. Moot, since the server already applies it.
+
+**Decision.** The board **renders the choice the server offers** and does not compute proposals.
+Per Pete: *"if the server doesn't support auto tap calculations, we don't need to implement them at
+this time."* It does support them — server-side — so nothing client-side is needed.
+
+**Still open (6.5a):** paying mana *before* casting (floating mana into the pool deliberately) is a
+distinct flow from paying *when prompted*. `manaPool` is in the snapshot, and mana abilities appear in
+`playable`, so it is reachable — but the interaction has not been designed. — *pending*
+
+---
+
+## 9. Following the opponent's turn
+
+### 9.1 The stack is the mechanism; priority is manual
+**Decision (Pete).** The player watches the **stack** and decides when to pass priority. Everything is
+manual for now; **auto-passing is explicitly deferred** to a later discussion.
+
+**Why this resolves the push-only concern.** No event-toast or recent-events strip is needed as a
+first cut: the stack shows what is happening, and because the player must actively pass priority they
+are present at each decision point rather than needing to reconstruct missed events.
+
+**Implication.** Manual priority means the player is prompted often, so passing must be fast and
+unambiguous — it is the single most repeated interaction in a game.
+
+---
+
+## 10. Reconnecting mid-game
+
+### 10.1 The bridge should cache board state and serve it — a bridge change, not a UI workaround
+**Decision (Pete).** *"The bridge needs to support the client reconnecting and the bridge should act
+as a proxy for the board state making it queryable."*
+
+**Why this is the right layer.** The push-only constraint (§0) is an *upstream* limitation: XMage has
+no "get game" verb, and re-joining a running game does not resync. But **the bridge sees every
+snapshot**, and state is a full snapshot rather than a delta — so the bridge can hold the latest one
+and answer a query with it. That converts a UI problem ("what do we show while blind?") into a data
+guarantee ("ask and you will be told"), and it removes the stale-board dilemma entirely.
+
+**Consequence.** The board no longer needs a "stale, may be out of date" mode as its primary recovery
+story: on reconnect it asks the bridge for current state.
+
+**Scope note.** This is a **`:bridge` + `:protocol` story**, ahead of the board UI stories, and it is
+new work beyond 0051/0052 — the game read verb does not exist yet. It also pairs with story 0023's
+park/resume: the parked session already keeps receiving snapshots, so the cache has fresh material.
+
+---
+
+## 11. Card inspection and known information
+
+### 11.1 Detail on first tap or long-press; playable from the detail view
+**Decision (Pete).** A card's detail opens on **first tap or long-press**. If the card is playable it
+can be **played directly from the detail view**. **Any tap elsewhere closes it.**
+
+**Why.** Inspecting and acting are the same gesture path, so reading a card never costs a mode switch
+— and the detail view becomes the natural place for the §5.1 confirm step.
+
+### 11.2 The player can browse any information they are entitled to see
+**Decision (Pete).** A way to view **any accessible data**: known cards in hand, cards in any known
+zone, face-down cards in exile that the player knows, and cards placed at specific library positions.
+
+**Why.** Magic generates a great deal of hidden-but-known information (scry/surveil placement, exiled
+face-down cards you may play, revealed zones). A player who cannot review it is playing with worse
+information than at a table.
+
+**Data — reachable, but must be checked field by field.** The snapshot carries `exile`, `revealed`,
+`lookedAt` and `companion` zones alongside the battlefields and hand. **Caveat already known:** the
+exile zone list contains one entry even when nothing is exiled, so presence must be judged by cards,
+not list size. **Library position knowledge (post-scry ordering) has not been confirmed present** —
+verify before promising it.
+
+**Resolved (11.2a).** **Both.** A single browser covering every zone the player is entitled to see,
+*and* zone indicators on the board that open it **already filtered to that zone**. Direct where the
+zone has a board presence (graveyard, exile), complete for the zones that do not (revealed, looked-at,
+library placement).
+
+---
+
+## 12. Match flow
+
+### 12.1 Between games: a full sideboard screen
+**Decision (Pete).** A dedicated sideboard screen for swapping cards between deck and sideboard,
+running on the server's timer.
+
+**Data.** A match is best-of-N (`winsNeeded`/`wins` are in the snapshot), and story 0036 already maps
+the server's **`ConstructPrompt`/`SideboardPrompt`** — so the trigger and the deck payload exist; this
+is a UI to build, not a protocol gap.
+
+**Note.** The construction surface is close to the deck builder (0035) but not the same thing: it is
+timed, match-scoped, and constrained to the registered pool. Reusing the builder was considered and
+rejected in favour of a purpose-built screen.
+
+### 12.2 Concede and quit are separate actions
+**Decision (Pete).** **Concede** (this game — the opponent wins it) and **quit match** (leave the whole
+match) are distinct, explicit actions.
+
+**Why.** It mirrors upstream exactly: `SessionImpl` exposes `concedeGame`-style player actions and
+`quitMatch` as separate verbs (both wired in 0051/0052). Collapsing them would misrepresent what
+actually happens to the match record.
+
+---
+
+## 13. Spectating — deferred
+
+**Decision (Pete).** **Not in the first playable board.** The lobby's Watch action stays disabled until
+the board is proven for players.
+
+**Data note for later.** The capability already exists end-to-end — `watchGame` is relayed (0051) and
+`isSpectator` is carried in `GameState` (0052) — so this is a scope choice, not a missing foundation.
+A spectator board is the same layout minus hands, prompts and playable affordances.
+
+---
+
+---
+
+## 14. Priority, stops and auto-pass
+
+### 14.1 Everything explicit now; stops and auto-pass are a named future feature
+**Decision (Pete).** All priority handling is **explicit and manual** in the first playable board.
+*"In the future I want to support similar functions to Arena and MTGO with manual set stops and
+configurable auto pass."*
+
+**Design constraint this creates (important).** Auto-pass is **named, not vague** — so the board must
+not be built in a way that precludes it. Concretely: passing priority must remain a **policy decision
+made in one place**, not logic scattered through the UI. When stops arrive, they change *when the app
+answers a priority prompt*, and nothing else should have to change.
+
+### 14.2 Floating mana is allowed; its interaction with auto-pass is deferred
+**Decision (Pete).** *"You can tap land at any time; passing priority with mana in the pool requires
+no special handling for this increment. When we implement pass, this will need to be augmented."*
+
+**What this means now.** Lands are tappable whenever the server permits it (mana abilities appear in
+`playable`, so this already works), `manaPool` is displayed, and unspent mana needs no warnings or
+guards in the first version.
+
+**Flagged for the auto-pass work (14.1).** Auto-passing with mana floating is exactly where an
+unattended pass can cost a player their mana — so the auto-pass feature must handle it deliberately.
+Recorded here so the requirement is not lost between increments.
+
+---
+
+## 15. The match-start interstitial
+
+### 15.1 Shows opponent, format, and the toss result
+**Decision (Pete).** The interstitial (§1.1) names both players and the format/game type, then shows
+the coin-toss outcome as it resolves.
+
+**Why.** Turns dead server-setup time into the game's opening beat, and gives the toss (§1.3) a
+natural home before the board appears.
+
+**Data.** Opponent name and game type come from the table the match started from (Epic 7); the toss
+result is the structural signal from §1.3 — *asked* means we won, *not asked* means we lost — with no
+prose parsing.
+
+---
+
+## Summary of what still needs deciding
+
+Everything below is **not yet designed** and is deliberately out of the first playable board:
+
+- **Spectating** (§13) — capability exists end to end; scope choice only.
+- **Stops / configurable auto-pass** (§14.1) — named future feature; keep pass-policy in one place.
+- **Auto-pass with floating mana** (§14.2) — must be handled when auto-pass is built.
+- **Library-position knowledge** (§11.2) — *unverified*: confirm the snapshot actually carries
+  post-scry ordering before promising to display it.
+- **Declining a target or an alternative-cost prompt** (§6.4a) — rollback confirmed only for the mana
+  step; verify per step before offering cancel there.
+
+## Work this design implies beyond the board itself
+
+- **A bridge game-state cache + query verb** (§10.1) — new `:bridge` + `:protocol` work, ahead of the
+  board UI, so a reconnecting client can ask for current state instead of waiting for a push.
+- **A sideboard screen** (§12.1) — a purpose-built, timed, match-scoped surface; the
+  `ConstructPrompt`/`SideboardPrompt` triggers already exist from story 0036.
