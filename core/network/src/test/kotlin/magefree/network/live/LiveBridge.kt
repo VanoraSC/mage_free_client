@@ -16,6 +16,9 @@ import magefree.network.LobbyClientImpl
 import magefree.network.game.GameClient
 import magefree.network.game.GameClients
 import magefree.network.ktor.KtorBridgeClient
+import magefree.network.reconnect.AlwaysOnlineConnectivityObserver
+import magefree.network.reconnect.ConnectivityObserver
+import magefree.network.reconnect.FakeConnectivityObserver
 import magefree.network.table.TableClient
 import magefree.network.table.TableClients
 import org.junit.Assume
@@ -38,9 +41,16 @@ import java.util.concurrent.CopyOnWriteArrayList
 internal class LiveBridge(
     private val scope: CoroutineScope,
     private val target: BridgeTarget,
+    /**
+     * The reachability source the production reconnect loop watches (story 0024). Defaulting to
+     * "always online" keeps every existing test unchanged; story 0054's reconnect proof passes a
+     * [magefree.network.reconnect.FakeConnectivityObserver] so it can take the **radio** away rather
+     * than the collector — see [dropRadio].
+     */
+    private val connectivity: ConnectivityObserver = AlwaysOnlineConnectivityObserver,
 ) {
     /** The production client under test. Its `connectionState` also drives the table client's re-sync. */
-    val client: KtorBridgeClient = KtorBridgeClient()
+    val client: KtorBridgeClient = KtorBridgeClient(connectivity = connectivity)
 
     /** Every session event the connect flow emitted, in order — the diagnostic record for a failure. */
     val events: MutableList<SessionEvent> = CopyOnWriteArrayList()
@@ -115,11 +125,43 @@ internal class LiveBridge(
      * the cold `connect` flow, which closes the socket with no `Logout` on it. Nothing here calls
      * `disconnect`/`signOut` — this is the shape the bridge must read as "park it, they may be back"
      * (stories 0023/0024).
+     *
+     * Note what this does **not** do: cancelling the flow discards the `ResumeHandle` with it, so a later
+     * `connect` is a fresh `Login`, not a `Resume`. For the reconnect-and-resume shape — the one an app
+     * that stays alive across a network hand-off actually performs — use [dropRadio]/[restoreRadio].
      */
     suspend fun dropWithoutSigningOut() {
         collector?.let { runCatching { it.cancelAndJoin() } }
         collector = null
     }
+
+    /**
+     * Takes the **radio** away without touching the session flow (story 0054's reconnect proof).
+     *
+     * This is the production drop, exactly: `ReconnectingSession` watches [connectivity] and ends a
+     * running attempt the moment the network goes (story 0050 defect B), so the socket closes with no
+     * `Logout` on it — the bridge parks the session — while the reconnect loop stays alive holding its
+     * `ResumeHandle`. It is literally the shape `KtorBridgeClient`'s KDoc records from the on-device
+     * smoke: Android tearing down a lingering network after a WIFI/CELLULAR hand-off.
+     *
+     * [dropWithoutSigningOut] cannot stand in for it — cancelling the collector throws the resume handle
+     * away, so what follows is a fresh `Login` and a **new** bridge session.
+     *
+     * Requires a [magefree.network.reconnect.FakeConnectivityObserver] to have been passed in; fails
+     * loudly rather than silently doing nothing if it was not.
+     */
+    fun dropRadio() {
+        driveableConnectivity().set(false)
+    }
+
+    /** Brings the radio back: the loop's back-off is cut short and the next attempt sends `Resume`. */
+    fun restoreRadio() {
+        driveableConnectivity().set(true)
+    }
+
+    private fun driveableConnectivity(): FakeConnectivityObserver =
+        connectivity as? FakeConnectivityObserver
+            ?: error("LiveBridge was built with $connectivity; pass a FakeConnectivityObserver to drive the radio")
 
     companion object {
         /** How long a first connect + login may take (the upstream connect/auth handshake is not free). */
