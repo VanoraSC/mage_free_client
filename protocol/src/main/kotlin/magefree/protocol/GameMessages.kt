@@ -33,6 +33,13 @@ import kotlinx.serialization.json.JsonDecoder
  *    — the server's own answer to "what may this player play right now". Nothing here re-derives
  *    legality, and nothing downstream may: a rules engine would dwarf everything built so far.
  *
+ * **The one thing upstream cannot do, and the bridge can.** There is no "get game" verb upstream at all,
+ * and re-joining a running game does not resync — so the board is push-only and a reconnecting client is
+ * blind until the next push. Story 0054 adds [GetGameState] → [GameStateSnapshot]/[GameStateUnavailable]:
+ * a read answered by the bridge from the last snapshot it relayed **to that session**, not by the server.
+ * It is a replay of the server's own data, never a fabrication, and its absence is typed rather than
+ * rendered as an empty board.
+ *
  * **Why a closed, typed prompt set.** A generic "the server asked something" blob would leave the app
  * unable to know what a valid answer looks like. [GamePrompt] is therefore a closed discriminated set —
  * one subtype per upstream prompt callback — and each subtype's KDoc names the exact reply message that
@@ -190,9 +197,92 @@ public data class SendPlayerAction(
     val requestId: String? = null,
 ) : ClientMessage
 
+/**
+ * App→bridge: **read** the current state of the game [gameId] (story 0054) — the targeted read that
+ * `observeGame` has had no way to issue, and the game-side sibling of 0040's [GetTable].
+ *
+ * There is no upstream verb behind this, and there never will be: XMage's `GameController.join` on an
+ * already-running game only logs "rejoined", so a reconnecting client is blind until the *next* push —
+ * which may be minutes away, or never while an opponent thinks. The bridge answers it from its own
+ * **per-session** cache of the most recent snapshot the server pushed *to this session*, which is why the
+ * request carries no room/scope: the only state it can name is this session's own.
+ *
+ * The reply is a [GameStateSnapshot] carrying the same [requestId], or a typed [GameStateUnavailable]
+ * when this session has been sent no snapshot for that game (or has no session at all). It is never an
+ * empty [GameStateView]: an empty board is indistinguishable from a real one and would be read as truth.
+ */
+@Serializable
+@SerialName("get_game_state")
+public data class GetGameState(
+    val gameId: String,
+    val requestId: String? = null,
+) : ClientMessage
+
 // ---------------------------------------------------------------------------------------------------
 // Results (bridge → app, correlated by requestId)
 // ---------------------------------------------------------------------------------------------------
+
+/**
+ * Bridge→app: the reply to a [GetGameState] (story 0054) — the most recent [GameStateView] the bridge
+ * relayed to **this** session for [gameId], **verbatim**.
+ *
+ * It is the server's own snapshot replayed, never a reconstruction: nothing is merged across snapshots,
+ * nothing is remembered about a card that has since been hidden, and no history is inferred (that is
+ * story 0053, deliberately not this one). The [state] here is byte-identical to the one that travelled in
+ * the [GameStarted]/[GameStateUpdated]/[GameInformed]/[GamePrompted]/[GameOver] that produced it, so a
+ * client folds it exactly as it folds a push.
+ *
+ * @property capturedAtEpochMs when the bridge captured this snapshot (wall clock, `System.currentTimeMillis`).
+ *   Staleness is bounded and *knowable* rather than guessed: the snapshot is current as of the last push,
+ *   and this says when that was. Null only from a bridge older than this story.
+ */
+@Serializable
+@SerialName("game_state_snapshot")
+public data class GameStateSnapshot(
+    val gameId: String,
+    val state: GameStateView,
+    val capturedAtEpochMs: Long? = null,
+    val requestId: String? = null,
+) : ServerMessage
+
+/**
+ * Bridge→app: the typed **"no state"** reply to a [GetGameState] (story 0054) — this session has never
+ * been sent a snapshot for [gameId], the game has ended, or the socket has no bound session.
+ *
+ * A miss is a typed result, never a silent drop and never an empty [GameStateSnapshot]: an all-defaults
+ * [GameStateView] renders as a real board with no players, no hand and nothing playable, which a client
+ * would show — and a player would act on — as though it were the truth. [reason] is the *kind*, so the app
+ * can branch; [detail] is the bridge's optional human-readable note.
+ */
+@Serializable
+@SerialName("game_state_unavailable")
+public data class GameStateUnavailable(
+    val gameId: String,
+    val reason: GameStateUnavailableCode,
+    val detail: String? = null,
+    val requestId: String? = null,
+) : ServerMessage
+
+/**
+ * Why a [GameStateUnavailable] carries no state, as a **kind** rather than as prose — the same discipline
+ * [GameFailureCode] applies to the action verbs (story 0050). Additive-only within a protocol major.
+ */
+@Serializable
+public enum class GameStateUnavailableCode {
+    /**
+     * The bridge holds no snapshot for that game on this session. Either nothing has been pushed yet
+     * (the join has not produced its `GAME_INIT`), the id names a game this session is not in, or the
+     * game ended and its cache entry was dropped. Waiting is what fixes the first; nothing fixes the
+     * others, which is why they are not distinguished — the bridge genuinely cannot tell them apart.
+     */
+    NO_STATE_YET,
+
+    /**
+     * There is no usable session behind this socket, so there is not even a cache to look in. Nothing
+     * was read, and re-authenticating — not retrying — is what fixes it (the 0050 convention).
+     */
+    SESSION_GONE,
+}
 
 /**
  * Bridge→app: the structured result of a game request. Every upstream game verb returns a bare

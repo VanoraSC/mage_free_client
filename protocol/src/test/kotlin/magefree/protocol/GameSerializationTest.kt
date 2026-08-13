@@ -4,6 +4,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -170,6 +171,8 @@ class GameSerializationTest {
                     action = PlayerActionCode.REQUEST_AUTO_ANSWER_TEXT_YES,
                     dataText = "Pay {1}?",
                 ),
+                GetGameState(gameId = "g-1", requestId = "r-11"),
+                GetGameState(gameId = "g-1"),
                 // The default-valued form: proves nothing required is silently defaulted away.
                 JoinGame(gameId = "g-1"),
             )
@@ -205,6 +208,15 @@ class GameSerializationTest {
                 GameError(gameId = "g-1", message = "server exploded"),
                 GameOver(gameId = "g-1", message = "alice has won", state = STATE),
                 WatchingGame(gameId = "g-1", tableId = "t-1", parentTableId = "t-0"),
+                GameStateSnapshot(gameId = "g-1", state = STATE, capturedAtEpochMs = 1_700_000_000_000L, requestId = "r-11"),
+                GameStateSnapshot(gameId = "g-1", state = STATE),
+                GameStateUnavailable(
+                    gameId = "g-1",
+                    reason = GameStateUnavailableCode.NO_STATE_YET,
+                    detail = "no snapshot for this game on this session yet",
+                    requestId = "r-12",
+                ),
+                GameStateUnavailable(gameId = "g-1", reason = GameStateUnavailableCode.SESSION_GONE),
             ) + PROMPTS.map { GamePrompted(gameId = "g-1", state = STATE, prompt = it) }
 
         messages.forEach { message ->
@@ -287,6 +299,56 @@ class GameSerializationTest {
     @Test
     fun `null defaults are omitted from a game frame`() {
         assertEquals("""{"type":"join_game","gameId":"g-1"}""", json.encodeToString<ClientMessage>(JoinGame("g-1")))
+    }
+
+    @Test
+    fun `the game-state read carries its own discriminators`() {
+        // Story 0054. The read and its two replies must be distinguishable on the wire from the pushes
+        // that carry the same payload — a `game_state_snapshot` that encoded as `game_state_updated`
+        // would be folded as a fresh server push rather than correlated to its waiter.
+        assertEquals(
+            """{"type":"get_game_state","gameId":"g-1","requestId":"r-1"}""",
+            json.encodeToString<ClientMessage>(GetGameState(gameId = "g-1", requestId = "r-1")),
+        )
+        val snapshot = json.encodeToString<ServerMessage>(GameStateSnapshot(gameId = "g-1", state = STATE))
+        assertTrue(snapshot.contains(""""type":"game_state_snapshot""""), "got $snapshot")
+
+        val unavailable =
+            json.encodeToString<ServerMessage>(
+                GameStateUnavailable(gameId = "g-1", reason = GameStateUnavailableCode.NO_STATE_YET),
+            )
+        assertTrue(unavailable.contains(""""type":"game_state_unavailable""""), "got $unavailable")
+    }
+
+    @Test
+    fun `a no-state reply is typed, and never decodes as a snapshot of an empty board`() {
+        // The acceptance criterion this story turns on: before any snapshot exists the honest answer is
+        // a *kind*, not a GameStateView full of defaults. An empty board is indistinguishable from a real
+        // one — no players, no hand, nothing playable is a legal snapshot — so a client that received one
+        // would render it as truth. Decoding must therefore land on a different type entirely.
+        val frame = """{"type":"game_state_unavailable","gameId":"g-1","reason":"NO_STATE_YET","requestId":"r-1"}"""
+
+        val decoded = json.decodeFromString<ServerMessage>(frame)
+
+        assertTrue(decoded is GameStateUnavailable, "expected a GameStateUnavailable, got $decoded")
+        val unavailable = decoded as GameStateUnavailable
+        assertEquals(GameStateUnavailableCode.NO_STATE_YET, unavailable.reason)
+        assertEquals("g-1", unavailable.gameId)
+        assertEquals("r-1", unavailable.requestId)
+    }
+
+    @Test
+    fun `a snapshot from a bridge that does not stamp a capture time still decodes`() {
+        // Additive tolerance in the older-peer direction: `capturedAtEpochMs` is new in 0054, so a reply
+        // without it must decode rather than throw — and must report the absence rather than a fake zero.
+        val frame = """{"type":"game_state_snapshot","gameId":"g-1","state":{"turn":4},"requestId":"r-1"}"""
+
+        val decoded = json.decodeFromString<ServerMessage>(frame)
+
+        assertTrue(decoded is GameStateSnapshot, "expected a GameStateSnapshot, got $decoded")
+        val snapshot = decoded as GameStateSnapshot
+        assertEquals(4, snapshot.state.turn)
+        assertNull(snapshot.capturedAtEpochMs, "an absent capture time is null, never a fabricated instant")
     }
 
     @Test
