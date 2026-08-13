@@ -51,6 +51,15 @@ defect ship: every one of the five defects found in the 2026-08 hardening pass h
    verification** that must be independent.
 4. **Commit incrementally.** Commit per defect or per coherent step, not once at the end. Long stories
    get interrupted; an interruption should cost minutes, not the whole story.
+5. **Unexpectedly absent.** Before relying on an upstream field, confirm something actually **writes**
+   to it — not merely that it exists and type-checks. A declared field with a getter and no producer
+   looks available at every stage: it compiles, it maps, it round-trips, and it silently carries
+   nothing forever. (Found 2026-08-13: `GameView.opponentHands` is declared with a getter and is
+   **never populated anywhere in XMage** — the only two references in the whole codebase are the
+   declaration and the getter. A board feature had been specified on top of it.) The check is cheap:
+   grep the upstream for writes, and confirm live that the field is non-empty in the situation that
+   should populate it. This is the mirror of standard 2 — reachability asks *what produces this state
+   in our code*; this asks *does the source we are reading from ever produce anything at all*.
 
 A fake that behaves differently from production is a defect in the fake, not a convenience — fix the
 double, not the test that depends on it.

@@ -417,8 +417,32 @@ verify before promising it.
 
 **Resolved (11.2a).** **Both.** A single browser covering every zone the player is entitled to see,
 *and* zone indicators on the board that open it **already filtered to that zone**. Direct where the
-zone has a board presence (graveyard, exile), complete for the zones that do not (revealed, looked-at,
-library placement).
+zone has a board presence (graveyard, exile), complete for the zones that do not (revealed, looked-at)
+— **but not library placement**, which does not exist (see §11.3).
+
+### 11.3 What is actually knowable — verified 2026-08-13
+
+Investigated in the XMage source and confirmed live. **The assumption that "XMage does all of this"
+does not hold**; three of the four capabilities differ from expectation.
+
+| Capability | Verdict | Evidence |
+|---|---|---|
+| **Scry / look at top cards** | ✅ **Fully available, with card identity** | Live: the decision arrives as an ordinary **Target prompt carrying the real card** — `msg='Select up to one card to PUT on the BOTTOM of your library (Scry)' cards=[Thoughtseize] required=false`. Seen repeatedly across turns with different cards. It comes through the prompt channel we **already map**. |
+| **Tuck / "X cards down" library position** | ❌ **No such concept upstream** | No known-library or library-order tracking on the player state; the snapshot carries only `libraryCount`. XMage expects the player to remember, as in paper. |
+| **Known opponent-hand cards, tracked individually and updated as they leave** | ❌ **Not available** | `GameView.opponentHands` is declared with a getter and **never written to anywhere in the codebase** — the only two references are the declaration and the getter. Permanently an empty map. |
+| **Reveal windows (e.g. Thoughtseize)** | ⚠️ **Channel exists and is mapped; contents unobserved** | `revealed` is populated upstream and mapped by 0051. Thoughtseize uses `DiscardCardYouChooseTargetEffect`, which shows the hand **at resolution** — transient, not durable. Two live attempts did not get the spell to resolve (the first rolled back at the mana step; the second ran out of observation budget just after casting), so the window's contents remain unconfirmed. |
+
+**Consequences.**
+- **Scry display is deliverable now**, with no new mapping.
+- **"Cards put into specific locations in a library" is not deliverable** — drop it, or accept it as
+  *our* bookkeeping rather than the server's.
+- **Individually tracked opponent-hand knowledge is not deliverable from XMage.** Building it means a
+  client-side knowledge model — remembering ids from a reveal window and following them across
+  snapshots — inventing state upstream does not maintain, and wrong the moment a card moves through a
+  zone we cannot observe.
+
+**Genuine mapping gap, worth fixing regardless:** `lookedAt` and `companion` are populated upstream and
+were **not** mapped by 0051 — a `:protocol` + `:bridge` fix, independent of the board.
 
 ---
 
