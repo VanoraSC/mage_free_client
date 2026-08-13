@@ -648,3 +648,56 @@ casting as one continuous act (§6.4), server-side mana narrowing (§6.5), manua
 as a named future feature (§9, §14), the bridge as the reconnect authority (§10, story 0054), inspection
 and the known-information browser (§11), match flow and separate concede/quit (§12), spectating deferred
 (§13), and everything in §11.3 about what is and is not knowable.
+
+---
+
+# 17. Target-cancel experiment — 2026-08-13
+
+Two human clients, deck 20× `Mountain` (`10E` #376) / 20× `Forked Bolt` (`ROE` #146) / 20× `Dragon
+Fodder` (`ALA` #97). Dragon Fodder makes two Goblins to shoot at; Forked Bolt is genuinely
+multi-target (*2 damage divided among one or two targets*). Both seats driven by the test, so **both
+views** are observable.
+
+```
+CAST Forked Bolt (goblins on board=2)      hand=6 stack=0
+  [B sees @before-cast]                    stack=0
+T1 'Select targets (selected 0 of 2, min 1) to divide 2 damage'
+        candidates=4  required=false     | A: stack=1 hand=5
+  [B sees @target-prompt-1]                stack=1 top=Forked Bolt
+  -> DECLINE
+  after decline: A  stack=0 hand=6 prompt=Select untappedMountains=2
+  [B sees @after-decline]                  stack=1 top=Forked Bolt      <-- STALE
+```
+
+## 17.1 Resolved (16.5a) — declining a TARGET rewinds, exactly like the mana step
+Casting put the Bolt on the stack (`hand 6→5`, `stack 0→1`); declining the target prompt returned it
+to hand (`hand=6`), cleared the stack (`stack=0`) and left **both Mountains untapped**. So the
+**cascading cancel of §16.5 is deliverable at the target step**, not only at mana. Rollback is the
+server's, and it is complete.
+
+## 17.2 Resolved (16.4a) — the server already tracks selection progress
+The prompt is **not** a bare "pick one". It reads *"Select targets (**selected 0 of 2, min 1**) to
+divide 2 damage"* with `candidates=4` and `required=false`. XMage maintains the running selection and
+**re-prompts with an updated count** after each pick.
+
+**Consequence for §16.4's confirm-before-submit.** The server is already doing incremental validation,
+so the honest shape is *pick → send → prompt updates → pick → send → **player confirms** → send done*
+(`SendPlayerBoolean(false)`, which the `min 1` / `required=false` wording shows is legitimate once
+enough are chosen). **Do not batch picks client-side against the first candidate list** — the count and
+candidates move as you go, and a batched submission would be validated against a list that no longer
+applies. The "confirm" the player sees is the final *done*, not a client-side accumulator.
+
+## 17.3 NEW FINDING — the opponent's view goes stale on a cancel
+`B` saw `stack=1 top=Forked Bolt` while A was choosing targets — which is **rules-correct**: in paper
+the spell is on the stack and your opponent can see it. But after A declined, **B still showed
+`stack=1 top=Forked Bolt`**. The rewind was not pushed to the opponent; B's board kept a spell that no
+longer exists until some later snapshot corrects it.
+
+**Why it matters.** A player looking at a phantom spell on the stack may hold up a response, or play
+around something that was never cast. It is a real, visible wrong state on the *opponent's* board.
+
+**Open (17.3a):** is this a *transient* gap that the next push corrects within a beat, or does B stay
+wrong until an unrelated game event? The experiment sampled B only twice and cannot tell. **Verify
+before building**, because the answer changes the design: if it self-corrects quickly, nothing is
+needed; if it persists, the board should not present the opponent's stack as authoritative between
+pushes — and story 0054's cached read gives a way to reconcile it.
