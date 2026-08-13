@@ -2,6 +2,8 @@ package magefree.network.reconnect
 
 import kotlinx.coroutines.CompletableDeferred
 import magefree.protocol.GameActionResult
+import magefree.protocol.GameStateSnapshot
+import magefree.protocol.GameStateUnavailable
 import magefree.protocol.GameTypeList
 import magefree.protocol.RoomUserList
 import magefree.protocol.ServerMessage
@@ -22,8 +24,9 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * The correlated replies are the 0027 lobby list replies ([TableList]/[RoomUserList]/[GameTypeList]),
  * the 0036 table-action replies ([TableCreated]/[TableActionResult], story 0037), 0040's targeted
- * table-read replies ([TableDetail]/[TableNotFound]) and 0051's game-action replies
- * ([GameActionResult], story 0052 — every join/watch/quit and every prompt answer) — each keyed by its
+ * table-read replies ([TableDetail]/[TableNotFound]), 0051's game-action replies
+ * ([GameActionResult], story 0052 — every join/watch/quit and every prompt answer) and 0054's targeted
+ * game-state read replies ([GameStateSnapshot]/[GameStateUnavailable]) — each keyed by its
  * echoed `requestId`. Resume flow-control frames, session-status pushes, and the spontaneous 0036 table
  * and 0051 game *events* (no `requestId` — routed to the push side-channel instead) are left untouched,
  * so the existing session-event behaviour (stories 0016/0024) is unchanged.
@@ -78,6 +81,12 @@ internal class PendingRequests {
             // out its timeout on a reply that did in fact arrive, which is the shape of defect this
             // registry exists to prevent.
             is GameActionResult -> requestId
+            // Story 0054: the game-state read's two arms. **Both** are correlated: an uncorrelated
+            // "no state" would leave the reconnecting board blocked on a waiter until it timed out —
+            // indistinguishable from the bridge never answering, which is the very failure the read
+            // exists to remove.
+            is GameStateSnapshot -> requestId
+            is GameStateUnavailable -> requestId
             else -> null
         }
 }

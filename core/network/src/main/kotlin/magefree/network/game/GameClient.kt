@@ -195,6 +195,28 @@ interface GameClient {
      */
     suspend fun concede(gameId: String): Result<Unit>
 
+    // --- reading -------------------------------------------------------------------------------------
+
+    /**
+     * Read the current board of [gameId] **on demand** (story 0054) — the game-side counterpart of
+     * `TableClient.refreshTable`, and the thing 0052 could not offer.
+     *
+     * **Nothing upstream answers this.** XMage has no verb that reads a `GameView`, and re-joining a
+     * running game does not resync, so a client that dropped its socket used to be blind until the next
+     * push — which may be minutes away while an opponent thinks, or never. The **bridge** answers it, from
+     * the last snapshot it relayed to *this* session: it sees every snapshot go past, and a snapshot is
+     * the whole truth rather than a delta, so holding the most recent one is sufficient.
+     *
+     * **A miss is a failure, never a blank board.** When the bridge holds nothing for that game the
+     * result is a failed [Result] carrying [GameStateUnavailableFailure] — because an empty [GameState]
+     * is a perfectly legal board and a caller could not tell it from the truth. A caller that already
+     * holds a state keeps it; a caller that does not keeps showing that it has nothing yet.
+     *
+     * [observeGame] issues this itself on open and after a resume, so a board built on that flow does not
+     * need to call it; this is here for a caller that wants a one-shot read.
+     */
+    suspend fun refreshGame(gameId: String): Result<GameSnapshot>
+
     // --- observing -----------------------------------------------------------------------------------
 
     /**
@@ -205,14 +227,18 @@ interface GameClient {
      * **Snapshot replace.** Every state-carrying push carries the whole game view, so each emission is a
      * complete picture rather than a patch; a consumer renders the latest and never reconciles.
      *
-     * **Resume (0023/0024).** On a return to [magefree.model.ConnectionState.Connected] the held state is
-     * re-emitted, so a reconnect does not strand a collector on a state it may have stopped rendering —
-     * the same non-destructive re-sync `TableClient.observeTable` performs. There is no game equivalent
-     * of `refreshTable` to follow it with: **upstream exposes no verb that reads a `GameView`**, so a
-     * fresh snapshot can only be pushed, never pulled. It does arrive: the bridge's parked session keeps
-     * pumping into a durable, re-bindable buffer while the app socket is down (story 0023), so the
-     * snapshots produced during the gap are delivered when the socket re-binds — and because state is a
-     * snapshot, the newest one is the whole truth even if older ones were dropped from that buffer.
+     * **Reads (story 0054).** [refreshGame] is issued **on open** and **again on each return to
+     * [magefree.model.ConnectionState.Connected]** (a 0023/0024 resume), and its snapshot is folded onto
+     * the held state exactly as a push would be. That is what makes a reconnecting board show something
+     * before the opponent acts. Until 0054 there was nothing to issue — game state was push-only — and
+     * `observeGameNeverIssuesARequestOfItsOwn` existed to stop anyone polling against a request the
+     * bridge could not answer; it now pins these two reads and the continued **absence of a poll**.
+     *
+     * **Resume (0023/0024).** The held state is also re-emitted on that return, so a collector that had
+     * stopped rendering is not stranded — the same non-destructive re-sync `TableClient.observeTable`
+     * performs. The bridge's parked session keeps pumping into a durable, re-bindable buffer while the
+     * app socket is down (story 0023), so pushes produced during the gap still arrive when the socket
+     * re-binds; the read is what covers the case where **no** push comes.
      *
      * @param seed the starting state; defaults to an empty [GameState] for [gameId]. A caller that
      *   already holds one (e.g. re-opening a board) may pass it so the first emission is not blank.

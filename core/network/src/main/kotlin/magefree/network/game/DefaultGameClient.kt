@@ -1,6 +1,7 @@
 package magefree.network.game
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -8,14 +9,20 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import magefree.model.ConnectionState
 import magefree.network.BridgeClient
 import magefree.network.ServerPushSource
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameFailureCode
 import magefree.protocol.GamePrompted
+import magefree.protocol.GameStateSnapshot
+import magefree.protocol.GameStateUnavailable
+import magefree.protocol.GameStateUnavailableCode
+import magefree.protocol.GetGameState
 import magefree.protocol.JoinGame
 import magefree.protocol.PlayerActionCode
 import magefree.protocol.QuitMatch
@@ -41,12 +48,19 @@ import java.util.UUID
  * plain [GameActionFailure] with the server's reason. A transport failure thrown by `request` (no
  * session, timeout, drop) is captured as a failed [Result] rather than propagated.
  *
- * **[observeGame]** merges two sources into a single folding collector, so the held state is mutated by
+ * **[observeGame]** merges three sources into a single folding collector, so the held state is mutated by
  * exactly one coroutine and no lock is needed: the [ServerPushSource] stream folded by [GameEventFold]
- * for this game, and a re-sync trigger on each return to [ConnectionState.Connected] that re-emits the
- * held state. Unlike the table client there is **no** periodic read and no read-on-open — not as an
- * omission but because upstream has no verb that reads a `GameView`; game state is push-only, and the
- * bridge's parked-session buffer (story 0023) is what carries it across a socket gap.
+ * for this game, a re-sync trigger on each return to [ConnectionState.Connected] that re-emits the held
+ * state, and — since story 0054 — a **targeted read** ([refreshGame]) issued on open and on each such
+ * return. Unlike the table client there is still **no periodic poll**: the two triggers are "the board
+ * opened" and "the socket came back", and nothing else changes the answer, so a timer would ask the
+ * bridge the same question forever.
+ *
+ * The read is answered by the *bridge*, not by XMage — upstream has no verb that reads a `GameView` and
+ * re-joining a running game does not resync, which is exactly why story 0052 could not have this. The
+ * bridge's parked-session buffer (story 0023) still carries the pushes produced during a socket gap; the
+ * read is what covers the gap in which the game produced **none**, which is when a reconnecting player
+ * would otherwise sit in front of an empty board until the opponent moved.
  *
  * @param newRequestId how a correlation id is minted (a UUID in production; overridable so a test can
  *   assert the exact id sent).
@@ -161,6 +175,56 @@ internal class DefaultGameClient(
 
     override suspend fun concede(gameId: String): Result<Unit> = playerAction(gameId, PlayerActionCode.CONCEDE)
 
+    // --- reading -------------------------------------------------------------------------------------
+
+    override suspend fun refreshGame(gameId: String): Result<GameSnapshot> =
+        readSnapshot(gameId).map { reply ->
+            GameSnapshot(
+                // A standalone state: only the snapshot-owned fields, applied onto a blank one. A read
+                // says what the board looks like, never that the server is waiting on us — the bridge
+                // caches the `GameView`, and a prompt is not part of it.
+                state = GameViewMapper.apply(GameState(gameId), reply.state),
+                capturedAtEpochMs = reply.capturedAtEpochMs,
+            )
+        }
+
+    /**
+     * The wire half of the read, shared by [refreshGame] and [observeGame] (which needs the snapshot
+     * itself so it can apply it to the state it already holds rather than to a blank one).
+     *
+     * A [GameStateUnavailable] becomes a typed failure rather than an empty success: an all-defaults
+     * `GameStateView` is a legal board, so "nothing to show" *must* be a different shape from "here is
+     * the board", or every caller renders the absence as truth.
+     */
+    private suspend fun readSnapshot(gameId: String): Result<GameStateSnapshot> {
+        val id = newRequestId()
+        return try {
+            when (val reply = bridgeClient.request<ServerMessage>(GetGameState(gameId = gameId, requestId = id), id)) {
+                is GameStateSnapshot -> Result.success(reply)
+                is GameStateUnavailable ->
+                    Result.failure(
+                        GameStateUnavailableFailure(
+                            gameId = reply.gameId,
+                            reason = reply.reason.toReason(),
+                            detail = reply.detail,
+                        ),
+                    )
+
+                else -> Result.failure(GameActionFailure("game: unexpected reply ${reply::class.simpleName}"))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun GameStateUnavailableCode.toReason(): GameStateUnavailableReason =
+        when (this) {
+            GameStateUnavailableCode.NO_STATE_YET -> GameStateUnavailableReason.NoStateYet
+            GameStateUnavailableCode.SESSION_GONE -> GameStateUnavailableReason.SessionGone
+        }
+
     // --- observing -----------------------------------------------------------------------------------
 
     override fun observeGame(
@@ -169,14 +233,27 @@ internal class DefaultGameClient(
     ): Flow<GameState> =
         callbackFlow {
             var state = seed
+
+            // The single read trigger every source funnels into (story 0054), CONFLATED exactly as the
+            // table client's is: at most one token is ever pending and the reader below suspends inside
+            // its own branch, so a resume that lands while an open-read is in flight collapses into one
+            // follow-up read rather than a second concurrent one. There is deliberately **no** timer
+            // feeding it: the two triggers are "the board opened" and "the socket came back", and
+            // nothing else. A poll would ask the bridge the same question forever for no new answer.
+            val reads = Channel<Unit>(Channel.CONFLATED)
+
             trySend(state)
 
-            // Both sources funnel into one collector: `merge` serialises them downstream, so the held
+            // Every source funnels into one collector: `merge` serialises them downstream, so the held
             // `state` is read/written by exactly one coroutine — no lock, no race.
             val pushes = pushSource.serverPushes.map<ServerMessage, Intent> { Intent.Push(it) }
             val resyncs = connectionState.reEstablishments().map { Intent.Resync }
+            val snapshots =
+                reads
+                    .receiveAsFlow()
+                    .mapNotNull { readSnapshot(gameId).getOrNull()?.let { Intent.Snapshot(it) } }
 
-            merge(pushes, resyncs)
+            merge(pushes, resyncs, snapshots)
                 .onEach { intent ->
                     when (intent) {
                         is Intent.Push -> {
@@ -193,24 +270,53 @@ internal class DefaultGameClient(
                             }
                         }
                         // A 0023/0024 resume completed. Re-emit the held state (the 0037 non-destructive
-                        // re-sync) so a collector that had stopped rendering is not stranded. Nothing is
-                        // re-read: there is no upstream verb that reads a GameView. The true current
-                        // snapshot arrives as the bridge's parked-session buffer drains into the
-                        // re-bound socket.
-                        Intent.Resync -> trySend(state)
+                        // re-sync) so a collector that had stopped rendering is not stranded, *and* read
+                        // the board — the buffered pushes the bridge drains into the re-bound socket
+                        // cover a game that moved during the gap, but nothing covers a game that did
+                        // not, and that is precisely when a reconnecting player sees an empty board.
+                        Intent.Resync -> {
+                            trySend(state)
+                            reads.trySend(Unit)
+                        }
+
+                        // A completed read. The snapshot is applied exactly as a pushed one is —
+                        // replacing every field a `GameView` owns and touching none it does not, so the
+                        // outstanding prompt, the last narration and a terminal result all survive it.
+                        // A finished game is left alone: re-applying a board to it would resurrect one
+                        // that no longer exists.
+                        is Intent.Snapshot ->
+                            if (!state.isOver) {
+                                val next = GameViewMapper.apply(state, intent.reply.state)
+                                if (next != state) {
+                                    state = next
+                                    trySend(next)
+                                }
+                            }
                     }
                 }.launchIn(this)
 
-            awaitClose { }
+            // Read the board once as the game opens. Before story 0054 this was impossible — there was
+            // no request the bridge could answer — which is why a client re-opening a running game saw
+            // nothing until the next push.
+            reads.trySend(Unit)
+
+            awaitClose { reads.close() }
         }
 
-    /** An `observeGame` input: a server push to fold, or a resume that re-syncs the current state. */
+    /**
+     * An `observeGame` input: a server push to fold, a resume that re-syncs the current state and
+     * triggers a read, or a completed read carrying the bridge's held snapshot.
+     */
     private sealed interface Intent {
         data class Push(
             val message: ServerMessage,
         ) : Intent
 
         data object Resync : Intent
+
+        data class Snapshot(
+            val reply: GameStateSnapshot,
+        ) : Intent
     }
 
     // --- request plumbing ----------------------------------------------------------------------------

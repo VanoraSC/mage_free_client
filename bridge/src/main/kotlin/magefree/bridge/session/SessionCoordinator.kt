@@ -17,7 +17,11 @@ import magefree.protocol.CreateTable
 import magefree.protocol.GameActionCode
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameFailureCode
+import magefree.protocol.GameStateSnapshot
+import magefree.protocol.GameStateUnavailable
+import magefree.protocol.GameStateUnavailableCode
 import magefree.protocol.GameTypeList
+import magefree.protocol.GetGameState
 import magefree.protocol.GetGameTypes
 import magefree.protocol.GetRoomUsers
 import magefree.protocol.GetServerInfo
@@ -85,6 +89,10 @@ import org.slf4j.LoggerFactory
  *   an empty list. Read-only — no join/create/watch here.
  * - `GetTable` replies the correlated `TableDetail` (summary + per-seat state) for one table, or a typed
  *   `TableNotFound` when the room does not list it / no session is bound (story 0040).
+ * - `GetGameState` replies the correlated `GameStateSnapshot` for one game — the latest snapshot **this
+ *   session** was sent, held by its own [LiveSession] cache — or a typed `GameStateUnavailable` when no
+ *   snapshot exists for it / no session is bound (story 0054). Answered entirely by the bridge: upstream
+ *   has no verb that reads a game.
  * - A second `Login`/`Resume` while a session is bound is ignored (documented choice) with a log line.
  * - Any other/malformed frame → a non-terminal `ProtocolError(UNKNOWN_MESSAGE_TYPE)`.
  *
@@ -156,13 +164,17 @@ public class SessionCoordinator(
             else -> null
         }
 
-    /** Stamps [id] onto a correlated table reply; other messages pass through unchanged. */
+    /** Stamps [id] onto a correlated table/game reply; other messages pass through unchanged. */
     private fun ServerMessage.withRequestId(id: String?): ServerMessage =
         when (this) {
             is TableCreated -> copy(requestId = id)
             is TableActionResult -> copy(requestId = id)
             is TableDetail -> copy(requestId = id)
             is TableNotFound -> copy(requestId = id)
+            // Story 0054's game-state read: both arms are correlated, so a miss is as answerable as a
+            // hit — an uncorrelated not-found would leave the app's waiter blocked until it timed out.
+            is GameStateSnapshot -> copy(requestId = id)
+            is GameStateUnavailable -> copy(requestId = id)
             else -> this
         }
 
@@ -367,6 +379,24 @@ public class SessionCoordinator(
                             val reply =
                                 bound?.live?.tableDetail(message)
                                     ?: TableNotFound(tableId = message.tableId, reason = "no active session on this socket")
+                            ws.sendSerialized<ServerMessage>(reply.withRequestId(message.requestId))
+                        }
+
+                        // Targeted game-state read (story 0054): answered from *this session's* cache of
+                        // the snapshots the bridge already relayed to it — there is no upstream verb to
+                        // ask, and re-joining a running game does not resync, so this is the only way a
+                        // reconnecting client can see the board before the next push. An unbound socket
+                        // replies a typed SESSION_GONE; a session with no snapshot for that game replies
+                        // NO_STATE_YET. Never an empty board: an all-defaults GameStateView is a legal
+                        // snapshot, so a client could not tell it from the truth.
+                        is GetGameState -> {
+                            val reply =
+                                bound?.live?.gameState(message)
+                                    ?: GameStateUnavailable(
+                                        gameId = message.gameId,
+                                        reason = GameStateUnavailableCode.SESSION_GONE,
+                                        detail = "no active session on this socket",
+                                    )
                             ws.sendSerialized<ServerMessage>(reply.withRequestId(message.requestId))
                         }
 

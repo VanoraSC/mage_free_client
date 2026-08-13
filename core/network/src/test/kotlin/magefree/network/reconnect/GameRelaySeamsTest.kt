@@ -14,6 +14,9 @@ import magefree.protocol.GameInformed
 import magefree.protocol.GameOver
 import magefree.protocol.GamePrompted
 import magefree.protocol.GameStarted
+import magefree.protocol.GameStateSnapshot
+import magefree.protocol.GameStateUnavailable
+import magefree.protocol.GameStateUnavailableCode
 import magefree.protocol.GameStateUpdated
 import magefree.protocol.GameStateView
 import magefree.protocol.ServerMessage
@@ -100,6 +103,51 @@ class GameRelaySeamsTest {
             assertNull(
                 "the game fold must decline a correlated-reply type",
                 GameEventFold.fold(GameState(gameId = "g-1"), reply),
+            )
+        }
+
+    @Test
+    fun bothArmsOfTheGameStateReadAreCorrelatedToTheirWaiters() =
+        runTest {
+            // Story 0054. The *miss* matters as much as the hit: an uncorrelated `GameStateUnavailable`
+            // would leave the reconnecting board blocked on its waiter until the request timed out —
+            // indistinguishable from a bridge that never answered, which is the exact failure the read
+            // exists to remove.
+            val pending = PendingRequests()
+            val hitWaiter = pending.register("read-hit")
+            val missWaiter = pending.register("read-miss")
+            val hit = GameStateSnapshot(gameId = "g-1", state = GameStateView(turn = 4), capturedAtEpochMs = 1L, requestId = "read-hit")
+            val miss =
+                GameStateUnavailable(
+                    gameId = "g-1",
+                    reason = GameStateUnavailableCode.NO_STATE_YET,
+                    requestId = "read-miss",
+                )
+
+            val captured = relay(listOf(SessionStatus(SessionStateCode.CONNECTED), hit, miss), pending)
+
+            assertTrue("the snapshot must complete its waiter", hitWaiter.isCompleted)
+            assertSame(hit, hitWaiter.getCompleted())
+            assertTrue("the typed no-state must complete its waiter too", missWaiter.isCompleted)
+            assertSame(miss, missWaiter.getCompleted())
+            assertEquals(1, captured.events.size)
+            assertTrue("a correlated read reply is never a push", captured.pushes.isEmpty())
+        }
+
+    @Test
+    fun aGameStateSnapshotWithNoWaiterChangesNoGameState() =
+        runTest {
+            // A read reply that arrives after its caller gave up must stay inert: it is not a lifecycle
+            // frame, and the *fold* must decline it — otherwise a late read would race the push stream
+            // and could put an older board on screen.
+            val late = GameStateSnapshot(gameId = "g-1", state = GameStateView(turn = 2), requestId = "nobody")
+
+            val captured = relay(listOf(SessionStatus(SessionStateCode.CONNECTED), late), PendingRequests())
+
+            assertEquals("it must not become a session lifecycle event", 1, captured.events.size)
+            assertNull(
+                "the game fold must decline a correlated-reply type",
+                GameEventFold.fold(GameState(gameId = "g-1"), late),
             )
         }
 
