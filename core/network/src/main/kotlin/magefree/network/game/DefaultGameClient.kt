@@ -15,6 +15,7 @@ import magefree.network.BridgeClient
 import magefree.network.ServerPushSource
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameFailureCode
+import magefree.protocol.GamePrompted
 import magefree.protocol.JoinGame
 import magefree.protocol.PlayerActionCode
 import magefree.protocol.QuitMatch
@@ -180,7 +181,13 @@ internal class DefaultGameClient(
                     when (intent) {
                         is Intent.Push -> {
                             val next = GameEventFold.fold(state, intent.message)
-                            if (next != null && next != state) {
+                            // An unchanged state is not re-emitted — every consumer would recompose for
+                            // nothing. A **prompt** is the deliberate exception: when the server refuses
+                            // an answer it re-asks with the very same view, so the folded state can be
+                            // byte-identical while a real, new question is outstanding. Swallowing that
+                            // emission would leave a consumer waiting for an event that never comes
+                            // while the server waits for an answer — a deadlock, not a redundancy.
+                            if (next != null && (next != state || intent.message is GamePrompted)) {
                                 state = next
                                 trySend(next)
                             }

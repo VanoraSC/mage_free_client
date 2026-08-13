@@ -131,6 +131,29 @@ class ObserveGameTest {
         }
 
     @Test
+    fun aRepeatedPromptStillEmitsSoARefusedAnswerCannotDeadlockTheGame() =
+        runTest {
+            // The exception to the rule above, and the reason it exists: when the server refuses an
+            // answer it re-asks with the *same* view, so the folded state is byte-identical while a real,
+            // new question is outstanding. Swallowing that emission leaves a consumer waiting for an
+            // event that never comes while the server waits for an answer.
+            val fake = FakeBridgeClient()
+            val prompt = GamePrompted(gameId = GAME, state = view(turn = 1), prompt = AskPrompt("Mulligan?"))
+
+            clientOver(fake).observeGame(GAME, seed).test {
+                assertEquals(seed, awaitItem())
+
+                fake.emitPush(prompt)
+                assertEquals(GamePrompt.Ask("Mulligan?"), awaitItem().prompt)
+
+                fake.emitPush(prompt)
+                assertEquals("a re-ask must reach the consumer", GamePrompt.Ask("Mulligan?"), awaitItem().prompt)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun aResumeReEmitsTheCurrentStateSoTheBoardIsNotStranded() =
         runTest {
             val fake = FakeBridgeClient()
