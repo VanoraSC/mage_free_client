@@ -62,6 +62,39 @@ import java.util.concurrent.CopyOnWriteArrayList
  * the board's seats, vitals, hand, turn, prompt and **priority-in-both-directions** are drawn from —
  * and no further. Turn advance and a populated battlefield need a client that can answer, which is
  * story 0056.
+ *
+ * ### What a real run produced (2026-08-13, `emulator-5554` + `docker-bridge-1`)
+ * ```
+ * [driver] table 'story0055_board' created
+ * [driver] WAITING FOR THE APP to join from the lobby…
+ * [driver] driver seated as it_ae10e9b9 (second)
+ * [driver] both seats filled: [Player/Human, it_ae10e9b9/Human]
+ * [driver] match starting; gameId=e086f1be-…
+ * [driver] STATE turn=1 … prompt=Target('Select a starting player') seats=[…hand=0 lib=60…]
+ * [driver] answering required Target 'Select a starting player' with 3227a57c-…
+ * [driver] STATE turn=1 … hand=7 … seats=[…hand=7 lib=53…] msg=Waiting for <font …>Player</font>
+ * ```
+ * and the app's board, at that moment, drew: opponent `20 it_ae10e9b9 Lib 53 · Hand 7 · GY 0 ·
+ * Exile 0 · Wins 0/1`, both battlefields on `No permanents`, `Turn 1 · … · turn holder unknown`,
+ * **"The server is waiting on you"**, `Stack · empty`, `Server asks: Mulligan down to 6 cards?`
+ * (the server's HTML stripped off), `Exile empty`, `In hand 7`, and — expanded — seven Forests.
+ * Earlier in the same sequence, while the server was asking the *driver*, it drew
+ * **"Waiting for opponent"** with `Waiting for it_…` as the narration: the indicator, in both
+ * directions, driven entirely from this side.
+ *
+ * **Two things a run cannot show here, and why.**
+ * 1. **A moving game.** The mulligan block above. Battlefields, the stack filling and clearing, and
+ *    turn/phase advance are unreachable until 0056 can answer.
+ * 2. **Card art.** Not the board's doing: this emulator has **no external egress**
+ *    (`nc 10.0.2.2 8080` answers the bridge; `nc <external host> 80` answers nothing), so every art
+ *    request fails and the design-system placeholder renders — which is the correct degradation, and
+ *    `:feature:cards`' own card browser shows exactly the same placeholders on the same device. A
+ *    *second*, independent problem is waiting behind it: Scryfall answers **HTTP 400
+ *    `generic_user_agent`** to OkHttp's default `User-Agent` and 200 to a descriptive one, and
+ *    `CardImageLoader` sets none — so art would still not load even with egress. Both are recorded in
+ *    the story report; neither is inside this story's guardrails to fix.
+ *
+ * **Seat order is load-bearing here** — see the comment on the deferred `joinTable` below.
  */
 class BoardOpponentDriverIT {
     @Test
@@ -109,14 +142,25 @@ class BoardOpponentDriverIT {
                             .collect { tableStates += it }
                     }
 
+                say("WAITING FOR THE APP to join '$TABLE_NAME' from the lobby…")
+
+                // **The driver seats itself second, on purpose.** XMage picks who chooses the starting
+                // player with `players[RandomUtil.nextInt(players.length)]` over the seats in join
+                // order, and that player is asked a *required* target prompt before the deal. When the
+                // app is picked, a read-only board cannot answer it and the game never even deals —
+                // which is what happened on three runs in a row while the driver sat down first.
+                // Joining after the app puts the app in slot 0 and this driver in slot 1, which flips
+                // which seat the same draw lands on and lets the run reach the opening hand.
+                awaitTable(tableStates, "the app to take a seat", APP_JOIN_TIMEOUT_MS) {
+                    it != null && it.seats.count { seat -> seat.isOccupied } >= 1
+                }
                 session.tables
                     .joinTable(created.tableId, username, deck, playerType = SeatPlayerType.Human)
                     .getOrThrow()
-                say("driver seated as $username; WAITING FOR THE APP to join '$TABLE_NAME' from the lobby…")
+                say("driver seated as $username (second)")
 
-                // The app now signs in on the emulator, opens the lobby, joins this table and submits a
-                // deck. The server reports readiness itself (story 0040) — nothing here invents it.
-                awaitTable(tableStates, "the app to take the second seat", APP_JOIN_TIMEOUT_MS) {
+                // The server reports readiness itself (story 0040) — nothing here invents it.
+                awaitTable(tableStates, "the table to become ready to start", APP_JOIN_TIMEOUT_MS) {
                     it?.isReadyToStart == true
                 }
                 say("both seats filled: ${tableStates.last().seats.map { "${it.name}/${it.playerType}" }}")
@@ -216,6 +260,12 @@ class BoardOpponentDriverIT {
                 is GamePrompt.Unrecognised -> Unit
             }
         }
+        // End the game deliberately rather than by walking away: `GAME_OVER` is the only thing that
+        // populates the board's result region, and conceding from *this* side is the one way a
+        // read-only board can be shown a real terminal result.
+        say("conceding to end the game — the app should show the server's own end-of-game line")
+        games.concede(gameId)
+        delay(END_PAUSE_MS)
         say("run window over")
     }
 
@@ -348,6 +398,9 @@ class BoardOpponentDriverIT {
 
         /** How long to keep playing this side once the game is up. */
         const val RUN_FOR_MS = 420_000L
+
+        /** A beat after the concede so the terminal push reaches the app before teardown. */
+        const val END_PAUSE_MS = 20_000L
 
         /** A deliberate beat between answers so each change is watchable on the emulator. */
         const val ANSWER_PAUSE_MS = 3_000L
