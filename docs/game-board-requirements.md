@@ -347,10 +347,41 @@ reached it deliberately, and this is what arrives:
 nothing**, and cannot choose *which* creatures attack. The ids are in the projection and there is no
 surface for them — the same shape as the defect 0057 shipped and had caught on a device.
 
-**Still unmeasured:** the *blocking* prompt, and therefore how a blocker is paired with an attacker.
-Do not specify pairing until it has been seen.
+### 7.3 What the server asks for blockers — measured, 2026-08-14
 
-### 7.3 The harness stall, diagnosed
+```
+[opp] step=DeclareAttackers turn=8 prompt=Select msg='Select attackers'
+      options.ids = {possibleAttackers=2}
+[app] step=DeclareBlockers turn=8 prompt=Select msg='Select blockers'
+      options.text = [queryType]          <- no specialButton
+      options.ids  = {possibleBlockers=2} -> [Goblin Token, Goblin Token]
+      playable     = 0
+```
+
+**Findings.**
+- Blocking mirrors attacking: a **`GamePrompt.Select`** with the literal message `Select blockers`,
+  carrying **`possibleBlockers`**. `playable` is empty here too.
+- **There is no `specialButton` for blocking.** Attacking gets "All attack"; blocking gets no
+  equivalent shortcut, so blocking is inherently per-creature.
+- Today's board offers `[Pass priority]` with `pickable=0` — **the viewer cannot block at all.**
+
+**Combat groups are per-attacker.** Two attackers produced **two** groups, not one:
+
+```
+combat groups=2
+group defender='app_be158b' attackers=1 blockers=0
+group defender='app_be158b' attackers=1 blockers=0
+```
+
+So `CombatGroup` reads *"against this defender, this attacker, blocked by these"* — the defender is
+repeated per group rather than grouping attackers under one defender.
+
+**Still unmeasured — do not specify it until it has been seen.** Whether picking a blocker triggers a
+**follow-up prompt asking which attacker it blocks**. The run's budget expired at the blocking prompt
+without answering it. This is the crux of the pairing problem below, so the combat story must measure it
+before designing the interaction.
+
+### 7.4 The harness stall, diagnosed
 
 `docs/live-test-decklists.md` recorded a stall as **unsolved** — *"after certain answers the game stops
 pushing to us altogether"*. It is not the server going quiet. Upstream asks
