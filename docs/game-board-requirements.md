@@ -422,18 +422,32 @@ is invented for the player to learn — it is §5.2's tap model with a condition
 to work live (§7.2), so it stays — but it commits the whole team, so it routes through the same
 confirm step as targeting (§16.4). There is no equivalent for blocking, and none should be invented.
 
-**⚠️ This decision has an unmeasured dependency — resolve it before building.** It is only free if the
-**server** behaves the same way: auto-assigning when unambiguous and asking when not. §7.2/§7.3 did
-**not** measure whether picking an attacker triggers a *"which defender?"* follow-up (the probe's board
-had only one legal defender), nor whether picking a blocker triggers a *"which attacker?"* follow-up.
+**✅ The dependency is resolved: upstream already behaves exactly this way.** Read from
+`mage.player.human.HumanPlayer` in `mage-player-human-1.4.60.jar` — the plugin the pinned reference
+server actually loads. Both directions share one shape: *build the set of legal pairings; if it has
+exactly one member, assign it silently; otherwise ask.*
 
-- If upstream asks only when ambiguous, the board renders its follow-up and this design costs nothing.
-- If upstream **always** asks, then answering a one-option question on the player's behalf is a
-  **policy decision**, and it belongs behind the same seam as auto-pass (§14.1) — not scattered into
-  combat code.
+| | Method | One candidate | More than one |
+|---|---|---|---|
+| **Attacking** | `selectDefender(Set, attackerId, game)` | `declareAttacker(attacker, theOnlyDefender, …)` and returns — **no prompt** | builds `TargetDefender` and asks |
+| **Blocking** | `selectBlockers(…)` | takes the single attacker from the set and assigns it | asks with the literal message **`Select attacker to block`** |
 
-Measure both before designing the interaction further. A deck with a planeswalker gives the
-multi-defender case; two attackers into one blocker gives the other.
+The blocking set is not "every attacker" — it is filtered by `CombatGroup.canBlock(permanent, game)`
+first, so the question is only asked when this blocker genuinely *could* block more than one.
+
+**What this means for the story.** §7.5's design costs nothing: the board taps the creature, and when
+the server asks a pairing question it renders it. **No policy seam is needed** — the "only when
+ambiguous" behaviour is upstream's, not ours, so nothing answers a one-option question on the player's
+behalf. Both follow-ups arrive through `fireSelectTargetEvent`, i.e. as ordinary **`GAME_TARGET`
+prompts**, which 0057's targeting machinery already answers with `chooseTarget`.
+
+**Two related findings from the same read:**
+- **`selectDefenderForAllAttack(Set, game)`** backs the "All attack" special button: it asks **once**
+  for a defender for the whole team, via `TargetDefender`. So the shortcut is not "attack the face" —
+  with several defenders it still asks, once, which supports keeping it behind §16.4's confirmation.
+- **`getCreaturesForcedToAttack()`** is consulted first: a creature forced to attack has a
+  **restricted defender set**, so the candidates for it may be narrower than the legal defenders
+  generally. Never widen the server's set.
 
 ### 7.6 The harness stall, diagnosed
 

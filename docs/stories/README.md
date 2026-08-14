@@ -49,6 +49,23 @@ defect ship: every one of the five defects found in the 2026-08 hardening pass h
    Every defect in the hardening pass was found this way; none was found by its implementer. Unit
    tests stay with the implementer (they benefit from implementation knowledge); it is **behavioural
    verification** that must be independent.
+
+   **How the independent pass is done (Pete, 2026-08-14).** Two automated halves, plus a human one:
+   - the **hermetic gate**, including Compose tests via Robolectric in `src/testDebug` — device-only
+     tests do not run pre-merge, which is how an entire epic once stayed unmounted, and it is what
+     caught a control that rendered, reported a click, and did nothing;
+   - a **live IT driven through the real ViewModel** against the bridge, so production logic is
+     exercised end to end without a screen;
+   - **eyes-on, by Pete.** The reviewer hands over a short numbered checklist of what to look at on
+     the device; the story is not done until Pete has confirmed it.
+
+   **Do not drive the app's UI programmatically** to satisfy this. `adb input tap` + `uiautomator`
+   loops were tried at length and the cost/benefit collapsed: taps landing during recomposition, panel
+   geometry shifting between dump and tap, the dump itself disturbing the tap, an install silently
+   resetting app data. Installing the APK and confirming it launches is fine; long tap-sequences to
+   reach a game state are not. This moves *where* verification effort goes, and relaxes nothing —
+   both blocking defects of the 0057/0058 pass were found by eyes on a device while the suites were
+   green, which is exactly why the human half stays.
 4. **Commit incrementally.** Commit per defect or per coherent step, not once at the end. Long stories
    get interrupted; an interruption should cost minutes, not the whole story.
 5. **Unexpectedly absent.** Before relying on an upstream field, confirm something actually **writes**
@@ -83,7 +100,8 @@ Every story uses these sections:
 7. **Testing & verification** — unit and (where relevant) integration tests, plus exact
    commands. Correctness is verified against a locally-run XMage server, never invented data.
    Name which tests must be **proven failing first** (standard 1), and — for user-visible work —
-   what the **independent verification** pass checks (standard 3).
+   what the **independent verification** pass checks (standard 3), including the **eyes-on checklist**
+   handed to Pete.
 8. **Acceptance criteria** — a checklist that defines done.
 9. **References** — files and docs to read.
 
@@ -386,7 +404,7 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0056 | Card art: send a User-Agent | 0031, 0043 | **App-wide defect.** `CardImageLoader` sends no `User-Agent`, and Scryfall rejects OkHttp's default with HTTP 400 — so card art has **never** loaded, anywhere: browser, deck builder, the deck-scoped offline download, and the board. One line, plus a test that inspects the real outgoing request. |
 | 0057 | Board interaction: casting, targeting, cancel | 0055, 0056, 0052, 0054 | Floating controls (never modals) + visibility toggle, tap-select-confirm, targeting with per-pick sends and a confirm, mana by tapping lands, cascading cancel, manual priority through a single pass-policy seam. Unblocks what 0055 could not verify live. |
 | 0058 | Creature status and counters | 0051, 0052, 0055 | **Defect + missing data.** The board renders `0/0 · Summoning sick` under a land, because P/T and summoning sickness are drawn unconditionally — and the bridge drops `cardTypes`, `isCreature()` and `counters` from `CardView` entirely. Creature-ness is game state, not printing (Earthbend, Ensoul Artifact, crewed Vehicles), so the server's own answer must be carried and rendered, along with counters. |
-| — | *Combat* | 0057 | Attackers and blockers using the same tap model. To be specified after 0057. |
+| 0061 | Combat: declaring attackers and blockers | 0057, 0058, 0055 | Combat cannot be played today: a declaration is projected as ordinary priority with `pickableObjectIds` empty, so the board offers "attack with everything or nothing" and **no way to block**. `playable` is empty during a declaration — the creatures come only from `possibleAttackers`/`possibleBlockers`, which the bridge already carries. Pairing questions are upstream's own (`selectDefender` / `Select attacker to block`), asked only when ambiguous, and arrive as ordinary target prompts 0057 already answers. |
 | 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
 
 ## Known issues (accepted, not scheduled)
@@ -432,18 +450,19 @@ bridge). Stories **0001–0022 are complete and merged**:
 10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038, with 0040 + 0041 fixing it end to end;
     **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
-11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 built; **0058 outstanding**. ⚠️
+11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 built; **0061 outstanding**. ⚠️
 
 **Current state — a game is playable from the app.** Hosting works end to end, and the board renders a
 live game and answers the server's prompts: a full turn has been played on-device against an AI —
 mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and turn advance.
 
-**Known gaps.** **0058** (creature status and counters) is specified and is the next board work:
-noncreature permanents render a meaningless `0/0`, and the bridge drops card types and counters, so
-counters cannot be shown at all. **Combat declaration** is unspecified and is the next functional gap
-after it. Two Epic 7 defects found while hosting by hand are now specified as **0059** (deck submission
-offered in states where upstream ignores it) and **0060** (the host form hardcodes 7 of the server's 52
-deck types). Neither blocks play: a match starts because `joinTable` binds the host's deck at creation.
+**Known gaps.** **0061** (combat declaration) is specified and is the next board work: combat cannot be
+played at all today — the board offers "attack with everything or nothing" and no way to block. Its
+prompt shapes and pairing behaviour are fully measured (requirements §7.2–§7.5), so it needs no
+protocol or bridge work. Two Epic 7 defects found while hosting by hand are specified as **0059** (deck
+submission offered in states where upstream ignores it) and **0060** (the host form hardcodes 7 of the
+server's 52 deck types). Neither blocks play: a match starts because `joinTable` binds the host's deck
+at creation.
 
 **Beyond that:** **EPIC-08** (tournaments / draft / sealed) is the remaining unstarted
 branch. The 10 → 9 → 7 ordering was deliberate: cards and decks came first. Epic 5's notifications
