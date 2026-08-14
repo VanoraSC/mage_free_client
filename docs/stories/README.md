@@ -337,6 +337,8 @@ startMatch/watchTable` (+ pushed table/game-start callbacks). Joining **submits 
 | 0039 | Live table-action coverage | 0036, 0022 | An env-gated `TableRelayIT` driving a real create → seat AI → seat self → start → `MatchStarting` round trip against the reference server, plus a typed-decline case. ✅ |
 | 0040 | Table seat state | 0036, 0037, 0027 | **Defect fix:** the room's seats come from `SeatView` via a targeted `GetTable` (nothing sends the `SeatUpdated` the fold expects), and start is gated on the server's own `READY_TO_START`. |
 | 0041 | Host seating flow | 0040, 0037, 0033/0035 | **Defect fix:** hosting seats the configured AI players and the host (each submitting a deck, deck picked offline with legality), removing the table if any step fails — mirroring upstream's `NewTableDialog`. |
+| 0059 | Deck submission: offer it only where it works | 0036, 0037, 0038 | **Defect fix.** The room's "Submit your deck" is declined every time and reports only "the server declined the action". Upstream's `TableController` makes `updateDeck` a **no-op** outside `SIDEBOARDING`/`CONSTRUCTING`, and routes `submitDeck` to a null tournament outside sideboarding — these are sideboarding verbs offered during waiting. Also: the decline reason exists but arrives on a channel the bridge does not correlate. |
+| 0060 | Table types come from the server | 0036, 0037, 0038 | **Defect fix.** The host form hardcodes 7 deck types; the reference server advertises **52** (plugin-loaded, named in server config), omitting `Constructed - Freeform Unlimited` and every Commander/Brawl/Block format. `SessionImpl` already exposes `getDeckTypes`/`getGameTypes`/`getPlayerTypes` — the lists are simply never asked for. |
 
 ---
 
@@ -427,7 +429,8 @@ bridge). Stories **0001–0022 are complete and merged**:
 
 9. **Epic 9 (deck builder):** 0033 → 0034 → 0035. ✅ (all deck ops offline; only art is networked)
 
-10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038, with 0040 + 0041 fixing it end to end. ✅
+10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038, with 0040 + 0041 fixing it end to end;
+    **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
 11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 built; **0058 outstanding**. ⚠️
 
@@ -438,9 +441,9 @@ mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and 
 **Known gaps.** **0058** (creature status and counters) is specified and is the next board work:
 noncreature permanents render a meaningless `0/0`, and the bridge drops card types and counters, so
 counters cannot be shown at all. **Combat declaration** is unspecified and is the next functional gap
-after it. Two defects outside the board are recorded but unspecified: the table room's `submitDeck` is
-declined by the server every time (a match only starts because `joinTable` binds the host's deck at
-creation), and the host form offers no `Constructed - Freeform Unlimited`.
+after it. Two Epic 7 defects found while hosting by hand are now specified as **0059** (deck submission
+offered in states where upstream ignores it) and **0060** (the host form hardcodes 7 of the server's 52
+deck types). Neither blocks play: a match starts because `joinTable` binds the host's deck at creation.
 
 **Beyond that:** **EPIC-08** (tournaments / draft / sealed) is the remaining unstarted
 branch. The 10 → 9 → 7 ordering was deliberate: cards and decks came first. Epic 5's notifications
