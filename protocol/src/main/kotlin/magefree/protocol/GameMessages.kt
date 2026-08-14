@@ -5,6 +5,8 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
@@ -753,6 +755,21 @@ public data class GamePlayerView(
  * A card as the server rendered it, projected from `mage.view.CardView`. Deliberately thin: enough to
  * identify a printing ([setCode] + [collectorNumber], the pair story 0030's catalog resolves art by) and
  * to render a text-only representation. Anything richer is additive.
+ *
+ * **What a card *currently is* (story 0058).** [cardTypes], [creature] and [counters] are the server's
+ * own answer about the live game object, not about the printing: Earthbend makes a land a creature,
+ * Ensoul Artifact makes an artifact one, crewing makes a Vehicle one until end of turn — and upstream
+ * recomputes all three for every snapshot. They are what lets a client render "is this a creature right
+ * now" without parsing [typeLine], which would be rules interpretation in the client.
+ *
+ * @property power / @property toughness the **current** values, after continuous effects, as *strings* —
+ *   `*` is a real value (Tarmogoyf, Mortivore), so they are never numbers on this wire.
+ * @property creature upstream `CardView.isCreature()`, which is `cardTypes.contains(CREATURE)` computed
+ *   over the live object (verified against `mage-common-1.4.60`). Carried as its own field rather than
+ *   re-derived downstream, so the server keeps owning the predicate.
+ * @property counters every counter on the object, by name and count. **Not battlefield-only**: upstream
+ *   populates them on `CardView` (from `Card.getCounters(game)`) as well as on `PermanentView`, so a
+ *   card outside the battlefield can carry them too.
  */
 @Serializable
 public data class GameCardView(
@@ -766,7 +783,77 @@ public data class GameCardView(
     val toughness: String? = null,
     val rules: List<String> = emptyList(),
     val faceDown: Boolean = false,
+    val cardTypes: List<CardTypeCode> = emptyList(),
+    val creature: Boolean = false,
+    val counters: List<GameCounterView> = emptyList(),
 )
+
+/**
+ * One counter on a card or permanent, projected from `mage.view.CounterView` — which is exactly
+ * `{name, count}`, so there is nothing richer to model.
+ *
+ * **Generic by construction.** `+1/+1` and `-1/-1` are the common ones, but loyalty, charge, oil, stun
+ * and hundreds more exist and new ones ship with every set, so the kind is carried as the server's own
+ * [name] string and never as a closed set the app would have to keep enumerating.
+ */
+@Serializable
+public data class GameCounterView(
+    val name: String,
+    val count: Int = 0,
+)
+
+/**
+ * A card type as the server currently reports it (`mage.constants.CardType`), *after* continuous
+ * effects — an animated land really does carry [CREATURE] here.
+ *
+ * Carried as the structured list rather than only as [GameCardView.creature] so that later stories
+ * (subtypes, supertypes, "why is this a creature") extend the same field instead of re-deriving from a
+ * display string.
+ *
+ * **Unknown values decode to [UNKNOWN] rather than throwing** (see [Serializer]). The set below is
+ * upstream's set at `mage-common-1.4.60`; upstream adds types (BATTLE and DUNGEON are recent), and a
+ * newer bridge sending a type this build has never heard of must cost one list entry, not the whole
+ * snapshot — the list form of the additive-compatibility promise in [ProtocolVersion].
+ */
+@Serializable(with = CardTypeCode.Serializer::class)
+public enum class CardTypeCode {
+    ARTIFACT,
+    BATTLE,
+    CONSPIRACY,
+    CREATURE,
+    DUNGEON,
+    ENCHANTMENT,
+    INSTANT,
+    KINDRED,
+    LAND,
+    PHENOMENON,
+    PLANE,
+    PLANESWALKER,
+    SCHEME,
+    SORCERY,
+    VANGUARD,
+
+    /** A type this build does not know — either upstream added one, or the server sent nothing usable. */
+    UNKNOWN,
+    ;
+
+    internal object Serializer : KSerializer<CardTypeCode> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("magefree.protocol.CardTypeCode", PrimitiveKind.STRING)
+
+        override fun serialize(
+            encoder: Encoder,
+            value: CardTypeCode,
+        ) {
+            encoder.encodeString(value.name)
+        }
+
+        override fun deserialize(decoder: Decoder): CardTypeCode {
+            val raw = decoder.decodeString()
+            return entries.firstOrNull { it.name == raw } ?: UNKNOWN
+        }
+    }
+}
 
 /**
  * A permanent on the battlefield, projected from `mage.view.PermanentView` — a [card] plus the
