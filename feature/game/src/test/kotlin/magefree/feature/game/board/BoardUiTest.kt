@@ -2,8 +2,10 @@ package magefree.feature.game.board
 
 import magefree.cards.art.CardArtFace
 import magefree.cards.art.CardArtSize
+import magefree.network.game.CardType
 import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
+import magefree.network.game.GameCounter
 import magefree.network.game.GameMessage
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
@@ -343,7 +345,16 @@ class BoardUiTest {
                                     battlefield =
                                         listOf(
                                             GamePermanent(
-                                                card = card("y-2", "Grizzly Bears").copy(power = "2", toughness = "2"),
+                                                // A bear really is a creature in the server's snapshot, and the
+                                                // fixture has to say so: a fake that differs from production is a
+                                                // defect in the fake.
+                                                card =
+                                                    card("y-2", "Grizzly Bears").copy(
+                                                        power = "2",
+                                                        toughness = "2",
+                                                        isCreature = true,
+                                                        cardTypes = listOf(CardType.Creature),
+                                                    ),
                                                 isTapped = true,
                                                 hasSummoningSickness = true,
                                                 damage = 1,
@@ -360,6 +371,138 @@ class BoardUiTest {
         assertTrue(bear.hasSummoningSickness)
         assertEquals(1, bear.damage)
         assertEquals("2/2", bear.card.powerToughness)
+    }
+
+    // ---- story 0058: what a permanent currently *is* -----------------------------------------------
+
+    @Test
+    fun `a land that is not a creature shows no power toughness and no summoning sickness`() {
+        // The defect this story exists to fix, seen on device: "0/0 · Summoning sick" under a Mountain.
+        // Upstream really does send "0"/"0" for a noncreature permanent and really does set summoning
+        // sickness for anything that arrived this turn — so both must be gated on what the card *is*.
+        val mountain =
+            card("o-1", "Mountain").copy(power = "0", toughness = "0", isCreature = false, cardTypes = listOf(CardType.Land))
+
+        val permanent = onlyPermanent(GamePermanent(card = mountain, hasSummoningSickness = true))
+
+        assertNull("a land has no power or toughness to show", permanent.card.powerToughness)
+        assertFalse("summoning sickness says nothing about a land", permanent.showsSummoningSickness)
+        assertTrue("the server's own fact is still carried — only the rendering is gated", permanent.hasSummoningSickness)
+    }
+
+    @Test
+    fun `a land an effect has animated shows its power toughness and can be summoning sick`() {
+        // The mirror of the test above, and the one that stops "hide P/T for lands" from passing: an
+        // Earthbent Mountain is a land AND a creature, and a board that reads the printed type gets it
+        // wrong. Summoning sickness is real here too — an animated land that came under your control
+        // this turn genuinely cannot attack.
+        val earthbent =
+            card("o-1", "Mountain").copy(
+                power = "0",
+                toughness = "3",
+                isCreature = true,
+                cardTypes = listOf(CardType.Land, CardType.Creature),
+            )
+
+        val permanent = onlyPermanent(GamePermanent(card = earthbent, hasSummoningSickness = true))
+
+        assertEquals("0/3", permanent.card.powerToughness)
+        assertTrue(permanent.showsSummoningSickness)
+    }
+
+    @Test
+    fun `a creature that has lost its creature status stops showing power toughness`() {
+        // Turgid Dross / an ended Crew: the same object, the next snapshot. Nothing is remembered.
+        val vehicle = card("y-2", "Smuggler's Copter").copy(power = "3", toughness = "3", cardTypes = listOf(CardType.Artifact))
+
+        val crewed = onlyPermanent(GamePermanent(card = vehicle.copy(isCreature = true)))
+        val uncrewed = onlyPermanent(GamePermanent(card = vehicle.copy(isCreature = false)))
+
+        assertEquals("3/3", crewed.card.powerToughness)
+        assertNull("the effect ended, so the board must stop calling it a creature", uncrewed.card.powerToughness)
+    }
+
+    @Test
+    fun `a star power is shown exactly as the server sent it`() {
+        val goyf = card("y-2", "Tarmogoyf").copy(power = "*", toughness = "1+*", isCreature = true)
+
+        assertEquals("*/1+*", onlyPermanent(GamePermanent(card = goyf)).card.powerToughness)
+    }
+
+    @Test
+    fun `a creature the server sent no power for shows none`() {
+        // Defensive, and the reason the check is on the strings rather than on `isCreature` alone: a
+        // half-filled view must not render "null/2".
+        val odd = card("y-2", "Mystery").copy(power = null, toughness = "2", isCreature = true)
+
+        assertNull(onlyPermanent(GamePermanent(card = odd)).card.powerToughness)
+    }
+
+    @Test
+    fun `counters are carried by name and count, whatever the kind`() {
+        val ballista =
+            card("y-2", "Walking Ballista").copy(
+                power = "2",
+                toughness = "2",
+                isCreature = true,
+                counters = listOf(GameCounter("+1/+1", 2), GameCounter("stun", 1), GameCounter("oil", 3)),
+            )
+
+        val counters = onlyPermanent(GamePermanent(card = ballista)).card.counters
+
+        assertEquals(listOf("+1/+1", "stun", "oil"), counters.map { it.name })
+        assertEquals(listOf(2, 1, 3), counters.map { it.count })
+        assertEquals(listOf("+1/+1 ×2", "stun ×1", "oil ×3"), counters.map { it.label })
+    }
+
+    @Test
+    fun `a permanent with no counters carries none`() {
+        assertTrue(onlyPermanent(GamePermanent(card = card("y-2", "Grizzly Bears"))).card.counters.isEmpty())
+    }
+
+    @Test
+    fun `counters are not battlefield-only - a card in hand carries the ones the server sent`() {
+        // `CardView` carries counters, not just `PermanentView`, so the board renders them wherever the
+        // data is present rather than assuming a zone.
+        val state = twoSeatState(viewerFirst = false)
+        val loyal = card("h-3", "Relic of Progenitus").copy(counters = listOf(GameCounter("charge", 4)))
+
+        val board = BoardUi.from(state.copy(hand = listOf(loyal)))
+
+        assertEquals(
+            listOf("charge ×4"),
+            board.hand.cards
+                .single()
+                .card.counters
+                .map { it.label },
+        )
+    }
+
+    @Test
+    fun `a noncreature that is somehow summoning sick still shows its counters`() {
+        val enchantment =
+            card("y-2", "Luminarch Ascension").copy(
+                power = "0",
+                toughness = "0",
+                cardTypes = listOf(CardType.Enchantment),
+                counters = listOf(GameCounter("quest", 3)),
+            )
+
+        val permanent = onlyPermanent(GamePermanent(card = enchantment, hasSummoningSickness = true))
+
+        assertNull(permanent.card.powerToughness)
+        assertFalse(permanent.showsSummoningSickness)
+        assertEquals(listOf("quest ×3"), permanent.card.counters.map { it.label })
+    }
+
+    /** The viewer's single permanent, for the story-0058 cases that only care about one card. */
+    private fun onlyPermanent(permanent: GamePermanent): PermanentUi {
+        val state = twoSeatState(viewerFirst = false)
+        val board =
+            BoardUi.from(
+                state.copy(players = state.players.map { if (it.isViewer) it.copy(battlefield = listOf(permanent)) else it }),
+            )
+        return board.viewerSeat!!.battlefield.single()
     }
 
     @Test

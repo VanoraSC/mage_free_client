@@ -580,6 +580,28 @@ internal fun CardDetailOverlay(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                // What the card **currently** is, which the type line above cannot say: the printed line
+                // still reads "Basic Land — Mountain" while an effect has it attacking as a 0/3. Present
+                // only for a creature, per [CardUi.powerToughness].
+                card.powerToughness?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                    )
+                }
+                // The permanent's own counter row is one ellipsised line 76dp wide, so this is where a
+                // player actually reads four counters. Same generic name/count rendering.
+                if (card.counters.isNotEmpty()) {
+                    Text(
+                        text = card.counters.joinToString(" · ") { it.label },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 card.display.oracleText?.let {
                     Text(
                         text = it,

@@ -37,8 +37,11 @@ import magefree.network.game.TurnPhase
  * | "nothing you can play" note | `GameState.playable` **while** `viewerHasPriority` (see [PriorityUi]) |
  * | the per-card "server offered this" mark | `GameState.playable` **while** `viewerHasPriority` (see [PermanentUi.isOfferedByServer]) |
  * | attacking / blocking marks | `GameState.combat[].attackerIds` / `blockerIds` |
- * | tapped / summoning sick / damage | `GamePermanent.isTapped` / `hasSummoningSickness` / `damage` |
- * | card name, cost, type, P/T, rules | `GameCard.name` / `manaCost` / `typeLine` / `power` / `toughness` / `rules` |
+ * | tapped / damage | `GamePermanent.isTapped` / `damage` |
+ * | summoning sick | `GamePermanent.hasSummoningSickness` **and** `GameCard.isCreature` (see [PermanentUi.showsSummoningSickness]) |
+ * | card name, cost, type, rules | `GameCard.name` / `manaCost` / `typeLine` / `rules` |
+ * | power/toughness | `GameCard.power` / `toughness`, shown only when `GameCard.isCreature` (see [CardUi.powerToughness]) |
+ * | counters | `GameCard.counters` — name and count, on a permanent *or* a card in another zone |
  * | card **art** | `GameCard.setCode` + `GameCard.collectorNumber` -> 0031's [CardArtRequest] |
  * | the prompt notice (read-only) | `GameState.prompt.message` |
  * | the narration line | `GameState.lastMessage.text` |
@@ -61,6 +64,16 @@ import magefree.network.game.TurnPhase
  *   nothing is exiled, so [BoardUi.exiledCardCount] sums the cards. (`GamePlayer.exileCount` is a
  *   different thing and is safe: the bridge maps it from `PlayerView.exile.size`, a set of *cards*.)
  * - **`manaCost` is null for lands** — carried through as null, never rendered as an empty cost.
+ * - **Creature-ness is game state, not printing** (story 0058). Earthbend animates a land, Ensoul
+ *   Artifact an artifact, crewing a Vehicle — all ordinary play. The board asks `GameCard.isCreature`
+ *   (upstream's own `CardView.isCreature()`) and never the printed type or `typeLine`; parsing that
+ *   display string is what would put rules interpretation in the client.
+ * - **A noncreature permanent's power/toughness are `"0"`, not absent**, and `hasSummoningSickness` is
+ *   set for *any* permanent that arrived this turn. Both are honest server facts that mean nothing off
+ *   a creature, which is why both are gated on `isCreature` here — the board renders "0/0 · Summoning
+ *   sick" under a Mountain otherwise, as it did on device before this story.
+ * - **`power`/`toughness` are strings and stay strings** — `*` is a real value (Tarmogoyf, Mortivore).
+ *   Nothing parses them; they are only checked for presence.
  * - **Clocks read 0 on an untimed table** — [ClockUi.of] returns null there, so nothing renders
  *   "0 seconds left".
  * - **Server narration is HTML** (`<font color='#20B2AA'>Computer</font>`) — [stripServerMarkup] takes
@@ -226,7 +239,18 @@ data class PermanentUi(
     val isAttacking: Boolean,
     val isBlocking: Boolean,
     val isOfferedByServer: Boolean,
-)
+) {
+    /**
+     * Whether the board says "summoning sick" — which it does **only for a creature**.
+     *
+     * [hasSummoningSickness] itself is kept exactly as the server sent it, because it is exactly what
+     * the server sent: upstream sets it for *any* permanent that came under its controller's control
+     * this turn, land and artifact and enchantment alike. On those it means nothing — there is nothing
+     * it stops them doing — and a board that printed it under a Mountain (which this one did) is stating
+     * a rule that does not exist. The fact is the server's; whether it is worth saying is the board's.
+     */
+    val showsSummoningSickness: Boolean get() = hasSummoningSickness && card.isCreature
+}
 
 /** One card in the viewer's hand (`GameState.hand`). */
 data class HandCardUi(
@@ -401,14 +425,32 @@ data class ClockUi(
  *   0030/0031 identify a printing. Null when the server sent no printing, or when the card is face
  *   down: a face-down card's art must not be fetched, because fetching it would show the player a card
  *   they are not entitled to see.
+ * @property isCreature the server's own answer for *this snapshot* — see the notes on [BoardUi].
+ * @property powerToughness the pair to draw, **or null when the object is not currently a creature**.
+ *   That is the whole of the "strictly speaking, creatures have power and toughness and noncreatures
+ *   don't" rule, in one place, so every surface that draws a card inherits it. Null too when the server
+ *   sent no P/T at all, so a half-filled view cannot produce "null/2".
+ * @property counters every counter on the card, by name and count, in the server's order. Present on a
+ *   card in any zone, not only on a permanent.
  */
 data class CardUi(
     val name: String,
     val display: CardDisplay,
     val art: CardArtRequest?,
     val powerToughness: String?,
+    val isCreature: Boolean,
+    val counters: List<CounterUi>,
     val isFaceDown: Boolean,
 )
+
+/** One counter on a card, as the board draws it. */
+data class CounterUi(
+    val name: String,
+    val count: Int,
+) {
+    /** What the board writes: the server's own name and the count, e.g. `+1/+1 ×2`. */
+    val label: String get() = "$name ×$count"
+}
 
 /** The name shown for a card the viewer is not entitled to identify. */
 const val FACE_DOWN_NAME: String = "Face-down"
@@ -455,8 +497,14 @@ private fun GamePermanent.toPermanentUi(
 
 internal fun GameCard.toCardUi(): CardUi {
     val shownName = if (isFaceDown) FACE_DOWN_NAME else name
+    // Power/toughness belong to a creature and to nothing else, and *what* the object is is the
+    // server's answer (`GameCard.isCreature`, upstream's `CardView.isCreature()`), never the printed
+    // type and never the type line — an animated land is a creature and says so, and stops when the
+    // effect ends. The strings are then carried through untouched: `*` is a real power, so nothing
+    // parses them; they are only checked for presence, because a half-filled view must not draw
+    // "null/2".
     val pt =
-        if (power.isNullOrBlank() || toughness.isNullOrBlank()) null else "$power/$toughness"
+        if (!isCreature || power.isNullOrBlank() || toughness.isNullOrBlank()) null else "$power/$toughness"
     return CardUi(
         name = shownName,
         display =
@@ -469,6 +517,8 @@ internal fun GameCard.toCardUi(): CardUi {
             ),
         art = if (isFaceDown) null else artRequestOf(setCode, collectorNumber),
         powerToughness = if (isFaceDown) null else pt,
+        isCreature = isCreature,
+        counters = counters.map { CounterUi(name = it.name, count = it.count) },
         isFaceDown = isFaceDown,
     )
 }
