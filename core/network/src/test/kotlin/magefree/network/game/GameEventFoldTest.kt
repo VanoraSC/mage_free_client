@@ -1,6 +1,7 @@
 package magefree.network.game
 
 import magefree.protocol.AskPrompt
+import magefree.protocol.CardTypeCode
 import magefree.protocol.ChooseAbilityPrompt
 import magefree.protocol.ChooseChoicePrompt
 import magefree.protocol.ChoosePilePrompt
@@ -8,6 +9,7 @@ import magefree.protocol.GameAbilityChoice
 import magefree.protocol.GameCardView
 import magefree.protocol.GameChoiceOption
 import magefree.protocol.GameCombatGroupView
+import magefree.protocol.GameCounterView
 import magefree.protocol.GameError
 import magefree.protocol.GameInformed
 import magefree.protocol.GameManaPoolView
@@ -351,6 +353,69 @@ class GameEventFoldTest {
         assertEquals("Basic Land — Forest", card.typeLine)
         assertEquals(listOf("({T}: Add {G}.)"), card.rules)
         assertFalse(card.isFaceDown)
+    }
+
+    @Test
+    fun aCardCarriesWhatItCurrentlyIsAndTheCountersOnIt() {
+        // Story 0058. Creature-ness is game state: the same Mountain is a land in one snapshot and a
+        // 0/3 creature in the next, and only the server can say which. The fold carries all three
+        // fields the bridge writes from `mage.view.CardView` — nothing here re-derives them.
+        val earthbentMountain =
+            GameCardView(
+                id = "perm-1",
+                name = "Mountain",
+                typeLine = "Basic Land — Mountain",
+                power = "0",
+                toughness = "3",
+                cardTypes = listOf(CardTypeCode.LAND, CardTypeCode.CREATURE),
+                creature = true,
+                counters = listOf(GameCounterView(name = "+1/+1", count = 2), GameCounterView(name = "stun", count = 1)),
+            )
+
+        val folded = GameEventFold.fold(seed, GameStarted(gameId = GAME, state = view(hand = listOf(earthbentMountain))))!!
+        val card = folded.hand.single()
+
+        assertTrue("the server says this land is a creature right now", card.isCreature)
+        assertEquals(listOf(CardType.Land, CardType.Creature), card.cardTypes)
+        assertEquals("0", card.power)
+        assertEquals("3", card.toughness)
+        assertEquals(listOf("+1/+1", "stun"), card.counters.map { it.name })
+        assertEquals(listOf(2, 1), card.counters.map { it.count })
+    }
+
+    @Test
+    fun aCardTheServerSaysNothingAboutIsNotAssumedToBeACreature() {
+        val folded = GameEventFold.fold(seed, GameStarted(gameId = GAME, state = view(hand = hand(1))))!!
+        val card = folded.hand.single()
+
+        assertFalse("absence of the field is 'the server said nothing', never 'yes'", card.isCreature)
+        assertTrue(card.cardTypes.isEmpty())
+        assertTrue(card.counters.isEmpty())
+    }
+
+    @Test
+    fun aCardTypeThisBuildDoesNotKnowFoldsToUnknownRatherThanBeingDropped() {
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        view(
+                            hand =
+                                listOf(
+                                    GameCardView(
+                                        id = "c-1",
+                                        name = "Thing",
+                                        cardTypes = listOf(CardTypeCode.CREATURE, CardTypeCode.UNKNOWN),
+                                        creature = true,
+                                    ),
+                                ),
+                        ),
+                ),
+            )!!
+
+        assertEquals(listOf(CardType.Creature, CardType.Unknown), folded.hand.single().cardTypes)
     }
 
     @Test

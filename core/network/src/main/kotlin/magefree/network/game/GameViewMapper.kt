@@ -1,6 +1,7 @@
 package magefree.network.game
 
 import magefree.protocol.AskPrompt
+import magefree.protocol.CardTypeCode
 import magefree.protocol.ChooseAbilityPrompt
 import magefree.protocol.ChooseChoicePrompt
 import magefree.protocol.ChoosePilePrompt
@@ -190,6 +191,12 @@ internal object GameViewMapper {
             toughness = toughness,
             rules = rules,
             isFaceDown = faceDown,
+            // Story 0058. Written on the wire by the bridge's own read of `mage.view.CardView`:
+            // `getCardTypes()`, `isCreature()` and `getCounters()` respectively. Carried through
+            // unchanged — the server owns the predicate, this is only a shape change.
+            cardTypes = cardTypes.map { it.toCardType() },
+            isCreature = creature,
+            counters = counters.map { GameCounter(name = it.name, count = it.count) },
         )
 
     private fun GamePermanentView.toPermanent(): GamePermanent =
@@ -228,6 +235,27 @@ internal object GameViewMapper {
         MultiAmountEntry(message = message, min = min, max = max, defaultValue = defaultValue)
 
     private fun GamePromptOptions.toOptions(): PromptOptions = PromptOptions(text = text, ids = ids)
+
+    /** The app-schema face of a wire card type. Total over the closed `:protocol` set. */
+    private fun CardTypeCode.toCardType(): CardType =
+        when (this) {
+            CardTypeCode.ARTIFACT -> CardType.Artifact
+            CardTypeCode.BATTLE -> CardType.Battle
+            CardTypeCode.CONSPIRACY -> CardType.Conspiracy
+            CardTypeCode.CREATURE -> CardType.Creature
+            CardTypeCode.DUNGEON -> CardType.Dungeon
+            CardTypeCode.ENCHANTMENT -> CardType.Enchantment
+            CardTypeCode.INSTANT -> CardType.Instant
+            CardTypeCode.KINDRED -> CardType.Kindred
+            CardTypeCode.LAND -> CardType.Land
+            CardTypeCode.PHENOMENON -> CardType.Phenomenon
+            CardTypeCode.PLANE -> CardType.Plane
+            CardTypeCode.PLANESWALKER -> CardType.Planeswalker
+            CardTypeCode.SCHEME -> CardType.Scheme
+            CardTypeCode.SORCERY -> CardType.Sorcery
+            CardTypeCode.VANGUARD -> CardType.Vanguard
+            CardTypeCode.UNKNOWN -> CardType.Unknown
+        }
 
     private fun TurnPhaseCode.toPhase(): TurnPhase =
         when (this) {
