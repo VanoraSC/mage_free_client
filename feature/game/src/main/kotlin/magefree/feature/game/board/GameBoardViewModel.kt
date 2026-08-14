@@ -38,6 +38,38 @@ data class CastUi(
 )
 
 /**
+ * The **declaration in flight** (story 0061) — combat's equivalent of [CastUi], and the same kind of
+ * thing: the app's record of what the player is in the middle of doing, so the act stays legible while
+ * the server asks its questions.
+ *
+ * **What it is not:** it is not a model of combat, it decides nothing, and it never causes a question to
+ * be asked or answered. Whether the server asks *which defender* or *which attacker to block* is
+ * entirely upstream's: `selectDefender` and `selectBlockers` each assign silently when the set of legal
+ * pairings has exactly one member, and ask otherwise (§7.5, read from `mage-player-human-1.4.60.jar`).
+ * The board renders the question if and only if it arrives.
+ *
+ * @property role which of combat's two assignment problems the server has the board in (§7.4).
+ * @property pairingCreatureName the creature the outstanding pairing question is about — the one the
+ *   player last tapped — or null when no pairing question is outstanding. Its producer is this app's own
+ *   record of the pick it just sent, because the server's prompt prose names the *candidates*, never the
+ *   creature being paired.
+ */
+data class DeclarationUi(
+    val role: CombatRole,
+    val pairingCreatureName: String? = null,
+) {
+    /** The sentence the panel shows while a pairing question is outstanding, or null when none is. */
+    val pairingLine: String?
+        get() =
+            pairingCreatureName?.let { name ->
+                when (role) {
+                    CombatRole.Attacking -> "$PAIRING_DEFENDER_PREFIX $name $PAIRING_DEFENDER_QUESTION"
+                    CombatRole.Blocking -> "$PAIRING_BLOCKER_PREFIX $name $PAIRING_BLOCKER_QUESTION"
+                }
+            }
+}
+
+/**
  * Immutable UI state for the playable board (stories 0055 + 0057).
  *
  * @property board the projected snapshot — see [BoardUi] for the field-by-field reachability record.
@@ -56,6 +88,8 @@ data class CastUi(
  *   detail; a second tap or the detail's own button commits). Cleared whenever the prompt changes, so a
  *   detail view can never outlive the question it was opened against.
  * @property cast the cast in flight (§6.4), or null.
+ * @property declaration the combat declaration in flight (§7.4/§7.5), or null when the server has the
+ *   board in neither role. Never both roles at once — [DeclarationUi.role] holds exactly one.
  * @property actionError the server's own reason for declining the last action, else null.
  */
 data class GameBoardUiState(
@@ -67,6 +101,7 @@ data class GameBoardUiState(
     val controls: PromptControlsUi? = null,
     val selectedObjectId: String? = null,
     val cast: CastUi? = null,
+    val declaration: DeclarationUi? = null,
     val actionError: String? = null,
 )
 
@@ -133,6 +168,16 @@ class GameBoardViewModel
          */
         private var hasPickedTarget = false
 
+        /**
+         * The creature the player last declared as an attacker or a blocker — this app's record of the
+         * pick it just sent, and the only thing that can name what an ensuing pairing question is about
+         * (the server's prompt names the *candidates*, never the creature being paired).
+         *
+         * Written only while the outstanding prompt is a [PromptControlsUi.Declaration], so an ordinary
+         * target pick never leaves a combat name behind.
+         */
+        private var lastDeclaredName: String? = null
+
         /** The prompt instance the [PassPolicy] has already been asked about, so it is asked once each. */
         private var policyAskedFor: GamePrompt? = null
 
@@ -188,6 +233,7 @@ class GameBoardViewModel
                     controls = controlsFor(state, hasPickedTarget = hasPickedTarget),
                     selectedObjectId = if (promptChanged) null else previous.selectedObjectId,
                     cast = previous.cast.advancedBy(state.prompt),
+                    declaration = previous.declaration.advancedBy(state.prompt),
                 )
 
             // The one place the app decides *when* to answer a priority prompt (§14.1). Asked once per
@@ -219,6 +265,29 @@ class GameBoardViewModel
         }
 
         /**
+         * How the declaration context (§7.4/§7.5) follows the server's questions.
+         *
+         * Three states, and the server drives every transition:
+         * - a `Select` carrying `possibleAttackers`/`possibleBlockers` **is** a declaration: the role is
+         *   read from it fresh each time, so the board is in whichever role the server put it in, and the
+         *   pairing line clears because that question has been answered;
+         * - a `Target` arriving **while a declaration is in flight** is the pairing question upstream
+         *   asks when the choice is genuinely ambiguous — the same prompt kind 0057 already answers. The
+         *   only thing added is the name of the creature the player just picked;
+         * - anything else — an ordinary `Select`, another prompt kind, or no prompt at all — ends it.
+         *
+         * Note what is *not* here: nothing decides whether a pairing question should exist. Upstream
+         * assigns silently when there is exactly one legal pairing, and this never sees a prompt at all
+         * in that case.
+         */
+        private fun DeclarationUi?.advancedBy(prompt: GamePrompt?): DeclarationUi? =
+            when {
+                prompt is GamePrompt.Select -> CombatRole.of(prompt.options)?.let { DeclarationUi(role = it) }
+                prompt is GamePrompt.Target && this != null -> copy(pairingCreatureName = lastDeclaredName)
+                else -> null
+            }
+
+        /**
          * Perform one [BoardAction] — the **only** translator from a UI gesture to a server call.
          *
          * Every arm is one client verb, and the two that share a wire message ([BoardAction.CancelPrompt]
@@ -241,8 +310,14 @@ class GameBoardViewModel
 
                 is BoardAction.ChooseTarget -> {
                     // Sent per pick, never batched: the server re-prompts with an updated count and a
-                    // narrowed candidate set after each one (§17.2).
+                    // narrowed candidate set after each one (§17.2). A declaration pick is the same verb
+                    // and the same rule — upstream re-asks after each creature.
                     hasPickedTarget = true
+                    // Remember *which* creature was just declared, so that if the server follows up with
+                    // a pairing question the panel can say what it is about. Recorded only when the
+                    // outstanding prompt really is a declaration, so an ordinary target pick cannot leave
+                    // a stale combat name behind.
+                    if (_uiState.value.controls is PromptControlsUi.Declaration) lastDeclaredName = nameOf(action.targetId)
                     _uiState.value = _uiState.value.copy(controls = controlsForLatest())
                     send { it.chooseTarget(id, action.targetId) }
                 }

@@ -191,6 +191,7 @@ fun GameBoardScreen(
                     FloatingControls(
                         controls = controls,
                         cast = uiState.cast,
+                        declaration = uiState.declaration,
                         actionError = uiState.actionError,
                         artRenderer = artRenderer,
                         onAction = onAction,

@@ -358,6 +358,9 @@ class CreatureStatusAndCountersIT {
 
             is PromptControlsUi.Amount -> controls.amountRequest?.let { BoardAction.ChooseAmount(it.min) }
             is PromptControlsUi.MultiAmount -> BoardAction.DistributeAmounts(controls.amountRows.map { it.min })
+            // This run is about what a permanent *is*, not about combat (story 0061 has its own live
+            // run), so a declaration is closed with its own *done* rather than answered.
+            is PromptControlsUi.Declaration -> BoardAction.FinishTargeting
             is PromptControlsUi.Notice -> null
         }
 

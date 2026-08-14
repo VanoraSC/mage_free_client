@@ -203,6 +203,10 @@ class BoardControlsTest {
         assertEquals(BoardAction.ChooseTarget("y-1"), controls.actionFor("y-1"))
         assertEquals(BoardAction.ChooseTarget("y-2"), controls.actionFor("y-2"))
         assertNull("nothing the server did not offer may be declared", controls.actionFor("o-1"))
+
+        assertTrue("a declaration is its own projection, not a priority window", controls is PromptControlsUi.Declaration)
+        assertEquals(CombatRole.Attacking, (controls as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_ATTACKER_ACTION_LABEL, controls.actionLabelFor("y-1"))
     }
 
     @Test
@@ -211,6 +215,8 @@ class BoardControlsTest {
 
         assertEquals(setOf("y-1", "y-2"), controls.pickableObjectIds)
         assertEquals(BoardAction.ChooseTarget("y-1"), controls.actionFor("y-1"))
+        assertEquals(CombatRole.Blocking, (controls as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_BLOCKER_ACTION_LABEL, controls.actionLabelFor("y-1"))
     }
 
     @Test
@@ -230,10 +236,14 @@ class BoardControlsTest {
         val attacking = controlsFor(declareAttackersState())!!
         assertEquals("Select attackers", attacking.message)
         assertEquals(setOf("y-1", "y-2"), attacking.pickableObjectIds)
+        assertEquals(CombatRole.Attacking, (attacking as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_ATTACKERS_NOTE, attacking.role.note())
 
         val blocking = controlsFor(declareBlockersState())!!
         assertEquals("Select blockers", blocking.message)
         assertEquals(setOf("y-1", "y-2"), blocking.pickableObjectIds)
+        assertEquals(CombatRole.Blocking, (blocking as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_BLOCKERS_NOTE, blocking.role.note())
 
         // …and even if both keys arrived together — which the server never does — only one role's
         // creatures are offered, never the union.
@@ -262,9 +272,16 @@ class BoardControlsTest {
         // The server supplies the shortcut for attacking (§7.2) and none for blocking (§7.3). Inventing
         // an "all block" would be inventing a reply the server has no arm for.
         val attacking = controlsFor(declareAttackersState())!!
+        val allAttack = attacking.buttons.single { it.action == BoardAction.UseSpecial }
+        assertEquals("the label is the server's own specialButton text", "All attack", allAttack.label)
         assertEquals(
-            "All attack",
-            attacking.buttons.single { it.action == BoardAction.UseSpecial }.label,
+            "committing the whole team confirms first (§16.4)",
+            ALL_ATTACK_CONFIRM_LABEL,
+            allAttack.confirmLabel,
+        )
+        assertTrue(
+            "nothing else in a declaration confirms — a single creature is one tap",
+            attacking.buttons.filter { it.confirmLabel != null }.map { it.action } == listOf(BoardAction.UseSpecial),
         )
 
         val blocking = controlsFor(declareBlockersState())!!

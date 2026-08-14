@@ -356,15 +356,23 @@ class CombatProbeIT {
                             state.board.hand.cards.firstOrNull { it.objectId in controls.pickableObjectIds }
                         val special = controls.buttons.firstOrNull { it.action == BoardAction.UseSpecial }
                         when {
-                            // At a declaration the board offers no way to pick attackers (pickable=0),
-                            // but the server's own special button ("All attack") is mapped. Press it, so
-                            // the run gets past declaring and the *blocking* prompt can be observed at
-                            // all — that shape is the other half of what the combat story needs.
+                            // Kept from the original run, when a declaration still projected as an
+                            // ordinary priority window with `pickable=0`: pressing the server's own
+                            // special button was the only way past declaring. Story 0061 gave a
+                            // declaration its own projection, so this arm no longer fires there — see
+                            // the `Declaration` arm below, which is what runs now.
                             step == PhaseStep.DeclareAttackers && special != null -> special.action
                             playable != null -> BoardAction.PlayObject(playable.objectId)
                             else -> controls.buttons.firstOrNull { it.action == BoardAction.PassPriority }?.action
                         }
                     }
+
+                    // Added when 0061 landed. The probe's own finding was that the board offered nothing
+                    // to tap here; now it offers the server's own candidates, so the seat declares one
+                    // creature per pass of the loop and closes when there are none left.
+                    is PromptControlsUi.Declaration ->
+                        controls.pickableObjectIds.firstOrNull()?.let(BoardAction::ChooseTarget)
+                            ?: BoardAction.FinishTargeting
 
                     is PromptControlsUi.Mana ->
                         controls.pickableObjectIds.firstOrNull()?.let(BoardAction::PlayManaSource)
