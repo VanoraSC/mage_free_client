@@ -264,12 +264,28 @@ class GameBoardViewModelTest {
             client.calls.clear()
 
             viewModel.act(BoardAction.ChooseTarget("o-1"))
+            // **The assertion that separates per-pick from batch-then-flush**, and the reason it is made
+            // here rather than only at the end: a client that held the picks locally and sent them on
+            // confirm produces the *same final sequence*. What it cannot produce is the pick already
+            // being at the server before the player has confirmed anything — which is exactly the
+            // property §17.2 requires, because the server's next prompt is computed from it.
+            assertEquals(
+                "each pick must reach the server as it is made, before any confirmation",
+                listOf("target:$GAME_ID:o-1"),
+                client.calls,
+            )
+
             // The server re-prompts with an updated count after the first pick; the second is chosen
             // against *that* list.
             client.emitGameState(targetPromptState(candidates = listOf("y-1")))
             viewModel.act(BoardAction.ChooseTarget("y-1"))
-            viewModel.act(BoardAction.FinishTargeting)
+            assertEquals(
+                "the second pick too — it is chosen against the narrowed list the server just sent",
+                listOf("target:$GAME_ID:o-1", "target:$GAME_ID:y-1"),
+                client.calls,
+            )
 
+            viewModel.act(BoardAction.FinishTargeting)
             assertEquals(
                 listOf("target:$GAME_ID:o-1", "target:$GAME_ID:y-1", "cancel:$GAME_ID"),
                 client.calls,
