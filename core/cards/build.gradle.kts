@@ -38,4 +38,8 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
+    // Story 0056: records the real outgoing art request so the User-Agent can be asserted on the
+    // wire, on the loader's *default* client — a test that injected its own Call.Factory would carry
+    // whatever headers the test gave it and would prove nothing about the path that ships.
+    testImplementation(libs.okhttp.mockwebserver)
 }
