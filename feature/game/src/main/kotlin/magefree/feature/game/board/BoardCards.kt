@@ -325,4 +325,7 @@ internal const val ATTACKING_MARK: String = "Attacking"
 
 internal const val BLOCKING_MARK: String = "Blocking"
 
+/** What an attacker says about the creatures blocking it — the other half of a legible combat (0061). */
+internal const val BLOCKED_BY_MARK: String = "Blocked by"
+
 internal const val DAMAGE_MARK: String = "Damage"

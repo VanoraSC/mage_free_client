@@ -17,6 +17,7 @@ import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.network.game.AbilityChoice
 import magefree.network.game.CardType
 import magefree.network.game.ChoiceOption
+import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
 import magefree.network.game.GameCounter
 import magefree.network.game.GameMessage
@@ -923,6 +924,72 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText("$ACTION_FAILED_PREFIX you can't play that now").assertIsDisplayed()
     }
 
+    // ---- combat: declaring attackers and blockers (story 0061) -----------------------------------------
+    //
+    // These are at the *screen*, not only at the projection, for the same reason 0057's were: the ids
+    // were in the projection the whole time and the board still offered no surface for them. A
+    // declaration arrives with **`playable` empty** (§7.2), so every fixture here sends it that way.
+
+    @Test
+    fun `a declaration offers the creature to tap, and the tap declares it`() {
+        // Today's board offers "Pass priority" and "All attack" and nothing else — attack with
+        // everything or nothing. The creature the server named must be tappable.
+        render(declaringAttackers(), selectedObjectId = "y-1")
+
+        composeTestRule.onNodeWithText(DECLARE_ATTACKER_ACTION_LABEL).performClick()
+        assertEquals(listOf(BoardAction.ChooseTarget("y-1")), actions)
+    }
+
+    @Test
+    fun `a blocker is declared the same way, from the server's own list`() {
+        render(declaringBlockers(), selectedObjectId = "y-1")
+
+        composeTestRule.onNodeWithText(DECLARE_BLOCKER_ACTION_LABEL).performClick()
+        assertEquals(listOf(BoardAction.ChooseTarget("y-1")), actions)
+    }
+
+    @Test
+    fun `all attack commits the whole team only behind a confirmation`() {
+        // §16.4 / §7.5 (Pete): the shortcut stays, because the server supplies it and it works — but it
+        // commits every creature at once, so it confirms first, exactly as concede does.
+        render(declaringAttackers())
+
+        composeTestRule.onNodeWithText(ALL_ATTACK_LABEL).performClick()
+        assertEquals("one tap only arms it", emptyList<BoardAction>(), actions)
+
+        composeTestRule.onNodeWithText(ALL_ATTACK_CONFIRM_LABEL).performClick()
+        assertEquals(listOf(BoardAction.UseSpecial), actions)
+    }
+
+    @Test
+    fun `the board says which of the two roles it is in, and never both`() {
+        render(declaringAttackers())
+        composeTestRule.onNodeWithText(DECLARE_ATTACKERS_NOTE).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText(DECLARE_BLOCKERS_NOTE).assertCountEquals(0)
+
+        composeTestRule.onNodeWithText(ALL_ATTACK_LABEL).assertIsDisplayed()
+    }
+
+    @Test
+    fun `blocking offers no shortcut, because the server sends none`() {
+        render(declaringBlockers())
+
+        composeTestRule.onNodeWithText(DECLARE_BLOCKERS_NOTE).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText(DECLARE_ATTACKERS_NOTE).assertCountEquals(0)
+        composeTestRule.onAllNodesWithText(ALL_ATTACK_LABEL).assertCountEquals(0)
+    }
+
+    @Test
+    fun `an attacker says what it attacks and what is blocking it`() {
+        // 0055 marks attackers and blockers; what it could not say is *what* they are attacking or
+        // blocking. `CombatGroup` is per-attacker (§7.3) and carries the defender's own name.
+        render(blockedAttack())
+
+        composeTestRule.onNodeWithText("$ATTACKING_MARK Computer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("$BLOCKED_BY_MARK Mountain", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("$BLOCKING_MARK Grizzly Bears", substring = true).assertIsDisplayed()
+    }
+
     // ---- fixtures --------------------------------------------------------------------------------------
 
     private fun card(
@@ -972,6 +1039,58 @@ class GameBoardScreenTest {
                 cardTypes = listOf(CardType.Creature),
             ),
     )
+
+    /**
+     * The server's own declare-attackers prompt (§7.2): a `Select` whose message is `Select attackers`,
+     * whose ids live in **`possibleAttackers`**, which carries the `specialButton` the board renders as
+     * "All attack" — and whose **`playable` is empty**, which is the whole reason the ids have to come
+     * from the options.
+     */
+    private fun declaringAttackers() =
+        runningGame(viewerPermanent = bears()).copy(
+            step = PhaseStep.DeclareAttackers,
+            phase = TurnPhase.Combat,
+            playable = emptyList(),
+            prompt =
+                GamePrompt.Select(
+                    message = "Select attackers",
+                    options =
+                        PromptOptions(
+                            text = mapOf(PromptOptions.SPECIAL_BUTTON to ALL_ATTACK_LABEL),
+                            ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to listOf("y-1")),
+                        ),
+                ),
+        )
+
+    /** The blocking half (§7.3): the same shape, `possibleBlockers`, and **no** special button. */
+    private fun declaringBlockers() =
+        runningGame(viewerPermanent = bears()).copy(
+            step = PhaseStep.DeclareBlockers,
+            phase = TurnPhase.Combat,
+            playable = emptyList(),
+            prompt =
+                GamePrompt.Select(
+                    message = "Select blockers",
+                    options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-1"))),
+                ),
+        )
+
+    /** A combat already declared on both sides: your Bears attacking, their Mountain blocking it. */
+    private fun blockedAttack() =
+        runningGame(viewerPermanent = bears()).copy(
+            step = PhaseStep.DeclareBlockers,
+            phase = TurnPhase.Combat,
+            combat =
+                listOf(
+                    CombatGroup(
+                        defenderId = "p-opp",
+                        defenderName = "Computer",
+                        isBlocked = true,
+                        attackerIds = listOf("y-1"),
+                        blockerIds = listOf("o-1"),
+                    ),
+                ),
+        )
 
     /**
      * A running game with the **opponent first** in the players list, as the real server often sends.
