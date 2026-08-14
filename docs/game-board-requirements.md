@@ -318,6 +318,9 @@ a lot of small taps — revisit once real games show where it hurts.
 
 **Data.** `combat` is present in the snapshot (empty outside combat, verified live).
 
+> **Refined by §7.4:** combat is two separate assignment problems, not one. §7.1's tap model survives;
+> its framing of combat as a single mode does not.
+
 ### 7.2 What the server actually asks for attackers — measured, 2026-08-14
 
 §7.1 was written before any run had reached combat (§17 records `combatSteps=0`). `CombatProbeIT`
@@ -381,7 +384,58 @@ repeated per group rather than grouping attackers under one defender.
 without answering it. This is the crux of the pairing problem below, so the combat story must measure it
 before designing the interaction.
 
-### 7.4 The harness stall, diagnosed
+### 7.4 Combat is **two** assignment problems, never both at once
+
+**Decision (Pete).** §7.1 treated combat as one thing. It is two, and they never belong to the same
+player at the same moment:
+
+| Role | The assignment | Server shape |
+|---|---|---|
+| **Attacking player** | each attacker → what it attacks (**player, planeswalker, or battle**) | `Select attackers` + `possibleAttackers`, **with** `specialButton` |
+| **Blocking player** | each blocker → the attacker it blocks | `Select blockers` + `possibleBlockers`, **no** shortcut |
+
+> *"the attacking player assigns attackers to targets, player or battle or Planeswalker, etc. the
+> blocker assigns blockers to attackers. we need to consider how best to represent each of these
+> situations as they never occur for the same player at the same time"*
+
+**Why it matters.** The board is only ever in one of these modes, so each can be designed for its own
+job rather than compromised into a shared "combat view". It also matches the data: `CombatGroup` is
+**per-attacker** (§7.3), reading *"this attacker, against this defender, blocked by these"*.
+
+**Note on defenders.** The opposing player is **not** the only legal defender — planeswalkers and
+battles are too, in ordinary 1v1. Any design that assumes "attack = point at the opponent" is wrong.
+
+### 7.5 Declaration: tap the creature, and ask only when the choice is real
+
+**Decision (Pete).** Both directions use the same principle — **tap the creature; the board asks for
+the pairing only when it is genuinely ambiguous**:
+
+- **Attacking:** tapping a creature declares it as an attacker. If more than one legal defender exists,
+  the board then asks which one.
+- **Blocking:** tapping a creature declares it as a blocker. If more than one attacker could be
+  blocked, the board then asks which.
+
+**Why.** One tap in the common case, and a second only where there is a real decision to make. Nothing
+is invented for the player to learn — it is §5.2's tap model with a conditional follow-up.
+
+**"All attack" is kept, with a confirmation (Pete).** The server supplies the shortcut and it is proven
+to work live (§7.2), so it stays — but it commits the whole team, so it routes through the same
+confirm step as targeting (§16.4). There is no equivalent for blocking, and none should be invented.
+
+**⚠️ This decision has an unmeasured dependency — resolve it before building.** It is only free if the
+**server** behaves the same way: auto-assigning when unambiguous and asking when not. §7.2/§7.3 did
+**not** measure whether picking an attacker triggers a *"which defender?"* follow-up (the probe's board
+had only one legal defender), nor whether picking a blocker triggers a *"which attacker?"* follow-up.
+
+- If upstream asks only when ambiguous, the board renders its follow-up and this design costs nothing.
+- If upstream **always** asks, then answering a one-option question on the player's behalf is a
+  **policy decision**, and it belongs behind the same seam as auto-pass (§14.1) — not scattered into
+  combat code.
+
+Measure both before designing the interaction further. A deck with a planeswalker gives the
+multi-defender case; two attackers into one blocker gives the other.
+
+### 7.6 The harness stall, diagnosed
 
 `docs/live-test-decklists.md` recorded a stall as **unsolved** — *"after certain answers the game stops
 pushing to us altogether"*. It is not the server going quiet. Upstream asks
