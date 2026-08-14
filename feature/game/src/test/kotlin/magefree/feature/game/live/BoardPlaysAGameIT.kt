@@ -20,6 +20,7 @@ import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
 import magefree.feature.game.board.PromptControlsUi
+import magefree.feature.game.board.cardFor
 import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.model.SessionEvent
@@ -318,6 +319,7 @@ class BoardPlaysAGameIT {
             // resolves it the same way: if the control is still there a beat later, press it again.
             val sameAsBefore = controls == lastAnswered && System.currentTimeMillis() - lastAnsweredAt < REANSWER_MS
             if (sameAsBefore) continue
+            checkSomethingToPress(state, controls)
             val action = decide(state, controls) ?: continue
             lastAnswered = controls
             lastAnsweredAt = System.currentTimeMillis()
@@ -362,13 +364,10 @@ class BoardPlaysAGameIT {
                     // §17.1: decline the target step and let the server rewind the whole cast.
                     phase == Phase.CastAndCancel -> BoardAction.CancelPrompt
                     phase == Phase.RecastAndResolve && !pickedForRecast ->
-                        controls.pickableObjectIds.firstOrNull()?.let { id ->
-                            pickedForRecast = true
-                            BoardAction.ChooseTarget(id)
-                        }
+                        pickATarget(state, controls)?.also { pickedForRecast = true }
                     // The confirmation *is* the final done (§17.2) — every pick was already sent.
                     phase == Phase.RecastAndResolve -> BoardAction.FinishTargeting
-                    else -> controls.pickableObjectIds.firstOrNull()?.let(BoardAction::ChooseTarget)
+                    else -> pickATarget(state, controls)
                 }
 
             is PromptControlsUi.Mana ->
@@ -385,6 +384,52 @@ class BoardPlaysAGameIT {
             // Nothing knows a valid answer; the board offers no control and neither does this.
             is PromptControlsUi.Notice -> null
         }
+
+    /**
+     * Choose a target **the way the screen offers one** — and only that way.
+     *
+     * This deliberately does *not* reach into `pickableObjectIds` first. The blocking defect this story
+     * shipped and had caught on a device was a Target prompt whose candidates were **players**: the
+     * projection held the ids the whole time, so a harness that read them directly answered the prompt
+     * happily while the screen showed nothing to press. Answering through the same two surfaces a finger
+     * has — a promoted button in the panel, or a card the board actually draws — is what makes this run
+     * able to see that class of gap at all.
+     */
+    private fun pickATarget(
+        state: GameBoardUiState,
+        controls: PromptControlsUi.Targeting,
+    ): BoardAction? {
+        val fromPanel = controls.buttons.map { it.action }.filterIsInstance<BoardAction.ChooseTarget>()
+        if (fromPanel.isNotEmpty()) return fromPanel.first()
+        val onTheBoard = controls.pickableObjectIds.firstOrNull { state.board.cardFor(it) != null }
+        return onTheBoard?.let(BoardAction::ChooseTarget)
+    }
+
+    /**
+     * The live form of "no prompt may leave the player with nothing to press".
+     *
+     * An answerable prompt that offers no button, no candidate card, no number **and** nothing the board
+     * draws is a stall — the game stops for both seats, which is precisely what happened on device. A
+     * timeout would eventually report it as "waiting for X", naming the symptom; this names the cause at
+     * the moment it occurs.
+     */
+    private fun checkSomethingToPress(
+        state: GameBoardUiState,
+        controls: PromptControlsUi,
+    ) {
+        if (!controls.isAnswerable) return
+        val tappableOnBoard = controls.pickableObjectIds.any { state.board.cardFor(it) != null }
+        val answerable =
+            controls.buttons.isNotEmpty() ||
+                controls.candidateCards.isNotEmpty() ||
+                controls.amountRequest != null ||
+                controls.amountRows.isNotEmpty() ||
+                tappableOnBoard
+        check(answerable) {
+            "DEAD PROMPT: ${controls::class.simpleName} '${controls.message}' offers nothing to press — " +
+                "pickable=${controls.pickableObjectIds} none of which the board draws"
+        }
+    }
 
     // ---- the opponent seat: a plain client, so the app seat has someone to play against -------------------
 
