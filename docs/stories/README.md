@@ -49,6 +49,23 @@ defect ship: every one of the five defects found in the 2026-08 hardening pass h
    Every defect in the hardening pass was found this way; none was found by its implementer. Unit
    tests stay with the implementer (they benefit from implementation knowledge); it is **behavioural
    verification** that must be independent.
+
+   **How the independent pass is done (Pete, 2026-08-14).** Two automated halves, plus a human one:
+   - the **hermetic gate**, including Compose tests via Robolectric in `src/testDebug` — device-only
+     tests do not run pre-merge, which is how an entire epic once stayed unmounted, and it is what
+     caught a control that rendered, reported a click, and did nothing;
+   - a **live IT driven through the real ViewModel** against the bridge, so production logic is
+     exercised end to end without a screen;
+   - **eyes-on, by Pete.** The reviewer hands over a short numbered checklist of what to look at on
+     the device; the story is not done until Pete has confirmed it.
+
+   **Do not drive the app's UI programmatically** to satisfy this. `adb input tap` + `uiautomator`
+   loops were tried at length and the cost/benefit collapsed: taps landing during recomposition, panel
+   geometry shifting between dump and tap, the dump itself disturbing the tap, an install silently
+   resetting app data. Installing the APK and confirming it launches is fine; long tap-sequences to
+   reach a game state are not. This moves *where* verification effort goes, and relaxes nothing —
+   both blocking defects of the 0057/0058 pass were found by eyes on a device while the suites were
+   green, which is exactly why the human half stays.
 4. **Commit incrementally.** Commit per defect or per coherent step, not once at the end. Long stories
    get interrupted; an interruption should cost minutes, not the whole story.
 5. **Unexpectedly absent.** Before relying on an upstream field, confirm something actually **writes**
@@ -83,7 +100,8 @@ Every story uses these sections:
 7. **Testing & verification** — unit and (where relevant) integration tests, plus exact
    commands. Correctness is verified against a locally-run XMage server, never invented data.
    Name which tests must be **proven failing first** (standard 1), and — for user-visible work —
-   what the **independent verification** pass checks (standard 3).
+   what the **independent verification** pass checks (standard 3), including the **eyes-on checklist**
+   handed to Pete.
 8. **Acceptance criteria** — a checklist that defines done.
 9. **References** — files and docs to read.
 
