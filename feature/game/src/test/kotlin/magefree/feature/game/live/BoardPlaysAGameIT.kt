@@ -111,6 +111,20 @@ class BoardPlaysAGameIT {
     @Volatile
     private var pickedForRecast = false
 
+    /**
+     * The board **at the instant the cast began**, captured in the drive loop rather than by the script.
+     *
+     * The first run of this harness compared against a snapshot taken when the *phase* was armed, and by
+     * the time the cast actually happened several turns had passed and the hand had grown — so "the card
+     * left your hand" read as 6 → 6 and failed for a reason that had nothing to do with the board. The
+     * rewind is a claim about one moment, so it is measured from that moment.
+     */
+    @Volatile
+    private var handAtCast = -1
+
+    @Volatile
+    private var untappedAtCast = -1
+
     private val transcript = CopyOnWriteArrayList<String>()
 
     @Test
@@ -209,9 +223,10 @@ class BoardPlaysAGameIT {
                         untappedLands(state) >= 1
                 }
                 val beforeCast = viewModel.uiState.value
-                val handBefore = beforeCast.board.hand.count
-                val landsBefore = untappedLands(beforeCast)
-                say("BEFORE CAST  hand=$handBefore stack=${beforeCast.board.stack.count} untappedLands=$landsBefore")
+                say(
+                    "READY TO CAST hand=${beforeCast.board.hand.count} stack=${beforeCast.board.stack.count} " +
+                        "untappedLands=${untappedLands(beforeCast)}",
+                )
 
                 phase = Phase.CastAndCancel
                 // The board reaches the target step: the spell is on the stack already (CR 601 / §16.5).
@@ -225,23 +240,23 @@ class BoardPlaysAGameIT {
                         "candidates=${atTargets.controls?.pickableObjectIds?.size}",
                 )
                 say("             opponent sees stack=${opponentState?.stack?.map { it.name }}")
-                check(atTargets.board.hand.count == handBefore - 1) {
-                    "the cast must have moved the card out of hand: $handBefore -> ${atTargets.board.hand.count}"
+                check(atTargets.board.hand.count == handAtCast - 1) {
+                    "the cast must have moved the card out of hand: $handAtCast -> ${atTargets.board.hand.count}"
                 }
                 check(atTargets.board.stack.count >= 1) { "the spell must be on the stack while targets are chosen" }
 
                 // The policy cancels; assert the server's rewind.
                 val rewound =
                     awaitApp(viewModel, "the server to rewind the cast", LONG_MS) {
-                        it.board.hand.count == handBefore && it.board.stack.isEmpty
+                        it.board.hand.count == handAtCast && it.board.stack.isEmpty
                     }
                 say(
                     "AFTER CANCEL hand=${rewound.board.hand.count} stack=${rewound.board.stack.count} " +
                         "untappedLands=${untappedLands(rewound)}",
                 )
                 say("             opponent sees stack=${opponentState?.stack?.map { it.name }} (§17.4: the rewind is not pushed)")
-                check(untappedLands(rewound) == landsBefore) {
-                    "cancelling must leave mana unspent: $landsBefore -> ${untappedLands(rewound)}"
+                check(untappedLands(rewound) == untappedAtCast) {
+                    "cancelling must leave mana unspent: $untappedAtCast -> ${untappedLands(rewound)}"
                 }
 
                 // --- 4. cast it again, and let it resolve ------------------------------------------------
@@ -270,7 +285,6 @@ class BoardPlaysAGameIT {
                 say("opponent board after resolution: stack=${opponentState?.stack?.map { it.name }}")
                 say("RUN COMPLETE")
             } finally {
-                transcript.forEach { println(it) }
                 jobs.forEach { runCatching { it.cancelAndJoin() } }
                 tableId?.let { runCatching { opponent.tables.removeTable(it) } }
                 app.close()
@@ -291,13 +305,27 @@ class BoardPlaysAGameIT {
      */
     private suspend fun driveApp(viewModel: GameBoardViewModel) {
         var lastAnswered: PromptControlsUi? = null
+        var lastAnsweredAt = 0L
         while (true) {
             delay(POLL_MS)
             val state = viewModel.uiState.value
             val controls = state.controls ?: continue
-            if (controls == lastAnswered) continue
+            // **Not a plain equality check.** [PromptControlsUi] is a data class, so the *same question
+            // asked again* — "Play instants and activated abilities", every round of priority, all game —
+            // compares equal to the one just answered. A loop that skipped those would answer priority
+            // once and then sit forever watching an identical prompt, which is exactly how the first run
+            // of this harness stalled. A person in front of the screen has the same information and
+            // resolves it the same way: if the control is still there a beat later, press it again.
+            val sameAsBefore = controls == lastAnswered && System.currentTimeMillis() - lastAnsweredAt < REANSWER_MS
+            if (sameAsBefore) continue
             val action = decide(state, controls) ?: continue
             lastAnswered = controls
+            lastAnsweredAt = System.currentTimeMillis()
+            if (action is BoardAction.PlayObject && phase == Phase.CastAndCancel) {
+                handAtCast = state.board.hand.count
+                untappedAtCast = untappedLands(state)
+                say("app  -> beginning the cast with hand=$handAtCast untappedLands=$untappedAtCast")
+            }
             say("app  -> $action   (${controls::class.simpleName}: '${controls.message?.take(TRIM)}')")
             viewModel.act(action)
         }
@@ -365,11 +393,15 @@ class BoardPlaysAGameIT {
         gameId: String,
     ) {
         var lastAnswered: GamePrompt? = null
+        var lastAnsweredAt = 0L
         while (true) {
             delay(POLL_MS)
             val prompt = opponentState?.prompt ?: continue
-            if (prompt == lastAnswered) continue
+            // Same reasoning as [driveApp]: the server asks the identical question every round of
+            // priority, so equality alone would answer once and then stall the whole game.
+            if (prompt == lastAnswered && System.currentTimeMillis() - lastAnsweredAt < REANSWER_MS) continue
             lastAnswered = prompt
+            lastAnsweredAt = System.currentTimeMillis()
             when (prompt) {
                 // Keep, so the game starts promptly.
                 is GamePrompt.Ask -> games.answerAsk(gameId, answer = false)
@@ -416,7 +448,6 @@ class BoardPlaysAGameIT {
             delay(POLL_MS)
         }
         val last = viewModel.uiState.value
-        transcript.forEach { println(it) }
         throw AssertionError(
             "timed out after ${timeoutMs}ms waiting for $what; last board was " +
                 "turn=${last.board.turn.number} hand=${last.board.hand.count} stack=${last.board.stack.count} " +
@@ -542,6 +573,9 @@ class BoardPlaysAGameIT {
         const val VERY_LONG_MS = 240_000L
         const val SETTLE_MS = 5_000L
         const val POLL_MS = 300L
+
+        /** How long an identical question must sit unanswered before it is treated as asked again. */
+        const val REANSWER_MS = 4_000L
         const val TRIM = 70
     }
 }
