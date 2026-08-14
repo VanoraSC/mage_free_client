@@ -318,6 +318,141 @@ a lot of small taps — revisit once real games show where it hurts.
 
 **Data.** `combat` is present in the snapshot (empty outside combat, verified live).
 
+> **Refined by §7.4:** combat is two separate assignment problems, not one. §7.1's tap model survives;
+> its framing of combat as a single mode does not.
+
+### 7.2 What the server actually asks for attackers — measured, 2026-08-14
+
+§7.1 was written before any run had reached combat (§17 records `combatSteps=0`). `CombatProbeIT`
+reached it deliberately, and this is what arrives:
+
+```
+[app] step=DeclareAttackers turn=5 prompt=Select msg='Select attackers'
+      options.text = [specialButton, queryType]
+      options.ids  = {possibleAttackers=2}  ->  [Goblin Token, Goblin Token]
+      playable     = 0
+```
+
+**Findings.**
+- Declaring attackers is a **`GamePrompt.Select`** whose message is the literal `Select attackers` —
+  the same prompt kind as ordinary priority, distinguished by its options rather than its type.
+- **`possibleAttackers` is populated**, and the bridge's `optionsView()` already carries it through:
+  that mapper turns *any* collection-valued option into an id list, so the data path was complete
+  before anyone looked. Nothing needs to be added to `:protocol` or `:bridge` to declare attackers.
+- **`playable` is empty during the declaration.** The attackers come *only* from `possibleAttackers`,
+  so a client that derives its affordances from `playable` — as `controlsFor` does today — sees
+  nothing to offer.
+- The server supplies a **`specialButton`**, which the board already maps and renders as **"All
+  attack"**. It works: pressing it declares the whole team.
+
+**What today's board does with it:** projects it as ordinary priority controls —
+`buttons=[Pass priority, All attack]`, `pickable=0`. So the player can attack with **everything or
+nothing**, and cannot choose *which* creatures attack. The ids are in the projection and there is no
+surface for them — the same shape as the defect 0057 shipped and had caught on a device.
+
+### 7.3 What the server asks for blockers — measured, 2026-08-14
+
+```
+[opp] step=DeclareAttackers turn=8 prompt=Select msg='Select attackers'
+      options.ids = {possibleAttackers=2}
+[app] step=DeclareBlockers turn=8 prompt=Select msg='Select blockers'
+      options.text = [queryType]          <- no specialButton
+      options.ids  = {possibleBlockers=2} -> [Goblin Token, Goblin Token]
+      playable     = 0
+```
+
+**Findings.**
+- Blocking mirrors attacking: a **`GamePrompt.Select`** with the literal message `Select blockers`,
+  carrying **`possibleBlockers`**. `playable` is empty here too.
+- **There is no `specialButton` for blocking.** Attacking gets "All attack"; blocking gets no
+  equivalent shortcut, so blocking is inherently per-creature.
+- Today's board offers `[Pass priority]` with `pickable=0` — **the viewer cannot block at all.**
+
+**Combat groups are per-attacker.** Two attackers produced **two** groups, not one:
+
+```
+combat groups=2
+group defender='app_be158b' attackers=1 blockers=0
+group defender='app_be158b' attackers=1 blockers=0
+```
+
+So `CombatGroup` reads *"against this defender, this attacker, blocked by these"* — the defender is
+repeated per group rather than grouping attackers under one defender.
+
+**Still unmeasured — do not specify it until it has been seen.** Whether picking a blocker triggers a
+**follow-up prompt asking which attacker it blocks**. The run's budget expired at the blocking prompt
+without answering it. This is the crux of the pairing problem below, so the combat story must measure it
+before designing the interaction.
+
+### 7.4 Combat is **two** assignment problems, never both at once
+
+**Decision (Pete).** §7.1 treated combat as one thing. It is two, and they never belong to the same
+player at the same moment:
+
+| Role | The assignment | Server shape |
+|---|---|---|
+| **Attacking player** | each attacker → what it attacks (**player, planeswalker, or battle**) | `Select attackers` + `possibleAttackers`, **with** `specialButton` |
+| **Blocking player** | each blocker → the attacker it blocks | `Select blockers` + `possibleBlockers`, **no** shortcut |
+
+> *"the attacking player assigns attackers to targets, player or battle or Planeswalker, etc. the
+> blocker assigns blockers to attackers. we need to consider how best to represent each of these
+> situations as they never occur for the same player at the same time"*
+
+**Why it matters.** The board is only ever in one of these modes, so each can be designed for its own
+job rather than compromised into a shared "combat view". It also matches the data: `CombatGroup` is
+**per-attacker** (§7.3), reading *"this attacker, against this defender, blocked by these"*.
+
+**Note on defenders.** The opposing player is **not** the only legal defender — planeswalkers and
+battles are too, in ordinary 1v1. Any design that assumes "attack = point at the opponent" is wrong.
+
+### 7.5 Declaration: tap the creature, and ask only when the choice is real
+
+**Decision (Pete).** Both directions use the same principle — **tap the creature; the board asks for
+the pairing only when it is genuinely ambiguous**:
+
+- **Attacking:** tapping a creature declares it as an attacker. If more than one legal defender exists,
+  the board then asks which one.
+- **Blocking:** tapping a creature declares it as a blocker. If more than one attacker could be
+  blocked, the board then asks which.
+
+**Why.** One tap in the common case, and a second only where there is a real decision to make. Nothing
+is invented for the player to learn — it is §5.2's tap model with a conditional follow-up.
+
+**"All attack" is kept, with a confirmation (Pete).** The server supplies the shortcut and it is proven
+to work live (§7.2), so it stays — but it commits the whole team, so it routes through the same
+confirm step as targeting (§16.4). There is no equivalent for blocking, and none should be invented.
+
+**⚠️ This decision has an unmeasured dependency — resolve it before building.** It is only free if the
+**server** behaves the same way: auto-assigning when unambiguous and asking when not. §7.2/§7.3 did
+**not** measure whether picking an attacker triggers a *"which defender?"* follow-up (the probe's board
+had only one legal defender), nor whether picking a blocker triggers a *"which attacker?"* follow-up.
+
+- If upstream asks only when ambiguous, the board renders its follow-up and this design costs nothing.
+- If upstream **always** asks, then answering a one-option question on the player's behalf is a
+  **policy decision**, and it belongs behind the same seam as auto-pass (§14.1) — not scattered into
+  combat code.
+
+Measure both before designing the interaction further. A deck with a planeswalker gives the
+multi-defender case; two attackers into one blocker gives the other.
+
+### 7.6 The harness stall, diagnosed
+
+`docs/live-test-decklists.md` recorded a stall as **unsolved** — *"after certain answers the game stops
+pushing to us altogether"*. It is not the server going quiet. Upstream asks
+
+> `You still have mana in your mana pool and it will be lost. Pass anyway?`
+
+and answering it with the **negative** arm hands priority straight back with the mana still floating,
+so an auto-responder that always declines loops forever. It is identifiable **without parsing the
+prose**: this is the only `Ask` that carries **`autoAnswerMessage`** in its options.
+
+Two further stalls sit behind it, both worth knowing before writing another live harness:
+- A mana prompt does **not** carry `possibleTargets`. Its sources are in **`playable`** — the same
+  place `controlsFor` reads them.
+- An auto-responder that plays `playable.first()` will cast a spell before playing its land, then
+  strand itself mid-payment and silently retry the cast forever. **Play lands first**; `manaCost` is
+  null for lands (§0), which is the only signal needed.
+
 ---
 
 ## 8. Game end

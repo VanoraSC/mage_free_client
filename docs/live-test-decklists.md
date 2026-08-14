@@ -83,6 +83,24 @@ has nothing to offer there — that was a blocking defect in 0057, caught on a d
 
 ---
 
+## 5. Reaching combat — creature-dense on purpose (2026-08-14)
+
+Used by `CombatProbeIT`. §17's run never reached combat at all (`combatSteps=0`) because its deck spent
+nine turns drawing lands before it had a creature. Dragon Fodder is `{1}{R}` for **two** 1/1 Goblin
+tokens, so both seats have attackers and blockers within a couple of turns.
+
+| Qty | Card | Set | № |
+|----:|------|-----|---|
+| 24 | Mountain | `10E` | `376` |
+| 36 | Dragon Fodder | `ALA` | `97` |
+
+**Result:** reached `DeclareAttackers` with a real declaration — see
+`docs/game-board-requirements.md` §7.2 for the prompt shape. Runs are **not deterministic**: of six
+runs, one reached the declaration and the rest ended earlier on mana draws or the stalls below. Budget
+accordingly, and re-run rather than concluding from a single quiet transcript.
+
+---
+
 ## Other verified printings (catalog-checked, for future decks)
 
 | Card | Set | № |
@@ -111,11 +129,19 @@ has nothing to offer there — that was a blocking defect in 0057, caught on a d
   table creation, so *Start match* works without submitting. That is `:feature:tables` (Epic 7); recorded
   here because it shapes how a live game can be set up by hand today.
 - **Receive timeouts must tolerate the AI's turn** — but a longer timeout is *not* a cure-all. 20 s
-  starved; raising it to **75 s starved too** (`no GameState emitted within 75000ms`). So the stall is
-  not merely AI think time: after certain answers the game stops pushing to us altogether. **Unsolved.**
-  A future attempt should log every state and prompt as it arrives (rather than only interesting ones)
-  to find the last thing answered before the stream goes quiet — the answer is probably a prompt kind
-  the auto-responder handles wrongly, leaving the server waiting on a reply that never comes.
+  starved; raising it to **75 s starved too** (`no GameState emitted within 75000ms`).
+  **Solved, 2026-08-14** (`CombatProbeIT`), and the earlier guess was right: it is a prompt the
+  auto-responder answers wrongly, not the server going quiet. Upstream asks
+  *"You still have mana in your mana pool and it will be lost. Pass anyway?"*, and answering with the
+  **negative** arm hands priority straight back with the mana still floating — forever. Identify it
+  without parsing the prose: it is the only `Ask` carrying **`autoAnswerMessage`** in its options, and
+  it must be answered **affirmatively**.
+- **Two more stalls behind that one**, both found the same day:
+  - A `PlayMana` prompt does **not** carry `possibleTargets`. Its sources are in **`playable`** — the
+    same place `controlsFor` reads them. Reading the wrong field cancels the cast and stalls the run.
+  - An auto-responder that plays `playable.first()` will cast a spell **before** playing its land, then
+    strand itself mid-payment and silently retry the cast forever. **Play lands first**; `manaCost` is
+    null for lands, which is the only signal needed.
 - **Deep-game experiments are therefore expensive.** Anything needing several turns of real play is
   better done *inside* the story that builds the relevant surface, where the loop can be driven by the
   real UI logic, than as a standalone scripted probe.
