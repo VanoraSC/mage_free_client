@@ -318,6 +318,56 @@ a lot of small taps — revisit once real games show where it hurts.
 
 **Data.** `combat` is present in the snapshot (empty outside combat, verified live).
 
+### 7.2 What the server actually asks for attackers — measured, 2026-08-14
+
+§7.1 was written before any run had reached combat (§17 records `combatSteps=0`). `CombatProbeIT`
+reached it deliberately, and this is what arrives:
+
+```
+[app] step=DeclareAttackers turn=5 prompt=Select msg='Select attackers'
+      options.text = [specialButton, queryType]
+      options.ids  = {possibleAttackers=2}  ->  [Goblin Token, Goblin Token]
+      playable     = 0
+```
+
+**Findings.**
+- Declaring attackers is a **`GamePrompt.Select`** whose message is the literal `Select attackers` —
+  the same prompt kind as ordinary priority, distinguished by its options rather than its type.
+- **`possibleAttackers` is populated**, and the bridge's `optionsView()` already carries it through:
+  that mapper turns *any* collection-valued option into an id list, so the data path was complete
+  before anyone looked. Nothing needs to be added to `:protocol` or `:bridge` to declare attackers.
+- **`playable` is empty during the declaration.** The attackers come *only* from `possibleAttackers`,
+  so a client that derives its affordances from `playable` — as `controlsFor` does today — sees
+  nothing to offer.
+- The server supplies a **`specialButton`**, which the board already maps and renders as **"All
+  attack"**. It works: pressing it declares the whole team.
+
+**What today's board does with it:** projects it as ordinary priority controls —
+`buttons=[Pass priority, All attack]`, `pickable=0`. So the player can attack with **everything or
+nothing**, and cannot choose *which* creatures attack. The ids are in the projection and there is no
+surface for them — the same shape as the defect 0057 shipped and had caught on a device.
+
+**Still unmeasured:** the *blocking* prompt, and therefore how a blocker is paired with an attacker.
+Do not specify pairing until it has been seen.
+
+### 7.3 The harness stall, diagnosed
+
+`docs/live-test-decklists.md` recorded a stall as **unsolved** — *"after certain answers the game stops
+pushing to us altogether"*. It is not the server going quiet. Upstream asks
+
+> `You still have mana in your mana pool and it will be lost. Pass anyway?`
+
+and answering it with the **negative** arm hands priority straight back with the mana still floating,
+so an auto-responder that always declines loops forever. It is identifiable **without parsing the
+prose**: this is the only `Ask` that carries **`autoAnswerMessage`** in its options.
+
+Two further stalls sit behind it, both worth knowing before writing another live harness:
+- A mana prompt does **not** carry `possibleTargets`. Its sources are in **`playable`** — the same
+  place `controlsFor` reads them.
+- An auto-responder that plays `playable.first()` will cast a spell before playing its land, then
+  strand itself mid-payment and silently retry the cast forever. **Play lands first**; `manaCost` is
+  null for lands (§0), which is the only signal needed.
+
 ---
 
 ## 8. Game end

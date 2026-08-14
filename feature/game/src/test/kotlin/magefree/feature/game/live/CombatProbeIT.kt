@@ -185,7 +185,12 @@ class CombatProbeIT {
         state: GameState,
     ) {
         val prompt = state.prompt ?: return
-        val key = "$who|${prompt::class.simpleName}|${prompt.message}|${state.step}"
+        // Combat steps carry the turn in the key, so a *later* combat is printed again rather than
+        // silently deduped against the first one — the first run hid the opponent's whole game that way.
+        val combatStep = state.step == PhaseStep.DeclareAttackers || state.step == PhaseStep.DeclareBlockers
+        val key =
+            "$who|${prompt::class.simpleName}|${prompt.message}|${state.step}" +
+                if (combatStep) "|${state.turn}" else ""
         if (!seen.addIfAbsent(key)) return
 
         val step = state.step
@@ -264,18 +269,30 @@ class CombatProbeIT {
             lastAt = System.currentTimeMillis()
 
             when (prompt) {
-                is GamePrompt.Ask -> games.answerAsk(gameId, answer = false)
+                // **The stall `docs/live-test-decklists.md` records as unsolved**, identified here.
+                // "You still have mana in your mana pool and it will be lost. Pass anyway?" answered
+                // with the negative arm hands priority straight back with the mana still floating, and
+                // the loop runs forever — which is exactly the "server stops pushing" symptom that note
+                // describes. It is distinguishable without reading the prose: this prompt is the only
+                // Ask that carries `autoAnswerMessage` in its options.
+                is GamePrompt.Ask ->
+                    games.answerAsk(gameId, answer = prompt.options.text.containsKey(AUTO_ANSWER))
 
                 is GamePrompt.Select -> {
                     val attackers = prompt.options.possibleAttackers
                     val playable = state.playable
+                    // **Lands before spells.** Playing whatever came first meant casting Dragon Fodder
+                    // with barely enough mana, then stalling mid-payment and silently retrying the cast
+                    // forever. `manaCost` is null for lands (§0), which is the only signal needed.
+                    val landIds = state.hand.filter { it.manaCost == null }.map { it.id }.toSet()
+                    val land = playable.firstOrNull { it.objectId in landIds }
                     when {
-                        // Attack with everything offered, then say done.
                         attackers.isNotEmpty() -> {
                             say("opp  -> declaring ${attackers.size} attacker(s)")
                             attackers.forEach { games.chooseTarget(gameId, it) }
                             games.cancelPrompt(gameId)
                         }
+                        land != null -> games.playObject(gameId, land.objectId)
                         playable.isNotEmpty() -> games.playObject(gameId, playable.first().objectId)
                         else -> games.passPriority(gameId)
                     }
@@ -286,9 +303,20 @@ class CombatProbeIT {
                     if (pick != null) games.chooseTarget(gameId, pick) else games.cancelPrompt(gameId)
                 }
 
+                // Mana sources come from `playable` (the server's `canPlayObjects` for this prompt), the
+                // same place `controlsFor` reads them — **not** from `possibleTargets`, which a mana
+                // prompt does not carry. Getting this wrong cancels the cast and stalls the run.
                 is GamePrompt.PlayMana -> {
-                    val source = prompt.options.possibleTargets.firstOrNull()
-                    if (source != null) games.playManaSource(gameId, source) else games.cancelPrompt(gameId)
+                    val source = state.playable.firstOrNull()?.objectId
+                    if (source != null) {
+                        games.playManaSource(gameId, source)
+                    } else {
+                        // Nothing left to tap: back the cast out and *pass*, rather than falling straight
+                        // back into a main phase that offers the same unpayable spell again.
+                        say("opp  -> cannot pay; cancelling and passing")
+                        games.cancelPrompt(gameId)
+                        games.passPriority(gameId)
+                    }
                 }
 
                 else -> runCatching { games.cancelPrompt(gameId) }
@@ -326,8 +354,16 @@ class CombatProbeIT {
                     is PromptControlsUi.Priority -> {
                         val playable =
                             state.board.hand.cards.firstOrNull { it.objectId in controls.pickableObjectIds }
-                        playable?.let { BoardAction.PlayObject(it.objectId) }
-                            ?: controls.buttons.firstOrNull { it.action == BoardAction.PassPriority }?.action
+                        val special = controls.buttons.firstOrNull { it.action == BoardAction.UseSpecial }
+                        when {
+                            // At a declaration the board offers no way to pick attackers (pickable=0),
+                            // but the server's own special button ("All attack") is mapped. Press it, so
+                            // the run gets past declaring and the *blocking* prompt can be observed at
+                            // all — that shape is the other half of what the combat story needs.
+                            step == PhaseStep.DeclareAttackers && special != null -> special.action
+                            playable != null -> BoardAction.PlayObject(playable.objectId)
+                            else -> controls.buttons.firstOrNull { it.action == BoardAction.PassPriority }?.action
+                        }
                     }
 
                     is PromptControlsUi.Mana ->
@@ -338,9 +374,13 @@ class CombatProbeIT {
                         controls.pickableObjectIds.firstOrNull()?.let(BoardAction::ChooseTarget)
                             ?: BoardAction.CancelPrompt
 
-                    is PromptControlsUi.Choices ->
-                        controls.buttons.firstOrNull { it.action == BoardAction.AnswerAsk(yes = false) }?.action
+                    is PromptControlsUi.Choices -> {
+                        // Same trap as the opponent's: the mana-pool "Pass anyway?" must be answered
+                        // affirmatively or the game never advances. Keep the opening hand otherwise.
+                        val passAnyway = (appState?.prompt as? GamePrompt.Ask)?.options?.text?.containsKey(AUTO_ANSWER) == true
+                        controls.buttons.firstOrNull { it.action == BoardAction.AnswerAsk(yes = passAnyway) }?.action
                             ?: controls.buttons.firstOrNull()?.action
+                    }
 
                     is PromptControlsUi.Amount -> controls.amountRequest?.let { BoardAction.ChooseAmount(it.min) }
                     is PromptControlsUi.MultiAmount -> BoardAction.DistributeAmounts(controls.amountRows.map { it.min })
@@ -429,6 +469,9 @@ class CombatProbeIT {
         )
 
     private companion object {
+        /** Options key present only on upstream's auto-answerable "Pass anyway?" question. */
+        const val AUTO_ANSWER = "autoAnswerMessage"
+
         const val BRIDGE_URL_ENV = "BRIDGE_URL"
         const val TABLE_NAME = "combat_probe"
         const val DUEL = "Two Player Duel"
@@ -436,8 +479,8 @@ class CombatProbeIT {
 
         const val CONNECT_MS = 60_000L
         const val TABLE_MS = 120_000L
-        const val BUDGET_MS = 420_000L
-        const val POLL_MS = 300L
-        const val REANSWER_MS = 4_000L
+        const val BUDGET_MS = 780_000L
+        const val POLL_MS = 200L
+        const val REANSWER_MS = 1_200L
     }
 }
