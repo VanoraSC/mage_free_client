@@ -148,12 +148,19 @@ internal fun SeatUi.zoneCountsLabel(): String =
  *
  * Empty state: [EMPTY_BATTLEFIELD] — the normal state of both battlefields on turn one, and of the
  * opponent's for as long as they play nothing.
+ *
+ * @param picks how each permanent relates to the outstanding prompt — the server's own candidate list,
+ *   projected by [controlsFor]. Both battlefields take it: a target can be the opponent's permanent just
+ *   as easily as your own.
  */
 @Composable
 internal fun BattlefieldBand(
     seat: SeatUi?,
     artRenderer: CardArtRenderer,
     modifier: Modifier = Modifier,
+    picks: (String) -> CardPickState = { CardPickState.None },
+    selectedObjectId: String? = null,
+    onCardTap: ((String) -> Unit)? = null,
 ) {
     Box(
         modifier = modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background),
@@ -178,7 +185,13 @@ internal fun BattlefieldBand(
             ) {
                 permanents.forEach { permanent ->
                     key(permanent.objectId) {
-                        PermanentCard(permanent = permanent, artRenderer = artRenderer)
+                        PermanentCard(
+                            permanent = permanent,
+                            artRenderer = artRenderer,
+                            pick = picks(permanent.objectId),
+                            isSelected = permanent.objectId == selectedObjectId,
+                            onTap = onCardTap?.let { tap -> { tap(permanent.objectId) } },
+                        )
                     }
                 }
             }
@@ -389,6 +402,9 @@ internal fun ExpandedHand(
     hand: HandUi,
     artRenderer: CardArtRenderer,
     modifier: Modifier = Modifier,
+    picks: (String) -> CardPickState = { CardPickState.None },
+    selectedObjectId: String? = null,
+    onCardTap: ((String) -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -418,7 +434,13 @@ internal fun ExpandedHand(
             ) {
                 hand.cards.forEach { handCard ->
                     key(handCard.objectId) {
-                        HandCard(handCard = handCard, artRenderer = artRenderer)
+                        HandCard(
+                            handCard = handCard,
+                            artRenderer = artRenderer,
+                            pick = picks(handCard.objectId),
+                            isSelected = handCard.objectId == selectedObjectId,
+                            onTap = onCardTap?.let { tap -> { tap(handCard.objectId) } },
+                        )
                     }
                 }
             }

@@ -339,7 +339,7 @@ sealed interface PriorityUi {
      */
     data object Asked : PriorityUi {
         override val headline: String get() = "The server is waiting on you"
-        override val detail: String? get() = "Answering arrives in a later update."
+        override val detail: String? get() = "Answer with the controls over the board."
     }
 
     /**
@@ -453,7 +453,7 @@ private fun GamePermanent.toPermanentUi(
         isOfferedByServer = card.id in playableIds,
     )
 
-private fun GameCard.toCardUi(): CardUi {
+internal fun GameCard.toCardUi(): CardUi {
     val shownName = if (isFaceDown) FACE_DOWN_NAME else name
     val pt =
         if (power.isNullOrBlank() || toughness.isNullOrBlank()) null else "$power/$toughness"
