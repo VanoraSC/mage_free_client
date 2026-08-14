@@ -383,6 +383,7 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0055 | Board rendering (read-only) | 0052, 0054, 0031, 0014 | Portrait board rendering a live `GameState` — both battlefields, peek-and-expand hand, stack/phase/turn, player vitals, explicit priority — with **real card art**. No interaction. |
 | 0056 | Card art: send a User-Agent | 0031, 0043 | **App-wide defect.** `CardImageLoader` sends no `User-Agent`, and Scryfall rejects OkHttp's default with HTTP 400 — so card art has **never** loaded, anywhere: browser, deck builder, the deck-scoped offline download, and the board. One line, plus a test that inspects the real outgoing request. |
 | 0057 | Board interaction: casting, targeting, cancel | 0055, 0056, 0052, 0054 | Floating controls (never modals) + visibility toggle, tap-select-confirm, targeting with per-pick sends and a confirm, mana by tapping lands, cascading cancel, manual priority through a single pass-policy seam. Unblocks what 0055 could not verify live. |
+| 0058 | Creature status and counters | 0051, 0052, 0055 | **Defect + missing data.** The board renders `0/0 · Summoning sick` under a land, because P/T and summoning sickness are drawn unconditionally — and the bridge drops `cardTypes`, `isCreature()` and `counters` from `CardView` entirely. Creature-ness is game state, not printing (Earthbend, Ensoul Artifact, crewed Vehicles), so the server's own answer must be carried and rendered, along with counters. |
 | — | *Combat* | 0057 | Attackers and blockers using the same tap model. To be specified after 0057. |
 | 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
 
@@ -426,17 +427,21 @@ bridge). Stories **0001–0022 are complete and merged**:
 
 9. **Epic 9 (deck builder):** 0033 → 0034 → 0035. ✅ (all deck ops offline; only art is networked)
 
-10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038 built; **0040 + 0041 outstanding**. ⚠️
+10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038, with 0040 + 0041 fixing it end to end. ✅
 
-**Current state — hosting does not yet work end to end.** The protocol/bridge half (0036) is sound and
-now **proven against the real server** by 0039's live `TableRelayIT` (create → seat AI → seat self →
-start → `MatchStarting`). The app half has two confirmed defects: the room's seats are folded from a
-`SeatUpdated` push **nothing sends**, so the host's Start can never enable (**0040**); and the host
-flow calls `createTable` without ever seating itself or its AI players, so a hosted table cannot
-become ready (**0041**). Joining an already-hosted table and spectating are unaffected. Both fixes are
-specified and are the next work.
+11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 built; **0058 outstanding**. ⚠️
 
-**Beyond that:** **EPIC-11** (in-game play) is the next functional gap — everything above funnels into
-the `MatchStarting` hand-off — and **EPIC-08** (tournaments / draft / sealed) is the other unstarted
+**Current state — a game is playable from the app.** Hosting works end to end, and the board renders a
+live game and answers the server's prompts: a full turn has been played on-device against an AI —
+mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and turn advance.
+
+**Known gaps.** **0058** (creature status and counters) is specified and is the next board work:
+noncreature permanents render a meaningless `0/0`, and the bridge drops card types and counters, so
+counters cannot be shown at all. **Combat declaration** is unspecified and is the next functional gap
+after it. Two defects outside the board are recorded but unspecified: the table room's `submitDeck` is
+declined by the server every time (a match only starts because `joinTable` binds the host's deck at
+creation), and the host form offers no `Constructed - Freeform Unlimited`.
+
+**Beyond that:** **EPIC-08** (tournaments / draft / sealed) is the remaining unstarted
 branch. The 10 → 9 → 7 ordering was deliberate: cards and decks came first. Epic 5's notifications
 track remains deferred; the downstream epics (08, 11–17) are not yet broken into stories.
