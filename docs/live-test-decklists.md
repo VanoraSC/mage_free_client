@@ -79,7 +79,7 @@ after one pick, which is the server-side incremental validation §17.2 describes
 
 **Caution:** the candidates for both the starting-player prompt and a Forked Bolt aimed at a face are
 **player ids**, and the prompt carries an empty `cards` list. A client that only lights up matching cards
-has nothing to offer there — that shipped as a blocking defect in 0057 and was caught on a device.
+has nothing to offer there — that was a blocking defect in 0057, caught on a device before merge.
 
 ---
 
