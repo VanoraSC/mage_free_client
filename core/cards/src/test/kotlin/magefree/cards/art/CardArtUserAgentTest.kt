@@ -161,6 +161,22 @@ class CardArtUserAgentTest {
     }
 
     @Test
+    fun `the User-Agent has the documented product-version-contact shape`() {
+        val userAgent = warmAndRecord().getHeader("User-Agent")!!
+
+        // Pins the whole value, not just its parts: `<product>/<version> (+<project url>)`. The
+        // version is whatever the platform reports for the installed build — `unknown` under
+        // Robolectric (the manifest under test declares no versionName), the app's versionName on a
+        // device — so its presence is pinned but its content is not.
+        val expected =
+            Regex("""^mage-free-client/\S+ \(\+https://github\.com/VanoraSC/mage_free_client\)$""")
+        assertTrue(
+            "User-Agent '$userAgent' does not match ${expected.pattern}",
+            expected.matches(userAgent),
+        )
+    }
+
+    @Test
     fun `the User-Agent is sent exactly once`() {
         // A header set on top of OkHttp's own default rather than replacing it would ship two values,
         // and Scryfall would see the generic one too.
