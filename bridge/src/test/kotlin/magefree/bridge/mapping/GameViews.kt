@@ -5,12 +5,14 @@ import mage.constants.PhaseStep
 import mage.constants.SubType
 import mage.constants.SuperType
 import mage.constants.TurnPhase
+import mage.counters.Counter
 import mage.players.PlayableObjectStats
 import mage.players.PlayableObjectsList
 import mage.util.SubTypes
 import mage.view.CardView
 import mage.view.CardsView
 import mage.view.CombatGroupView
+import mage.view.CounterView
 import mage.view.ExileView
 import mage.view.GameView
 import mage.view.ManaPoolView
@@ -67,7 +69,18 @@ internal object GameViews {
         error("no field '$name' on ${javaClass.name}")
     }
 
-    /** A `CardView` as the server would send one: identifiable printing, type line, rules, P/T. */
+    /**
+     * A `CardView` as the server would send one: identifiable printing, type line, rules, P/T, and the
+     * counters on the object.
+     *
+     * [counters] is built through upstream's **own** `CounterView(Counter)` constructor rather than
+     * reflectively, because that constructor is real production code (`name` and `count` come off
+     * `mage.counters.Counter`) and is on the bridge's classpath.
+     *
+     * Note that `CardView.isCreature()` is not a settable field: upstream computes it as
+     * `cardTypes.contains(CREATURE)`, so [cardTypes] is what drives it here exactly as it does in a
+     * running game.
+     */
     fun card(
         id: UUID = UUID.randomUUID(),
         name: String = "Forest",
@@ -81,8 +94,10 @@ internal object GameViews {
         toughness: String = "",
         rules: List<String> = listOf("({T}: Add {G}.)"),
         faceDown: Boolean = false,
+        counters: List<Pair<String, Int>> = emptyList(),
     ): CardView =
         allocate(CardView::class.java).apply {
+            set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
             set("id", id)
             set("expansionSetCode", setCode)
             set("cardNumber", collectorNumber)
@@ -132,6 +147,7 @@ internal object GameViews {
         set("cardTypes", card.cardTypes)
         set("superTypes", card.superTypes)
         set("subTypes", card.subTypes)
+        set("counters", card.counters)
         set("manaCostLeftStr", card.manaCostSymbols)
         set("manaCostRightStr", emptyList<String>())
         set("faceDown", card.isFaceDown)

@@ -6,6 +6,7 @@ import mage.constants.SubType
 import mage.constants.TurnPhase
 import mage.view.CardView
 import mage.view.GameView
+import magefree.protocol.CardTypeCode
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.TurnPhaseCode
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -379,6 +380,141 @@ class GameViewMapperTest {
         assertNull(card.manaCost, "the composed mana cost degrades to null")
     }
 
+    // ---- story 0058: what a card currently *is* -----------------------------------------------------
+
+    @Test
+    fun `a land that an effect has animated is carried as the creature it currently is`() {
+        // Earthbend on a Mountain. The card is still a land AND is now a creature — upstream recomputes
+        // `cardTypes` for every snapshot, and `isCreature()` reads exactly that list. Nothing here (and
+        // nothing downstream) may decide this from the printing or from the composed type line.
+        val earthbentMountain =
+            GameViews.card(
+                name = "Mountain",
+                setCode = "M21",
+                collectorNumber = "269",
+                cardTypes = listOf(CardType.LAND, CardType.CREATURE),
+                subTypes = listOf(SubType.MOUNTAIN),
+                power = "0",
+                toughness = "3",
+            )
+
+        val card = GameViewMapper.mapCard(earthbentMountain)
+
+        assertTrue(card.creature, "the server says this land is a creature right now")
+        assertEquals(listOf(CardTypeCode.LAND, CardTypeCode.CREATURE), card.cardTypes)
+        assertEquals("0", card.power)
+        assertEquals("3", card.toughness)
+    }
+
+    @Test
+    fun `a land that is only a land is never reported as a creature`() {
+        // The mirror of the test above, and the reason both exist: a mapper that hardcoded "lands are
+        // not creatures" would pass one and fail the other.
+        val mountain =
+            GameViews.card(
+                name = "Mountain",
+                cardTypes = listOf(CardType.LAND),
+                subTypes = listOf(SubType.MOUNTAIN),
+                // Upstream sends a permanent's *current* P/T, and a noncreature's is "0" — not blank.
+                // This is the payload that produced "0/0 · Summoning sick" under a Mountain on device.
+                power = "0",
+                toughness = "0",
+            )
+
+        val card = GameViewMapper.mapCard(mountain)
+
+        assertFalse(card.creature)
+        assertEquals(listOf(CardTypeCode.LAND), card.cardTypes)
+        assertEquals("0", card.power, "the mapper carries what the server sent; suppressing it is the board's job")
+    }
+
+    @Test
+    fun `a creature is carried with its current power and toughness, star and all`() {
+        val goyf =
+            GameViews.card(
+                name = "Tarmogoyf",
+                cardTypes = listOf(CardType.CREATURE),
+                superTypes = emptyList(),
+                subTypes = listOf(SubType.LHURGOYF),
+                power = "*",
+                toughness = "1+*",
+            )
+
+        val card = GameViewMapper.mapCard(goyf)
+
+        assertTrue(card.creature)
+        assertEquals("*", card.power, "`*` is a real power — it is carried as the string upstream sent")
+        assertEquals("1+*", card.toughness)
+    }
+
+    @Test
+    fun `a permanent carries every counter the server put on it, whatever the kind`() {
+        val elder =
+            GameViews.permanent(
+                card =
+                    GameViews.card(
+                        name = "Walking Ballista",
+                        cardTypes = listOf(CardType.ARTIFACT, CardType.CREATURE),
+                        superTypes = emptyList(),
+                        subTypes = emptyList(),
+                        power = "2",
+                        toughness = "2",
+                        // Deliberately not just +1/+1: the mapping must not know any counter kind.
+                        counters = listOf("+1/+1" to 2, "stun" to 1, "oil" to 3),
+                    ),
+            )
+
+        val card = GameViewMapper.mapCard(elder)
+
+        assertEquals(listOf("+1/+1", "stun", "oil"), card.counters.map { it.name })
+        assertEquals(listOf(2, 1, 3), card.counters.map { it.count })
+    }
+
+    @Test
+    fun `a permanent with no counters carries an empty list, never a fabricated one`() {
+        val bear =
+            GameViews.permanent(
+                card =
+                    GameViews.card(
+                        name = "Grizzly Bears",
+                        cardTypes = listOf(CardType.CREATURE),
+                        superTypes = emptyList(),
+                        subTypes = listOf(SubType.BEAR),
+                        power = "2",
+                        toughness = "2",
+                    ),
+            )
+
+        assertTrue(GameViewMapper.mapCard(bear).counters.isEmpty())
+    }
+
+    @Test
+    fun `a counter list upstream never populated maps to empty rather than throwing`() {
+        // `CardView.counters` is left null unless the object actually has counters (upstream only
+        // allocates the list when `Card.getCounters(game)` is non-empty), so null is the ordinary case
+        // for most cards — not a drifted view.
+        val sparse = GameViews.card(name = "Forest").apply { nullOutCounters() }
+
+        assertTrue(GameViewMapper.mapCard(sparse).counters.isEmpty())
+    }
+
+    @Test
+    fun `every card type upstream defines has a code of its own`() {
+        // The guard on the one place upstream's set and ours meet. If a future mage-common adds a card
+        // type, this fails here — naming the type — rather than silently mapping it to UNKNOWN and
+        // making an animated whatever-it-is look like a noncreature to the board.
+        CardType.values().forEach { upstream ->
+            val mapped =
+                GameViewMapper
+                    .mapCard(
+                        GameViews.card(cardTypes = listOf(upstream), superTypes = emptyList(), subTypes = emptyList()),
+                    ).cardTypes
+                    .single()
+
+            assertEquals(upstream.name, mapped.name, "upstream's $upstream has no code of its own")
+        }
+    }
+
     /** Nulls out every collection field of a [GameView], standing in for a sparse upstream view. */
     private fun GameView.setEveryCollectionNull() {
         listOf("players", "myHand", "stack", "exiles", "revealed", "combat", "canPlayObjects").forEach { name ->
@@ -386,6 +522,13 @@ class GameViewMapperTest {
             field.isAccessible = true
             field.set(this, null)
         }
+    }
+
+    /** Nulls `CardView.counters`, which is upstream's state for "this object has no counters at all". */
+    private fun CardView.nullOutCounters() {
+        val field = CardView::class.java.getDeclaredField("counters")
+        field.isAccessible = true
+        field.set(this, null)
     }
 
     /** Nulls the backing collections `getTypeText()`/`getManaCostStr()` walk, so both getters throw. */

@@ -1,5 +1,6 @@
 package magefree.bridge.mapping
 
+import mage.constants.CardType
 import mage.constants.PhaseStep
 import mage.constants.TurnPhase
 import mage.view.CardView
@@ -8,8 +9,10 @@ import mage.view.CombatGroupView
 import mage.view.GameView
 import mage.view.PermanentView
 import mage.view.PlayerView
+import magefree.protocol.CardTypeCode
 import magefree.protocol.GameCardView
 import magefree.protocol.GameCombatGroupView
+import magefree.protocol.GameCounterView
 import magefree.protocol.GameManaPoolView
 import magefree.protocol.GamePermanentView
 import magefree.protocol.GamePlayableObject
@@ -165,8 +168,24 @@ public object GameViewMapper {
 
     /**
      * Maps one `CardView` to its app-schema form. Deliberately thin — enough to identify the printing
-     * (`(setCode, collectorNumber)`, the pair story 0030's catalog resolves art by) and to render a
-     * text-only card.
+     * (`(setCode, collectorNumber)`, the pair story 0030's catalog resolves art by), to render a
+     * text-only card, and (story 0058) to say what the object **currently is**.
+     *
+     * **Reachability (verification standard 2/5) — what writes the 0058 fields.** Each is a getter on
+     * the same `CardView` the rest of this function reads, and upstream populates all three in the
+     * `CardView` constructors themselves (verified against `mage-common-1.4.60`):
+     * - [GameCardView.cardTypes] ← `CardView.getCardTypes()`, recomputed per snapshot from the live
+     *   game object, so continuous effects are already in it (an Earthbent land carries `CREATURE`).
+     * - [GameCardView.creature] ← `CardView.isCreature()`, which upstream defines as
+     *   `cardTypes.contains(CREATURE)`. Read rather than reimplemented: the predicate stays the
+     *   server's.
+     * - [GameCardView.counters] ← `CardView.getCounters()`, built from `Card.getCounters(game)` /
+     *   `Permanent.getCounters(game)` into `CounterView{name, count}`. Upstream allocates the list only
+     *   when the object actually has counters, so **null is the ordinary case** and means "none".
+     *
+     * `power`/`toughness` stay strings on purpose — `*` is a real value — and are carried exactly as
+     * sent, including the `"0"` a noncreature permanent reports. Deciding whether to *show* them is the
+     * board's job, not the mapper's.
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
@@ -180,7 +199,44 @@ public object GameViewMapper {
             toughness = card.toughness.orNullIfBlank(),
             rules = card.rules.orEmpty().filterNotNull(),
             faceDown = card.isFaceDown,
+            cardTypes =
+                card.cardTypes
+                    .orEmpty()
+                    .filterNotNull()
+                    .map(::typeOf),
+            // The server's own predicate, asked only once it has actually sent the list it reads:
+            // `isCreature()` dereferences `cardTypes`, and a sparse view can leave it null (the same
+            // null `getTypeText()` chokes on). "The server did not say" is never "yes".
+            creature = card.cardTypes != null && card.isCreature,
+            counters =
+                card.counters.orEmpty().filterNotNull().map { counter ->
+                    GameCounterView(name = counter.name.orEmpty(), count = counter.count)
+                },
         )
+
+    /**
+     * Maps `CardType` to its app-schema code. Exhaustive on purpose: a card type added upstream becomes
+     * a **compile** error here — the one place the two sets meet — rather than a permanent that quietly
+     * stops looking like what it is.
+     */
+    private fun typeOf(type: CardType): CardTypeCode =
+        when (type) {
+            CardType.ARTIFACT -> CardTypeCode.ARTIFACT
+            CardType.BATTLE -> CardTypeCode.BATTLE
+            CardType.CONSPIRACY -> CardTypeCode.CONSPIRACY
+            CardType.CREATURE -> CardTypeCode.CREATURE
+            CardType.DUNGEON -> CardTypeCode.DUNGEON
+            CardType.ENCHANTMENT -> CardTypeCode.ENCHANTMENT
+            CardType.INSTANT -> CardTypeCode.INSTANT
+            CardType.KINDRED -> CardTypeCode.KINDRED
+            CardType.LAND -> CardTypeCode.LAND
+            CardType.PHENOMENON -> CardTypeCode.PHENOMENON
+            CardType.PLANE -> CardTypeCode.PLANE
+            CardType.PLANESWALKER -> CardTypeCode.PLANESWALKER
+            CardType.SCHEME -> CardTypeCode.SCHEME
+            CardType.SORCERY -> CardTypeCode.SORCERY
+            CardType.VANGUARD -> CardTypeCode.VANGUARD
+        }
 
     /** Maps `TurnPhase` to its app-schema code; an absent/unknown phase becomes [TurnPhaseCode.UNKNOWN]. */
     private fun phaseOf(phase: TurnPhase?): TurnPhaseCode =
