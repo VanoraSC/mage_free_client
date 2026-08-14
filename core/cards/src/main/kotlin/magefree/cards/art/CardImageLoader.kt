@@ -50,6 +50,10 @@ interface ArtWarmer {
  * the existing disk cache before swapping in the memory-only loader. The current loader is exposed as
  * a [StateFlow] so 0032's `AsyncImage` always binds to the policy-correct instance.
  *
+ * ### Identifying the client
+ * The default HTTP client sends a descriptive `User-Agent` ([CardArtUserAgent]). Scryfall rejects
+ * generic client defaults with HTTP 400, so this is load-bearing, not courtesy (story 0056).
+ *
  * ### Offline / placeholder
  * A cache miss with no network yields an [ErrorResult] (never a crash); 0032 renders the design-system
  * placeholder, and the card's text stays available from the bundled catalog (0030).
@@ -67,7 +71,10 @@ class CardImageLoader(
         if (callFactory != null) {
             OkHttpNetworkFetcherFactory(callFactory = { callFactory })
         } else {
-            OkHttpNetworkFetcherFactory()
+            // Not a bare OkHttpNetworkFetcherFactory(): its client sends OkHttp's generic
+            // `okhttp/<version>` agent, which Scryfall refuses with HTTP 400 (story 0056). The lambda
+            // is evaluated lazily by Coil, so the client is still built on first use.
+            OkHttpNetworkFetcherFactory(callFactory = { defaultArtCallFactory(context) })
         }
 
     private val rebuildMutex = Mutex()
