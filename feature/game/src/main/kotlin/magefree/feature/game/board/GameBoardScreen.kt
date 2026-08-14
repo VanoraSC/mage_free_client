@@ -148,6 +148,13 @@ fun GameBoardScreen(
                     onCardTap = onCardTap,
                 )
                 StatusRail(board = board, artRenderer = artRenderer)
+                // **Your vitals sit above your battlefield, not below it.** The floating controls are
+                // bottom-anchored, and with the bar at the foot of the column the panel covered it — the
+                // only way to read your own life was to hide the controls. That is merely annoying most
+                // of the time and actively wrong when *you* are one of the candidates being chosen
+                // between (a player-target prompt). Above the band it sits against the status rail,
+                // mirroring the opponent's bar, and nothing that must stay legible is under the panel.
+                SeatVitalsBar(seat = board.viewerSeat, fallbackLabel = VIEWER_SEAT_LABEL)
                 BattlefieldBand(
                     seat = board.viewerSeat,
                     artRenderer = artRenderer,
@@ -156,7 +163,6 @@ fun GameBoardScreen(
                     selectedObjectId = uiState.selectedObjectId,
                     onCardTap = onCardTap,
                 )
-                SeatVitalsBar(seat = board.viewerSeat, fallbackLabel = VIEWER_SEAT_LABEL)
                 NoticeStrip(board = board)
                 HandPeek(
                     hand = board.hand,

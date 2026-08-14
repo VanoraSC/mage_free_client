@@ -209,3 +209,16 @@ const val QUIT_MATCH_CONFIRM_LABEL: String = "Quit — you leave the whole match
 
 /** Prefix for a game action the server declined, carrying its own reason. */
 const val ACTION_FAILED_PREFIX: String = "The server declined:"
+
+/**
+ * What a candidate is called when the board cannot name it.
+ *
+ * The board can name a player, a card in hand, on either battlefield, on the stack, in exile or in a
+ * revealed set. A graveyard is only a **count** upstream, so a card there has no name to show — and an
+ * unnameable candidate must still be *answerable*, because the alternative is a prompt the player cannot
+ * satisfy. Numbered, so two of them are at least distinguishable from each other.
+ */
+const val UNNAMED_CANDIDATE_LABEL: String = "Choice"
+
+/** Marks the viewer's own seat in a list of candidates, so "choose a player" is not a guess. */
+const val YOU_SUFFIX: String = " (you)"

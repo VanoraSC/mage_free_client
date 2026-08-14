@@ -3,6 +3,7 @@ package magefree.feature.game.board
 import magefree.network.game.AbilityChoice
 import magefree.network.game.ChoiceOption
 import magefree.network.game.GameCard
+import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
@@ -126,13 +127,15 @@ class BoardControlsTest {
 
     @Test
     fun `the closing button reads cancel before a pick and done after one`() {
+        // The candidate is a permanent the board draws, so this is only about the closing button —
+        // promotion to a panel button is a different concern, covered above.
         val prompt = GamePrompt.Target(message = "Select targets", targetIds = listOf("o-1"), isRequired = false)
 
-        val beforeAPick = controlsFor(baseState().copy(prompt = prompt), hasPickedTarget = false)!!
+        val beforeAPick = controlsFor(stateWithBoardCards().copy(prompt = prompt), hasPickedTarget = false)!!
         assertEquals(listOf(CANCEL_CAST_LABEL), beforeAPick.buttons.map { it.label })
         assertEquals(listOf(BoardAction.CancelPrompt), beforeAPick.buttons.map { it.action })
 
-        val afterAPick = controlsFor(baseState().copy(prompt = prompt), hasPickedTarget = true)!!
+        val afterAPick = controlsFor(stateWithBoardCards().copy(prompt = prompt), hasPickedTarget = true)!!
         assertEquals(
             "the player's confirmation is the final done (§17.2)",
             BoardAction.FinishTargeting,
@@ -165,13 +168,122 @@ class BoardControlsTest {
     fun `a required target prompt offers no cancel until something has been picked`() {
         // The server refuses a decline of a required prompt with too few targets and re-asks, so
         // offering the button before then would be offering the player a control that cannot work.
-        val required = GamePrompt.Target(message = "Select a starting player", targetIds = listOf("p-1"), isRequired = true)
+        // A permanent on the board, so the only buttons in play are the closing ones.
+        val required = GamePrompt.Target(message = "Select a target", targetIds = listOf("o-1"), isRequired = true)
 
-        assertEquals(emptyList<String>(), controlsFor(baseState().copy(prompt = required))!!.buttons.map { it.label })
+        assertEquals(emptyList<String>(), controlsFor(stateWithBoardCards().copy(prompt = required))!!.buttons.map { it.label })
         assertEquals(
             listOf(DONE_LABEL),
-            controlsFor(baseState().copy(prompt = required), hasPickedTarget = true)!!.buttons.map { it.label },
+            controlsFor(stateWithBoardCards().copy(prompt = required), hasPickedTarget = true)!!.buttons.map { it.label },
         )
+    }
+
+    // ---- candidates that are not cards --------------------------------------------------------------
+    //
+    // The gap these cover, found on a real device: a Target prompt's candidate ids do not have to name
+    // anything the board draws. **Choosing the starting player** — the very first prompt of every game,
+    // asked before priority exists — carries two *player* ids and an empty `cards` list. Players are not
+    // cards, so nothing on the board carries those ids, and a projection that only lit up matching cards
+    // produced a prompt with zero affordances: no candidate, no done (nothing picked), no cancel
+    // (`isRequired` is true). The game could not begin.
+    //
+    // Reachability (standard 2), written out because its absence is what let this ship: *what produces a
+    // Target prompt whose ids match no card?* Upstream's start-of-game "who goes first" question does,
+    // every game. The same shape reaches us wherever the server offers a player as a target — any burn
+    // spell aimed at a face.
+
+    @Test
+    fun `a target prompt whose candidates are players is answerable from the panel`() {
+        val controls =
+            controlsFor(
+                baseState().copy(
+                    prompt =
+                        GamePrompt.Target(
+                            message = "Select a starting player",
+                            targetIds = listOf("p-you", "p-opp"),
+                            isRequired = true,
+                        ),
+                ),
+            )!!
+
+        // Nothing on the board carries a player id, and the prompt sent no cards…
+        assertEquals(emptyList<CandidateCardUi>(), controls.candidateCards)
+        // …so the panel itself must offer them, named, or the prompt cannot be answered at all.
+        assertEquals(
+            listOf(BoardAction.ChooseTarget("p-you"), BoardAction.ChooseTarget("p-opp")),
+            controls.buttons.map { it.action },
+        )
+        assertEquals(listOf("you (you)", "Computer"), controls.buttons.map { it.label })
+    }
+
+    @Test
+    fun `a candidate the board does draw stays a board tap, not a button`() {
+        // The complement: what the board can show, the board shows. Only what it cannot draw is promoted
+        // into the panel, so targeting a permanent stays the tap model of §5.2.
+        val controls =
+            controlsFor(
+                stateWithBoardCards().copy(
+                    prompt = GamePrompt.Target(message = "Select a target", targetIds = listOf("y-1", "p-opp")),
+                ),
+            )!!
+
+        assertTrue("the permanent is still tappable on the board", "y-1" in controls.pickableObjectIds)
+        assertEquals(
+            "only the player needs a button",
+            listOf(BoardAction.ChooseTarget("p-opp")),
+            controls.buttons.map { it.action }.filterIsInstance<BoardAction.ChooseTarget>(),
+        )
+    }
+
+    @Test
+    fun `a select offering an object the board cannot draw is still playable`() {
+        // Same class of gap on the priority prompt: `canPlayObjects` can name a card the board does not
+        // render — flashback from a graveyard is the everyday case, and the board draws no graveyard.
+        val controls =
+            controlsFor(
+                baseState().copy(
+                    prompt = GamePrompt.Select(message = "Play spells and abilities"),
+                    playable = listOf(PlayableObject("gy-1")),
+                ),
+            )!!
+
+        assertTrue(
+            "an offer the board cannot draw must still be reachable",
+            controls.buttons.any { it.action == BoardAction.PlayObject("gy-1") },
+        )
+    }
+
+    @Test
+    fun `a mana source the board cannot draw is still tappable from the panel`() {
+        val controls =
+            controlsFor(
+                baseState().copy(
+                    prompt = GamePrompt.PlayMana(message = "Pay {R}"),
+                    playable = listOf(PlayableObject("off-1")),
+                ),
+            )!!
+
+        assertTrue(
+            "a source the board cannot draw must still be payable",
+            controls.buttons.any { it.action == BoardAction.PlayManaSource("off-1") },
+        )
+    }
+
+    @Test
+    fun `an unnamed candidate still gets a control rather than nothing`() {
+        // The board can name players, cards in hand, on either battlefield, on the stack, in exile and in
+        // revealed sets. A graveyard is a *count* upstream, so a card there cannot be named — and an
+        // unnameable candidate must still be answerable, because the alternative is the stall this whole
+        // section exists to prevent.
+        val controls =
+            controlsFor(
+                baseState().copy(
+                    prompt = GamePrompt.Target(message = "Select a target", targetIds = listOf("mystery-1"), isRequired = true),
+                ),
+            )!!
+
+        assertEquals(listOf(BoardAction.ChooseTarget("mystery-1")), controls.buttons.map { it.action })
+        assertEquals(listOf("$UNNAMED_CANDIDATE_LABEL 1"), controls.buttons.map { it.label })
     }
 
     @Test
@@ -408,6 +520,21 @@ class BoardControlsTest {
     }
 
     // ---- fixtures ------------------------------------------------------------------------------------
+
+    /** [baseState] with a permanent on each battlefield, so "the board draws it" is a real distinction. */
+    private fun stateWithBoardCards(): GameState {
+        val base = baseState()
+        return base.copy(
+            players =
+                base.players.map { player ->
+                    if (player.isViewer) {
+                        player.copy(battlefield = listOf(GamePermanent(card = GameCard(id = "y-1", name = "Mountain"))))
+                    } else {
+                        player.copy(battlefield = listOf(GamePermanent(card = GameCard(id = "o-1", name = "Forest"))))
+                    }
+                },
+        )
+    }
 
     private fun baseState(pool: ManaPool = ManaPool()) =
         GameState(

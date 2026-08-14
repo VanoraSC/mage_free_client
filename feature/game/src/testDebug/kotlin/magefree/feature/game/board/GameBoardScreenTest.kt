@@ -522,6 +522,94 @@ class GameBoardScreenTest {
     }
 
     @Test
+    fun `the first prompt of every game can actually be answered`() {
+        // Found on a real device, and blocking: the board came up on "Select a starting player" with no
+        // way to answer it at all. The candidate ids are **players**, the prompt carries no cards, and
+        // nothing on the board draws a player id — so a panel that only ever lit up matching cards
+        // offered zero affordances, on the one prompt that runs before any other. The game could not
+        // begin.
+        //
+        // Asserted at the *screen*, not only at the projection, because the projection already held the
+        // ids: `pickableObjectIds` was populated the whole time. What was missing was a surface. The live
+        // harness answered this prompt happily by reading the model directly, which is exactly why it
+        // never caught it.
+        render(
+            runningGame().copy(
+                viewerHasPriority = false,
+                priorityPlayerName = null,
+                prompt =
+                    GamePrompt.Target(
+                        message = "Select a starting player",
+                        targetIds = listOf("p-you", "p-opp"),
+                        isRequired = true,
+                    ),
+            ),
+        )
+
+        composeTestRule.onNodeWithText("The server is waiting on you").assertIsDisplayed()
+        // Both seats are offered, each by name — "Computer" now appears twice on screen (its vitals bar
+        // and its candidate button), which is itself the evidence that the candidate arrived.
+        composeTestRule.onAllNodesWithText("Computer").assertCountEquals(2)
+
+        composeTestRule.onNodeWithText("you (you)").performClick()
+        assertEquals(listOf(BoardAction.ChooseTarget("p-you")), actions)
+    }
+
+    @Test
+    fun `the floating controls never leave the board with a prompt and nothing to press`() {
+        // The general form of the defect above, mechanised: for every prompt kind the server can ask,
+        // the panel must offer **something** — a button, a candidate, or a stepper. The only exception
+        // is the one the app is right to refuse: `Unrecognised`, which has no valid answer at all.
+        val prompt = mutableStateOf<GamePrompt?>(null)
+        composeTestRule.setContent {
+            MageTheme {
+                val state = runningGame().copy(prompt = prompt.value, viewerHasPriority = true)
+                GameBoardScreen(
+                    uiState = GameBoardUiState(board = BoardUi.from(state), isJoining = false, controls = controlsFor(state)),
+                    onExit = {},
+                    onHandExpandedChange = {},
+                    onControlsVisibleChange = {},
+                    onCardTap = {},
+                    onAction = { actions += it },
+                    artRenderer = PlaceholderCardArtRenderer,
+                )
+            }
+        }
+
+        everyPromptKind().forEach { (name, kind) ->
+            composeTestRule.runOnIdle { prompt.value = kind }
+            composeTestRule.waitForIdle()
+            val controls = controlsFor(runningGame().copy(prompt = kind, viewerHasPriority = true))!!
+            if (!controls.isAnswerable) {
+                composeTestRule.onNodeWithText(UNANSWERABLE_NOTE).assertIsDisplayed()
+            } else {
+                val answerable =
+                    controls.buttons.isNotEmpty() ||
+                        controls.amountRequest != null ||
+                        controls.amountRows.isNotEmpty() ||
+                        controls.candidateCards.isNotEmpty()
+                assertTrue("a $name prompt must leave the player something to press", answerable)
+            }
+        }
+    }
+
+    @Test
+    fun `the controls do not cover your own vitals bar`() {
+        // The panel is anchored to the bottom, and your own life total used to sit underneath it: the
+        // only way to read it was to hide the controls. That is survivable for life, and not survivable
+        // when *you* are one of the candidates being chosen between.
+        render(runningGame().copy(prompt = GamePrompt.Select(message = "Select"), viewerHasPriority = true))
+
+        val panel = composeTestRule.onNodeWithText(CONTROLS_TITLE).fetchSemanticsNode()
+        val viewerVitals = composeTestRule.onNodeWithText("$LIBRARY_LABEL 53", substring = true).fetchSemanticsNode()
+
+        assertTrue(
+            "your own vitals bar must stay visible while the controls are open",
+            viewerVitals.boundsInRoot.bottom <= panel.positionInRoot.y,
+        )
+    }
+
+    @Test
     fun `the target step offers a cancel before a pick and a done after one`() {
         val prompt =
             GamePrompt.Target(

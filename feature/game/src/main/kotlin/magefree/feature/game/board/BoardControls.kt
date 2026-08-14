@@ -345,10 +345,13 @@ internal fun controlsFor(
                 pickableObjectIds = offeredIds,
                 buttons =
                     buildList {
+                        // Pass stays first: it is the single most repeated interaction in a game (§9.1).
                         add(ControlButton(label = PASS_LABEL, action = BoardAction.PassPriority, isPrimary = true))
                         prompt.options.specialButtonText?.cleanedOrNull()?.let {
                             add(ControlButton(label = it, action = BoardAction.UseSpecial))
                         }
+                        // An offer the board cannot draw is still an offer — see [offBoardCandidateButtons].
+                        addAll(offBoardCandidateButtons(state, offeredIds, BoardAction::PlayObject))
                     },
             )
 
@@ -368,6 +371,9 @@ internal fun controlsFor(
                 hasPicked = hasPicked,
                 buttons =
                     buildList {
+                        // Candidates the board cannot draw — players, above all — come first, because
+                        // without them this prompt has no answer at all.
+                        addAll(offBoardCandidateButtons(state, pickable, BoardAction::ChooseTarget))
                         // The player's confirmation *is* the final done (§17.2) — it is not a
                         // client-side accumulator being flushed, because every pick was already sent.
                         if (hasPicked) {
@@ -393,6 +399,8 @@ internal fun controlsFor(
                 pickableObjectIds = offeredIds,
                 buttons =
                     buildList {
+                        // A source the board cannot draw is still a source the server offered.
+                        addAll(offBoardCandidateButtons(state, offeredIds, BoardAction::PlayManaSource))
                         // Mana already floating: the pool is the producer, and only types actually in it
                         // are offered.
                         state.viewer?.manaPool?.let { pool ->
@@ -523,6 +531,67 @@ internal fun controlsFor(
 
         // No answering method exists, so no control is offered — only the notice.
         is GamePrompt.Unrecognised -> PromptControlsUi.Notice(message = UNRECOGNISED_PROMPT_NOTICE)
+    }
+}
+
+/**
+ * The object ids the board actually **draws**: the viewer's hand, both battlefields, and the stack.
+ *
+ * This is the honest definition of "tappable on the board", and it is deliberately the same set
+ * [BoardUi.cardFor] resolves a detail view from — if the board cannot draw it, the player cannot tap it,
+ * and the affordance has to live somewhere else.
+ */
+private fun GameState.drawnObjectIds(): Set<String> =
+    buildSet {
+        hand.forEach { add(it.id) }
+        players.forEach { seat -> seat.battlefield.forEach { add(it.card.id) } }
+        stack.forEach { add(it.id) }
+    }
+
+/**
+ * What to call [id] — a **player**, or a card in any zone the snapshot carries identities for.
+ *
+ * Returns null when nothing in the snapshot names it. A graveyard is a *count* upstream (0052), so a
+ * card there genuinely has no name to show; see [UNNAMED_CANDIDATE_LABEL] for why that still gets a
+ * control rather than nothing.
+ */
+private fun GameState.nameFor(id: String): String? {
+    players.firstOrNull { it.playerId == id }?.let { seat ->
+        return if (seat.isViewer) seat.name + YOU_SUFFIX else seat.name
+    }
+    hand.firstOrNull { it.id == id }?.let { return it.name }
+    val onBattlefield = players.flatMap { it.battlefield }
+    onBattlefield.firstOrNull { it.card.id == id }?.let { return it.card.name }
+    stack.firstOrNull { it.id == id }?.let { return it.name }
+    val inSideZones = (exile + revealed).flatMap { it.cards }
+    return inSideZones.firstOrNull { it.id == id }?.name
+}
+
+/**
+ * Promote every candidate the board **cannot draw** into a labelled button in the panel.
+ *
+ * **Why this exists** (found on a real device, and blocking): a candidate id does not have to name
+ * anything the board draws. The first prompt of every game — *"Select a starting player"*, asked before
+ * priority exists — carries two **player** ids and an empty `cards` list. Players are not cards, so a
+ * projection that only lit up matching cards produced a prompt with no candidate, no *done* (nothing
+ * picked) and no *cancel* (`isRequired` is true): zero affordances, on the path that runs before any
+ * other. The same shape reaches us for any spell aimed at a face, and for `canPlayObjects` naming a card
+ * in a zone the board does not render (flashback from a graveyard is the everyday case).
+ *
+ * The presentation is the one §16.2 already gives to prompts *answered from their own content* — a
+ * button in the floating panel — so nothing new is invented and nothing becomes modal. What the board
+ * **can** draw stays a board tap (§5.2); only what it cannot is promoted.
+ */
+private fun offBoardCandidateButtons(
+    state: GameState,
+    candidateIds: Collection<String>,
+    action: (String) -> BoardAction,
+): List<ControlButton> {
+    val drawn = state.drawnObjectIds()
+    var unnamed = 0
+    return candidateIds.filterNot { it in drawn }.map { id ->
+        val label = state.nameFor(id) ?: "$UNNAMED_CANDIDATE_LABEL ${++unnamed}"
+        ControlButton(label = label, action = action(id))
     }
 }
 
