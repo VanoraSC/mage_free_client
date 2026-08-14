@@ -1,6 +1,8 @@
 package magefree.feature.game.board
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -93,23 +95,61 @@ private fun FaceDownBack(modifier: Modifier = Modifier) {
 }
 
 /**
+ * The highlight a card carries for the **outstanding prompt** (story 0057) — the server's own answer to
+ * "may this be picked right now", never a computed one.
+ *
+ * Distinct from [PermanentUi.isOfferedByServer], which is the standing `canPlayObjects` mark: this says
+ * *the question on screen accepts this card*, and it is what makes the card tappable.
+ */
+internal enum class CardPickState {
+    /** Not part of the outstanding question. Still tappable to *inspect* (§11.1) — never to act. */
+    None,
+
+    /** The server offered this object as an answer to the outstanding prompt. */
+    Pickable,
+
+    /** The server says this object is already chosen for the outstanding prompt. */
+    Chosen,
+}
+
+/** The border a [CardPickState] draws, or null for none. Selection wins, because it is the player's. */
+@Composable
+private fun pickBorder(
+    pick: CardPickState,
+    isSelected: Boolean,
+): BorderStroke? =
+    when {
+        isSelected -> BorderStroke(SELECTED_BORDER, MaterialTheme.colorScheme.secondary)
+        pick == CardPickState.Pickable -> BorderStroke(PICKABLE_BORDER, MaterialTheme.colorScheme.primary)
+        pick == CardPickState.Chosen -> BorderStroke(PICKABLE_BORDER, MaterialTheme.colorScheme.tertiary)
+        else -> null
+    }
+
+/**
  * One permanent on a battlefield: its face, rotated when tapped, with the battlefield-only marks the
  * server reports — summoning sickness, marked damage, attacking/blocking, and (only while the viewer
  * holds priority) the "the server offered this" mark.
+ *
+ * @param onTap raises the card and opens its detail (§5.1 / §11.1). Inspecting is not acting: the
+ *   *action* lives on the detail's own button, and only when the server offered this object.
  */
 @Composable
 internal fun PermanentCard(
     permanent: PermanentUi,
     artRenderer: CardArtRenderer,
     modifier: Modifier = Modifier,
+    pick: CardPickState = CardPickState.None,
+    isSelected: Boolean = false,
+    onTap: (() -> Unit)? = null,
 ) {
     Column(
-        modifier = modifier.width(PermanentWidth),
+        modifier = modifier.width(PermanentWidth).let { if (onTap != null) it.clickable(onClick = onTap) else it },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(
             shape = RoundedCornerShape(Corner.small),
             tonalElevation = if (permanent.isOfferedByServer) Elevation.level3 else Elevation.level1,
+            border = pickBorder(pick, isSelected),
             color =
                 if (permanent.isOfferedByServer) {
                     MaterialTheme.colorScheme.primaryContainer
@@ -159,14 +199,18 @@ internal fun HandCard(
     handCard: HandCardUi,
     artRenderer: CardArtRenderer,
     modifier: Modifier = Modifier,
+    pick: CardPickState = CardPickState.None,
+    isSelected: Boolean = false,
+    onTap: (() -> Unit)? = null,
 ) {
     Column(
-        modifier = modifier.width(HandCardWidth),
+        modifier = modifier.width(HandCardWidth).let { if (onTap != null) it.clickable(onClick = onTap) else it },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(
             shape = RoundedCornerShape(Corner.small),
             tonalElevation = if (handCard.isOfferedByServer) Elevation.level3 else Elevation.level1,
+            border = pickBorder(pick, isSelected),
             color =
                 if (handCard.isOfferedByServer) {
                     MaterialTheme.colorScheme.primaryContainer
@@ -232,6 +276,11 @@ internal fun HandPeekEdge(modifier: Modifier = Modifier) {
 }
 
 private val HAND_EDGE_WIDTH: Dp = 22.dp
+
+/** Border widths for the two "the server offered this for the outstanding prompt" marks. */
+private val PICKABLE_BORDER: Dp = 2.dp
+
+private val SELECTED_BORDER: Dp = 3.dp
 
 /** How far a tapped permanent turns. */
 private const val TAPPED_ROTATION = 90f

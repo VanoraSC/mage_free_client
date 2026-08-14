@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.zIndex
 import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
@@ -28,12 +29,15 @@ import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.network.game.GameCard
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
+import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
 import magefree.network.game.PhaseStep
+import magefree.network.game.PlayableObject
+import magefree.network.game.PromptOptions
 import magefree.network.game.TurnPhase
 
 /**
- * The **read-only portrait board** (story 0055).
+ * The **playable portrait board** (stories 0055 + 0057).
  *
  * ## The layout, and why it is this one
  *
@@ -57,6 +61,7 @@ import magefree.network.game.TurnPhase
  * ├──────────────────────────────┤
  * │ In hand 7  ▮▮▮▮▮▮▮ Show hand │  hand peek         (fixed)
  * └──────────────────────────────┘
+ *   …with the floating controls and the expanded hand drawn *over* the bottom of that column.
  * ```
  *
  * - **Opponent above, you below** (§3.1) — unchanged by the portrait revision, and it reads better in
@@ -71,13 +76,21 @@ import magefree.network.game.TurnPhase
  * - **The hand is peek-and-expand** (§3.2): the peek edge is part of the column, and the expanded hand
  *   is drawn *over* the board so opening it costs no battlefield height.
  *
- * ## Read-only, stated and enforced
+ * ## Playable, and nothing modal (story 0057)
  *
- * The board offers **no way to act**. There is exactly one interactive element on the whole screen —
- * the hand's show/hide toggle — and it changes how much of the player's *own* hand is drawn, sending
- * nothing. No card is clickable; the outstanding prompt is rendered as text with no control attached;
- * there is no pass-priority. [READ_ONLY_NOTICE] says so out loud, because a player who cannot tell "the
- * app won't let me" from "the game isn't asking me" would read this board as broken.
+ * The board answers the server's prompts through **floating controls** ([FloatingControls]) that sit
+ * over the bottom of the board and can be hidden ([HiddenControlsToggle]). There is **no `Dialog` and
+ * no `Popup` on this screen**, for any prompt kind — §16.2 made §6.2's exception the rule.
+ *
+ * Two things the layout guarantees, because §16.3 says a hidden control set must never hide that the
+ * server is waiting:
+ * 1. the **priority banner is part of the board's status rail**, not of the controls, so the toggle
+ *    cannot take it away;
+ * 2. the collapsed toggle itself restates it.
+ *
+ * Every gesture leaves through [onAction] as a [BoardAction]; this screen holds no client and decides
+ * nothing about the rules. What may be tapped comes from [GameBoardUiState.controls], which is the
+ * server's own candidate list for the outstanding prompt.
  *
  * @param artRenderer how card art is drawn. Production passes 0032's Coil-backed renderer (see
  *   `GameBoardRoute`); previews and hermetic tests pass [PlaceholderCardArtRenderer], so no test or
@@ -88,12 +101,26 @@ fun GameBoardScreen(
     uiState: GameBoardUiState,
     onExit: () -> Unit,
     onHandExpandedChange: (Boolean) -> Unit,
+    onControlsVisibleChange: (Boolean) -> Unit,
+    onCardTap: (String?) -> Unit,
+    onAction: (BoardAction) -> Unit,
     artRenderer: CardArtRenderer,
     modifier: Modifier = Modifier,
 ) {
     val board = uiState.board
-    // Back closes the expanded hand before it leaves the board.
-    BackHandler(enabled = uiState.isHandExpanded) { onHandExpandedChange(false) }
+    val controls = uiState.controls
+    // Back closes whatever is open over the board, innermost first, before it leaves the board.
+    BackHandler(enabled = uiState.selectedObjectId != null) { onCardTap(null) }
+    BackHandler(enabled = uiState.selectedObjectId == null && uiState.isHandExpanded) { onHandExpandedChange(false) }
+
+    val pickOf: (String) -> CardPickState = { objectId ->
+        when {
+            controls == null -> CardPickState.None
+            objectId in controls.chosenObjectIds -> CardPickState.Chosen
+            objectId in controls.pickableObjectIds -> CardPickState.Pickable
+            else -> CardPickState.None
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -116,14 +143,26 @@ fun GameBoardScreen(
                     seat = board.opponentSeats.firstOrNull(),
                     artRenderer = artRenderer,
                     modifier = Modifier.weight(1f),
+                    picks = pickOf,
+                    selectedObjectId = uiState.selectedObjectId,
+                    onCardTap = onCardTap,
                 )
                 StatusRail(board = board, artRenderer = artRenderer)
+                // **Your vitals sit above your battlefield, not below it.** The floating controls are
+                // bottom-anchored, and with the bar at the foot of the column the panel covered it — the
+                // only way to read your own life was to hide the controls. That is merely annoying most
+                // of the time and actively wrong when *you* are one of the candidates being chosen
+                // between (a player-target prompt). Above the band it sits against the status rail,
+                // mirroring the opponent's bar, and nothing that must stay legible is under the panel.
+                SeatVitalsBar(seat = board.viewerSeat, fallbackLabel = VIEWER_SEAT_LABEL)
                 BattlefieldBand(
                     seat = board.viewerSeat,
                     artRenderer = artRenderer,
                     modifier = Modifier.weight(1f),
+                    picks = pickOf,
+                    selectedObjectId = uiState.selectedObjectId,
+                    onCardTap = onCardTap,
                 )
-                SeatVitalsBar(seat = board.viewerSeat, fallbackLabel = VIEWER_SEAT_LABEL)
                 NoticeStrip(board = board)
                 HandPeek(
                     hand = board.hand,
@@ -132,22 +171,82 @@ fun GameBoardScreen(
                 )
             }
 
-            // The expanded hand floats over the board rather than displacing it (§16.1: height is the
-            // scarce axis in portrait, so nothing may take it twice).
-            if (uiState.isHandExpanded) {
-                ExpandedHand(
-                    hand = board.hand,
-                    artRenderer = artRenderer,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = HandPeekHeight),
-                )
+            // The expanded hand and the floating controls both draw *over* the board rather than
+            // displacing it (§16.1: height is the scarce axis in portrait, so nothing may take it
+            // twice). They stack, controls above hand, so neither hides the other.
+            Column(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        // Explicit rather than incidental: these controls deliberately overlap the
+                        // board's own bottom regions, and which layer receives the touch there is a
+                        // property worth stating instead of inheriting from declaration order.
+                        .zIndex(FLOATING_LAYER_Z)
+                        .fillMaxWidth()
+                        .padding(bottom = HandPeekHeight),
+            ) {
+                if (uiState.areControlsVisible) {
+                    FloatingControls(
+                        controls = controls,
+                        cast = uiState.cast,
+                        actionError = uiState.actionError,
+                        artRenderer = artRenderer,
+                        onAction = onAction,
+                        onHide = { onControlsVisibleChange(false) },
+                    )
+                } else {
+                    HiddenControlsToggle(
+                        // The board's own priority banner says this too; this is the second, independent
+                        // statement §16.3 requires (see [HiddenControlsToggle]).
+                        isServerWaiting = board.priority is PriorityUi.Yours || board.priority == PriorityUi.Asked,
+                        onShow = { onControlsVisibleChange(true) },
+                    )
+                }
+                if (uiState.isHandExpanded) {
+                    ExpandedHand(
+                        hand = board.hand,
+                        artRenderer = artRenderer,
+                        picks = pickOf,
+                        selectedObjectId = uiState.selectedObjectId,
+                        onCardTap = onCardTap,
+                    )
+                }
+            }
+
+            // §5.1/§11.1: the first tap raised the card; this is where it is inspected and committed.
+            uiState.selectedObjectId?.let { objectId ->
+                board.cardFor(objectId)?.let { card ->
+                    CardDetailOverlay(
+                        card = card,
+                        actionLabel = controls?.actionLabelFor(objectId),
+                        artRenderer = artRenderer,
+                        onCommit = { controls?.actionFor(objectId)?.let(onAction) },
+                        onClose = { onCardTap(null) },
+                        modifier = Modifier.zIndex(DETAIL_LAYER_Z),
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * The two standing statements that must survive whatever else is on screen: that this board cannot be
- * acted on, and — before the first snapshot — that nothing has arrived yet.
+ * The card [objectId] names, wherever the board is drawing it: the hand, either battlefield, or the
+ * stack. Null when the object is not on the board at all — a target the server offered that lives
+ * somewhere this board does not draw (a graveyard, a library) simply has no detail view.
+ */
+internal fun BoardUi.cardFor(objectId: String): CardUi? {
+    hand.cards.firstOrNull { it.objectId == objectId }?.let { return it.card }
+    (listOfNotNull(viewerSeat) + opponentSeats)
+        .flatMap { it.battlefield }
+        .firstOrNull { it.objectId == objectId }
+        ?.let { return it.card }
+    return stack.entries.firstOrNull { it.objectId == objectId }?.card
+}
+
+/**
+ * The standing statements that must survive whatever else is on screen: before the first snapshot, that
+ * nothing has arrived yet, and — always — a declined join.
  *
  * Requirements §16.3 makes the equivalent point about hiding floating controls: whatever is hidden, the
  * player must never be left unable to tell a waiting game from a frozen one.
@@ -175,13 +274,6 @@ private fun StandingHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            text = READ_ONLY_NOTICE,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
     }
 }
 
@@ -254,11 +346,38 @@ private fun previewState(): GameState =
                 previewCard("h-2", "Llanowar Elves", "Creature — Elf Druid", "G"),
             ),
         stack = listOf(previewCard("s-1", "Giant Growth", "Instant", "G")),
+        playable = listOf(PlayableObject("h-1"), PlayableObject("h-2")),
+        prompt = GamePrompt.Select(message = "Select an ability to play"),
     )
 
-@Preview(name = "Board — portrait (light)", showBackground = true, widthDp = 411, heightDp = 891)
+private fun previewUiState(state: GameState = previewState()) =
+    GameBoardUiState(
+        board = BoardUi.from(state),
+        isJoining = false,
+        controls = controlsFor(state),
+    )
+
+@Composable
+private fun PreviewBoard(
+    uiState: GameBoardUiState,
+    onCardTap: (String?) -> Unit = {},
+) {
+    MageTheme {
+        GameBoardScreen(
+            uiState = uiState,
+            onExit = {},
+            onHandExpandedChange = {},
+            onControlsVisibleChange = {},
+            onCardTap = onCardTap,
+            onAction = {},
+            artRenderer = PlaceholderCardArtRenderer,
+        )
+    }
+}
+
+@Preview(name = "Board — priority, floating controls", showBackground = true, widthDp = 411, heightDp = 891)
 @Preview(
-    name = "Board — portrait (dark)",
+    name = "Board — priority, floating controls (dark)",
     showBackground = true,
     widthDp = 411,
     heightDp = 891,
@@ -266,38 +385,50 @@ private fun previewState(): GameState =
 )
 @Composable
 private fun GameBoardPreview() {
-    MageTheme {
-        GameBoardScreen(
-            uiState = GameBoardUiState(board = BoardUi.from(previewState()), isJoining = false),
-            onExit = {},
-            onHandExpandedChange = {},
-            artRenderer = PlaceholderCardArtRenderer,
-        )
-    }
+    PreviewBoard(previewUiState())
 }
 
 @Preview(name = "Board — first snapshot, empty everywhere", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
 private fun GameBoardEmptyPreview() {
-    MageTheme {
-        GameBoardScreen(
-            uiState = GameBoardUiState(board = BoardUi(gameId = "g-1")),
-            onExit = {},
-            onHandExpandedChange = {},
-            artRenderer = PlaceholderCardArtRenderer,
+    PreviewBoard(GameBoardUiState(board = BoardUi(gameId = "g-1")))
+}
+
+@Preview(name = "Board — mid-cast, choosing targets", showBackground = true, widthDp = 411, heightDp = 891)
+@Composable
+private fun GameBoardTargetingPreview() {
+    val state =
+        previewState().copy(
+            prompt =
+                GamePrompt.Target(
+                    message = "Select targets (selected 0 of 2, min 1) to divide 2 damage",
+                    isRequired = false,
+                    options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_TARGETS to listOf("o-2", "y-1"))),
+                ),
         )
-    }
+    PreviewBoard(
+        previewUiState(state).copy(cast = CastUi(cardName = "Forked Bolt", stepLabel = CAST_STEP_TARGETS)),
+    )
+}
+
+@Preview(name = "Board — controls hidden while the server waits", showBackground = true, widthDp = 411, heightDp = 891)
+@Composable
+private fun GameBoardControlsHiddenPreview() {
+    PreviewBoard(previewUiState().copy(areControlsVisible = false))
 }
 
 @Preview(name = "Board — hand expanded", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
 private fun GameBoardExpandedHandPreview() {
-    MageTheme {
-        GameBoardScreen(
-            uiState = GameBoardUiState(board = BoardUi.from(previewState()), isJoining = false, isHandExpanded = true),
-            onExit = {},
-            onHandExpandedChange = {},
-            artRenderer = PlaceholderCardArtRenderer,
-        )
-    }
+    PreviewBoard(previewUiState().copy(isHandExpanded = true))
 }
+
+/**
+ * The z of the floating layer (controls, expanded hand) and the card detail above it.
+ *
+ * Stated rather than inherited from declaration order, because a control that is drawn on top but not
+ * *hit* on top is a dead button — a failure mode this screen is one layout edit away from at all times.
+ */
+private const val FLOATING_LAYER_Z = 1f
+
+private const val DETAIL_LAYER_Z = 2f

@@ -17,7 +17,7 @@ import magefree.feature.game.board.GameBoardViewModel
  */
 
 /**
- * The read-only board for one game.
+ * The playable board for one game.
  *
  * @param gameId the game to observe — in production the id carried by the table's `MatchStarting`
  *   push, which is the only place a game id comes from (story 0051/0037).
@@ -42,6 +42,11 @@ fun GameBoardRoute(
         uiState = uiState,
         onExit = onExit,
         onHandExpandedChange = viewModel::setHandExpanded,
+        onControlsVisibleChange = viewModel::setControlsVisible,
+        onCardTap = viewModel::selectCard,
+        // The one seam from a gesture to the server: the screen holds no client and the ViewModel is the
+        // only thing that translates an action into a game verb (story 0057).
+        onAction = viewModel::act,
         artRenderer = artRenderer,
         modifier = modifier,
     )
