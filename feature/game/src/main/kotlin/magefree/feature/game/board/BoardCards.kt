@@ -174,9 +174,12 @@ internal fun PermanentCard(
         )
         val marks =
             buildList {
+                // Power/toughness only when the permanent **is** a creature right now — the projection
+                // has already asked the server that question (see [CardUi.powerToughness]).
                 permanent.card.powerToughness?.let { add(it) }
                 if (permanent.isTapped) add(TAPPED_MARK)
-                if (permanent.hasSummoningSickness) add(SUMMONING_SICK_MARK)
+                // …and summoning sickness only where it means something (see [PermanentUi]).
+                if (permanent.showsSummoningSickness) add(SUMMONING_SICK_MARK)
                 if (permanent.isAttacking) add(ATTACKING_MARK)
                 if (permanent.isBlocking) add(BLOCKING_MARK)
                 if (permanent.damage > 0) add("$DAMAGE_MARK ${permanent.damage}")
@@ -190,7 +193,32 @@ internal fun PermanentCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        CounterLine(counters = permanent.card.counters)
     }
+}
+
+/**
+ * The counters on a card, by name and count — a row of its own so a permanent carrying several does not
+ * push its power/toughness off the end of the marks line above.
+ *
+ * **Generic, and deliberately so.** The kind is the server's own string; nothing here knows what a
+ * `+1/+1` is, which is the only way the same code renders loyalty, charge, oil, stun and whatever ships
+ * next set. Absent counters draw nothing at all, which is the ordinary case for most permanents.
+ */
+@Composable
+private fun CounterLine(
+    counters: List<CounterUi>,
+    modifier: Modifier = Modifier,
+) {
+    if (counters.isEmpty()) return
+    Text(
+        text = counters.joinToString(" · ") { it.label },
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
 }
 
 /** One card in the expanded hand: its face, its name, and its cost when the server sent one. */
@@ -237,6 +265,9 @@ internal fun HandCard(
                 maxLines = 1,
             )
         }
+        // Counters are not battlefield-only: upstream puts them on `CardView`, so a card in hand can
+        // carry them and the board draws them wherever the data is present.
+        CounterLine(counters = handCard.card.counters)
     }
 }
 

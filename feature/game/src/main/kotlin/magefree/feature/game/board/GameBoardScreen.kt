@@ -26,7 +26,9 @@ import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
 import magefree.feature.cards.PlaceholderCardArtRenderer
+import magefree.network.game.CardType
 import magefree.network.game.GameCard
+import magefree.network.game.GameCounter
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GamePrompt
@@ -287,6 +289,10 @@ private fun previewCard(
     name: String,
     typeLine: String,
     manaCost: String? = null,
+    power: String? = null,
+    toughness: String? = null,
+    isCreature: Boolean = false,
+    counters: List<GameCounter> = emptyList(),
 ) = GameCard(
     id = id,
     name = name,
@@ -294,6 +300,13 @@ private fun previewCard(
     collectorNumber = "272",
     manaCost = manaCost,
     typeLine = typeLine,
+    // A land really does arrive with "0"/"0" and no CREATURE type; a creature arrives with both. The
+    // preview says so, because a preview that disagrees with the server is a preview that lies.
+    power = power ?: "0",
+    toughness = toughness ?: "0",
+    isCreature = isCreature,
+    cardTypes = if (isCreature) listOf(CardType.Creature) else emptyList(),
+    counters = counters,
 )
 
 private fun previewState(): GameState =
@@ -323,7 +336,17 @@ private fun previewState(): GameState =
                         listOf(
                             GamePermanent(card = previewCard("o-1", "Forest", "Basic Land — Forest"), isTapped = true),
                             GamePermanent(
-                                card = previewCard("o-2", "Grizzly Bears", "Creature — Bear", "1G"),
+                                card =
+                                    previewCard(
+                                        "o-2",
+                                        "Grizzly Bears",
+                                        "Creature — Bear",
+                                        "1G",
+                                        power = "2",
+                                        toughness = "2",
+                                        isCreature = true,
+                                        counters = listOf(GameCounter("+1/+1", 2)),
+                                    ),
                                 hasSummoningSickness = true,
                             ),
                         ),

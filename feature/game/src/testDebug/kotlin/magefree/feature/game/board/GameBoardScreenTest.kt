@@ -15,8 +15,10 @@ import androidx.compose.ui.test.performClick
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.network.game.AbilityChoice
+import magefree.network.game.CardType
 import magefree.network.game.ChoiceOption
 import magefree.network.game.GameCard
+import magefree.network.game.GameCounter
 import magefree.network.game.GameMessage
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
@@ -502,6 +504,81 @@ class GameBoardScreenTest {
         assertEquals(listOf<String?>(null), taps)
     }
 
+    // ---- story 0058: what a permanent currently *is*, on screen -------------------------------------
+
+    @Test
+    fun `a land on the battlefield shows no power toughness and no summoning-sickness mark`() {
+        // The defect, as it was actually seen on device: "0/0 · Summoning sick" under a Mountain. Both
+        // halves are the server's honest data — a noncreature permanent's current power really is "0",
+        // and summoning sickness really is set for anything that arrived this turn — so both are gated
+        // on what the permanent *is*, not suppressed at the source.
+        render(runningGame(landIsAnimated = false))
+
+        composeTestRule.onNodeWithText("Mountain").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0/0", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText(SUMMONING_SICK_MARK, substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `the same land, animated by an effect, shows its power toughness and its sickness`() {
+        // The mirror case, and the one that makes the test above mean something: a board that simply
+        // hardcoded "lands have no P/T" would pass that test and fail this one. Earthbend is ordinary
+        // play, not a corner case.
+        render(runningGame(landIsAnimated = true))
+
+        composeTestRule.onNodeWithText("Mountain").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0/3", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText(SUMMONING_SICK_MARK, substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `a creature shows its current power and toughness`() {
+        render(runningGame(viewerPermanent = bears(power = "4", toughness = "5")))
+
+        composeTestRule.onNodeWithText("4/5", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `counters are drawn by name and count, for kinds the board has never heard of`() {
+        render(
+            runningGame(
+                viewerPermanent =
+                    GamePermanent(
+                        card =
+                            bears().card.copy(
+                                counters = listOf(GameCounter("+1/+1", 2), GameCounter("hatchling", 7)),
+                            ),
+                    ),
+            ),
+        )
+
+        composeTestRule.onNodeWithText("+1/+1 ×2", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("hatchling ×7", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `a permanent with no counters draws no counter row`() {
+        render(runningGame(viewerPermanent = bears()))
+
+        composeTestRule.onNodeWithText("×", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `the raised card's detail states the power toughness and counters of what it currently is`() {
+        // The permanent's own line is one ellipsised row 76dp wide, so the detail is where a player with
+        // four counters on something actually reads them (§11.1: the first tap is for looking).
+        render(
+            runningGame(
+                viewerPermanent =
+                    GamePermanent(card = bears(power = "2", toughness = "2").card.copy(counters = listOf(GameCounter("oil", 3)))),
+            ),
+            selectedObjectId = "y-1",
+        )
+
+        composeTestRule.onAllNodesWithText("2/2", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("oil ×3", substring = true).onFirst().assertIsDisplayed()
+    }
+
     @Test
     fun `a target candidate on the board is picked one tap at a time`() {
         // §17.2: each pick is sent as it is made. The gesture path is the same as playing — raise, then
@@ -879,47 +956,98 @@ class GameBoardScreenTest {
             "unrecognised" to GamePrompt.Unrecognised(type = "GAME_NEW_THING"),
         )
 
-    /** A running game with the **opponent first** in the players list, as the real server often sends. */
-    private fun runningGame() =
-        GameState(
-            gameId = "g-1",
-            turn = 3,
-            phase = TurnPhase.PrecombatMain,
-            step = PhaseStep.PrecombatMain,
-            activePlayerId = "p-you",
-            activePlayerName = "you",
-            priorityPlayerName = "Computer",
-            viewerPlayerId = "p-you",
-            viewerHasPriority = false,
-            hasSnapshot = true,
-            players =
-                listOf(
-                    GamePlayer(
-                        playerId = "p-opp",
-                        name = "Computer",
-                        life = 18,
-                        libraryCount = 51,
-                        handCount = 5,
-                        isHuman = false,
-                        battlefield = listOf(GamePermanent(card = card("o-1", "Mountain", "Basic Land — Mountain"))),
+    /**
+     * A creature permanent in the viewer's seat, at id `y-1` — the seat's only permanent, so a test can
+     * raise it with `selectedObjectId = "y-1"`.
+     */
+    private fun bears(
+        power: String = "2",
+        toughness: String = "2",
+    ) = GamePermanent(
+        card =
+            card("y-1", "Grizzly Bears", "Creature — Bear", "1G").copy(
+                power = power,
+                toughness = toughness,
+                isCreature = true,
+                cardTypes = listOf(CardType.Creature),
+            ),
+    )
+
+    /**
+     * A running game with the **opponent first** in the players list, as the real server often sends.
+     *
+     * The opponent's Mountain is **summoning sick** and carries the `"0"`/`"0"` power/toughness upstream
+     * really sends for a noncreature permanent — the exact payload that rendered "0/0 · Summoning sick"
+     * on device. [landIsAnimated] flips it to what the server sends once an effect (Earthbend) has made
+     * it a creature: same card, same zone, different answer.
+     */
+    private fun runningGame(
+        landIsAnimated: Boolean = false,
+        viewerPermanent: GamePermanent =
+            GamePermanent(
+                card =
+                    card("y-1", "Forest", "Basic Land — Forest").copy(
+                        power = "0",
+                        toughness = "0",
+                        cardTypes = listOf(CardType.Land),
                     ),
-                    GamePlayer(
-                        playerId = "p-you",
-                        name = "you",
-                        life = 20,
-                        libraryCount = 53,
-                        handCount = 2,
-                        isViewer = true,
-                        isActive = true,
-                        manaPool = ManaPool(),
-                        battlefield = listOf(GamePermanent(card = card("y-1", "Forest", "Basic Land — Forest"))),
-                    ),
+            ),
+    ) = GameState(
+        gameId = "g-1",
+        turn = 3,
+        phase = TurnPhase.PrecombatMain,
+        step = PhaseStep.PrecombatMain,
+        activePlayerId = "p-you",
+        activePlayerName = "you",
+        priorityPlayerName = "Computer",
+        viewerPlayerId = "p-you",
+        viewerHasPriority = false,
+        hasSnapshot = true,
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "p-opp",
+                    name = "Computer",
+                    life = 18,
+                    libraryCount = 51,
+                    handCount = 5,
+                    isHuman = false,
+                    battlefield =
+                        listOf(
+                            GamePermanent(
+                                card =
+                                    card("o-1", "Mountain", "Basic Land — Mountain").copy(
+                                        power = "0",
+                                        toughness = if (landIsAnimated) "3" else "0",
+                                        isCreature = landIsAnimated,
+                                        cardTypes =
+                                            if (landIsAnimated) {
+                                                listOf(CardType.Land, CardType.Creature)
+                                            } else {
+                                                listOf(CardType.Land)
+                                            },
+                                    ),
+                                hasSummoningSickness = true,
+                            ),
+                        ),
                 ),
-            hand =
-                listOf(
-                    card("h-1", "Llanowar Elves", "Creature — Elf Druid", "G"),
-                    card("h-2", "Grizzly Bears", "Creature — Bear", "1G"),
+                GamePlayer(
+                    playerId = "p-you",
+                    name = "you",
+                    life = 20,
+                    libraryCount = 53,
+                    handCount = 2,
+                    isViewer = true,
+                    isActive = true,
+                    manaPool = ManaPool(),
+                    battlefield = listOf(viewerPermanent),
                 ),
-            stack = listOf(card("s-1", "Giant Growth", "Instant", "G")),
-        )
+            ),
+        hand =
+            listOf(
+                card("h-1", "Llanowar Elves", "Creature — Elf Druid", "G"),
+                card("h-2", "Grizzly Bears", "Creature — Bear", "1G"),
+            ),
+        stack = listOf(card("s-1", "Giant Growth", "Instant", "G")),
+    )
 }

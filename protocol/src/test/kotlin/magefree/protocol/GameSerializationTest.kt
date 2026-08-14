@@ -3,6 +3,7 @@ package magefree.protocol
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -349,6 +350,79 @@ class GameSerializationTest {
         val snapshot = decoded as GameStateSnapshot
         assertEquals(4, snapshot.state.turn)
         assertNull(snapshot.capturedAtEpochMs, "an absent capture time is null, never a fabricated instant")
+    }
+
+    // ---- story 0058: what a card currently *is* -----------------------------------------------------
+
+    @Test
+    fun `a card carries its current types, creature status and counters`() {
+        val animatedLand =
+            GameCardView(
+                id = "c-2",
+                name = "Mountain",
+                setCode = "M21",
+                collectorNumber = "269",
+                typeLine = "Basic Land - Mountain",
+                power = "2",
+                toughness = "2",
+                // An Earthbent Mountain: still a land, and a creature *as well* — which is exactly why
+                // the list is carried rather than a single type.
+                cardTypes = listOf(CardTypeCode.LAND, CardTypeCode.CREATURE),
+                creature = true,
+                counters = listOf(GameCounterView(name = "+1/+1", count = 2), GameCounterView(name = "stun", count = 1)),
+            )
+
+        val round = json.decodeFromString<GameCardView>(json.encodeToString(animatedLand))
+
+        assertEquals(animatedLand, round)
+        assertTrue(round.creature, "creature status is the server's own answer and must survive the wire")
+        assertEquals(listOf(CardTypeCode.LAND, CardTypeCode.CREATURE), round.cardTypes)
+        assertEquals(listOf("+1/+1", "stun"), round.counters.map { it.name })
+        assertEquals(listOf(2, 1), round.counters.map { it.count })
+    }
+
+    @Test
+    fun `a card frame from an older bridge decodes with the 0058 fields defaulted`() {
+        // Additive-only: the fields added by this story must have defaults, so a payload written before
+        // them still decodes rather than throwing.
+        val frame = """{"id":"c-3","name":"Forest"}"""
+
+        val decoded = json.decodeFromString<GameCardView>(frame)
+
+        assertTrue(decoded.cardTypes.isEmpty())
+        assertFalse(decoded.creature, "absence of the field is 'the server said nothing', never 'it is a creature'")
+        assertTrue(decoded.counters.isEmpty())
+    }
+
+    @Test
+    fun `a card type this build has never heard of decodes to UNKNOWN instead of throwing`() {
+        // The list form of the forward-compat promise: upstream keeps adding card types (BATTLE and
+        // DUNGEON are recent), and `ignoreUnknownKeys` does not cover an unknown *value* inside a list.
+        // One unrecognised entry must cost that entry, never the whole snapshot.
+        val frame = """{"id":"c-4","name":"Thing","cardTypes":["CREATURE","SPACESHIP"]}"""
+
+        val decoded = json.decodeFromString<GameCardView>(frame)
+
+        assertEquals(listOf(CardTypeCode.CREATURE, CardTypeCode.UNKNOWN), decoded.cardTypes)
+    }
+
+    @Test
+    fun `card types encode as their upstream names`() {
+        val encoded = json.encodeToString(GameCardView(id = "c-5", name = "Bear", cardTypes = listOf(CardTypeCode.CREATURE)))
+
+        assertTrue(encoded.contains(""""cardTypes":["CREATURE"]"""), "got $encoded")
+    }
+
+    @Test
+    fun `power and toughness stay strings, so a star is carried as sent`() {
+        // Tarmogoyf/Mortivore: `*` is a real power. Parsing it into a number anywhere on this wire would
+        // lose it, so the contract is a string end to end.
+        val goyf = GameCardView(id = "c-6", name = "Tarmogoyf", power = "*", toughness = "1+*", creature = true)
+
+        val round = json.decodeFromString<GameCardView>(json.encodeToString(goyf))
+
+        assertEquals("*", round.power)
+        assertEquals("1+*", round.toughness)
     }
 
     @Test

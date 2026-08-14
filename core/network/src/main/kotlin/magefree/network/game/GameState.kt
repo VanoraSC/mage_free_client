@@ -173,7 +173,20 @@ data class GamePlayer(
  * thin: enough to identify a printing ([setCode] + [collectorNumber], the pair story 0030's card catalog
  * resolves art by) and to render a text-only representation.
  *
+ * **What the card currently *is* (story 0058) is game state, not printing.** [cardTypes], [isCreature]
+ * and [counters] are recomputed by the server for every snapshot, so an Earthbent land really does
+ * arrive as a creature and stops being one when the effect ends. A UI must therefore ask [isCreature]
+ * rather than reading [typeLine] — parsing that display string would be the client interpreting rules.
+ *
  * @property id the object id — what a reply names when this card is chosen.
+ * @property power / @property toughness the **current** values, after effects, as *strings*: `*` is a
+ *   real power (Tarmogoyf, Mortivore), so nothing anywhere parses these into numbers. Upstream reports
+ *   `"0"`/`"0"` for a noncreature permanent, which is why showing them is gated on [isCreature] rather
+ *   than on their presence.
+ * @property isCreature the server's own `CardView.isCreature()`. The single question a board asks about
+ *   creature-ness — never the printed type, never [typeLine].
+ * @property counters every counter on the object, by name and count. Not battlefield-only: a card in
+ *   another zone can carry them, because upstream puts them on `CardView`.
  */
 data class GameCard(
     val id: String,
@@ -186,7 +199,51 @@ data class GameCard(
     val toughness: String? = null,
     val rules: List<String> = emptyList(),
     val isFaceDown: Boolean = false,
+    val cardTypes: List<CardType> = emptyList(),
+    val isCreature: Boolean = false,
+    val counters: List<GameCounter> = emptyList(),
 )
+
+/**
+ * One counter on a card or permanent — the app-schema projection of `mage.view.CounterView`, which is
+ * exactly `{name, count}`.
+ *
+ * The kind is the server's own [name] string and stays one: `+1/+1` and `-1/-1` matter most, but
+ * loyalty, charge, oil, stun and hundreds more exist, and every set adds more. Nothing in the app
+ * enumerates counter kinds.
+ */
+data class GameCounter(
+    val name: String,
+    val count: Int = 0,
+)
+
+/**
+ * A card type as the server currently reports it — the app-schema projection of `mage.constants.CardType`
+ * (via `CardTypeCode`), **after** continuous effects.
+ *
+ * Carried as the structured list, not just as [GameCard.isCreature], so later work (subtypes,
+ * supertypes, "which effect animated this") extends this rather than re-deriving from a display string.
+ */
+enum class CardType {
+    Artifact,
+    Battle,
+    Conspiracy,
+    Creature,
+    Dungeon,
+    Enchantment,
+    Instant,
+    Kindred,
+    Land,
+    Phenomenon,
+    Plane,
+    Planeswalker,
+    Scheme,
+    Sorcery,
+    Vanguard,
+
+    /** A type this build does not know — upstream added one, or the bridge sent nothing usable. */
+    Unknown,
+}
 
 /**
  * A permanent on the battlefield — the app-schema projection of `mage.view.PermanentView`: a [card] plus

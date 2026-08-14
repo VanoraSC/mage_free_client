@@ -81,6 +81,61 @@ after one pick, which is the server-side incremental validation §17.2 describes
 **player ids**, and the prompt carries an empty `cards` list. A client that only lights up matching cards
 has nothing to offer there — that was a blocking defect in 0057, caught on a device before merge.
 
+## 5. Creature status and counters — a permanent that *becomes* a creature (2026-08-14)
+
+Story 0058 needed something no static board can show: a permanent whose **creature-ness changes**, plus
+a permanent carrying counters. Used by `CreatureStatusAndCountersIT`.
+
+| Qty | Card | Set | № |
+|----:|------|-----|---|
+| 24 | Mutavault | `M14` | `228` |
+| 18 | Dryad Arbor | `FUT` | `174` |
+| 18 | Servant of the Scale | `DTK` | `203` |
+
+**Why this deck.**
+
+- **Mutavault** is a land that is *not* a creature, with `{1}: Mutavault becomes a 2/2 creature … until
+  end of turn`. One card, one activation, no second card needed — the cheapest live path to a permanent
+  whose creature-ness changes. It also taps for `{C}`, so a second copy pays for the first, and the whole
+  animation is reachable on **turn two**.
+- **Dryad Arbor** is a land that *is* a creature with no effect involved (`Land Creature — Forest
+  Dryad`, 1/1) — the static half of the same pair, and the deck's green source.
+- **Servant of the Scale** (`{G}`) enters as a 0/0 **with a +1/+1 counter**, so one cheap cast produces
+  both a counter to render and a creature whose printed 0/0 is not its current P/T.
+
+**Result (2026-08-14, both seats driven, app seat through the real `GameBoardViewModel`):**
+
+```
+PLAIN LAND    Mutavault id=8e5d10ec  board.powerToughness=null  board.showsSummoningSick=false
+              server.power=0/0  server.isCreature=false  server.summoningSick=true  server.cardTypes=[Land]
+LAND CREATURE Dryad Arbor powerToughness=1/1 isCreature=true showsSummoningSick=true
+              typeLine='Land Creature - Forest Dryad'
+ANIMATED      id=8e5d10ec  powerToughness=2/2  isCreature=true  server.cardTypes=[Land, Creature]
+              server.power=2/2  typeLine='Land Creature'
+COUNTERS      Servant of the Scale counters=[+1/+1 ×1] powerToughness=1/1
+              server=[GameCounter(name=+1/+1, count=1)]
+```
+
+The animated line carries **the same object id** as the plain-land line: one permanent, two snapshots,
+`[Land]` → `[Land, Creature]`. Note also that the server really does send `power=0` and
+`summoningSickness=true` for a plain land — the board declines to *show* them, which is a different thing
+from the server not sending them, and is why the transcript prints both.
+
+**Cautions learned in this run:**
+
+- **Mutavault has two activatable abilities**, so activating it produces a `GAME_CHOOSE_ABILITY` prompt
+  (`Choose spell or ability to play Mutavault [340]`). The animate one is picked by the server's own
+  text (`becomes`); the ability ids mean nothing to a client.
+- **Pick the mana source by what the prompt is owed.** Mutavault makes `{C}` and Dryad Arbor makes
+  `{G}`, and `{C}` cannot pay `{G}`. A first attempt that simply took the first offered id tapped the
+  same source **199 times** without the payment ever completing.
+- **Dryad Arbor is summoning sick the turn it lands** — it is a creature — so it cannot tap for mana
+  until the next turn. Play it early if the run needs green.
+- **Rebuild the `bridge` container before a live run that depends on a bridge change.** The first
+  attempt of this run reported `cardTypes=[]` and `isCreature=false` for a Dryad Arbor whose type line
+  read `Land Creature — Forest Dryad`: the container was 27 hours old and did not have the new mapper.
+  `docker compose -f docker/docker-compose.yml build bridge && … up -d bridge`.
+
 ---
 
 ## 5. Reaching combat — creature-dense on purpose (2026-08-14)
@@ -113,6 +168,9 @@ accordingly, and re-run rather than concluding from a single quiet transcript.
 | Temple of Triumph | `BLC` | `344` (also `C21` 327) |
 | Plains | `M11` | `230` |
 | Swamp | `10E` | `372` |
+| Mutavault | `M14` | `228` |
+| Dryad Arbor | `FUT` | `174` |
+| Servant of the Scale | `DTK` | `203` |
 
 ## Harness notes
 
