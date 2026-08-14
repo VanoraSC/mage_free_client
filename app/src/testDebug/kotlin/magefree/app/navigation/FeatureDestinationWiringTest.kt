@@ -157,6 +157,9 @@ class FeatureDestinationWiringTest {
                 HostTableNavRoute::class to ":feature:tables — hosting a table from the lobby",
                 JoinTableNavRoute::class to ":feature:tables — joining a lobby table",
                 TableRoomNavRoute::class to ":feature:tables — the table room (seats/ready/start)",
+                GameBoardNavRoute::class to
+                    ":feature:game — the read-only board the room's MatchStarting hand-off opens; " +
+                    "without it the game id the server sends has nowhere to go",
                 ProfileRoute::class to "the Profile tab",
                 SettingsRoute::class to "the Settings tab (which owns sign-out)",
             ),

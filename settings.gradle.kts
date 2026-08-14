@@ -50,4 +50,7 @@ if (System.getenv("MAGE_JVM_ONLY") != "1") {
     // Story 0038: host/join/room/spectate tables UI over :core:network's 0037 TableClient, reusing
     // :core:decks for offline deck pick + legality (Android lib; needs the SDK).
     include(":feature:tables")
+    // Story 0055: the read-only portrait game board over :core:network's 0052 GameClient/GameState,
+    // reusing :feature:cards' Coil-backed art renderer (Android lib; needs the SDK).
+    include(":feature:game")
 }

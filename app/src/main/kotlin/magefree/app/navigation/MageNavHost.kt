@@ -1,7 +1,11 @@
 package magefree.app.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -14,7 +18,9 @@ import magefree.app.screens.SettingsPlaceholderScreen
 import magefree.feature.tables.RoomArgs
 import magefree.feature.tables.TableRole
 import magefree.feature.tables.join.JoinTarget
+import magefree.feature.tables.room.TableRoomViewModel
 import magefree.feature.cards.CardsRoute as CardsFeatureRoute
+import magefree.feature.game.GameBoardRoute as GameBoardFeatureRoute
 import magefree.feature.lobby.LobbyRoute as LobbyFeatureRoute
 import magefree.feature.tables.HostTableRoute as HostTableFeatureRoute
 import magefree.feature.tables.JoinTableRoute as JoinTableFeatureRoute
@@ -68,6 +74,26 @@ data class TableRoomNavRoute(
     val tableName: String,
     val gameType: String,
     val role: String,
+)
+
+/**
+ * Type-safe route for the read-only game board (story 0055, `:feature:game`).
+ *
+ * It carries the **game** id, which is a different identifier from the table id the room is keyed by:
+ * the server mints it when the match starts and delivers it on the table's `MatchStarting` push
+ * (`magefree.network.table.MatchStarting.gameId`). That push is the only producer of a game id in the
+ * whole app, and until this story nothing consumed it — the room rendered a terminal "Match starting…"
+ * screen and the hand-off stopped there.
+ *
+ * Mounted here, inside the shell graph, rather than beside story 0011's immersive [magefree.app.game.GameRoute]:
+ * the board is reached from the room, which lives in this graph, and keeping it here means Back behaves
+ * and the connection strip stays visible over a live game. The trade-off is that the shell's tab chrome
+ * takes vertical space from a portrait board; moving the board outside the chrome is a deliberate
+ * follow-up, not something to improvise inside this story.
+ */
+@Serializable
+data class GameBoardNavRoute(
+    val gameId: String,
 )
 
 /** Map the feature's [RoomArgs] hand-off onto the type-safe [TableRoomNavRoute]. */
@@ -177,6 +203,27 @@ fun MageNavHost(
         }
         composable<TableRoomNavRoute> { entry ->
             val route = entry.toRoute<TableRoomNavRoute>()
+            // The room's own ViewModel, resolved here and handed to the feature route so both read the
+            // *same* instance (`hiltViewModel()` is scoped to this back-stack entry either way). That is
+            // what lets the graph watch for the match-start hand-off without a second subscription to
+            // `observeTable`, and without `:feature:tables` having to grow a navigation callback.
+            val roomViewModel: TableRoomViewModel = hiltViewModel()
+            val roomState by roomViewModel.uiState.collectAsStateWithLifecycle()
+
+            // Story 0055: the Epic-7 hand-off, finally connected. `MatchStarting` is the server's own
+            // "your game exists and its id is this" push (story 0037's `TableState.matchStarting`); the
+            // board is opened with that id and the room is popped, so Back from a live game returns to
+            // the lobby rather than to a room whose match has already begun.
+            val startedGameId = roomState.matchStarting?.gameId
+            LaunchedEffect(startedGameId) {
+                startedGameId?.let { gameId ->
+                    navController.navigate(GameBoardNavRoute(gameId = gameId)) {
+                        popUpTo(LobbyRoute) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                }
+            }
+
             TableRoomFeatureRoute(
                 args =
                     RoomArgs(
@@ -187,6 +234,14 @@ fun MageNavHost(
                     ),
                 onExit = { navController.popBackStack() },
                 onBuildDeck = { navigateToTab(DecksRoute) },
+                viewModel = roomViewModel,
+            )
+        }
+        composable<GameBoardNavRoute> { entry ->
+            val route = entry.toRoute<GameBoardNavRoute>()
+            GameBoardFeatureRoute(
+                gameId = route.gameId,
+                onExit = { navController.popBackStack() },
             )
         }
         composable<DecksRoute> {

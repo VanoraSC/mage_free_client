@@ -57,6 +57,8 @@ dependencies {
     implementation(project(":feature:decks"))
     // Story 0038: host/join/room/spectate tables UI behind the lobby's Join/Watch/Host entries.
     implementation(project(":feature:tables"))
+    // Story 0055: the read-only game board the table room's MatchStarting hand-off now opens.
+    implementation(project(":feature:game"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
