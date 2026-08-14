@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.zIndex
 import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
@@ -168,7 +169,15 @@ fun GameBoardScreen(
             // displacing it (§16.1: height is the scarce axis in portrait, so nothing may take it
             // twice). They stack, controls above hand, so neither hides the other.
             Column(
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = HandPeekHeight),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        // Explicit rather than incidental: these controls deliberately overlap the
+                        // board's own bottom regions, and which layer receives the touch there is a
+                        // property worth stating instead of inheriting from declaration order.
+                        .zIndex(FLOATING_LAYER_Z)
+                        .fillMaxWidth()
+                        .padding(bottom = HandPeekHeight),
             ) {
                 if (uiState.areControlsVisible) {
                     FloatingControls(
@@ -207,6 +216,7 @@ fun GameBoardScreen(
                         artRenderer = artRenderer,
                         onCommit = { controls?.actionFor(objectId)?.let(onAction) },
                         onClose = { onCardTap(null) },
+                        modifier = Modifier.zIndex(DETAIL_LAYER_Z),
                     )
                 }
             }
@@ -406,3 +416,13 @@ private fun GameBoardControlsHiddenPreview() {
 private fun GameBoardExpandedHandPreview() {
     PreviewBoard(previewUiState().copy(isHandExpanded = true))
 }
+
+/**
+ * The z of the floating layer (controls, expanded hand) and the card detail above it.
+ *
+ * Stated rather than inherited from declaration order, because a control that is drawn on top but not
+ * *hit* on top is a dead button — a failure mode this screen is one layout edit away from at all times.
+ */
+private const val FLOATING_LAYER_Z = 1f
+
+private const val DETAIL_LAYER_Z = 2f

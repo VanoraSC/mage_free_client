@@ -66,8 +66,15 @@ import magefree.feature.cards.CardArtRenderer
  * itself. Both are asserted in `GameBoardScreenTest`.
  */
 
-/** The tallest the floating panel is allowed to get before it scrolls inside itself. */
-internal val ControlsMaxHeight: Dp = 240.dp
+/**
+ * The tallest the floating panel is allowed to get before it scrolls inside itself.
+ *
+ * Chosen against the portrait layout rather than picked: with the hand's peek edge below it, a panel this
+ * tall stops above the **tap point of the viewer's own permanents**, which is what mana payment (§6.3)
+ * and targeting (§5.2) both need to stay reachable while the panel is open. `GameBoardScreenTest`
+ * measures exactly that, so the number cannot drift without a test noticing.
+ */
+internal val ControlsMaxHeight: Dp = 200.dp
 
 /** Width of a candidate card the prompt carried itself (a scry card, a pile). */
 internal val CandidateCardWidth: Dp = 72.dp
@@ -91,10 +98,16 @@ internal fun FloatingControls(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth().heightIn(max = ControlsMaxHeight),
-        shape = RoundedCornerShape(topStart = Corner.medium, topEnd = Corner.medium),
+        // Every corner the same radius, deliberately. `Surface` clips to its shape, and a shape whose
+        // corners differ (e.g. top-only rounding) produces a **non-simple** outline that hit-testing has
+        // to resolve through a path — which Robolectric's graphics shadows cannot do, so every button
+        // inside the panel rendered, reported a click action, and silently did nothing under the
+        // hermetic gate. Found exactly that way; keep the radii equal.
+        shape = RoundedCornerShape(Corner.medium),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = Elevation.level4,
     ) {
+        var menuExpanded by rememberSaveable { mutableStateOf(false) }
         Column(
             modifier =
                 Modifier
@@ -117,7 +130,15 @@ internal fun FloatingControls(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                TextButton(onClick = onHide) { Text(text = HIDE_CONTROLS_LABEL) }
+                TextButton(onClick = { menuExpanded = !menuExpanded }) { Text(text = BOARD_MENU_LABEL, maxLines = 1) }
+                TextButton(onClick = onHide) { Text(text = HIDE_CONTROLS_LABEL, maxLines = 1) }
+            }
+
+            // Kept directly under the header, and out of the answering controls, because leaving a game
+            // is a different kind of act from answering a question — and because it must stay reachable
+            // whatever the prompt is, including one this build cannot answer at all.
+            if (menuExpanded) {
+                BoardMenu(onAction = onAction, onDone = { menuExpanded = false })
             }
 
             // §6.4: the spell does not vanish behind each new question.
@@ -159,15 +180,6 @@ internal fun FloatingControls(
                 else -> Unit
             }
 
-            if (controls != null && controls.candidateCards.isNotEmpty()) {
-                CandidateRow(
-                    candidates = controls.candidateCards,
-                    artRenderer = artRenderer,
-                    onPick = { objectId -> controls.actionFor(objectId)?.let(onAction) },
-                    isPickable = controls is PromptControlsUi.Targeting,
-                )
-            }
-
             controls?.amountRequest?.let { request ->
                 AmountControl(request = request, promptKey = controls.message.orEmpty(), onAction = onAction)
             }
@@ -175,6 +187,11 @@ internal fun FloatingControls(
                 MultiAmountControl(rows = controls.amountRows, promptKey = controls.message.orEmpty(), onAction = onAction)
             }
 
+            // The answering buttons come **before** the prompt's own cards, deliberately: the panel is
+            // height-capped so it cannot swallow the board (see [ControlsMaxHeight]), and a prompt that
+            // carries a wide set of cards would otherwise push *done* and *cancel* past the fold. The
+            // cards below are informational for a pile and a second route for a scry — the board itself
+            // is the primary route for anything that is on it.
             val buttons = controls?.buttons.orEmpty()
             if (buttons.isNotEmpty()) {
                 Row(
@@ -190,6 +207,15 @@ internal fun FloatingControls(
                 }
             }
 
+            if (controls != null && controls.candidateCards.isNotEmpty()) {
+                CandidateRow(
+                    candidates = controls.candidateCards,
+                    artRenderer = artRenderer,
+                    onPick = { objectId -> controls.actionFor(objectId)?.let(onAction) },
+                    isPickable = controls is PromptControlsUi.Targeting,
+                )
+            }
+
             actionError?.let { reason ->
                 Text(
                     text = "$ACTION_FAILED_PREFIX $reason",
@@ -199,8 +225,6 @@ internal fun FloatingControls(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-
-            BoardMenu(onAction = onAction)
         }
     }
 }
@@ -210,7 +234,14 @@ internal fun FloatingControls(
 private fun CastContext(cast: CastUi) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = if (cast.stepLabel == null) "$CASTING_PREFIX ${cast.cardName}" else "$CASTING_PREFIX ${cast.cardName} — ${cast.stepLabel}",
+            text =
+                if (cast.stepLabel ==
+                    null
+                ) {
+                    "$CASTING_PREFIX ${cast.cardName}"
+                } else {
+                    "$CASTING_PREFIX ${cast.cardName} — ${cast.stepLabel}"
+                },
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -415,40 +446,34 @@ private fun MultiAmountControl(
  * neither should ever be reachable by a mis-tap during a game.
  */
 @Composable
-private fun BoardMenu(onAction: (BoardAction) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+private fun BoardMenu(
+    onAction: (BoardAction) -> Unit,
+    onDone: () -> Unit,
+) {
     var confirming by rememberSaveable { mutableStateOf<String?>(null) }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        TextButton(onClick = {
-            expanded = !expanded
-            confirming = null
-        }) { Text(text = BOARD_MENU_LABEL) }
-        if (expanded) {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.small),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                when (confirming) {
-                    CONCEDE_LABEL ->
-                        Button(onClick = {
-                            confirming = null
-                            expanded = false
-                            onAction(BoardAction.Concede)
-                        }) { Text(text = CONCEDE_CONFIRM_LABEL, maxLines = 1) }
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when (confirming) {
+            CONCEDE_LABEL ->
+                Button(onClick = {
+                    confirming = null
+                    onDone()
+                    onAction(BoardAction.Concede)
+                }) { Text(text = CONCEDE_CONFIRM_LABEL, maxLines = 1) }
 
-                    QUIT_MATCH_LABEL ->
-                        Button(onClick = {
-                            confirming = null
-                            expanded = false
-                            onAction(BoardAction.QuitMatch)
-                        }) { Text(text = QUIT_MATCH_CONFIRM_LABEL, maxLines = 1) }
+            QUIT_MATCH_LABEL ->
+                Button(onClick = {
+                    confirming = null
+                    onDone()
+                    onAction(BoardAction.QuitMatch)
+                }) { Text(text = QUIT_MATCH_CONFIRM_LABEL, maxLines = 1) }
 
-                    else -> {
-                        OutlinedButton(onClick = { confirming = CONCEDE_LABEL }) { Text(text = CONCEDE_LABEL, maxLines = 1) }
-                        OutlinedButton(onClick = { confirming = QUIT_MATCH_LABEL }) { Text(text = QUIT_MATCH_LABEL, maxLines = 1) }
-                    }
-                }
+            else -> {
+                OutlinedButton(onClick = { confirming = CONCEDE_LABEL }) { Text(text = CONCEDE_LABEL, maxLines = 1) }
+                OutlinedButton(onClick = { confirming = QUIT_MATCH_LABEL }) { Text(text = QUIT_MATCH_LABEL, maxLines = 1) }
             }
         }
     }

@@ -131,7 +131,7 @@ const val SHOW_CONTROLS_LABEL: String = "Show controls"
  * survives the toggle by construction (it is part of the board, not of the floating controls); this puts
  * the same fact on the toggle itself, where the finger that hid them already is.
  */
-const val WAITING_ON_YOU_WHILE_HIDDEN: String = "The server is waiting on you"
+const val WAITING_ON_YOU_WHILE_HIDDEN: String = "Waiting on you — show the controls"
 
 /** Pass priority — the most repeated interaction in a game (§9.1), so it is always the primary button. */
 const val PASS_LABEL: String = "Pass priority"

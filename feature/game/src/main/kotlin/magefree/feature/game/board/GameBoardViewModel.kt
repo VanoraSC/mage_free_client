@@ -300,7 +300,8 @@ class GameBoardViewModel
         /** The server's own name for [objectId], from the board projection; a fallback if it is unknown. */
         private fun nameOf(objectId: String): String {
             val board = _uiState.value.board
-            board.hand.cards.firstOrNull { it.objectId == objectId }?.let { return it.card.name }
+            val inHand = board.hand.cards.firstOrNull { it.objectId == objectId }
+            if (inHand != null) return inHand.card.name
             (board.opponentSeats + listOfNotNull(board.viewerSeat))
                 .flatMap { it.battlefield }
                 .firstOrNull { it.objectId == objectId }
