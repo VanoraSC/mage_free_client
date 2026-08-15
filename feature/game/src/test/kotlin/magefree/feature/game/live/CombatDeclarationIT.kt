@@ -174,9 +174,14 @@ class CombatDeclarationIT {
                     jobs += launch { drive(who, viewModel) }
                 }
 
+                // Kept running past the three asserted facts to give the **pairing** question room to
+                // arrive: with two attackers on the board a blocker could block either, which is
+                // exactly when `selectBlockers` stops assigning silently and asks (§7.5). It is not
+                // asserted, because whether it is ever ambiguous in a given game is upstream's call and
+                // not this board's — the point is that the board answers it if it comes.
                 val deadline = System.currentTimeMillis() + BUDGET_MS
                 while (System.currentTimeMillis() < deadline &&
-                    !(sawAttackerDeclaration && sawBlockerDeclaration && declaredAttackerConfirmed)
+                    !(sawAttackerDeclaration && sawBlockerDeclaration && declaredAttackerConfirmed && sawPairingQuestion)
                 ) {
                     delay(POLL_MS)
                 }
@@ -359,7 +364,7 @@ class CombatDeclarationIT {
         if (alreadyDone.isEmpty()) {
             transcript +=
                 "[$who] turn ${state.board.turn.number} ${state.board.turn.phaseLabel}: the board offers " +
-                "${controls.role} — ${controls.pickableObjectIds.size} creature(s) to tap, " +
+                "${controls.role} with ${controls.pickableObjectIds.size} creature(s) to tap, " +
                 "buttons=${controls.buttons.map { it.label }}, and the server's `playable` holds $playableCount"
         }
 
@@ -368,7 +373,8 @@ class CombatDeclarationIT {
         alreadyDone += next
         if (controls.role == CombatRole.Attacking && declaredAttackerId == null) declaredAttackerId = next
         val name = state.board.cardName(next)
-        transcript += "[$who] declaring '$name' as a ${controls.role} — from the board's own ${controls.actionLabelFor(next)}"
+        // ASCII only in the transcript: it is read through a console whose code page mangles anything else.
+        transcript += "[$who] ${controls.role}: declaring '$name' via the board's own '${controls.actionLabelFor(next)}'"
         return controls.actionFor(next)!!
     }
 

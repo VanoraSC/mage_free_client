@@ -154,6 +154,20 @@ tokens, so both seats have attackers and blockers within a couple of turns.
 runs, one reached the declaration and the rest ended earlier on mana draws or the stalls below. Budget
 accordingly, and re-run rather than concluding from a single quiet transcript.
 
+**Reused by `CombatDeclarationIT` (story 0061), and it got much luckier.** With **both** seats driven
+by a real `GameBoardViewModel` — rather than one board and one raw client — the run reached combat on
+turn 5 of the **first** attempt: attackers declared from the board's own controls on one seat,
+blockers on the other, in the same turn. Two seats that both develop a board seems to matter more than
+luck did: neither seat wastes turns on a harness that cannot attack, so combat arrives as soon as both
+have creatures. Still budget for re-runs — one good run is not a distribution.
+
+**What this deck cannot show you.** It has no planeswalkers and no battles, so the attacking seat has
+exactly **one** legal defender and upstream's `selectDefender` assigns silently — the *"which
+defender"* question is never asked, correctly. To see that question you need a second permanent type
+to attack, which is what `CombatPairingProbeIT`'s deck adds (12× `Tibalt, the Fiend-Blooded`, `AVR`
+`161`). The *blocking* pairing question (`Select attacker to block`) **is** reachable with this deck,
+because two attackers make a blocker's choice genuinely ambiguous.
+
 ---
 
 ## Other verified printings (catalog-checked, for future decks)
@@ -200,6 +214,16 @@ accordingly, and re-run rather than concluding from a single quiet transcript.
   - An auto-responder that plays `playable.first()` will cast a spell **before** playing its land, then
     strand itself mid-payment and silently retry the cast forever. **Play lands first**; `manaCost` is
     null for lands, which is the only signal needed.
+- **A harness that declares attackers must remember what it has already declared** (story 0061).
+  Upstream keeps a declared creature in `possibleAttackers`, because re-selecting it is how a player
+  takes the declaration *back*. A loop that always taps the first candidate therefore toggles one
+  creature in and out forever and never reaches blockers. Keep the declared ids per seat and per step,
+  and send the *done* (`cancelPrompt`) once nothing new is offered.
+- **Drive both seats through the real board where the feature is two-sided** (story 0061). Combat's
+  two roles never belong to the same player at once, so a run with one board and one raw client can
+  only ever exercise half of it — and the seat that cannot play the feature also wastes its turns,
+  which is part of why combat was so hard to reach. Two `GameBoardViewModel`s reached a declared,
+  blocked combat on turn 5 of the first attempt.
 - **Deep-game experiments are therefore expensive.** Anything needing several turns of real play is
   better done *inside* the story that builds the relevant surface, where the loop can be driven by the
   real UI logic, than as a standalone scripted probe.

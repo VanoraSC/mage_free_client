@@ -224,6 +224,14 @@ enum class CombatRole {
         /**
          * The role a `Select` is a declaration for, or null when it is an ordinary priority window.
          *
+         * **The signal is the key, not its contents.** Upstream's `selectAttackers` puts
+         * `possibleAttackers` into the options **unconditionally** and only then decides whether to
+         * prompt, so a player whose creatures all cannot attack gets `Select attackers` with an *empty*
+         * list. Keying off "the list is non-empty" would project that as an ordinary priority window —
+         * a "Pass priority" button on a prompt that is not a priority window, and a board that says
+         * nothing about the step it is in. Keying off the key itself keeps it honest: the board is
+         * declaring attackers, and there happen to be none to declare.
+         *
          * **Attackers win if both keys ever arrive together.** The server never sends both — the two
          * roles never belong to the same player at the same moment (§7.4) — but if it ever did, the
          * board must still be in exactly one of them: offering the union would be offering blocks during
@@ -231,8 +239,8 @@ enum class CombatRole {
          */
         fun of(options: PromptOptions): CombatRole? =
             when {
-                options.possibleAttackers.isNotEmpty() -> Attacking
-                options.possibleBlockers.isNotEmpty() -> Blocking
+                options.ids.containsKey(PromptOptions.POSSIBLE_ATTACKERS) -> Attacking
+                options.ids.containsKey(PromptOptions.POSSIBLE_BLOCKERS) -> Blocking
                 else -> null
             }
     }

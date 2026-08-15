@@ -177,8 +177,12 @@ internal fun FloatingControls(
                     }
 
                 // One role's instruction, never both (§7.4): the note comes off the role the *server*
-                // put the board in, so there is no state here that can drift out of step with it.
-                is PromptControlsUi.Declaration -> Note(text = controls.role.note())
+                // put the board in, so there is no state here that can drift out of step with it. A
+                // declaration with nothing in it is a real state — upstream sends `Select attackers`
+                // even when no creature can attack — and it says so rather than showing an instruction
+                // the player cannot follow.
+                is PromptControlsUi.Declaration ->
+                    Note(text = if (controls.pickableObjectIds.isEmpty()) NOTHING_TO_DECLARE_NOTE else controls.role.note())
 
                 is PromptControlsUi.Targeting -> Note(text = TAP_TO_TARGET_NOTE)
                 is PromptControlsUi.Mana ->
@@ -712,3 +716,13 @@ internal const val TAP_FOR_MANA_NOTE: String = "Tap your own highlighted sources
 internal const val NO_MANA_SOURCE_NOTE: String = "The server offers no source to tap — you can still cancel."
 
 internal const val UNANSWERABLE_NOTE: String = "Nothing to press: this one can't be answered by this version."
+
+/**
+ * What a declaration says when the server named no creature at all.
+ *
+ * Not a corner case: upstream's `selectAttackers` builds `possibleAttackers` from the creatures that
+ * pass `canAttack`, puts it in the options **whether or not it is empty**, and can still prompt — so a
+ * player with only summoning-sick creatures gets a declare-attackers prompt with nothing in it. The
+ * board says so and offers the *done*, rather than an instruction to tap something that is not there.
+ */
+internal const val NOTHING_TO_DECLARE_NOTE: String = "The server names no creature to declare — you can still finish the step."

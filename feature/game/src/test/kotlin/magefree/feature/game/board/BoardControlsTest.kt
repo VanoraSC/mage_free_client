@@ -326,6 +326,30 @@ class BoardControlsTest {
     }
 
     @Test
+    fun `a declaration with no eligible creature is still a declaration, not a priority window`() {
+        // Read out of `HumanPlayer.selectAttackers`: `possibleAttackers` goes into the options
+        // **unconditionally**, and the prompt can still be fired — a player whose creatures all fail
+        // `canAttack` gets `Select attackers` with an empty list. Projecting that as priority would put
+        // a "Pass priority" button on a prompt that is not a priority window.
+        val controls =
+            controlsFor(
+                declareAttackersState().copy(
+                    prompt =
+                        GamePrompt.Select(
+                            message = "Select attackers",
+                            options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to emptyList())),
+                        ),
+                ),
+            )!!
+
+        assertTrue(controls is PromptControlsUi.Declaration)
+        assertEquals(CombatRole.Attacking, (controls as PromptControlsUi.Declaration).role)
+        assertEquals(emptySet<String>(), controls.pickableObjectIds)
+        assertEquals(listOf(BoardAction.FinishTargeting), controls.buttons.map { it.action })
+        assertFalse("still not a priority window", controls.buttons.any { it.action == BoardAction.PassPriority })
+    }
+
+    @Test
     fun `a select with no combat options is still the ordinary priority window`() {
         // The guard in the other direction: a declaration is distinguished by its options, not by its
         // type, so an ordinary `Select` must not be mistaken for one.
