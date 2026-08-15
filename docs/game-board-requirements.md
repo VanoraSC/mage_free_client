@@ -825,19 +825,33 @@ Everything below is **not yet designed** and is deliberately out of the first pl
 - **Combat damage among multiple blockers, trample, first/double strike** (§19) — **not actually an
   open design question**: traced to the same `GetMultiAmount` prompt already proven live for Forked
   Bolt's damage division (§17). Needs a short live combat probe to confirm, not new design.
+- **Modal spells and Spree** (§21.1) — **not an open design question**: `ChooseAbility` was already
+  written with mode-choice in mind and the wire shape is confirmed identical to ability choice. Needs a
+  live probe (a Charm or a Spree card) to move from traced to proven, not new design.
+- **Graveyard, companion, looked-at card identity** (§21.2, §11.3, story 0066) — **a confirmed defect**:
+  `PlayerView.graveyard` is a full `CardsView`, sent always, and our bridge reads only its size, so a
+  graveyard-castable spell (Flashback and its relatives) renders as `"Unnamed candidate N"` today. The
+  interaction already works; only the name is missing.
+- **Commander damage** (§21.3a, story 0067) — a genuine, unresolved product decision: upstream exposes
+  it only via narration text, never structurally (confirmed even absent from desktop XMage). Show the
+  narration as-is, or accumulate it client-side from combat snapshots — neither is decided.
 
 ## Work this design implies beyond the board itself
 
 - **A bridge game-state cache + query verb** (§10.1) — new `:bridge` + `:protocol` work, ahead of the
   board UI, so a reconnecting client can ask for current state instead of waiting for a push.
-- **A sideboard screen** (§12.1) — a purpose-built, timed, match-scoped surface; the
-  `ConstructPrompt`/`SideboardPrompt` triggers already exist from story 0036. No story number is
-  assigned to it yet — it is the one piece of "play a full match" (rather than a single game) with no
-  story at all today.
-- **Stops / configurable auto-pass** (§14.3) — a board-side feature; no protocol/bridge work, since the
-  server sends the identical priority prompt either way.
-- **Special-action affordance for convoke/delve** (§18) — a small board-side fix: wire
-  `specialActionsAvailable` to a real control. No protocol/bridge work expected.
+- **A sideboard screen** (§12.1, story 0064) — a purpose-built, timed, match-scoped surface; also a
+  genuine `:protocol`/`:bridge` fix (the deck payload was found to be dropped, not merely a UI gap).
+- **Stops / configurable auto-pass** (§14.3, story 0063) — a board-side feature; no protocol/bridge
+  work, since the server sends the identical priority prompt either way.
+- **Special-action affordance for convoke/delve** (§18, story 0062) — a small board-side fix: wire
+  `specialActionsAvailable` to a real control. No protocol/bridge work expected. Companion (§21.4)
+  reuses this design with zero extra work once §21.2's card-identity fix lands.
+- **Card identity for graveyard/companion/looked-at** (§21.2, story 0066) — a `:protocol` + `:bridge`
+  fix: map `CardsView` collections that already exist upstream and are currently dropped to a count.
+- **Command zone / Commander format** (§21.3, story 0067) — a whole zone (`commandList`) mapped nowhere
+  today; tax is automatic once casting from the zone works, but commander damage (§21.3a above) needs a
+  decision first.
 
 ---
 
@@ -1220,3 +1234,152 @@ tapped and moved into a new pile,"* falling out of the same general mechanism.
   `controlsFor`, and the pick-state plumbing are all unchanged.
 - Applies to **both** battlefield bands — an opponent with ten lands is exactly as cluttered as the
   viewer's own, and the grouping key reads the same `PermanentUi` fields either side.
+
+---
+
+## 21. Casting/activation cost patterns — a systematic review, traced from `../mage`
+
+Prompted by a direct request to review every alternative casting cost (kicker, spree, …), every
+activation cost (crew, Deathrite Shaman, …), and any other prompt a normal game needs — checked against
+source, not guessed. The result is reassuring in one direction and reveals one real, concrete gap in
+another.
+
+### 21.1 The result: everything routes through the closed prompt set already built
+
+**No mechanic examined needs a new `GamePrompt` kind.** CR 601.2b's real cast sequence — traced from
+`AbilityImpl.activate()` (`Mage/src/main/java/mage/abilities/AbilityImpl.java:307-430`) — is, in order:
+splice reveal → **alternative/additional costs announced** → X announced → Phyrexian/Waterbending mana
+choices → **mode chosen** → per-target announcements → mana payment. Every step in that sequence maps to
+a prompt kind this document and 0057/0062 already cover:
+
+| Step | Mechanism, traced | Prompt kind |
+|---|---|---|
+| Optional additional costs (kicker, multikicker, buyback, entwine, escalate, surge, overload, bargain, …) | `OptionalAdditionalSourceCosts.addOptionalAdditionalCosts` — a loop of `player.chooseUse(...)`, one **yes/no per cost**, repeated for multikicker until declined or unaffordable (`KickerAbility.java:182-228`, confirmed directly; `BuybackAbility implements OptionalAdditionalSourceCosts` confirmed the same way — the rest share this interface and were not read individually) | `GamePrompt.Ask` — already generic |
+| Phyrexian mana (pay 2 life instead of a colored symbol) | `AbilityImpl.handlePhyrexianCosts` — another `chooseUse` per symbol (`AbilityImpl.java:692`) | `GamePrompt.Ask` |
+| Modal spells, **including Spree** | `Modes.choose` → `HumanPlayer.chooseMode` fires `fireGetModeEvent`, which server-side reuses the **exact same wire message** as ability choice — `TableController`'s `chooseMode` builds an `AbilityPickerView` from the mode map (`GameController.java:856-857`), identical in shape to the `AbilityPickerView` built for `CHOOSE_ABILITY`. **`SpreeAbility` is not a distinct mechanism at all** — it is `Modes.setMinModes(1)`/`setMaxModes(MAX_VALUE)` with a per-mode cost, i.e. an ordinary modal spell configured to allow choosing more than one mode (`SpreeAbility.java`, 27 lines, confirmed directly). Our bridge's `chooseAbility` mapper already reads `AbilityPickerView.choices` blind to which server-side path produced it (`GamePromptMapper.kt:90-102`), and **our board's `ChooseAbility` control was already written with this in mind** — its own doc comment reads *"Choose one of an object's abilities, **or one mode of a modal spell**"* (`BoardControls.kt:105`). | `GamePrompt.ChooseAbility` — already generic, **already wired for this**, but **never live-verified against a real modal or Spree card** |
+| Activated-ability costs with a target (crew, equip, Deathrite Shaman-style graveyard-exile costs, sacrifice/discard costs) | Crew's cost is an ordinary `TargetPermanent(0, MAX, filter, true)` with a custom "(selected power X of N)" message — the **identical incremental-select-then-confirm shape** already proven live for Forked Bolt's damage division (§17.2) (`CrewAbility.java:149-169`, confirmed directly). Deathrite Shaman is three ordinary `SimpleActivatedAbility`s, each with a `TargetCardInGraveyard` — note **not** "in *your* graveyard": it can target either player's (confirmed directly, `DeathriteShaman.java`). Activating a permanent with more than one ability (Deathrite has three) shows `ChooseAbility` first, exactly as already measured live for Mutavault (§7.6/0058's live test) | `GamePrompt.ChooseAbility` (if >1 ability) then `GamePrompt.Target` — already generic |
+| Alternative/additional costs paid via a non-mana action at the moment of casting (convoke, delve) | Fully traced already — §18 | `Select`/`PlayMana`'s special-action affordance → `ChooseAbility`/`Target` — story 0062 |
+| Combat damage among multiple blockers, trample | Fully traced already — §19 | `GetMultiAmount` |
+| "May move to the command zone instead" (a commander's own replacement effect, §21.4) | Another ordinary `chooseUse` (`CommanderReplacementEffect.java:152,172`) | `GamePrompt.Ask` |
+
+**Consequence.** The architectural bet §6.2 made explicitly — *"the prompt set is closed and typed… there
+is no generic 'server asked something' case to guess about"* — holds up across a genuinely wide sample of
+real Magic mechanics, not just the handful originally measured. That is a load-bearing finding for the
+whole project, not a footnote.
+
+### 21.2 The one real gap: graveyard cards have no individual identity
+
+**`playable` already includes graveyard-zone abilities.** `PlayerImpl.getPlayable(game, hidden, fromZone,
+…)` explicitly scans `Zone.GRAVEYARD` (every graveyard in range, not just the viewer's own),
+`Zone.EXILED`, revealed cards from any zone, and — separately — `Zone.OUTSIDE` for companion cards
+(`PlayerImpl.java:4359-4395`, confirmed directly). So Flashback, Escape, Jump-start, Unearth, Embalm,
+Eternalize, Disturb, and Retrace cards are **already** offered to the app through the same `playable`
+list a hand card or a land uses — the mechanism is not missing.
+
+**But the board cannot say what they are.** `PlayerView.graveyard` is a full `CardsView` — the same
+per-card shape as hand — sent by the server for **every player, always** (a graveyard is public
+information; there is no hidden-info reason to withhold it):
+`graveyard.put(card.getId(), new CardView(card, game, …))` (`PlayerView.java:40,84-85`, confirmed
+directly). Our bridge reads only its size: `graveyardCount = player.graveyard?.size ?: 0`
+(`GameViewMapper.kt:92`) — the individual `CardsView` is dropped. This is standard 5's exact shape
+again: a real, always-populated upstream field, silently reduced to a count.
+
+**The consequence is already visible in the board's own code**, and the comment names it directly —
+`BoardControls.kt`'s `offBoardCandidateButtons`, written for exactly this gap: *"a candidate id does not
+have to name anything the board draws… `canPlayObjects` naming a card in a zone the board does not
+render (**flashback from a graveyard is the everyday case**)."* Its fallback, `nameFor`, checks
+`hand`/`battlefield`/`stack`/`exile`/`revealed` — **never `graveyard`, because `GameState` carries no
+graveyard cards to check.** The result today: a Flashback-eligible card in `playable` renders as
+`"Unnamed candidate 1"`. The tap would actually work (the id is real and the server offered it) — the
+player just cannot tell which card they're casting, and if more than one graveyard-castable card is
+available (either player's), they are indistinguishable buttons.
+
+**Scope of the fix, precisely — do not over-claim.** A `Target` prompt that names a graveyard card
+directly (Delve's own target, Deathrite Shaman's own target) already carries its **own** `cards` list
+per-prompt, the same way Scry does (§11.3) — that path is *not* broken. The gap is specifically:
+**anything resolved through `playable`/`offBoardCandidateButtons` rather than through a `Target` prompt's
+own card list** — i.e., knowing a graveyard-castable spell exists and what it is *before* acting on it.
+
+**This also touches a gap already on record.** §11.3 already flagged, independently: *"`lookedAt` and
+`companion` are populated upstream and were not mapped by 0051 — a `:protocol` + `:bridge` fix,
+independent of the board."* Graveyard is the same shape of fix, and worth doing together — see story
+0066.
+
+### 21.3 Commander — traced from `GameCommanderImpl`, `Commander`, and the view layer
+
+Commander identity is chosen at **deck registration**, not asked mid-game: at game init, every card in
+the player's sideboard is checked, and cards are moved into the command zone
+(`GameCommanderImpl.init()`, `GameCommanderImpl.java:100-130`, confirmed directly) — so "who is your
+commander" is 0033/0059's territory (deck submission), not a board prompt.
+
+**The command zone already has a unified, mapped-shape upstream view — currently mapped nowhere on our
+side.** `PlayerView.commandList: List<CommandObjectView>` carries **Commander, Emblem, Dungeon, and
+Plane** objects together, per player (`PlayerView.java:47,116-136`, confirmed directly).
+`CommanderView extends CardView` (`CommanderView.java`, confirmed directly) — the **same shape** hand,
+graveyard, and exile already use, so mapping it reuses existing card-mapping code rather than inventing
+a new one. Our `GameState`/`GamePlayer` model has **no command-zone field at all** today — this is not a
+partial gap, it is the entire zone missing. **Commander cannot be played through the app today**: no way
+to see a commander in the command zone, cast it from there, or see an emblem/plane/dungeon.
+
+**Commander tax needs no board work at all.** It is a `CostModificationEffectImpl` applied automatically,
+server-side, *before* the mana cost is ever shown to the player (`CommanderCostModification.java`,
+confirmed directly — CR 903.8, "+{2} for each previous cast from the command zone"). The increased cost
+**is** the cost the ordinary `PlayMana` prompt asks for; once command-zone casting works at all (§21.2's
+sibling gap, since `CommanderView` needs the same mapping treatment as graveyard), tax is correct for
+free. Showing the running tax count/history is a legibility nicety, not a functional requirement.
+
+**Commander damage is a genuine upstream data constraint, not a mapping gap — a real design decision is
+needed.** `CommanderInfoWatcher` tracks accumulated combat damage per commander per victim
+(`damageToPlayer: Map<UUID, Integer>`) purely server-side, and **nothing in `GameView`/`PlayerView`
+exposes it** — confirmed by an exhaustive grep across `Mage.Common/src/main/java/mage/view/`, zero
+matches. The only way a player currently learns "you've taken 15 from that commander" is the narration
+log (`game.informPlayers(...)`, `CommanderInfoWatcher.java:51`) — **the same HTML-narration channel this
+document has already rejected parsing** (§1.3's resolved decision: *"no prose parsing at all"*). Even
+desktop XMage has no dedicated commander-damage HUD; this is an upstream limitation, not something our
+bridge silently dropped. **Open (21.3a):** two honest options, neither yet decided —
+1. Show the narration line as-is in the log/stack overlay (§9.1) and accept that a structured
+   per-opponent-per-commander damage total is simply not available.
+2. Have the **client** accumulate it independently, watching each snapshot's combat data (attacker id →
+   defender → damage dealt) across the game — the same shape of risk §11.3 already flagged for
+   client-side knowledge-tracking ("wrong the moment a card moves through a zone we cannot observe"),
+   except combat damage is momentarily visible in every snapshot that has it, which may make this safer
+   than the hand-tracking case that was rejected. **Unverified**, and a genuine product decision either
+   way, not a default to assume.
+
+**Partner/background/multiple commanders need no new shape.** `commandList` is already a `List`, and
+`getCommandersIds(player, CommanderCardType.ANY, false)` (`GameCommanderImpl.java:125`) already handles
+more than one — rendering N commanders per player falls out of the same list-shaped mapping in §21.2's
+sibling fix, not a separate mechanism.
+
+**"May move to command zone instead"** (a commander dying/being exiled/bounced/tucked) is confirmed
+already, in §21.1's table — an ordinary `Ask`.
+
+### 21.4 Companion — the same `SpecialAction` mechanism as convoke and delve
+
+`CompanionAbility extends SpecialAction` (`CompanionAbility.java`, confirmed directly) — *"pay {3}: put
+the companion card into your hand,"* registered in `Zone.OUTSIDE`, discovered and triggered **exactly**
+the way convoke and delve already are (§18): via `GameView.special`/our `specialActionsAvailable`, then
+`useSpecialAction()`. **Story 0062's design already covers the interaction mechanism for this case with
+no changes** — companion is simply another entry in the special-actions set.
+
+**What's missing is legibility, and it is the same fix as §21.2/§11.3's `companion` zone gap.**
+`CompanionAbility` has no target — its effect resolves directly against its own source id, so the
+special action *can* be triggered blind and it will work. But the player cannot see **which** card their
+companion is (before or after fetching it) without the `companion` zone mapped, the gap §11.3 already
+named independently. Folding this into story 0066 makes it one fix instead of two.
+
+### 21.5 Consequences for the story list
+
+- **Story 0062** (convoke/delve, already specified) needs no change — its design already generalises to
+  companion (§21.4) with zero extra work, and its "verify live" step should add a companion deck once
+  the zone mapping (below) lands.
+- **New: story 0066** — map the individual card identities that already exist upstream and are
+  currently dropped: `PlayerView.graveyard` (§21.2), `companion` and `lookedAt` (§11.3, already flagged,
+  now given a story number). One shape of fix, three fields.
+- **New: story 0067** — Commander format support: map `PlayerView.commandList` (command zone rendering,
+  reusing `CommanderView`'s `CardView` shape), verify tax is correct for free once casting from the
+  zone works, and **resolve 21.3a** (the commander-damage decision) before building anything that
+  depends on its answer.
+- **Modal spells / Spree (§21.1)** need no new story — the mechanism is already built into 0057's
+  `ChooseAbility` handling. Worth a live probe (a Charm or a Spree card) to move it from "traced" to
+  "proven," the same standard already applied everywhere else in this document, but not a design gap.
