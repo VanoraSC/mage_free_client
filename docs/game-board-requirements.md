@@ -652,6 +652,14 @@ not be built in a way that precludes it. Concretely: passing priority must remai
 made in one place**, not logic scattered through the UI. When stops arrive, they change *when the app
 answers a priority prompt*, and nothing else should have to change.
 
+**⚠️ Trap for whoever writes auto-pass (found during 0061).** `PassPolicy` is consulted on **every
+`GamePrompt.Select`** — and after 0061 a **combat declaration is also a `Select`** (§7.2/§7.3). A
+policy that returns `PassImmediately` on one would send `passPriority`, which upstream reads as the
+declaration's *done* arm: the app would **silently decline to attack or block**. Harmless today,
+because `ManualPassPolicy` never passes. So an auto-pass policy **must** discriminate the prompt — the
+cheapest honest test is `CombatRole.of(prompt.options) != null` — and declare-attackers/blockers are
+exactly the steps players most want a **stop** at anyway.
+
 ### 14.2 Floating mana is allowed; its interaction with auto-pass is deferred
 **Decision (Pete).** *"You can tap land at any time; passing priority with mana in the pool requires
 no special handling for this increment. When we implement pass, this will need to be augmented."*
