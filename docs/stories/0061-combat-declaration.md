@@ -145,4 +145,4 @@ groups, each `attackers=1`, the defender repeated.
 - `docs/game-board-requirements.md` — §7.2/§7.3 (measured prompt shapes), §7.4 (two assignment problems), §7.5 (declaration decisions + the upstream read), §7.6 (harness stalls), §16.4 (confirmation).
 - `feature/game/.../board/BoardControls.kt` — `controlsFor`, where `pickableObjectIds` comes from `playable`.
 - `feature/game/src/test/.../live/CombatProbeIT.kt`, `CombatPairingProbeIT.kt` — how to reach combat.
-- `docs/live-test-decklists.md` §5 — the creature-dense deck, and the nondeterminism warning.
+- `docs/live-test-decklists.md` §6 — the creature-dense deck, and the nondeterminism warning.

@@ -94,7 +94,7 @@ throughout (lobby, decks, cards, tables). Entering a game becomes an orientation
 is the only landscape surface in the product. Accepted knowingly.
 
 **Open question (2.1a):** does the app force the rotation on entering a game, or ask the player to
-rotate? — *pending*
+rotate? — **moot.** Portrait (§16.1) means the board never rotates the device at all.
 
 ---
 
@@ -696,10 +696,12 @@ Everything below is **not yet designed** and is deliberately out of the first pl
 - **Spectating** (§13) — capability exists end to end; scope choice only.
 - **Stops / configurable auto-pass** (§14.1) — named future feature; keep pass-policy in one place.
 - **Auto-pass with floating mana** (§14.2) — must be handled when auto-pass is built.
-- **Library-position knowledge** (§11.2) — *unverified*: confirm the snapshot actually carries
-  post-scry ordering before promising to display it.
-- **Declining a target or an alternative-cost prompt** (§6.4a) — rollback confirmed only for the mana
-  step; verify per step before offering cancel there.
+- **Library-position knowledge** (§11.2) — **resolved, not deliverable** (§11.3): there is no
+  known-library or library-order tracking upstream. Dropped, not pending.
+- **Declining a mode or an alternative-cost prompt** (§6.4a/§16.5a) — rollback is confirmed for both
+  the **mana** step and the **target** step (§17.1); declining a **mode** choice or an alternative
+  cost such as delve/convoke remains unverified. Verify those specifically before offering cancel
+  there.
 
 ## Work this design implies beyond the board itself
 

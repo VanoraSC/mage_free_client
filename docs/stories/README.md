@@ -450,16 +450,15 @@ bridge). Stories **0001–0022 are complete and merged**:
 10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038, with 0040 + 0041 fixing it end to end;
     **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
-11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 built; **0061 outstanding**. ⚠️
+11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built. ✅
 
-**Current state — a game is playable from the app.** Hosting works end to end, and the board renders a
-live game and answers the server's prompts: a full turn has been played on-device against an AI —
-mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and turn advance.
+**Current state — a game is playable from the app, including combat.** Hosting works end to end, and
+the board renders a live game and answers the server's prompts: a full turn has been played on-device
+against an AI — mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and turn
+advance. Combat (0061) is built: attackers and blockers are declared by tapping, with the server's
+pairing questions answered the same way.
 
-**Known gaps.** **0061** (combat declaration) is specified and is the next board work: combat cannot be
-played at all today — the board offers "attack with everything or nothing" and no way to block. Its
-prompt shapes and pairing behaviour are fully measured (requirements §7.2–§7.5), so it needs no
-protocol or bridge work. Two Epic 7 defects found while hosting by hand are specified as **0059** (deck
+**Known gaps.** Two Epic 7 defects found while hosting by hand are specified as **0059** (deck
 submission offered in states where upstream ignores it) and **0060** (the host form hardcodes 7 of the
 server's 52 deck types). Neither blocks play: a match starts because `joinTable` binds the host's deck
 at creation.
