@@ -405,6 +405,8 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0057 | Board interaction: casting, targeting, cancel | 0055, 0056, 0052, 0054 | Floating controls (never modals) + visibility toggle, tap-select-confirm, targeting with per-pick sends and a confirm, mana by tapping lands, cascading cancel, manual priority through a single pass-policy seam. Unblocks what 0055 could not verify live. |
 | 0058 | Creature status and counters | 0051, 0052, 0055 | **Defect + missing data.** The board renders `0/0 · Summoning sick` under a land, because P/T and summoning sickness are drawn unconditionally — and the bridge drops `cardTypes`, `isCreature()` and `counters` from `CardView` entirely. Creature-ness is game state, not printing (Earthbend, Ensoul Artifact, crewed Vehicles), so the server's own answer must be carried and rendered, along with counters. |
 | 0061 | Combat: declaring attackers and blockers | 0057, 0058, 0055 | Combat cannot be played today: a declaration is projected as ordinary priority with `pickableObjectIds` empty, so the board offers "attack with everything or nothing" and **no way to block**. `playable` is empty during a declaration — the creatures come only from `possibleAttackers`/`possibleBlockers`, which the bridge already carries. Pairing questions are upstream's own (`selectDefender` / `Select attacker to block`), asked only when ambiguous, and arrive as ordinary target prompts 0057 already answers. |
+| 0062 | Alternative costs: convoke, delve | 0057 | **Defect fix, traced from `../mage`.** `GameState.specialActionsAvailable` is mapped end to end and never read — the board has no way to trigger a `SpecialAction` (convoke, delve), so decks using them are unplayable. No new prompt kind needed: the fix is a board affordance wired to the existing field, then live verification. |
+| 0063 | Priority: stops and configurable auto-pass | 0057, 0061 | **Mechanism traced from `../mage`'s desktop client** (§14.3): six explicit skip-to-X actions, persistent stop settings (global + per-phase-step × your/opponent turn), and a separate hold-priority concept — entirely client-local, no protocol change. First cut: the global stop flags + one or two skip actions through the existing `PassPolicy` seam. Touch-first presentation of the full desktop matrix is a later design pass. |
 | 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
 
 ## Known issues (accepted, not scheduled)
@@ -450,7 +452,8 @@ bridge). Stories **0001–0022 are complete and merged**:
 10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038, with 0040 + 0041 fixing it end to end;
     **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
-11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built. ✅
+11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built;
+    **0062 + 0063 specified**. ⚠️
 
 **Current state — a game is playable from the app, including combat.** Hosting works end to end, and
 the board renders a live game and answers the server's prompts: a full turn has been played on-device
@@ -458,10 +461,22 @@ against an AI — mulligan, land, cast, cancel, recast, targeting, mana, resolut
 advance. Combat (0061) is built: attackers and blockers are declared by tapping, with the server's
 pairing questions answered the same way.
 
-**Known gaps.** Two Epic 7 defects found while hosting by hand are specified as **0059** (deck
-submission offered in states where upstream ignores it) and **0060** (the host form hardcodes 7 of the
-server's 52 deck types). Neither blocks play: a match starts because `joinTable` binds the host's deck
-at creation.
+**Known gaps toward "a full game/match is playable end to end."** A 2026-08-15 pass through `../mage`
+source (not guesswork) found two concrete gaps and closed one open question:
+- **0062** (convoke/delve) — a confirmed defect: the board has no way to pay these costs at all today.
+- **0063** (stops/auto-pass) — manual-only priority (§9.1/§14.1) works but is tedious over a full game;
+  the desktop mechanism it should eventually match is now traced and specified (§14.3).
+- Combat damage among multiple blockers/trample (requirements §19) is **not** an open design
+  question — it is the same `GetMultiAmount` prompt already proven live for Forked Bolt's damage
+  division. Needs a short live combat probe to confirm, not new design.
+- **Full-match play** (sideboarding between games, §12.1) has **no story number assigned yet** — it is
+  the one piece of "play a full match, not just one game" with no story at all today. `joinTable` binds
+  a deck at table creation, so a single game or the first game of a match plays fine; sideboarding into
+  game 2 has nothing built.
+
+Two Epic 7 defects found while hosting by hand are specified as **0059** (deck submission offered in
+states where upstream ignores it) and **0060** (the host form hardcodes 7 of the server's 52 deck
+types). Neither blocks play: a match starts because `joinTable` binds the host's deck at creation.
 
 **Beyond that:** **EPIC-08** (tournaments / draft / sealed) is the remaining unstarted
 branch. The 10 → 9 → 7 ordering was deliberate: cards and decks came first. Epic 5's notifications

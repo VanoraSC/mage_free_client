@@ -672,6 +672,77 @@ guards in the first version.
 unattended pass can cost a player their mana — so the auto-pass feature must handle it deliberately.
 Recorded here so the requirement is not lost between increments.
 
+### 14.3 The real upstream model — traced from `Mage.Client`, not guessed
+
+§14.1 named "similar functions to Arena and MTGO" but did not specify a shape, and `PassPolicy`'s own
+KDoc (`feature/game/.../board/PassPolicy.kt`) already correctly guessed that the eventual feature would
+not fit its one-shot `decide(state): AskThePlayer | PassImmediately` seam — *"the standing 'pass
+until …' verbs are a different thing entirely — they are player actions, not answers."* This section
+replaces the guess with what desktop XMage **actually does**, read from `../mage`
+(`Mage.Client/src/main/java/mage/client/game/GamePanel.java` and
+`Mage/src/main/java/mage/players/net/{UserSkipPrioritySteps,SkipPrioritySteps}.java`). It is a **client-
+local UX feature with no server counterpart** — `grep`ing `Mage.Common`/`Mage`/`Mage.Server` for
+auto-pass turns up nothing outside `Mage.Client` itself. The server sends the identical `Select` prompt
+every time regardless; whether the client shows it to the human or answers it silently is entirely our
+decision.
+
+**It is not one policy — it is two separate mechanisms.**
+
+1. **Six explicit "skip to X" player actions** (`GamePanel.skipButtonsList`, each bound to a hotkey),
+   not a standing toggle. Pressing one starts auto-passing *from now*, repeatedly, until its own stop
+   condition fires — then control returns to the player and skipping stops:
+
+   | Skip action | Stops when |
+   |---|---|
+   | **Skip to next turn** | any player's turn begins |
+   | **Skip to [opponent's / next] end step** | reaches the chosen end-of-turn step (toggle: specifically the opponent's, or whichever comes next) |
+   | **Skip to [opponent's / next] main phase** | reaches the chosen main phase (same toggle) |
+   | **Skip to your turn** | your own turn begins |
+   | **Skip until the stack resolves** | the stack is empty — **or**, on its own toggle, stops early the moment something *new* is added to the stack |
+   | **Skip to the end step before your turn** | the end step immediately preceding your next turn (the last window to act before it) |
+
+2. **Persistent per-user "stop" settings** (`UserSkipPrioritySteps`) that apply as override conditions
+   **during any skip**, regardless of which skip action started it:
+   - **Per-phase-step, tracked separately for your turn vs. the opponent's turn**
+     (`SkipPrioritySteps`: upkeep, draw, main1, beforeCombat, endOfCombat, main2, endOfTurn) — default
+     is to stop on **your own** main phases (`main1`/`main2 = true`) and nowhere else by default; the
+     opponent-turn set defaults the same shape but is configured independently.
+   - **Global flags**, independent of whose turn it is: `stopOnDeclareAttackers` (default **true**),
+     `stopOnDeclareBlockersWithAnyPermanents` (default **true**),
+     `stopOnDeclareBlockersWithZeroPermanents` (default **false** — don't interrupt a skip just because
+     you have nothing to block with), `stopOnAllMainPhases` (true), `stopOnAllEndPhases` (true),
+     `stopOnStackNewObjects` (true — a skip **always** breaks the moment the opponent puts something new
+     on the stack, independent of the specific skip action's own stack-related toggle above).
+
+3. **"Hold priority"** (`GamePanel.holdPriority`, Ctrl/Cmd-click or a toggle) is a **third, separate**
+   mechanism: after *you* take an action (cast, activate), holding priority means the app does **not**
+   auto-pass on your behalf afterward, so you can chain a second action before priority moves on. This
+   is orthogonal to the skip/stop settings above, which govern *incoming* prompts, not what happens
+   right after your own action.
+
+**Consequence for our design.** `PassPolicy`'s one-shot `decide()` seam is real and correct for the
+*stop-condition* checks (both the global flags and the per-phase-step settings reduce to "does this
+`Select` match a condition the player cares about right now" — the KDoc's design already anticipated
+this). But it cannot express the **six skip actions** on its own: those are stateful player-triggered
+commands ("keep passing until…"), not a predicate evaluated once per prompt. The skip actions need
+their own state (which skip is active, if any) that arms `PassPolicy` to answer `PassImmediately`
+repeatedly and disarms itself the moment a stop condition (global, per-phase, or "new object on stack")
+is met — exactly the "player actions, not answers" distinction the KDoc already drew. Hold-priority is
+a third, independent piece of state consulted after *our own* `playObject`/ability activation, not by
+`PassPolicy` at all.
+
+**Combat's own trap (§14.1) is upstream's own model, not an edge case we invented.**
+`stopOnDeclareAttackers`/`stopOnDeclareBlockersWith*` existing as **dedicated** settings, separate from
+the ordinary phase-step list, confirms declare-attackers/blockers need their own stop handling — the
+same conclusion §14.1 already reached from 0061, now corroborated by upstream treating it the same way.
+
+**Not yet decided (deliberately, for a later pass):** which of these six skip actions and which stop
+settings ship in v1 vs. later, and how they're surfaced as UI on a phone (desktop exposes seven buttons
++ a settings dialog with per-phase checkboxes ×2 turns — that is Swing-desktop-shaped, and porting it
+verbatim would be exactly the "don't port the Desktop UI" mistake `AGENTS.md` warns against). This
+section only fixes the *mechanism* (what upstream actually does and why our seam is the right shape);
+the touch-first presentation of it is a separate design pass.
+
 ---
 
 ## 15. The match-start interstitial
@@ -694,21 +765,37 @@ prose parsing.
 Everything below is **not yet designed** and is deliberately out of the first playable board:
 
 - **Spectating** (§13) — capability exists end to end; scope choice only.
-- **Stops / configurable auto-pass** (§14.1) — named future feature; keep pass-policy in one place.
-- **Auto-pass with floating mana** (§14.2) — must be handled when auto-pass is built.
+- **Stops / configurable auto-pass** (§14.1/§14.3) — the *mechanism* is now grounded from upstream
+  source (six skip actions + persistent stop settings + hold-priority, §14.3); what ships in v1 and its
+  touch-first presentation are still undesigned.
+- **Auto-pass with floating mana** (§14.2) — must be handled when the skip/stop mechanism (§14.3) is
+  built.
 - **Library-position knowledge** (§11.2) — **resolved, not deliverable** (§11.3): there is no
   known-library or library-order tracking upstream. Dropped, not pending.
 - **Declining a mode or an alternative-cost prompt** (§6.4a/§16.5a) — rollback is confirmed for both
   the **mana** step and the **target** step (§17.1); declining a **mode** choice or an alternative
-  cost such as delve/convoke remains unverified. Verify those specifically before offering cancel
-  there.
+  cost such as delve/convoke (§18) remains unverified live. Verify those specifically before offering
+  cancel there.
+- **Alternative/additional costs — convoke, delve** (§18) — **a confirmed defect, not just an open
+  question**: `specialActionsAvailable` is mapped end to end and never read by the board, so these
+  costs currently have no way to be paid at all. The fix needs no new prompt kind (§18.2) — only a
+  board affordance wired to the existing state field, then live verification.
+- **Combat damage among multiple blockers, trample, first/double strike** (§19) — **not actually an
+  open design question**: traced to the same `GetMultiAmount` prompt already proven live for Forked
+  Bolt's damage division (§17). Needs a short live combat probe to confirm, not new design.
 
 ## Work this design implies beyond the board itself
 
 - **A bridge game-state cache + query verb** (§10.1) — new `:bridge` + `:protocol` work, ahead of the
   board UI, so a reconnecting client can ask for current state instead of waiting for a push.
 - **A sideboard screen** (§12.1) — a purpose-built, timed, match-scoped surface; the
-  `ConstructPrompt`/`SideboardPrompt` triggers already exist from story 0036.
+  `ConstructPrompt`/`SideboardPrompt` triggers already exist from story 0036. No story number is
+  assigned to it yet — it is the one piece of "play a full match" (rather than a single game) with no
+  story at all today.
+- **Stops / configurable auto-pass** (§14.3) — a board-side feature; no protocol/bridge work, since the
+  server sends the identical priority prompt either way.
+- **Special-action affordance for convoke/delve** (§18) — a small board-side fix: wire
+  `specialActionsAvailable` to a real control. No protocol/bridge work expected.
 
 ---
 
@@ -895,3 +982,98 @@ spell as a reason to hold up a response.
 loop spent nine turns drawing lands before it had creatures, then ended at the cancel. Attacks, blocks
 and the after-cancel *different* spell remain unexercised, and are better driven by real UI logic than
 by a scripted probe.
+
+---
+
+## 18. Alternative and additional costs (convoke, delve, and anything else routed through `SpecialAction`)
+
+### 18.1 A real, confirmed defect — `specialActionsAvailable` is mapped and never read
+
+**Traced from `../mage`, not guessed** (`ConvokeAbility.java`, `DelveAbility.java`,
+`Mage.Server.Plugins/Mage.Player.Human/.../HumanPlayer.java`, `Mage.Common/.../GameView.java`):
+
+- Convoke and delve are both implemented upstream as a `SpecialAction` registered on
+  `game.getState().getSpecialActions()` — `ConvokeAbility.addSpecialAction` adds one targeting a
+  creature to tap; `DelveAbility.addSpecialAction` adds one costing `ExileFromGraveCost` on a
+  `TargetCardInYourGraveyard`. Neither is folded into the ordinary mana-payment prompt; they are
+  **separate, player-triggered actions available alongside it**.
+- `GameView.special` (`this.special = !state.getSpecialActions().getControlledBy(priorityPlayer...).isEmpty()`)
+  is **only a boolean** — "some special action is available right now" — with no enumeration or label.
+  It is already mapped end to end on our side: `:protocol` → `GameState.specialActionsAvailable` →
+  `GameViewMapper` (both bridge and app-side) — confirmed present, tested
+  (`GameEventFoldTest`), and printed in a live-test transcript.
+- **It is never read anywhere in `feature/game`.** `BoardControls.controlsFor` only ever offers the
+  `UseSpecial` action when `prompt.options.specialButtonText` is set — the **unrelated** mechanism
+  behind combat's "All attack" button (`Constants.Option.SPECIAL_BUTTON`, a labelled hint on one
+  specific prompt). Convoke/delve never set that hint; they only flip `GameView.special`. This is
+  standard 5's exact shape: a field that compiles, maps, round-trips, and is asserted in a test, but
+  drives nothing. **A deck that wants to convoke or delve has no way to do it from the board today** —
+  confirmed by reading the code, not yet by a live probe.
+
+### 18.2 How the server actually resolves it — read from `HumanPlayer.activateSpecialAction`
+
+`useSpecialAction()` already exists on `GameClient` and sends the literal `SPECIAL` command — it was
+built for combat's special button but the wire verb is generic. Upstream's handler
+(`activateSpecialAction`, `HumanPlayer.java:2295`) is:
+
+1. Collect `game.getState().getSpecialActions().getControlledBy(playerId, inManaPaymentMode)`.
+2. **Exactly one** → activate it directly. It then asks for its own cost/target the same way any
+   ability does — for convoke, a `Target` prompt ("creature to tap for convoke"); for delve, a `Target`
+   prompt over the graveyard (`TargetCardInYourGraveyard`). **Both are ordinary `GAME_TARGET` prompts
+   0057 already answers.**
+3. **More than one** → `fireGetChoiceEvent`, which is our already-mapped **`GAME_CHOOSE_ABILITY`**
+   (`GamePrompt.ChooseAbility`) — the same prompt kind used for "which of this permanent's abilities."
+   The player picks one, then step 2 happens for it.
+
+**Consequence: no new prompt kind, no `:protocol`/`:bridge` change expected.** Every step in this
+sequence — the initial trigger, the ability choice when there's more than one, and the eventual
+cost/target — already routes through prompt kinds the board answers generically. The gap is narrow and
+purely client-side: **the board must offer a "use special action" affordance whenever
+`state.specialActionsAvailable` is true**, not only when the current prompt happens to carry a
+`specialButtonText` hint. Convoke can be invoked repeatedly (once per creature tapped, since each
+`ConvokeSpecialAction` targets exactly one) — pressing it again after tapping one creature re-offers
+the (recomputed) special actions for the remaining unpaid cost, the same way "use special action" would
+if nothing had changed.
+
+### 18.3 What this means for the board
+
+**Decision.** Whenever `GameState.specialActionsAvailable` is true, offer a generic control (e.g.
+"Special action") **in addition to** the ordinary controls for whatever prompt is currently showing —
+priority (`Select`) or mana payment (`PlayMana`), the two moments upstream actually calls
+`activateSpecialAction` from. Tapping it sends `useSpecialAction()`; the server's own next prompt
+(`ChooseAbility` if there's a choice, otherwise straight to a `Target`/cost prompt) renders through the
+existing generic machinery with no special-casing.
+
+**Cancel.** §6.4/§16.5's cascading-cancel story extends here directly: a convoke/delve `Target` prompt
+is an ordinary `Target` with `isRequired` presumably false (unconfirmed — verify live), so the existing
+cancel affordance should already apply. This is the same "declining a mode or an alternative-cost
+prompt" gap the summary at the top of this document already names as unverified (§6.4a/§16.5a) — convoke
+and delve are exactly the concrete cases that item refers to.
+
+**Still to verify live (do not claim done from source reading alone):**
+- That `specialActionsAvailable` genuinely flips to `true` during a real convoke/delve cast, using a
+  deck built for it (candidate: any convoke or delve card + enough creatures/graveyard fuel).
+- That tapping "use special action" produces the `ChooseAbility`/`Target` sequence exactly as read
+  above, end to end, with the cost actually applied (mana pool gains a mana from convoke; the graveyard
+  shrinks from delve).
+- Whether declining the resulting `Target` prompt rewinds the way §17.1 proved for an ordinary target.
+
+## 19. Combat damage among multiple blockers — already covered, confirmed from source
+
+§7.4's out-of-scope note ("damage assignment order, trample, first/double strike... do not
+special-case them") was a judgment call made without checking what prompt they actually use. Traced now
+(`HumanPlayer.chooseTargetAmount`, `HumanPlayer.java:1038`): when a player must divide combat damage
+among multiple blockers (or an attacker with trample beyond lethal), upstream calls the **same**
+`getMultiAmount` path that produces our `GamePrompt.GetMultiAmount` — `multiAmountType = DAMAGE` when
+the ability's rule text contains "damage." This is **not a new or unverified mechanism**: it is the
+identical prompt kind already **proven live** by the target-cancel experiment (§17), where "Select
+targets (selected 0 of 2, min 1) to divide 2 damage" for Forked Bolt is this same code path applied to
+a spell instead of combat.
+
+**Consequence.** 0061's call to leave damage assignment as a generic prompt is confirmed correct by
+source, not just asserted — first/double strike need no client logic at all (the server runs an extra
+combat-damage step and simply may prompt again), and trample/multi-blocker division is the
+already-shipped `GetMultiAmount` renderer. **Still open:** this has not been exercised **live** for
+combat specifically (only for a spell) — worth a short live probe (a creature with two blockers) before
+calling it proven, the same standard applied to every other measured claim in this document, but it is
+no longer an open design question.
