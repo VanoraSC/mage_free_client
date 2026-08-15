@@ -83,6 +83,7 @@ class GameBoardScreenTest {
         controlsVisible: Boolean = true,
         selectedObjectId: String? = null,
         cast: CastUi? = null,
+        declaration: DeclarationUi? = null,
         hasPickedTarget: Boolean = false,
     ) {
         composeTestRule.setContent {
@@ -97,6 +98,7 @@ class GameBoardScreenTest {
                             controls = controlsFor(state, hasPickedTarget = hasPickedTarget),
                             selectedObjectId = selectedObjectId,
                             cast = cast,
+                            declaration = declaration,
                         ),
                     onExit = {},
                     onHandExpandedChange = { expandRequests += it },
@@ -977,6 +979,30 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText(DECLARE_BLOCKERS_NOTE).assertIsDisplayed()
         composeTestRule.onAllNodesWithText(DECLARE_ATTACKERS_NOTE).assertCountEquals(0)
         composeTestRule.onAllNodesWithText(ALL_ATTACK_LABEL).assertCountEquals(0)
+    }
+
+    @Test
+    fun `a pairing question mid-declaration says which creature it is about, and is answerable`() {
+        // The follow-up arrives as an ordinary `GAME_TARGET` (§7.5) whose prose names the *candidates*
+        // and never the creature being paired. Without the context line the player is asked to choose a
+        // defender with no statement of what for.
+        val state =
+            declaringAttackers().copy(
+                prompt =
+                    GamePrompt.Target(
+                        message = "Select a defender",
+                        targetIds = listOf("o-1"),
+                        isRequired = true,
+                    ),
+            )
+        render(state, declaration = DeclarationUi(role = CombatRole.Attacking, pairingCreatureName = "Grizzly Bears"))
+
+        composeTestRule.onNodeWithText(DECLARING_ATTACKERS_TITLE).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Attacking with Grizzly Bears", substring = true).assertIsDisplayed()
+
+        // …and it is still answered exactly like any other target.
+        composeTestRule.onNodeWithText("Mountain").performClick()
+        assertEquals(listOf<String?>("o-1"), taps)
     }
 
     @Test

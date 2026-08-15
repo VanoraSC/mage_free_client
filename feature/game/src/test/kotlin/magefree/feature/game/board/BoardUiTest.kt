@@ -552,7 +552,11 @@ class BoardUiTest {
                 ),
             )
 
-        val attacker = board.opponentSeats.single().battlefield.single { it.objectId == "o-1" }
+        val attacker =
+            board.opponentSeats
+                .single()
+                .battlefield
+                .single { it.objectId == "o-1" }
         assertEquals("you", attacker.attackingDefenderName)
         assertEquals(listOf("Forest"), attacker.blockedByNames)
         assertEquals("$ATTACKING_MARK you · $BLOCKED_BY_MARK Forest", attacker.combatSummary)
@@ -577,7 +581,11 @@ class BoardUiTest {
                 ),
             )
 
-        val attacker = board.opponentSeats.single().battlefield.single { it.objectId == "o-1" }
+        val attacker =
+            board.opponentSeats
+                .single()
+                .battlefield
+                .single { it.objectId == "o-1" }
         assertEquals("$ATTACKING_MARK Tibalt, the Fiend-Blooded", attacker.combatSummary)
     }
 
@@ -605,7 +613,10 @@ class BoardUiTest {
 
         assertEquals(
             listOf("$ATTACKING_MARK you", "$ATTACKING_MARK you"),
-            board.opponentSeats.single().battlefield.map { it.combatSummary },
+            board.opponentSeats
+                .single()
+                .battlefield
+                .map { it.combatSummary },
         )
     }
 
@@ -621,7 +632,12 @@ class BoardUiTest {
                 .none { it.isAttacking || it.isBlocking },
         )
         // …and says nothing about combat either, which is the ordinary state of most of a game.
-        assertNull(board.viewerSeat!!.battlefield.single().combatSummary)
+        assertNull(
+            board.viewerSeat!!
+                .battlefield
+                .single()
+                .combatSummary,
+        )
     }
 
     // ---- the stack ---------------------------------------------------------------------------------

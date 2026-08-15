@@ -141,7 +141,10 @@ class CombatProbeIT {
                     launch {
                         opponent.games
                             .observeGame(starting.gameId, GameState(starting.gameId))
-                            .collect { opponentState = it; report("opp", it) }
+                            .collect {
+                                opponentState = it
+                                report("opp", it)
+                            }
                     }
                 opponent.games.joinGame(starting.gameId).getOrThrow()
                 jobs += launch { driveOpponent(opponent.games, starting.gameId) }
@@ -151,7 +154,10 @@ class CombatProbeIT {
                     launch {
                         app.games
                             .observeGame(starting.gameId, GameState(starting.gameId))
-                            .collect { appState = it; report("app", it) }
+                            .collect {
+                                appState = it
+                                report("app", it)
+                            }
                     }
                 viewModel.observe(starting.gameId)
                 jobs += launch { driveApp(viewModel) }
@@ -167,7 +173,9 @@ class CombatProbeIT {
                 say("        final turn=${appState?.turn} step=${appState?.step}")
                 say("        combat groups=${appState?.combat?.size ?: 0}")
                 appState?.combat?.forEach { group ->
-                    say("        group defender='${group.defenderName}' attackers=${group.attackerIds.size} blockers=${group.blockerIds.size}")
+                    say(
+                        "        group defender='${group.defenderName}' attackers=${group.attackerIds.size} blockers=${group.blockerIds.size}",
+                    )
                 }
                 say("=".repeat(70))
             } finally {
@@ -284,7 +292,11 @@ class CombatProbeIT {
                     // **Lands before spells.** Playing whatever came first meant casting Dragon Fodder
                     // with barely enough mana, then stalling mid-payment and silently retrying the cast
                     // forever. `manaCost` is null for lands (§0), which is the only signal needed.
-                    val landIds = state.hand.filter { it.manaCost == null }.map { it.id }.toSet()
+                    val landIds =
+                        state.hand
+                            .filter { it.manaCost == null }
+                            .map { it.id }
+                            .toSet()
                     val land = playable.firstOrNull { it.objectId in landIds }
                     when {
                         attackers.isNotEmpty() -> {
@@ -353,7 +365,8 @@ class CombatProbeIT {
                 when (controls) {
                     is PromptControlsUi.Priority -> {
                         val playable =
-                            state.board.hand.cards.firstOrNull { it.objectId in controls.pickableObjectIds }
+                            state.board.hand.cards
+                                .firstOrNull { it.objectId in controls.pickableObjectIds }
                         val special = controls.buttons.firstOrNull { it.action == BoardAction.UseSpecial }
                         when {
                             // Kept from the original run, when a declaration still projected as an
@@ -413,7 +426,12 @@ class CombatProbeIT {
     }
 
     private fun username(prefix: String) =
-        prefix + "_" + UUID.randomUUID().toString().filter { it != '-' }.take(6)
+        prefix + "_" +
+            UUID
+                .randomUUID()
+                .toString()
+                .filter { it != '-' }
+                .take(6)
 
     /** One live app→bridge session, assembled from production parts only. */
     private class LiveSession(
@@ -450,7 +468,12 @@ class CombatProbeIT {
     private fun requireBridge(): ServerTarget {
         val raw = System.getenv(BRIDGE_URL_ENV)
         Assume.assumeTrue("$BRIDGE_URL_ENV is not set; skipping the combat probe", !raw.isNullOrBlank())
-        val authority = raw!!.trim().trimEnd('/').removePrefix("wss://").removePrefix("ws://")
+        val authority =
+            raw!!
+                .trim()
+                .trimEnd('/')
+                .removePrefix("wss://")
+                .removePrefix("ws://")
         val separator = authority.lastIndexOf(':')
         return ServerTarget(
             host = authority.substring(0, separator),

@@ -27,6 +27,7 @@ import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
 import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.network.game.CardType
+import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
 import magefree.network.game.GameCounter
 import magefree.network.game.GamePermanent
@@ -433,6 +434,80 @@ private fun GameBoardTargetingPreview() {
     PreviewBoard(
         previewUiState(state).copy(cast = CastUi(cardName = "Forked Bolt", stepLabel = CAST_STEP_TARGETS)),
     )
+}
+
+@Preview(name = "Board — declaring attackers", showBackground = true, widthDp = 411, heightDp = 891)
+@Composable
+private fun GameBoardDeclaringAttackersPreview() {
+    // As the server sends it (§7.2): the ids in `possibleAttackers`, the shortcut in `specialButton`,
+    // and **`playable` empty** — the preview would be dishonest with anything in it.
+    val state =
+        previewState().copy(
+            phase = TurnPhase.Combat,
+            step = PhaseStep.DeclareAttackers,
+            playable = emptyList(),
+            prompt =
+                GamePrompt.Select(
+                    message = "Select attackers",
+                    options =
+                        PromptOptions(
+                            text = mapOf(PromptOptions.SPECIAL_BUTTON to ALL_ATTACK_LABEL),
+                            ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to listOf("y-1")),
+                        ),
+                ),
+        )
+    PreviewBoard(previewUiState(state).copy(declaration = DeclarationUi(role = CombatRole.Attacking)))
+}
+
+@Preview(name = "Board — blocking, with the fight legible", showBackground = true, widthDp = 411, heightDp = 891)
+@Composable
+private fun GameBoardBlockingPreview() {
+    val base = previewState()
+    val state =
+        base.copy(
+            phase = TurnPhase.Combat,
+            step = PhaseStep.DeclareBlockers,
+            playable = emptyList(),
+            players =
+                base.players.map { player ->
+                    if (!player.isViewer) {
+                        player
+                    } else {
+                        player.copy(
+                            battlefield =
+                                player.battlefield +
+                                    GamePermanent(
+                                        card =
+                                            previewCard(
+                                                "y-2",
+                                                "Goblin Token",
+                                                "Creature — Goblin",
+                                                power = "1",
+                                                toughness = "1",
+                                                isCreature = true,
+                                            ),
+                                    ),
+                        )
+                    }
+                },
+            combat =
+                listOf(
+                    CombatGroup(
+                        defenderId = "p-you",
+                        defenderName = "You",
+                        isBlocked = true,
+                        attackerIds = listOf("o-2"),
+                        blockerIds = listOf("y-2"),
+                    ),
+                ),
+            prompt =
+                GamePrompt.Select(
+                    message = "Select blockers",
+                    // No special button: blocking has no shortcut, and none is invented (§7.3).
+                    options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-2"))),
+                ),
+        )
+    PreviewBoard(previewUiState(state).copy(declaration = DeclarationUi(role = CombatRole.Blocking)))
 }
 
 @Preview(name = "Board — controls hidden while the server waits", showBackground = true, widthDp = 411, heightDp = 891)
