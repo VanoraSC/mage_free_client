@@ -396,10 +396,10 @@ group defender='app_be158b' attackers=1 blockers=0
 So `CombatGroup` reads *"against this defender, this attacker, blocked by these"* — the defender is
 repeated per group rather than grouping attackers under one defender.
 
-**Still unmeasured — do not specify it until it has been seen.** Whether picking a blocker triggers a
-**follow-up prompt asking which attacker it blocks**. The run's budget expired at the blocking prompt
-without answering it. This is the crux of the pairing problem below, so the combat story must measure it
-before designing the interaction.
+**Resolved — measured, then built.** Whether picking a blocker triggers a **follow-up prompt asking
+which attacker it blocks** was the crux of the pairing problem below; §7.5 confirms it from upstream
+source (`selectBlockers`/`Select attacker to block`), and story 0061 (built, merged) implements and
+live-verifies it — `CombatDeclarationIT`/`CombatPairingProbeIT`, `docs/live-test-decklists.md` §6.
 
 ### 7.4 Combat is **two** assignment problems, never both at once
 
@@ -823,6 +823,9 @@ prose parsing.
 ---
 
 ## Summary of what still needs deciding
+
+See [`verification-test-plan.md`](verification-test-plan.md) for a checklist covering every claim below
+marked "unverified"/"traced from source" — what to run, and pass/fail criteria for each.
 
 Everything below is **not yet designed** and is deliberately out of the first playable board:
 
