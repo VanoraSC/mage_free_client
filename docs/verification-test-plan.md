@@ -13,6 +13,85 @@ ran, what happened.
 
 ---
 
+## Part 0 — Setup and teardown: bridge, reference server, and a real phone on the LAN
+
+Everything below needs the bridge and reference XMage server up, and — since you're testing from a
+physical phone rather than the emulator or a JVM integration test — a couple of things that only bite
+on a real device. Full background: [`docker/README.md`](../docker/README.md),
+[`docs/build-environment.md`](build-environment.md).
+
+### Bringing it up
+
+```bash
+# From the repo root. Docker Desktop with the WSL2 backend must be running.
+./scripts/dev up xmage-server      # reference server, port 17171, auth disabled
+# Wait ~1-2 minutes: the container starts immediately, but it loads its card database
+# before it actually listens. `depends_on` (in docker-compose.yml) only waits for the
+# container to start, not for that load to finish — starting the bridge or connecting
+# too early hits a server that isn't ready yet, not a bridge problem.
+
+./scripts/dev up bridge            # the bridge itself, port 8080
+curl http://localhost:8080/health  # {"status":"ok","service":"mage-bridge"} once it's up
+```
+
+**If you've changed bridge code and need the container to pick it up** — a stale bridge silently keeps
+serving the old build otherwise (this cost a live run before, per `live-test-decklists.md`):
+```bash
+docker compose -f docker/docker-compose.yml build bridge
+docker compose -f docker/docker-compose.yml up -d bridge
+```
+
+### Tearing down
+
+```bash
+./scripts/dev down    # stops and removes both containers + the compose network
+```
+This keeps the built image layers and the `gradle-cache` volume, so the next `up`/build is fast. Don't
+add `-v` unless you deliberately want to wipe that cache — not needed for a routine test session, and
+it makes the next build slow again.
+
+### Connecting a real phone over the LAN — the part that only bites on physical hardware
+
+**Install a debug build, not release.** Cleartext WebSocket (`ws://`, not `wss://`) is only allowed in
+the **debug** variant — `app/src/debug/AndroidManifest.xml` sets `usesCleartextTraffic="true"` and says
+exactly why: without it, a device refuses the connection with *"CLEARTEXT communication … not
+permitted by network security policy,"* even though the app is otherwise reachable. A release build
+will hit this. Confirm the phone is attached (`adb devices`), then `./gradlew installDebug` (or
+`adb install -r app/build/outputs/apk/debug/app-debug.apk` if you've already built it). Per `AGENTS.md`:
+only debug builds on personal hardware, never a destructive `adb` command.
+
+**Never use `10.0.2.2`.** That address is the Android **emulator's** magic alias for the host machine —
+it means nothing to a physical phone and won't connect. You need the host machine's real LAN IP.
+
+**Find the host's LAN IP:**
+- **Windows / WSL2** (the expected setup per `docker/README.md`) — use the **Windows** host's IP, not
+  anything WSL-internal; Docker Desktop publishes the port onto the Windows network stack. Run
+  `ipconfig` and read the IPv4 address off your active Wi-Fi or Ethernet adapter.
+- **macOS** — `ipconfig getifaddr en0` (or `en1`), or System Settings → Wi-Fi → Details.
+- **Linux** — `ip addr show` or `hostname -I`.
+
+**Same network, and watch for client isolation.** The phone and the host must be on the same Wi-Fi/LAN.
+A guest network or a mesh router with **client/AP isolation** enabled will show both devices as
+"connected" while silently blocking device-to-device traffic — if the phone can't reach the bridge at
+all, this is a likely cause before suspecting the app.
+
+**Firewall.** The host's firewall must allow inbound TCP on port 8080 from the LAN — Windows Defender
+Firewall typically prompts the first time Docker Desktop publishes the port; allow it for Private
+networks.
+
+**In the app:** open the server list → **Add Server** → **Host**: the LAN IP you found above; **Port**:
+`8080`; leave **"Use secure connection (wss)"** off (the dev bridge is plain `ws://`) → Save → select
+the new entry → sign in.
+
+**Pass/fail for the connection itself, before testing anything else:**
+- [ ] `curl http://<host-LAN-IP>:8080/health` succeeds from a machine (or the phone's own browser)
+      **other than the host** — confirms the port is actually reachable over the LAN, so a failure here
+      is a network/firewall problem, not an app bug.
+- [ ] The app's connection status surface reaches **Connected**, not stuck on Connecting, or an
+      auth-failed / network-timeout state.
+
+---
+
 ## Part 1 — Verifiable now, no new code needed
 
 These exercise machinery already merged (0051–0061). Nothing needs to be built first.
