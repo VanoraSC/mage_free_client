@@ -138,7 +138,7 @@ from the server not sending them, and is why the transcript prints both.
 
 ---
 
-## 5. Reaching combat — creature-dense on purpose (2026-08-14)
+## 6. Reaching combat — creature-dense on purpose (2026-08-14)
 
 Used by `CombatProbeIT`. §17's run never reached combat at all (`combatSteps=0`) because its deck spent
 nine turns drawing lands before it had a creature. Dragon Fodder is `{1}{R}` for **two** 1/1 Goblin

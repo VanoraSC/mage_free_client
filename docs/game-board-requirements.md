@@ -94,7 +94,7 @@ throughout (lobby, decks, cards, tables). Entering a game becomes an orientation
 is the only landscape surface in the product. Accepted knowingly.
 
 **Open question (2.1a):** does the app force the rotation on entering a game, or ask the player to
-rotate? — *pending*
+rotate? — **moot.** Portrait (§16.1) means the board never rotates the device at all.
 
 ---
 
@@ -124,8 +124,12 @@ see your hand.
 **Implication.** The hand's empty/loading state (§1.2) must work in the *peeking* form too — the very
 first thing the player sees is the peek edge with no cards behind it.
 
-**Open question (3.2a):** does the expanded hand stay open while you act (play a card, answer a
-prompt), or collapse on each action? — *pending*
+**Resolved (3.2a) — confirmed from the built code.** The expanded hand **stays open through actions**;
+nothing auto-collapses it. `GameBoardViewModel.isHandExpanded` is set **only** by the player's own
+explicit toggle (`setHandExpanded`) — no `BoardAction` handler touches it, and its own KDoc states the
+reasoning directly: *"View state, not game state: opening the hand looks at cards the player already
+holds and sends nothing to the server."* Acting (playing a card, answering a prompt) is orthogonal to
+whether the hand happens to be visible while it's done.
 
 ---
 
@@ -146,7 +150,8 @@ less spatially intuitive there than "between" the players.
 sensibly empty, and must not reflow the battlefields when it fills.
 
 **Open question (4.1a):** which edge, and what else shares the panel (log, life totals, phase)? —
-*pending*
+resolved further down (just before §4.3), then superseded by the portrait revision (§16.1) — see that
+note for the shape actually built.
 
 ### 4.2 Priority is stated explicitly, not just implied
 **Decision.** A persistent indicator — "Your turn to act" / "Waiting for opponent" — **in addition to**
@@ -186,9 +191,19 @@ appears at game start (in the runs where the toss was won).
 
 ---
 
-**Resolved (4.1a).** **Right edge, stack + phase only.** The game log moves to an on-demand overlay
-rather than living permanently in the panel — which also contains the HTML-narration problem to a
-surface the player opens deliberately, instead of it being always on screen.
+**Resolved (4.1a), then superseded by portrait — see below for the shape actually built.**
+~~Right edge, stack + phase only.~~ The game log moves to an on-demand overlay rather than living
+permanently in the panel — which also contains the HTML-narration problem to a surface the player opens
+deliberately, instead of it being always on screen. **The log-as-overlay half survives**; the
+"right edge" half does not, because portrait (§16.1) has no landscape edge to put it on.
+
+**4.1a's real, current answer — confirmed from the built code (`BoardRegions.kt`'s `StatusRail`,
+story 0055, merged).** Not an edge panel: a **single horizontal band between the two battlefields**,
+fixed height regardless of contents. It holds, top to bottom: the turn/phase/whose-turn line, the
+explicit priority banner (§4.2), then a fixed-height stack strip (§4.1's "must not reflow the
+battlefields" requirement, honoured by reserving the space unconditionally rather than collapsing an
+empty stack). Life totals and zone counts live separately, in each seat's own vitals bar (§4.3) — they
+never shared the panel. The log stays an on-demand overlay, as resolved above.
 
 ### 4.3 Player info is a compact bar per player
 **Decision.** A thin persistent strip per player — life prominent, zone counts small — separate from
@@ -242,8 +257,10 @@ non-blocking, non-answerable notice rather than a modal the player cannot dismis
 **Implication.** Mana payment becomes one of the most frequent interactions in the game, so it must be
 fast and forgiving — and it is board-interactive, hence §6.2.
 
-**Open question (6.3a):** does a mana prompt need a visible "mana produced so far / still required"
-readout, and where? — *pending*
+**Resolved (6.3a, Pete).** **No dedicated readout.** The server's own prompt message plus the visibly
+shrinking set of offered/tappable sources is enough — consistent with the board rendering what the
+server offers rather than inventing UI it didn't ask for. Revisit only if live testing shows the
+message text alone is unclear for a costly spell.
 
 ---
 
@@ -507,9 +524,10 @@ the bridge. Moot, since the server already applies it.
 Per Pete: *"if the server doesn't support auto tap calculations, we don't need to implement them at
 this time."* It does support them — server-side — so nothing client-side is needed.
 
-**Still open (6.5a):** paying mana *before* casting (floating mana into the pool deliberately) is a
-distinct flow from paying *when prompted*. `manaPool` is in the snapshot, and mana abilities appear in
-`playable`, so it is reachable — but the interaction has not been designed. — *pending*
+**Resolved (6.5a, Pete).** **Reuse the existing generic flow — no dedicated affordance.** A land's mana
+ability is just another entry in `playable` during ordinary priority; the same tap-to-play model
+(§5.1: first tap opens detail, confirm activates) already reaches it. Floating mana deliberately before
+casting anything needs nothing beyond what 0057 already ships.
 
 ---
 
@@ -609,13 +627,55 @@ were **not** mapped by 0051 — a `:protocol` + `:bridge` fix, independent of th
 **Decision (Pete).** A dedicated sideboard screen for swapping cards between deck and sideboard,
 running on the server's timer.
 
-**Data.** A match is best-of-N (`winsNeeded`/`wins` are in the snapshot), and story 0036 already maps
-the server's **`ConstructPrompt`/`SideboardPrompt`** — so the trigger and the deck payload exist; this
-is a UI to build, not a protocol gap.
+**Data — corrected 2026-08-15, traced from `../mage`, not assumed.** The line below was never actually
+verified against source and turns out to be **wrong**:
+
+> ~~A match is best-of-N (`winsNeeded`/`wins` are in the snapshot), and story 0036 already maps the
+> server's `ConstructPrompt`/`SideboardPrompt` — so the trigger and the deck payload exist; this is a UI
+> to build, not a protocol gap.~~
+
+The **trigger** exists (0036 maps `SIDEBOARD`/`CONSTRUCT` to `SideboardPrompt`/`ConstructPrompt`), but
+the **deck payload does not cross the bridge at all** — this *is* a protocol gap, not only a UI one.
+Read from `Mage.Server/.../TableController.java` and `Mage.Common/.../mage/view/TableClientMessage.java`:
+
+- Upstream's `TableClientMessage` (what the `SIDEBOARD` callback actually carries) has a `getDeck():
+  DeckView` field, populated from the player's **real registered deck**
+  (`MatchImpl.sideboard()` → `player.getPlayer().sideboard(this, player.getDeck())`, `TableController`
+  line 773 → `user1.ccSideboard(deck, tableId, parentTableId, remaining, options.isLimited())`).
+- `bridge/.../mapping/table/SideboardMapper.kt` maps `tableId`/`parentTableId`/`remainingSeconds`/
+  `isConstruct` — and **never reads `message.getDeck()`**. `SideboardPrompt` (`:protocol`) has no
+  `deck` field to put it in. Nothing downstream (`:core:network`'s `TableState`) carries a deck either.
+- **Contrast with `CONSTRUCT`:** `ConstructMapper.kt` *also* omits the deck, but says why — draft/pool
+  construction is built from picks the app already tracks client-side. `SideboardMapper` has no such
+  justification, because there is none: between games of an ordinary constructed match, the app has
+  **no other way to know what the player's registered deck currently is**. Without this field, a
+  sideboard screen cannot be built at all — there is nothing to show cards from.
+
+**The real mechanism, in full (grounds the screen's design):**
+- Sideboarding is **match-level, not game-level** — a `TableEvent.SIDEBOARD` per player, entirely
+  separate from the `GAME_*` prompt machinery this document otherwise covers (§0–§19). It fires from
+  `TableController.endGameAndStartNextGame()` when the format allows it
+  (`game.getGameType().isSideboardingAllowed()`), between one game ending and the next starting.
+- It is **timed and self-resolving, not blocking on one player forever**:
+  `Match.SIDEBOARD_TIME = 180` seconds (upstream default). The match thread blocks
+  (`MatchImpl.sideboard()`) until **every** player has submitted or the timer expires; on expiry,
+  `TableController.autoSideboard()` auto-completes any straggler's deck
+  (`player.autoCompleteDeck(validator)`) and submits it **on their behalf, silently** — the app receives
+  no distinct "you ran out of time" event, only whatever comes next (the next game starting, or match
+  end). The board must treat timer expiry as authoritative without expecting a graceful signal.
+- **Two save verbs, already implemented** (0037's `TableClient`, built for join-time submission but
+  state-gated server-side, not verb-specific — `TableController.submitDeck`/`updateDeck` both check
+  `table.getState() == SIDEBOARDING || CONSTRUCTING`): `updateDeck` is the *live auto-save* upstream's
+  own desktop client calls continuously while the player edits (server comment: "used for auto-save
+  deck"); `submitDeck` is the final, binding commit that also ends that player's wait early.
+- **`isConstruct`/`isLimited`** distinguishes strict constructed sideboarding (swap only within your
+  registered 15-card sideboard, no added cards) from a limited/draft-style construct (basics are free
+  and unlimited). This changes what 0033's `DeckLegality` must validate against — the *pool* the swap
+  is constrained to, not just format legality.
 
 **Note.** The construction surface is close to the deck builder (0035) but not the same thing: it is
-timed, match-scoped, and constrained to the registered pool. Reusing the builder was considered and
-rejected in favour of a purpose-built screen.
+timed, match-scoped, and constrained to the registered pool (or the limited pool, per `isConstruct`).
+Reusing the builder was considered and rejected in favour of a purpose-built screen.
 
 ### 12.2 Concede and quit are separate actions
 **Decision (Pete).** **Concede** (this game — the opponent wins it) and **quit match** (leave the whole
@@ -672,6 +732,79 @@ guards in the first version.
 unattended pass can cost a player their mana — so the auto-pass feature must handle it deliberately.
 Recorded here so the requirement is not lost between increments.
 
+### 14.3 The real upstream model — traced from `Mage.Client`, not guessed
+
+§14.1 named "similar functions to Arena and MTGO" but did not specify a shape, and `PassPolicy`'s own
+KDoc (`feature/game/.../board/PassPolicy.kt`) already correctly guessed that the eventual feature would
+not fit its one-shot `decide(state): AskThePlayer | PassImmediately` seam — *"the standing 'pass
+until …' verbs are a different thing entirely — they are player actions, not answers."* This section
+replaces the guess with what desktop XMage **actually does**, read from `../mage`
+(`Mage.Client/src/main/java/mage/client/game/GamePanel.java` and
+`Mage/src/main/java/mage/players/net/{UserSkipPrioritySteps,SkipPrioritySteps}.java`). It is a **client-
+local UX feature with no server counterpart** — `grep`ing `Mage.Common`/`Mage`/`Mage.Server` for
+auto-pass turns up nothing outside `Mage.Client` itself. The server sends the identical `Select` prompt
+every time regardless; whether the client shows it to the human or answers it silently is entirely our
+decision.
+
+**It is not one policy — it is two separate mechanisms.**
+
+1. **Six explicit "skip to X" player actions** (`GamePanel.skipButtonsList`, each bound to a hotkey),
+   not a standing toggle. Pressing one starts auto-passing *from now*, repeatedly, until its own stop
+   condition fires — then control returns to the player and skipping stops:
+
+   | Skip action | Stops when |
+   |---|---|
+   | **Skip to next turn** | any player's turn begins |
+   | **Skip to [opponent's / next] end step** | reaches the chosen end-of-turn step (toggle: specifically the opponent's, or whichever comes next) |
+   | **Skip to [opponent's / next] main phase** | reaches the chosen main phase (same toggle) |
+   | **Skip to your turn** | your own turn begins |
+   | **Skip until the stack resolves** | the stack is empty — **or**, on its own toggle, stops early the moment something *new* is added to the stack |
+   | **Skip to the end step before your turn** | the end step immediately preceding your next turn (the last window to act before it) |
+
+2. **Persistent per-user "stop" settings** (`UserSkipPrioritySteps`) that apply as override conditions
+   **during any skip**, regardless of which skip action started it:
+   - **Per-phase-step, tracked separately for your turn vs. the opponent's turn**
+     (`SkipPrioritySteps`: upkeep, draw, main1, beforeCombat, endOfCombat, main2, endOfTurn) — default
+     is to stop on **your own** main phases (`main1`/`main2 = true`) and nowhere else by default; the
+     opponent-turn set defaults the same shape but is configured independently.
+   - **Global flags**, independent of whose turn it is: `stopOnDeclareAttackers` (default **true**),
+     `stopOnDeclareBlockersWithAnyPermanents` (default **true**),
+     `stopOnDeclareBlockersWithZeroPermanents` (default **false** — don't interrupt a skip just because
+     you have nothing to block with), `stopOnAllMainPhases` (true), `stopOnAllEndPhases` (true),
+     `stopOnStackNewObjects` (true — a skip **always** breaks the moment the opponent puts something new
+     on the stack, independent of the specific skip action's own stack-related toggle above).
+
+3. **"Hold priority"** (`GamePanel.holdPriority`, Ctrl/Cmd-click or a toggle) is a **third, separate**
+   mechanism: after *you* take an action (cast, activate), holding priority means the app does **not**
+   auto-pass on your behalf afterward, so you can chain a second action before priority moves on. This
+   is orthogonal to the skip/stop settings above, which govern *incoming* prompts, not what happens
+   right after your own action.
+
+**Consequence for our design.** `PassPolicy`'s one-shot `decide()` seam is real and correct for the
+*stop-condition* checks (both the global flags and the per-phase-step settings reduce to "does this
+`Select` match a condition the player cares about right now" — the KDoc's design already anticipated
+this). But it cannot express the **six skip actions** on its own: those are stateful player-triggered
+commands ("keep passing until…"), not a predicate evaluated once per prompt. The skip actions need
+their own state (which skip is active, if any) that arms `PassPolicy` to answer `PassImmediately`
+repeatedly and disarms itself the moment a stop condition (global, per-phase, or "new object on stack")
+is met — exactly the "player actions, not answers" distinction the KDoc already drew. Hold-priority is
+a third, independent piece of state consulted after *our own* `playObject`/ability activation, not by
+`PassPolicy` at all.
+
+**Combat's own trap (§14.1) is upstream's own model, not an edge case we invented.**
+`stopOnDeclareAttackers`/`stopOnDeclareBlockersWith*` existing as **dedicated** settings, separate from
+the ordinary phase-step list, confirms declare-attackers/blockers need their own stop handling — the
+same conclusion §14.1 already reached from 0061, now corroborated by upstream treating it the same way.
+
+**Resolved — mechanism parity with upstream (Pete, 2026-08-15).** Build **all six** skip actions and the
+**full** stop-settings matrix (global flags, plus per-phase-step tracked separately for your turn and
+the opponent's), not a narrowed v1 subset — the feature should do everything desktop's does, mechanism
+for mechanism. **This is parity of *mechanism*, not of *presentation*:** desktop's seven buttons + a
+settings dialog with per-phase checkboxes ×2 turns is Swing-desktop-shaped, and porting *that* verbatim
+would be exactly the "don't port the Desktop UI" mistake `AGENTS.md` warns against. The touch-first
+presentation of the same complete mechanism — how six skip actions and a full stop matrix become
+something usable on a phone — is still its own design pass, not decided here.
+
 ---
 
 ## 15. The match-start interstitial
@@ -694,19 +827,56 @@ prose parsing.
 Everything below is **not yet designed** and is deliberately out of the first playable board:
 
 - **Spectating** (§13) — capability exists end to end; scope choice only.
-- **Stops / configurable auto-pass** (§14.1) — named future feature; keep pass-policy in one place.
-- **Auto-pass with floating mana** (§14.2) — must be handled when auto-pass is built.
-- **Library-position knowledge** (§11.2) — *unverified*: confirm the snapshot actually carries
-  post-scry ordering before promising to display it.
-- **Declining a target or an alternative-cost prompt** (§6.4a) — rollback confirmed only for the mana
-  step; verify per step before offering cancel there.
+- **Commander** (§21.3, story 0067) — **parked, a future increment.** Fully traced and specified (the
+  command zone, tax, the "move to command zone" replacement, partner/background) so nothing needs
+  re-deriving when it's picked up; not in the first playable board.
+- **Stops / configurable auto-pass** (§14.1/§14.3) — the *mechanism* is grounded from upstream source
+  and its scope is resolved: **full parity** (all six skip actions, the complete stop-settings matrix,
+  hold-priority), not a narrowed v1. Only the **touch-first presentation** of that complete mechanism on
+  a phone is still undesigned.
+- **Auto-pass with floating mana** (§14.2) — must be handled when the skip/stop mechanism (§14.3) is
+  built.
+- **Library-position knowledge** (§11.2) — **resolved, not deliverable** (§11.3): there is no
+  known-library or library-order tracking upstream. Dropped, not pending.
+- **Declining a mode or an alternative-cost prompt** (§6.4a/§16.5a) — rollback is confirmed for both
+  the **mana** step and the **target** step (§17.1); declining a **mode** choice or an alternative
+  cost such as delve/convoke (§18) remains unverified live. Verify those specifically before offering
+  cancel there.
+- **Alternative/additional costs — convoke, delve** (§18) — **a confirmed defect, not just an open
+  question**: `specialActionsAvailable` is mapped end to end and never read by the board, so these
+  costs currently have no way to be paid at all. The fix needs no new prompt kind (§18.2) — only a
+  board affordance wired to the existing state field, then live verification.
+- **Combat damage among multiple blockers, trample, first/double strike** (§19) — **not actually an
+  open design question**: traced to the same `GetMultiAmount` prompt already proven live for Forked
+  Bolt's damage division (§17). Needs a short live combat probe to confirm, not new design.
+- **Modal spells and Spree** (§21.1) — **not an open design question**: `ChooseAbility` was already
+  written with mode-choice in mind and the wire shape is confirmed identical to ability choice. Needs a
+  live probe (a Charm or a Spree card) to move from traced to proven, not new design.
+- **Graveyard, companion, looked-at card identity** (§21.2, §11.3, story 0066) — **a confirmed defect**:
+  `PlayerView.graveyard` is a full `CardsView`, sent always, and our bridge reads only its size, so a
+  graveyard-castable spell (Flashback and its relatives) renders as `"Unnamed candidate N"` today. The
+  interaction already works; only the name is missing.
+- **Commander damage** (§21.3a) — parked with the rest of Commander (above); a genuine, unresolved
+  product decision when it's picked up: upstream exposes it only via narration text, never structurally
+  (confirmed even absent from desktop XMage). Show the narration as-is, or accumulate it client-side
+  from combat snapshots — neither is decided, and doesn't need to be until the format is in scope.
 
 ## Work this design implies beyond the board itself
 
 - **A bridge game-state cache + query verb** (§10.1) — new `:bridge` + `:protocol` work, ahead of the
   board UI, so a reconnecting client can ask for current state instead of waiting for a push.
-- **A sideboard screen** (§12.1) — a purpose-built, timed, match-scoped surface; the
-  `ConstructPrompt`/`SideboardPrompt` triggers already exist from story 0036.
+- **A sideboard screen** (§12.1, story 0064) — a purpose-built, timed, match-scoped surface; also a
+  genuine `:protocol`/`:bridge` fix (the deck payload was found to be dropped, not merely a UI gap).
+- **Stops / configurable auto-pass** (§14.3, story 0063) — a board-side feature; no protocol/bridge
+  work, since the server sends the identical priority prompt either way.
+- **Special-action affordance for convoke/delve** (§18, story 0062) — a small board-side fix: wire
+  `specialActionsAvailable` to a real control. No protocol/bridge work expected. Companion (§21.4)
+  reuses this design with zero extra work once §21.2's card-identity fix lands.
+- **Card identity for graveyard/companion/looked-at** (§21.2, story 0066) — a `:protocol` + `:bridge`
+  fix: map `CardsView` collections that already exist upstream and are currently dropped to a count.
+- **Command zone / Commander format** (§21.3, story 0067) — **parked, future increment.** A whole zone
+  (`commandList`) mapped nowhere today; tax is automatic once casting from the zone works, but commander
+  damage (§21.3a above) needs a decision first, when this is picked up.
 
 ---
 
@@ -893,3 +1063,354 @@ spell as a reason to hold up a response.
 loop spent nine turns drawing lands before it had creatures, then ended at the cancel. Attacks, blocks
 and the after-cancel *different* spell remain unexercised, and are better driven by real UI logic than
 by a scripted probe.
+
+---
+
+## 18. Alternative and additional costs (convoke, delve, and anything else routed through `SpecialAction`)
+
+### 18.1 A real, confirmed defect — `specialActionsAvailable` is mapped and never read
+
+**Traced from `../mage`, not guessed** (`ConvokeAbility.java`, `DelveAbility.java`,
+`Mage.Server.Plugins/Mage.Player.Human/.../HumanPlayer.java`, `Mage.Common/.../GameView.java`):
+
+- Convoke and delve are both implemented upstream as a `SpecialAction` registered on
+  `game.getState().getSpecialActions()` — `ConvokeAbility.addSpecialAction` adds one targeting a
+  creature to tap; `DelveAbility.addSpecialAction` adds one costing `ExileFromGraveCost` on a
+  `TargetCardInYourGraveyard`. Neither is folded into the ordinary mana-payment prompt; they are
+  **separate, player-triggered actions available alongside it**.
+- `GameView.special` (`this.special = !state.getSpecialActions().getControlledBy(priorityPlayer...).isEmpty()`)
+  is **only a boolean** — "some special action is available right now" — with no enumeration or label.
+  It is already mapped end to end on our side: `:protocol` → `GameState.specialActionsAvailable` →
+  `GameViewMapper` (both bridge and app-side) — confirmed present, tested
+  (`GameEventFoldTest`), and printed in a live-test transcript.
+- **It is never read anywhere in `feature/game`.** `BoardControls.controlsFor` only ever offers the
+  `UseSpecial` action when `prompt.options.specialButtonText` is set — the **unrelated** mechanism
+  behind combat's "All attack" button (`Constants.Option.SPECIAL_BUTTON`, a labelled hint on one
+  specific prompt). Convoke/delve never set that hint; they only flip `GameView.special`. This is
+  standard 5's exact shape: a field that compiles, maps, round-trips, and is asserted in a test, but
+  drives nothing. **A deck that wants to convoke or delve has no way to do it from the board today** —
+  confirmed by reading the code, not yet by a live probe.
+
+### 18.2 How the server actually resolves it — read from `HumanPlayer.activateSpecialAction`
+
+`useSpecialAction()` already exists on `GameClient` and sends the literal `SPECIAL` command — it was
+built for combat's special button but the wire verb is generic. Upstream's handler
+(`activateSpecialAction`, `HumanPlayer.java:2295`) is:
+
+1. Collect `game.getState().getSpecialActions().getControlledBy(playerId, inManaPaymentMode)`.
+2. **Exactly one** → activate it directly. It then asks for its own cost/target the same way any
+   ability does — for convoke, a `Target` prompt ("creature to tap for convoke"); for delve, a `Target`
+   prompt over the graveyard (`TargetCardInYourGraveyard`). **Both are ordinary `GAME_TARGET` prompts
+   0057 already answers.**
+3. **More than one** → `fireGetChoiceEvent`, which is our already-mapped **`GAME_CHOOSE_ABILITY`**
+   (`GamePrompt.ChooseAbility`) — the same prompt kind used for "which of this permanent's abilities."
+   The player picks one, then step 2 happens for it.
+
+**Consequence: no new prompt kind, no `:protocol`/`:bridge` change expected.** Every step in this
+sequence — the initial trigger, the ability choice when there's more than one, and the eventual
+cost/target — already routes through prompt kinds the board answers generically. The gap is narrow and
+purely client-side: **the board must offer a "use special action" affordance whenever
+`state.specialActionsAvailable` is true**, not only when the current prompt happens to carry a
+`specialButtonText` hint. Convoke can be invoked repeatedly (once per creature tapped, since each
+`ConvokeSpecialAction` targets exactly one) — pressing it again after tapping one creature re-offers
+the (recomputed) special actions for the remaining unpaid cost, the same way "use special action" would
+if nothing had changed.
+
+### 18.3 What this means for the board
+
+**Decision.** Whenever `GameState.specialActionsAvailable` is true, offer a generic control (e.g.
+"Special action") **in addition to** the ordinary controls for whatever prompt is currently showing —
+priority (`Select`) or mana payment (`PlayMana`), the two moments upstream actually calls
+`activateSpecialAction` from. Tapping it sends `useSpecialAction()`; the server's own next prompt
+(`ChooseAbility` if there's a choice, otherwise straight to a `Target`/cost prompt) renders through the
+existing generic machinery with no special-casing.
+
+**Cancel.** §6.4/§16.5's cascading-cancel story extends here directly: a convoke/delve `Target` prompt
+is an ordinary `Target` with `isRequired` presumably false (unconfirmed — verify live), so the existing
+cancel affordance should already apply. This is the same "declining a mode or an alternative-cost
+prompt" gap the summary at the top of this document already names as unverified (§6.4a/§16.5a) — convoke
+and delve are exactly the concrete cases that item refers to.
+
+**Still to verify live (do not claim done from source reading alone):**
+- That `specialActionsAvailable` genuinely flips to `true` during a real convoke/delve cast, using a
+  deck built for it (candidate: any convoke or delve card + enough creatures/graveyard fuel).
+- That tapping "use special action" produces the `ChooseAbility`/`Target` sequence exactly as read
+  above, end to end, with the cost actually applied (mana pool gains a mana from convoke; the graveyard
+  shrinks from delve).
+- Whether declining the resulting `Target` prompt rewinds the way §17.1 proved for an ordinary target.
+
+## 19. Combat damage among multiple blockers — already covered, confirmed from source
+
+§7.4's out-of-scope note ("damage assignment order, trample, first/double strike... do not
+special-case them") was a judgment call made without checking what prompt they actually use. Traced now
+(`HumanPlayer.chooseTargetAmount`, `HumanPlayer.java:1038`): when a player must divide combat damage
+among multiple blockers (or an attacker with trample beyond lethal), upstream calls the **same**
+`getMultiAmount` path that produces our `GamePrompt.GetMultiAmount` — `multiAmountType = DAMAGE` when
+the ability's rule text contains "damage." This is **not a new or unverified mechanism**: it is the
+identical prompt kind already **proven live** by the target-cancel experiment (§17), where "Select
+targets (selected 0 of 2, min 1) to divide 2 damage" for Forked Bolt is this same code path applied to
+a spell instead of combat.
+
+**Consequence.** 0061's call to leave damage assignment as a generic prompt is confirmed correct by
+source, not just asserted — first/double strike need no client logic at all (the server runs an extra
+combat-damage step and simply may prompt again), and trample/multi-blocker division is the
+already-shipped `GetMultiAmount` renderer. **Still open:** this has not been exercised **live** for
+combat specifically (only for a spell) — worth a short live probe (a creature with two blockers) before
+calling it proven, the same standard applied to every other measured claim in this document, but it is
+no longer an open design question.
+
+---
+
+## 20. Battlefield stacking — conserving board space for duplicate permanents
+
+**Decision (Pete).** *"For any card with the same name, multiples should be stacked horizontally. They
+should be turned 90 degrees when tapped and moved into a new pile. If there are more than 3, they
+should be rendered as a pile of 3 with a numerical indicator of how many are in the stack. This will
+happen very often with lands and sometimes with tokens."*
+
+This is a pure **board-rendering** feature — no server behaviour to trace (this is not a protocol
+question), but real correctness hazards to get right: the server's per-object pick/targeting state
+(§0, §5.2, §7) must never be hidden by a visual merge. Today's `BattlefieldBand`
+(`feature/game/.../board/BoardRegions.kt`) renders every `PermanentUi` as its own full-size card in a
+single scrolling row — confirmed by reading the code, not assumed — so ten basic lands cost the same
+board space as ten different spells. This is the concrete gap the feature closes.
+
+### 20.1 What may share a pile — the grouping key, resolved
+
+**Decision (Pete, resolved 2026-08-15).** Two permanents may share a pile **only when every rendered
+field of [`PermanentUi`](../feature/game/src/main/kotlin/magefree/feature/game/board/BoardUi.kt) matches
+exactly** — not name alone. Concretely: `card.name`, `isTapped`, `damage`, `card.counters` (name **and**
+count), `showsSummoningSickness`, `isAttacking`, `isBlocking`, `attackingDefenderName`,
+`blockedByNames`/`blockingAttackerNames`, and the object's **current pick-eligibility** for whatever
+prompt is outstanding (`isOfferedByServer`, plus — during an active `Target`/`Select`/`PlayMana`
+prompt — whether this specific id is in the server's candidate set and whether it is already chosen).
+
+**Why this is not optional.** Piling is a pure rendering optimisation; it must never let two permanents
+that are *not* fungible right now look identical. A land with 2 damage marked, a creature carrying a
+counter the others lack, or one specific untapped Mountain the server did *not* list as a legal mana
+source while its neighbours are — none of these may be merged. **Pete's own resolution confirms this
+directly**, naming summoning sickness specifically: *"split summoning sick items into a new stack"* —
+a freshly-played land-turned-creature (Dryad Arbor, an animated Mutavault, §7.6/0058) is not
+interchangeable with an established one even if the name matches.
+
+**Deliberately excluded from the key: printing/art.** Two Mountains from different sets are still the
+same pile — the feature exists precisely for the common case of a deck's basic lands, which very often
+carry mixed art on purpose. The pile shows **one representative card face** (the first member's art);
+this is a considered exception to "match every field," stated explicitly rather than silently assumed.
+
+**Combat is not a special case — the same key already produces Pete's described behaviour.** Combat
+fields (`isAttacking`, `isBlocking`, `attackingDefenderName`, `blockedByNames`, `blockingAttackerNames`)
+are just more fields in the same key, which is why no separate combat rule is needed:
+*"there are times when grouping makes sense in combat. If there are a large number of tokens involved,
+stack them. As tokens are assigned blockers, split them out. Then, if we're in a situation where a
+large number of creatures are attacking and a large number of blockers are blocking, organize them into
+stacks when all permanents in the stack are the same card with the same state, for example +1/+1
+counters."* Concretely: a wide token attack with no blocks assigned yet stays one pile (identical name,
+identical `isAttacking`, identical `attackingDefenderName`, no `blockedByNames` yet); the moment a
+blocker is assigned to one attacker, that attacker's `blockedByNames` diverges from its still-unblocked
+siblings and it falls out of the pile automatically — this is the grouping key doing its job, not a
+new rule. The same applies during an active declare-attackers/blockers prompt (0061): the pile still
+renders, and a tap on it sends one pick, exactly as below.
+
+### 20.2 Rendering: fan up to 3, then cap with a count
+
+**Decision (Pete).** 1 member renders as today (an ordinary single card — no change). 2 or 3 members
+render as a **horizontal fan of that many real card faces**, each slightly offset, so the count is
+visible by inspection with no extra label. **More than 3** caps the fan at **3** layered faces plus a
+**numeric badge** showing the true count (e.g. `×7`) — the pile never grows taller/wider than a 3-card
+fan regardless of how many members it actually holds, which is the whole point: board space stops
+scaling with duplicate count.
+
+**Tapped state moves a permanent into a different pile, visually.** A tapped permanent already renders
+rotated 90° (`BoardCards.kt`, `TAPPED_ROTATION` — this part already exists, built for 0055). Since
+`isTapped` is part of the grouping key (§20.1), tapping the last untapped member of an N-pile is not a
+special case either: the next snapshot simply has one more tapped-and-rotated permanent, which forms
+or joins the tapped pile while the untapped pile shrinks to N−1 — exactly *"turned 90 degrees when
+tapped and moved into a new pile,"* falling out of the same general mechanism.
+
+### 20.3 Interaction — resolved 2026-08-15
+
+- **Tapping a pile while a prompt is asking for one of its members** (mana payment, targeting, playing
+  a land, a combat declaration) sends **one pick — the first id in the pile the server actually
+  offered** — never invented, never widened, the same discipline as every other prompt in this document.
+  *"One tap = one member consumed"*: the pile visually shrinks by one member per tap, the same feedback
+  a player already gets tapping individual lands today, just space-efficient. Paying `{3}` from a pile
+  of 5 untapped Mountains is three taps on the same pile, watching it count down 5 → 4 → 3.
+- **Tapping a pile with no prompt outstanding** (ordinary inspection) opens the **existing**
+  `CardDetailOverlay` (0057) on an arbitrary representative member's id. No new detail component is
+  needed: every member of a pile is, by construction of §20.1's key, currently indistinguishable from
+  every other, so "which one" genuinely does not matter — reusing 0057's single-card detail path was
+  chosen over building a dedicated pile-member list for exactly this reason.
+- **Piling is a pure, re-derived view, never persisted state.** Every render recomputes piles fresh from
+  the current `PermanentUi` list (plus live pick-state) — there is no separate "this is a pile" flag the
+  server or the app invents and must keep in sync. A snapshot that changes one member's state (a
+  counter added, a block assigned, priority moving so pick-eligibility changes) reshapes the piles
+  automatically as a side effect of the same key, with nothing bespoke to maintain.
+
+### 20.4 Where this lives, architecturally
+
+- A pure function — `groupPermanents(permanents: List<PermanentUi>, picks: (String) -> CardPickState):
+  List<PermanentPile>` or equivalent — sits between `seat.battlefield` and `BattlefieldBand`'s render
+  loop, unit-testable in isolation against §20.1's key with no Compose/UI dependency (the project's
+  established preference for pure, fake-testable logic over UI-embedded rules).
+- **The tap contract does not change.** `BattlefieldBand`'s `onCardTap: ((String) -> Unit)?` already
+  takes a single object id; a pile resolves *which* id to send internally (§20.3), so nothing above
+  `BattlefieldBand` needs to become pile-aware. This keeps the blast radius small — `GameBoardScreen`,
+  `controlsFor`, and the pick-state plumbing are all unchanged.
+- Applies to **both** battlefield bands — an opponent with ten lands is exactly as cluttered as the
+  viewer's own, and the grouping key reads the same `PermanentUi` fields either side.
+
+---
+
+## 21. Casting/activation cost patterns — a systematic review, traced from `../mage`
+
+Prompted by a direct request to review every alternative casting cost (kicker, spree, …), every
+activation cost (crew, Deathrite Shaman, …), and any other prompt a normal game needs — checked against
+source, not guessed. The result is reassuring in one direction and reveals one real, concrete gap in
+another.
+
+### 21.1 The result: everything routes through the closed prompt set already built
+
+**No mechanic examined needs a new `GamePrompt` kind.** CR 601.2b's real cast sequence — traced from
+`AbilityImpl.activate()` (`Mage/src/main/java/mage/abilities/AbilityImpl.java:307-430`) — is, in order:
+splice reveal → **alternative/additional costs announced** → X announced → Phyrexian/Waterbending mana
+choices → **mode chosen** → per-target announcements → mana payment. Every step in that sequence maps to
+a prompt kind this document and 0057/0062 already cover:
+
+| Step | Mechanism, traced | Prompt kind |
+|---|---|---|
+| Optional additional costs (kicker, multikicker, buyback, entwine, escalate, surge, overload, bargain, …) | `OptionalAdditionalSourceCosts.addOptionalAdditionalCosts` — a loop of `player.chooseUse(...)`, one **yes/no per cost**, repeated for multikicker until declined or unaffordable (`KickerAbility.java:182-228`, confirmed directly; `BuybackAbility implements OptionalAdditionalSourceCosts` confirmed the same way — the rest share this interface and were not read individually) | `GamePrompt.Ask` — already generic |
+| Phyrexian mana (pay 2 life instead of a colored symbol) | `AbilityImpl.handlePhyrexianCosts` — another `chooseUse` per symbol (`AbilityImpl.java:692`) | `GamePrompt.Ask` |
+| Modal spells, **including Spree** | `Modes.choose` → `HumanPlayer.chooseMode` fires `fireGetModeEvent`, which server-side reuses the **exact same wire message** as ability choice — `TableController`'s `chooseMode` builds an `AbilityPickerView` from the mode map (`GameController.java:856-857`), identical in shape to the `AbilityPickerView` built for `CHOOSE_ABILITY`. **`SpreeAbility` is not a distinct mechanism at all** — it is `Modes.setMinModes(1)`/`setMaxModes(MAX_VALUE)` with a per-mode cost, i.e. an ordinary modal spell configured to allow choosing more than one mode (`SpreeAbility.java`, 27 lines, confirmed directly). Our bridge's `chooseAbility` mapper already reads `AbilityPickerView.choices` blind to which server-side path produced it (`GamePromptMapper.kt:90-102`), and **our board's `ChooseAbility` control was already written with this in mind** — its own doc comment reads *"Choose one of an object's abilities, **or one mode of a modal spell**"* (`BoardControls.kt:105`). | `GamePrompt.ChooseAbility` — already generic, **already wired for this**, but **never live-verified against a real modal or Spree card** |
+| Activated-ability costs with a target (crew, equip, Deathrite Shaman-style graveyard-exile costs, sacrifice/discard costs) | Crew's cost is an ordinary `TargetPermanent(0, MAX, filter, true)` with a custom "(selected power X of N)" message — the **identical incremental-select-then-confirm shape** already proven live for Forked Bolt's damage division (§17.2) (`CrewAbility.java:149-169`, confirmed directly). Deathrite Shaman is three ordinary `SimpleActivatedAbility`s, each with a `TargetCardInGraveyard` — note **not** "in *your* graveyard": it can target either player's (confirmed directly, `DeathriteShaman.java`). Activating a permanent with more than one ability (Deathrite has three) shows `ChooseAbility` first, exactly as already measured live for Mutavault (§7.6/0058's live test) | `GamePrompt.ChooseAbility` (if >1 ability) then `GamePrompt.Target` — already generic |
+| Alternative/additional costs paid via a non-mana action at the moment of casting (convoke, delve) | Fully traced already — §18 | `Select`/`PlayMana`'s special-action affordance → `ChooseAbility`/`Target` — story 0062 |
+| Combat damage among multiple blockers, trample | Fully traced already — §19 | `GetMultiAmount` |
+| "May move to the command zone instead" (a commander's own replacement effect, §21.4) | Another ordinary `chooseUse` (`CommanderReplacementEffect.java:152,172`) | `GamePrompt.Ask` |
+
+**Consequence.** The architectural bet §6.2 made explicitly — *"the prompt set is closed and typed… there
+is no generic 'server asked something' case to guess about"* — holds up across a genuinely wide sample of
+real Magic mechanics, not just the handful originally measured. That is a load-bearing finding for the
+whole project, not a footnote.
+
+### 21.2 The one real gap: graveyard cards have no individual identity
+
+**`playable` already includes graveyard-zone abilities.** `PlayerImpl.getPlayable(game, hidden, fromZone,
+…)` explicitly scans `Zone.GRAVEYARD` (every graveyard in range, not just the viewer's own),
+`Zone.EXILED`, revealed cards from any zone, and — separately — `Zone.OUTSIDE` for companion cards
+(`PlayerImpl.java:4359-4395`, confirmed directly). So Flashback, Escape, Jump-start, Unearth, Embalm,
+Eternalize, Disturb, and Retrace cards are **already** offered to the app through the same `playable`
+list a hand card or a land uses — the mechanism is not missing.
+
+**But the board cannot say what they are.** `PlayerView.graveyard` is a full `CardsView` — the same
+per-card shape as hand — sent by the server for **every player, always** (a graveyard is public
+information; there is no hidden-info reason to withhold it):
+`graveyard.put(card.getId(), new CardView(card, game, …))` (`PlayerView.java:40,84-85`, confirmed
+directly). Our bridge reads only its size: `graveyardCount = player.graveyard?.size ?: 0`
+(`GameViewMapper.kt:92`) — the individual `CardsView` is dropped. This is standard 5's exact shape
+again: a real, always-populated upstream field, silently reduced to a count.
+
+**The consequence is already visible in the board's own code**, and the comment names it directly —
+`BoardControls.kt`'s `offBoardCandidateButtons`, written for exactly this gap: *"a candidate id does not
+have to name anything the board draws… `canPlayObjects` naming a card in a zone the board does not
+render (**flashback from a graveyard is the everyday case**)."* Its fallback, `nameFor`, checks
+`hand`/`battlefield`/`stack`/`exile`/`revealed` — **never `graveyard`, because `GameState` carries no
+graveyard cards to check.** The result today: a Flashback-eligible card in `playable` renders as
+`"Unnamed candidate 1"`. The tap would actually work (the id is real and the server offered it) — the
+player just cannot tell which card they're casting, and if more than one graveyard-castable card is
+available (either player's), they are indistinguishable buttons.
+
+**Scope of the fix, precisely — do not over-claim.** A `Target` prompt that names a graveyard card
+directly (Delve's own target, Deathrite Shaman's own target) already carries its **own** `cards` list
+per-prompt, the same way Scry does (§11.3) — that path is *not* broken. The gap is specifically:
+**anything resolved through `playable`/`offBoardCandidateButtons` rather than through a `Target` prompt's
+own card list** — i.e., knowing a graveyard-castable spell exists and what it is *before* acting on it.
+
+**This also touches a gap already on record.** §11.3 already flagged, independently: *"`lookedAt` and
+`companion` are populated upstream and were not mapped by 0051 — a `:protocol` + `:bridge` fix,
+independent of the board."* Graveyard is the same shape of fix, and worth doing together — see story
+0066.
+
+### 21.3 Commander — traced from `GameCommanderImpl`, `Commander`, and the view layer — deferred
+
+**Decision (Pete, 2026-08-15).** **Parked — a future increment, not the first playable board.** The
+trace below stays on record as grounded, verified requirements for whenever the format is picked up;
+nothing here blocks 1v1 constructed play. See story 0067 for the deferred scope, and §21.5 for how it
+now relates to 0062/0066 (both of which remain in scope and do **not** depend on Commander).
+
+Commander identity is chosen at **deck registration**, not asked mid-game: at game init, every card in
+the player's sideboard is checked, and cards are moved into the command zone
+(`GameCommanderImpl.init()`, `GameCommanderImpl.java:100-130`, confirmed directly) — so "who is your
+commander" is 0033/0059's territory (deck submission), not a board prompt.
+
+**The command zone already has a unified, mapped-shape upstream view — currently mapped nowhere on our
+side.** `PlayerView.commandList: List<CommandObjectView>` carries **Commander, Emblem, Dungeon, and
+Plane** objects together, per player (`PlayerView.java:47,116-136`, confirmed directly).
+`CommanderView extends CardView` (`CommanderView.java`, confirmed directly) — the **same shape** hand,
+graveyard, and exile already use, so mapping it reuses existing card-mapping code rather than inventing
+a new one. Our `GameState`/`GamePlayer` model has **no command-zone field at all** today — this is not a
+partial gap, it is the entire zone missing. **Commander cannot be played through the app today**: no way
+to see a commander in the command zone, cast it from there, or see an emblem/plane/dungeon.
+
+**Commander tax needs no board work at all.** It is a `CostModificationEffectImpl` applied automatically,
+server-side, *before* the mana cost is ever shown to the player (`CommanderCostModification.java`,
+confirmed directly — CR 903.8, "+{2} for each previous cast from the command zone"). The increased cost
+**is** the cost the ordinary `PlayMana` prompt asks for; once command-zone casting works at all (§21.2's
+sibling gap, since `CommanderView` needs the same mapping treatment as graveyard), tax is correct for
+free. Showing the running tax count/history is a legibility nicety, not a functional requirement.
+
+**Commander damage is a genuine upstream data constraint, not a mapping gap — a real design decision is
+needed.** `CommanderInfoWatcher` tracks accumulated combat damage per commander per victim
+(`damageToPlayer: Map<UUID, Integer>`) purely server-side, and **nothing in `GameView`/`PlayerView`
+exposes it** — confirmed by an exhaustive grep across `Mage.Common/src/main/java/mage/view/`, zero
+matches. The only way a player currently learns "you've taken 15 from that commander" is the narration
+log (`game.informPlayers(...)`, `CommanderInfoWatcher.java:51`) — **the same HTML-narration channel this
+document has already rejected parsing** (§1.3's resolved decision: *"no prose parsing at all"*). Even
+desktop XMage has no dedicated commander-damage HUD; this is an upstream limitation, not something our
+bridge silently dropped. **Open (21.3a):** two honest options, neither yet decided —
+1. Show the narration line as-is in the log/stack overlay (§9.1) and accept that a structured
+   per-opponent-per-commander damage total is simply not available.
+2. Have the **client** accumulate it independently, watching each snapshot's combat data (attacker id →
+   defender → damage dealt) across the game — the same shape of risk §11.3 already flagged for
+   client-side knowledge-tracking ("wrong the moment a card moves through a zone we cannot observe"),
+   except combat damage is momentarily visible in every snapshot that has it, which may make this safer
+   than the hand-tracking case that was rejected. **Unverified**, and a genuine product decision either
+   way, not a default to assume.
+
+**Partner/background/multiple commanders need no new shape.** `commandList` is already a `List`, and
+`getCommandersIds(player, CommanderCardType.ANY, false)` (`GameCommanderImpl.java:125`) already handles
+more than one — rendering N commanders per player falls out of the same list-shaped mapping in §21.2's
+sibling fix, not a separate mechanism.
+
+**"May move to command zone instead"** (a commander dying/being exiled/bounced/tucked) is confirmed
+already, in §21.1's table — an ordinary `Ask`.
+
+### 21.4 Companion — the same `SpecialAction` mechanism as convoke and delve
+
+`CompanionAbility extends SpecialAction` (`CompanionAbility.java`, confirmed directly) — *"pay {3}: put
+the companion card into your hand,"* registered in `Zone.OUTSIDE`, discovered and triggered **exactly**
+the way convoke and delve already are (§18): via `GameView.special`/our `specialActionsAvailable`, then
+`useSpecialAction()`. **Story 0062's design already covers the interaction mechanism for this case with
+no changes** — companion is simply another entry in the special-actions set.
+
+**What's missing is legibility, and it is the same fix as §21.2/§11.3's `companion` zone gap.**
+`CompanionAbility` has no target — its effect resolves directly against its own source id, so the
+special action *can* be triggered blind and it will work. But the player cannot see **which** card their
+companion is (before or after fetching it) without the `companion` zone mapped, the gap §11.3 already
+named independently. Folding this into story 0066 makes it one fix instead of two.
+
+### 21.5 Consequences for the story list
+
+- **Story 0062** (convoke/delve, already specified) needs no change — its design already generalises to
+  companion (§21.4) with zero extra work, and its "verify live" step should add a companion deck once
+  the zone mapping (below) lands.
+- **New: story 0066** — map the individual card identities that already exist upstream and are
+  currently dropped: `PlayerView.graveyard` (§21.2), `companion` and `lookedAt` (§11.3, already flagged,
+  now given a story number). One shape of fix, three fields.
+- **New: story 0067 — parked (§21.3).** Commander format support: map `PlayerView.commandList` (command
+  zone rendering, reusing `CommanderView`'s `CardView` shape), verify tax is correct for free once
+  casting from the zone works, and **resolve 21.3a** (the commander-damage decision) before building
+  anything that depends on its answer. Deferred to a future increment — the trace stays on record so it
+  doesn't need re-deriving when picked up. **Independent of 0062/0066** — neither depends on Commander.
+- **Modal spells / Spree (§21.1)** need no new story — the mechanism is already built into 0057's
+  `ChooseAbility` handling. Worth a live probe (a Charm or a Spree card) to move it from "traced" to
+  "proven," the same standard already applied everywhere else in this document, but not a design gap.

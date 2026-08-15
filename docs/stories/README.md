@@ -405,7 +405,13 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0057 | Board interaction: casting, targeting, cancel | 0055, 0056, 0052, 0054 | Floating controls (never modals) + visibility toggle, tap-select-confirm, targeting with per-pick sends and a confirm, mana by tapping lands, cascading cancel, manual priority through a single pass-policy seam. Unblocks what 0055 could not verify live. |
 | 0058 | Creature status and counters | 0051, 0052, 0055 | **Defect + missing data.** The board renders `0/0 · Summoning sick` under a land, because P/T and summoning sickness are drawn unconditionally — and the bridge drops `cardTypes`, `isCreature()` and `counters` from `CardView` entirely. Creature-ness is game state, not printing (Earthbend, Ensoul Artifact, crewed Vehicles), so the server's own answer must be carried and rendered, along with counters. |
 | 0061 | Combat: declaring attackers and blockers | 0057, 0058, 0055 | Combat cannot be played today: a declaration is projected as ordinary priority with `pickableObjectIds` empty, so the board offers "attack with everything or nothing" and **no way to block**. `playable` is empty during a declaration — the creatures come only from `possibleAttackers`/`possibleBlockers`, which the bridge already carries. Pairing questions are upstream's own (`selectDefender` / `Select attacker to block`), asked only when ambiguous, and arrive as ordinary target prompts 0057 already answers. |
+| 0062 | Alternative costs: convoke, delve | 0057 | **Defect fix, traced from `../mage`.** `GameState.specialActionsAvailable` is mapped end to end and never read — the board has no way to trigger a `SpecialAction` (convoke, delve), so decks using them are unplayable. No new prompt kind needed: the fix is a board affordance wired to the existing field, then live verification. |
+| 0063 | Priority: stops and configurable auto-pass | 0057, 0061 | **Mechanism traced from `../mage`'s desktop client** (§14.3): six explicit skip-to-X actions, the full stop-settings matrix (global + per-phase-step × your/opponent turn), and hold-priority — entirely client-local, no protocol change. **Scope: full mechanism parity with upstream** (Pete), not a narrowed v1 — all six skip actions, the complete stop matrix, hold-priority, through the existing `PassPolicy` seam. Touch-first presentation of that mechanism on a phone is a separate, still-undesigned pass. |
+| 0064 | Between-games sideboard | 0036, 0037, 0033, 0059, 0057 | **Full-match gap, and a genuine `:protocol`/`:bridge` fix — corrects requirements §12.1's original claim.** `SideboardPrompt`'s deck payload is dropped by `SideboardMapper` (upstream's `TableClientMessage.getDeck()` is never read), so today's board has no way to build a sideboard screen at all. Adds the payload, then the timed swap screen itself, reusing 0037's existing `submitDeck`/`updateDeck` verbs and 0033's deck model/legality. |
+| 0065 | Battlefield stacking | 0055, 0057, 0058, 0061 | **Board-space feature, no protocol change.** Every permanent renders full-size in a scrolling row today, so a battlefield with many of the same land/token costs as much space as one with ten different spells. Groups same-name permanents into a compact pile **only when every rendered field matches** (tapped, damage, counters, summoning sickness, combat state, pick-eligibility) — a correctness requirement, not a preference, so a pile never hides what the server's per-object state actually distinguishes. Fans up to 3 members, caps at 3 with a count badge beyond that. |
+| 0066 | Card identity: graveyard, companion, looked-at | 0051, 0052, 0055 | **Defect fix, traced from `../mage`.** `PlayerView.graveyard` is a full `CardsView`, sent always (graveyard is public info) — our bridge reads only its size. `playable` already includes graveyard-castable spells (Flashback, Escape, …), so they render as `"Unnamed candidate N"` today, not broken, just unnamed. Folds in `companion`/`lookedAt`, already flagged separately in requirements §11.3. |
 | 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
+| 0067 | Commander format support | 0051, 0052, 0055, 0066 | **Parked — a future increment (Pete, 2026-08-15), not the first playable board.** Fully traced and specified so nothing needs re-deriving when picked up: `PlayerView.commandList` (commander/emblem/dungeon/plane) is mapped nowhere today — Commander cannot be played at all. Tax is automatic server-side and needs no board work once casting from the zone works; commander damage is a genuine upstream data constraint (not exposed structurally anywhere, even on desktop) requiring a product decision (§21.3a) before any damage UI is built. |
 
 ## Known issues (accepted, not scheduled)
 
@@ -450,19 +456,42 @@ bridge). Stories **0001–0022 are complete and merged**:
 10. **Epic 7 (hosting & joining tables):** 0036 → 0037 → 0038, with 0040 + 0041 fixing it end to end;
     **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
-11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 built; **0061 outstanding**. ⚠️
+11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built;
+    **0062 + 0063 + 0064 + 0065 + 0066 specified**. ⚠️ **0067 (Commander) parked** — a future increment.
 
-**Current state — a game is playable from the app.** Hosting works end to end, and the board renders a
-live game and answers the server's prompts: a full turn has been played on-device against an AI —
-mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and turn advance.
+**Current state — a game is playable from the app, including combat.** Hosting works end to end, and
+the board renders a live game and answers the server's prompts: a full turn has been played on-device
+against an AI — mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and turn
+advance. Combat (0061) is built: attackers and blockers are declared by tapping, with the server's
+pairing questions answered the same way. **A full best-of-N match is not yet playable** — see 0064.
 
-**Known gaps.** **0061** (combat declaration) is specified and is the next board work: combat cannot be
-played at all today — the board offers "attack with everything or nothing" and no way to block. Its
-prompt shapes and pairing behaviour are fully measured (requirements §7.2–§7.5), so it needs no
-protocol or bridge work. Two Epic 7 defects found while hosting by hand are specified as **0059** (deck
-submission offered in states where upstream ignores it) and **0060** (the host form hardcodes 7 of the
-server's 52 deck types). Neither blocks play: a match starts because `joinTable` binds the host's deck
-at creation.
+**Known gaps toward "a full game/match is playable end to end."** A 2026-08-15 pass through `../mage`
+source (not guesswork) found three concrete gaps and closed one open question:
+- **0062** (convoke/delve) — a confirmed defect: the board has no way to pay these costs at all today.
+- **0063** (stops/auto-pass) — manual-only priority (§9.1/§14.1) works but is tedious over a full game;
+  the desktop mechanism it should eventually match is now traced and specified (§14.3).
+- **0064** (between-games sideboard) — the one piece of "a full **match**," not just one game: today's
+  board has no story, no UI, and (unlike 0062/0063) a genuine **`:protocol`/`:bridge` gap** — requirements
+  §12.1's original claim that the deck payload already crossed the bridge was checked against source and
+  is wrong; `SideboardMapper` drops it. A match that reaches game 2 has nothing to sideboard with.
+- Combat damage among multiple blockers/trample (requirements §19) is **not** an open design
+  question — it is the same `GetMultiAmount` prompt already proven live for Forked Bolt's damage
+  division. Needs a short live combat probe to confirm, not new design.
+- **0065** (battlefield stacking) — a board-space feature (lands/tokens crowding the battlefield), no
+  protocol change; see requirements §20.
+- **0066** (graveyard/companion/looked-at card identity) — a confirmed defect: `playable` already
+  includes graveyard-castable spells (Flashback and its relatives), but they render as
+  `"Unnamed candidate N"` because the bridge only reads the graveyard's *size*, not its cards.
+
+A **2026-08-15 systematic review of alternative/activation costs, Commander, and companion**
+(requirements §21) found every mechanic checked already routes through the existing prompt set — no new
+protocol work needed there — except the graveyard-identity gap above (0066) and the whole Commander
+format, which is **parked as story 0067** for a future increment (Pete's call, not in the first
+playable board) but fully traced and specified so it needs no re-deriving when picked up.
+
+Two Epic 7 defects found while hosting by hand are specified as **0059** (deck submission offered in
+states where upstream ignores it) and **0060** (the host form hardcodes 7 of the server's 52 deck
+types). Neither blocks play: a match starts because `joinTable` binds the host's deck at creation.
 
 **Beyond that:** **EPIC-08** (tournaments / draft / sealed) is the remaining unstarted
 branch. The 10 → 9 → 7 ordering was deliberate: cards and decks came first. Epic 5's notifications
