@@ -381,6 +381,9 @@ class BoardPlaysAGameIT {
 
             is PromptControlsUi.Amount -> controls.amountRequest?.let { BoardAction.ChooseAmount(it.min) }
             is PromptControlsUi.MultiAmount -> BoardAction.DistributeAmounts(controls.amountRows.map { it.min })
+            // This run is about casting and cancelling, not combat (story 0061 has its own live run), so
+            // a declaration is simply closed with its own *done* — the equivalent of declaring nothing.
+            is PromptControlsUi.Declaration -> BoardAction.FinishTargeting
             // Nothing knows a valid answer; the board offers no control and neither does this.
             is PromptControlsUi.Notice -> null
         }

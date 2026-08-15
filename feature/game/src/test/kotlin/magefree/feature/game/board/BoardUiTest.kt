@@ -531,6 +531,96 @@ class BoardUiTest {
     }
 
     @Test
+    fun `an attacker says what it is attacking, and what is blocking it`() {
+        // Story 0061: marking a creature "Attacking" is not enough to follow a fight — with two
+        // attackers and a planeswalker in play, *what* it attacks is the whole question. The defender's
+        // name is the server's own (`CombatGroup.defenderName`), and a defender is not always a player.
+        val state = twoSeatState(viewerFirst = false)
+        val board =
+            BoardUi.from(
+                state.copy(
+                    combat =
+                        listOf(
+                            CombatGroup(
+                                defenderId = "p-you",
+                                defenderName = "you",
+                                isBlocked = true,
+                                attackerIds = listOf("o-1"),
+                                blockerIds = listOf("y-1"),
+                            ),
+                        ),
+                ),
+            )
+
+        val attacker =
+            board.opponentSeats
+                .single()
+                .battlefield
+                .single { it.objectId == "o-1" }
+        assertEquals("you", attacker.attackingDefenderName)
+        assertEquals(listOf("Forest"), attacker.blockedByNames)
+        assertEquals("$ATTACKING_MARK you · $BLOCKED_BY_MARK Forest", attacker.combatSummary)
+
+        val blocker = board.viewerSeat!!.battlefield.single { it.objectId == "y-1" }
+        assertEquals(listOf("Mountain"), blocker.blockingAttackerNames)
+        assertEquals("$BLOCKING_MARK Mountain", blocker.combatSummary)
+    }
+
+    @Test
+    fun `a planeswalker being attacked is named as the defender, not the opposing player`() {
+        // A defender is not always the opposing player — planeswalkers and battles are legal defenders
+        // in ordinary 1v1 (§7.4). A board that said "attacking Computer" here would be lying.
+        val state = twoSeatState(viewerFirst = false)
+        val board =
+            BoardUi.from(
+                state.copy(
+                    combat =
+                        listOf(
+                            CombatGroup(defenderId = "pw-1", defenderName = "Tibalt, the Fiend-Blooded", attackerIds = listOf("o-1")),
+                        ),
+                ),
+            )
+
+        val attacker =
+            board.opponentSeats
+                .single()
+                .battlefield
+                .single { it.objectId == "o-1" }
+        assertEquals("$ATTACKING_MARK Tibalt, the Fiend-Blooded", attacker.combatSummary)
+    }
+
+    @Test
+    fun `two attackers are two groups with the defender repeated, and each says so`() {
+        // Measured live (§7.3): `CombatGroup` is **per-attacker**, so two attackers produced two groups
+        // rather than one group with two attackers. A projection that assumed one group per defender
+        // would silently drop the second attacker.
+        val state = twoSeatState(viewerFirst = false)
+        val opponent =
+            state.players.first { !it.isViewer }.copy(
+                battlefield = listOf(GamePermanent(card = card("o-1", "Goblin Token")), GamePermanent(card = card("o-2", "Goblin Token"))),
+            )
+        val board =
+            BoardUi.from(
+                state.copy(
+                    players = state.players.map { if (it.isViewer) it else opponent },
+                    combat =
+                        listOf(
+                            CombatGroup(defenderId = "p-you", defenderName = "you", attackerIds = listOf("o-1")),
+                            CombatGroup(defenderId = "p-you", defenderName = "you", attackerIds = listOf("o-2")),
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf("$ATTACKING_MARK you", "$ATTACKING_MARK you"),
+            board.opponentSeats
+                .single()
+                .battlefield
+                .map { it.combatSummary },
+        )
+    }
+
+    @Test
     fun `an empty combat marks nothing`() {
         val board = BoardUi.from(twoSeatState(viewerFirst = false))
 
@@ -540,6 +630,13 @@ class BoardUiTest {
                 .single()
                 .battlefield
                 .none { it.isAttacking || it.isBlocking },
+        )
+        // …and says nothing about combat either, which is the ordinary state of most of a game.
+        assertNull(
+            board.viewerSeat!!
+                .battlefield
+                .single()
+                .combatSummary,
         )
     }
 

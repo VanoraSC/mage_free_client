@@ -37,6 +37,8 @@ import magefree.network.game.TurnPhase
  * | "nothing you can play" note | `GameState.playable` **while** `viewerHasPriority` (see [PriorityUi]) |
  * | the per-card "server offered this" mark | `GameState.playable` **while** `viewerHasPriority` (see [PermanentUi.isOfferedByServer]) |
  * | attacking / blocking marks | `GameState.combat[].attackerIds` / `blockerIds` |
+ * | **what** an attacker is attacking | `GameState.combat[].defenderName` — the server's own name for a player, planeswalker or battle (see [PermanentUi.combatSummary]) |
+ * | what is blocking an attacker, and what a blocker blocks | the other side of the same per-attacker `CombatGroup`, with names taken from the battlefields the snapshot draws |
  * | tapped / damage | `GamePermanent.isTapped` / `damage` |
  * | summoning sick | `GamePermanent.hasSummoningSickness` **and** `GameCard.isCreature` (see [PermanentUi.showsSummoningSickness]) |
  * | card name, cost, type, rules | `GameCard.name` / `manaCost` / `typeLine` / `rules` |
@@ -137,15 +139,14 @@ data class BoardUi(
                 if (state.viewerHasPriority) state.playable.map { it.objectId }.toSet() else emptySet()
 
             val (viewerSeats, otherSeats) = state.players.partition { it.isViewer }
-            val attackerIds = state.combat.flatMap(CombatGroup::attackerIds).toSet()
-            val blockerIds = state.combat.flatMap(CombatGroup::blockerIds).toSet()
+            val combat = CombatView.of(state)
 
             return BoardUi(
                 gameId = state.gameId,
                 hasSnapshot = state.hasSnapshot,
                 isSpectator = state.isSpectator,
-                viewerSeat = viewerSeats.firstOrNull()?.toSeatUi(playableIds, attackerIds, blockerIds),
-                opponentSeats = otherSeats.map { it.toSeatUi(playableIds, attackerIds, blockerIds) },
+                viewerSeat = viewerSeats.firstOrNull()?.toSeatUi(playableIds, combat),
+                opponentSeats = otherSeats.map { it.toSeatUi(playableIds, combat) },
                 hand =
                     HandUi(
                         cards =
@@ -239,6 +240,9 @@ data class PermanentUi(
     val isAttacking: Boolean,
     val isBlocking: Boolean,
     val isOfferedByServer: Boolean,
+    val attackingDefenderName: String? = null,
+    val blockedByNames: List<String> = emptyList(),
+    val blockingAttackerNames: List<String> = emptyList(),
 ) {
     /**
      * Whether the board says "summoning sick" — which it does **only for a creature**.
@@ -250,6 +254,35 @@ data class PermanentUi(
      * a rule that does not exist. The fact is the server's; whether it is worth saying is the board's.
      */
     val showsSummoningSickness: Boolean get() = hasSummoningSickness && card.isCreature
+
+    /**
+     * What this permanent is doing in the combat the server is currently reporting — *"attacking
+     * Computer, blocked by Grizzly Bears"* — or null when it is doing nothing.
+     *
+     * **Why a sentence and not two flags.** 0055 already marked attackers and blockers, and on a real
+     * board that is not enough to follow a fight: with two attackers and a planeswalker in play, "this
+     * one is attacking" leaves out the only thing the player needs to know, which is *what* it is
+     * attacking. `CombatGroup` carries the answer and is **per-attacker** (§7.3) — it reads "against this
+     * defender, this attacker, blocked by these" — so the defender's own name is right there.
+     *
+     * The names are the server's: the defender's from `CombatGroup.defenderName` (which is a player, a
+     * planeswalker or a battle — never assumed to be the opponent), the creatures' from the battlefields
+     * the snapshot draws. Nothing is inferred and nothing is computed.
+     */
+    val combatSummary: String?
+        get() =
+            buildList {
+                if (isAttacking) add(attackingDefenderName?.let { "$ATTACKING_MARK $it" } ?: ATTACKING_MARK)
+                if (blockedByNames.isNotEmpty()) add("$BLOCKED_BY_MARK ${blockedByNames.joinToString(", ")}")
+                if (isBlocking) {
+                    add(
+                        blockingAttackerNames
+                            .takeIf { it.isNotEmpty() }
+                            ?.let { "$BLOCKING_MARK ${it.joinToString(", ")}" }
+                            ?: BLOCKING_MARK,
+                    )
+                }
+            }.joinToString(" · ").ifBlank { null }
 }
 
 /** One card in the viewer's hand (`GameState.hand`). */
@@ -455,10 +488,67 @@ data class CounterUi(
 /** The name shown for a card the viewer is not entitled to identify. */
 const val FACE_DOWN_NAME: String = "Face-down"
 
+/**
+ * The current combat, indexed by permanent — the one place `GameState.combat` is read.
+ *
+ * `CombatGroup` is **per-attacker** (§7.3, measured live: two attackers produced two groups, each with
+ * `attackers=1` and the defender repeated), so "what is this permanent doing" is a lookup across groups
+ * rather than a field on one. Building it once per snapshot keeps that out of the per-permanent path and
+ * out of the composables entirely.
+ *
+ * Empty outside combat, which is most of the game (verified live).
+ */
+private class CombatView(
+    val attackerIds: Set<String>,
+    val blockerIds: Set<String>,
+    private val defenderOfAttacker: Map<String, String>,
+    private val blockersOfAttacker: Map<String, List<String>>,
+    private val attackersOfBlocker: Map<String, List<String>>,
+) {
+    fun defenderFor(id: String): String? = defenderOfAttacker[id]
+
+    fun blockersOf(id: String): List<String> = blockersOfAttacker[id].orEmpty()
+
+    fun attackersBlockedBy(id: String): List<String> = attackersOfBlocker[id].orEmpty()
+
+    companion object {
+        val Empty = CombatView(emptySet(), emptySet(), emptyMap(), emptyMap(), emptyMap())
+
+        fun of(state: GameState): CombatView {
+            if (state.combat.isEmpty()) return Empty
+            // The server's own names for what is on the battlefields; a permanent the snapshot does not
+            // draw simply contributes no name, and the sentence is shorter rather than wrong.
+            val names = state.players.flatMap { it.battlefield }.associate { it.card.id to it.card.name }
+            val defenderOfAttacker = LinkedHashMap<String, String>()
+            val blockersOfAttacker = LinkedHashMap<String, MutableList<String>>()
+            val attackersOfBlocker = LinkedHashMap<String, MutableList<String>>()
+            state.combat.forEach { group ->
+                val blockerNames = group.blockerIds.mapNotNull { names[it] }
+                group.attackerIds.forEach { attacker ->
+                    // The defender's own name: a player, a planeswalker or a battle. Never worked out
+                    // from the seats — assuming "attack = the opposing player" is wrong even in 1v1.
+                    group.defenderName?.let { defenderOfAttacker.putIfAbsent(attacker, it) }
+                    if (blockerNames.isNotEmpty()) blockersOfAttacker.getOrPut(attacker) { mutableListOf() } += blockerNames
+                }
+                val attackerNames = group.attackerIds.mapNotNull { names[it] }
+                group.blockerIds.forEach { blocker ->
+                    if (attackerNames.isNotEmpty()) attackersOfBlocker.getOrPut(blocker) { mutableListOf() } += attackerNames
+                }
+            }
+            return CombatView(
+                attackerIds = state.combat.flatMap(CombatGroup::attackerIds).toSet(),
+                blockerIds = state.combat.flatMap(CombatGroup::blockerIds).toSet(),
+                defenderOfAttacker = defenderOfAttacker,
+                blockersOfAttacker = blockersOfAttacker,
+                attackersOfBlocker = attackersOfBlocker,
+            )
+        }
+    }
+}
+
 private fun GamePlayer.toSeatUi(
     playableIds: Set<String>,
-    attackerIds: Set<String>,
-    blockerIds: Set<String>,
+    combat: CombatView,
 ): SeatUi =
     SeatUi(
         playerId = playerId,
@@ -476,13 +566,12 @@ private fun GamePlayer.toSeatUi(
         hasPriority = hasPriority,
         isHuman = isHuman,
         hasLeft = hasLeft,
-        battlefield = battlefield.map { it.toPermanentUi(playableIds, attackerIds, blockerIds) },
+        battlefield = battlefield.map { it.toPermanentUi(playableIds, combat) },
     )
 
 private fun GamePermanent.toPermanentUi(
     playableIds: Set<String>,
-    attackerIds: Set<String>,
-    blockerIds: Set<String>,
+    combat: CombatView,
 ): PermanentUi =
     PermanentUi(
         objectId = card.id,
@@ -490,9 +579,12 @@ private fun GamePermanent.toPermanentUi(
         isTapped = isTapped,
         hasSummoningSickness = hasSummoningSickness,
         damage = damage,
-        isAttacking = card.id in attackerIds,
-        isBlocking = card.id in blockerIds,
+        isAttacking = card.id in combat.attackerIds,
+        isBlocking = card.id in combat.blockerIds,
         isOfferedByServer = card.id in playableIds,
+        attackingDefenderName = combat.defenderFor(card.id),
+        blockedByNames = combat.blockersOf(card.id),
+        blockingAttackerNames = combat.attackersBlockedBy(card.id),
     )
 
 internal fun GameCard.toCardUi(): CardUi {

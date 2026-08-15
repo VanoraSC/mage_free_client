@@ -90,6 +90,7 @@ internal val CandidateCardWidth: Dp = 72.dp
 internal fun FloatingControls(
     controls: PromptControlsUi?,
     cast: CastUi?,
+    declaration: DeclarationUi?,
     actionError: String?,
     artRenderer: CardArtRenderer,
     onAction: (BoardAction) -> Unit,
@@ -144,6 +145,10 @@ internal fun FloatingControls(
             // §6.4: the spell does not vanish behind each new question.
             cast?.let { CastContext(cast = it) }
 
+            // …and the same for a declaration: which of combat's two roles this is, and — while the
+            // server is asking a pairing question — which creature it is asking about (§7.4/§7.5).
+            declaration?.let { DeclarationContext(declaration = it) }
+
             controls?.message?.let { message ->
                 Text(
                     text = message,
@@ -170,6 +175,14 @@ internal fun FloatingControls(
                     } else {
                         Note(text = TAP_TO_PLAY_NOTE)
                     }
+
+                // One role's instruction, never both (§7.4): the note comes off the role the *server*
+                // put the board in, so there is no state here that can drift out of step with it. A
+                // declaration with nothing in it is a real state — upstream sends `Select attackers`
+                // even when no creature can attack — and it says so rather than showing an instruction
+                // the player cannot follow.
+                is PromptControlsUi.Declaration ->
+                    Note(text = if (controls.pickableObjectIds.isEmpty()) NOTHING_TO_DECLARE_NOTE else controls.role.note())
 
                 is PromptControlsUi.Targeting -> Note(text = TAP_TO_TARGET_NOTE)
                 is PromptControlsUi.Mana ->
@@ -201,7 +214,7 @@ internal fun FloatingControls(
                 ) {
                     buttons.forEach { button ->
                         key(button.label) {
-                            ControlButtonUi(button = button, onAction = onAction)
+                            ControlButtonUi(button = button, promptKey = controls?.message.orEmpty(), onAction = onAction)
                         }
                     }
                 }
@@ -260,6 +273,39 @@ private fun CastContext(cast: CastUi) {
     }
 }
 
+/**
+ * The declaration in flight (story 0061): which of combat's two roles the board is in, and — while the
+ * server is asking a **pairing** question — which creature that question is about.
+ *
+ * The second line exists because the server's own prose does not say. `Select attacker to block` names
+ * no blocker, and `TargetDefender`'s prompt names no attacker: without this the player is asked to pick
+ * something with no statement of what they are picking *for*. The board adds only the creature's name,
+ * which it knows because it is the creature the player just tapped — it never decides that a question
+ * should be asked, and never answers one on the player's behalf.
+ */
+@Composable
+private fun DeclarationContext(declaration: DeclarationUi) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = declaration.role.title(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        declaration.pairingLine?.let { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
 /** One instruction line inside the panel — how to answer a prompt that is answered on the board. */
 @Composable
 private fun Note(text: String) {
@@ -272,15 +318,43 @@ private fun Note(text: String) {
     )
 }
 
+/**
+ * One button in the panel — and, for a button that carries a [ControlButton.confirmLabel], §16.4's
+ * confirm step.
+ *
+ * The armed flag is **view state and nothing else**: arming sends nothing, so a player who arms "All
+ * attack" and then taps a creature instead has not told the server anything. It is keyed on the prompt
+ * (and on the button's own label), so a new question can never inherit the previous one's armed button —
+ * the failure that would turn a confirmation into a mis-tap that commits the whole team.
+ *
+ * The same two-tap idiom as the board menu's concede/quit, for the same reason: what it commits cannot be
+ * taken back.
+ */
 @Composable
 private fun ControlButtonUi(
     button: ControlButton,
+    promptKey: String,
     onAction: (BoardAction) -> Unit,
 ) {
-    if (button.isPrimary) {
-        Button(onClick = { onAction(button.action) }) { Text(text = button.label, maxLines = 1) }
+    val confirmLabel = button.confirmLabel
+    if (confirmLabel == null) {
+        if (button.isPrimary) {
+            Button(onClick = { onAction(button.action) }) { Text(text = button.label, maxLines = 1) }
+        } else {
+            OutlinedButton(onClick = { onAction(button.action) }) { Text(text = button.label, maxLines = 1) }
+        }
+        return
+    }
+    var armed by rememberSaveable(promptKey, button.label) { mutableStateOf(false) }
+    if (armed) {
+        Button(
+            onClick = {
+                armed = false
+                onAction(button.action)
+            },
+        ) { Text(text = confirmLabel, maxLines = 1) }
     } else {
-        OutlinedButton(onClick = { onAction(button.action) }) { Text(text = button.label, maxLines = 1) }
+        OutlinedButton(onClick = { armed = true }) { Text(text = button.label, maxLines = 1) }
     }
 }
 
@@ -642,3 +716,13 @@ internal const val TAP_FOR_MANA_NOTE: String = "Tap your own highlighted sources
 internal const val NO_MANA_SOURCE_NOTE: String = "The server offers no source to tap — you can still cancel."
 
 internal const val UNANSWERABLE_NOTE: String = "Nothing to press: this one can't be answered by this version."
+
+/**
+ * What a declaration says when the server named no creature at all.
+ *
+ * Not a corner case: upstream's `selectAttackers` builds `possibleAttackers` from the creatures that
+ * pass `canAttack`, puts it in the options **whether or not it is empty**, and can still prompt — so a
+ * player with only summoning-sick creatures gets a declare-attackers prompt with nothing in it. The
+ * board says so and offers the *done*, rather than an instruction to tap something that is not there.
+ */
+internal const val NOTHING_TO_DECLARE_NOTE: String = "The server names no creature to declare — you can still finish the step."

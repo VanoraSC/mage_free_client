@@ -222,3 +222,66 @@ const val UNNAMED_CANDIDATE_LABEL: String = "Choice"
 
 /** Marks the viewer's own seat in a list of candidates, so "choose a player" is not a guess. */
 const val YOU_SUFFIX: String = " (you)"
+
+// ---- story 0061: combat, the two declarations (§7.4) ----------------------------------------------
+//
+// Every string here belongs to exactly one of the two roles. Combat is **two** assignment problems that
+// never belong to the same player at the same moment (§7.4), so the board never has to phrase a
+// sentence that covers both — and a shared word here would be the first step towards a control that
+// offers both at once.
+
+/** What a tap on an offered creature is called, per role, on the raised card's own button. */
+const val DECLARE_ATTACKER_ACTION_LABEL: String = "Declare as attacker"
+
+const val DECLARE_BLOCKER_ACTION_LABEL: String = "Declare as blocker"
+
+/**
+ * The *done* that ends a declaration.
+ *
+ * It is `cancelPrompt` on the wire — upstream's shared "done / cancel" arm, the same message targeting's
+ * own done sends (§17.2) and the same one the probes used to close a declaration. It is deliberately not
+ * called *pass*: a declaration is not a priority window, and "Pass priority" on it would be a lie about
+ * what the button does.
+ */
+const val DONE_DECLARING_ATTACKERS_LABEL: String = "Done declaring attackers"
+
+const val DONE_DECLARING_BLOCKERS_LABEL: String = "Done declaring blockers"
+
+/**
+ * The server's own shortcut, and its confirmation.
+ *
+ * `ALL_ATTACK_LABEL` is only ever a **fallback**: the label rendered is the server's own
+ * `specialButton` text where it sent one (it sends "All attack"). The confirm step is §16.4's, applied
+ * here because the shortcut commits the entire team in one press — and because `selectDefenderForAllAttack`
+ * shows it is not "attack the face": with more than one legal defender the server still asks, once,
+ * which one.
+ */
+const val ALL_ATTACK_LABEL: String = "All attack"
+
+const val ALL_ATTACK_CONFIRM_LABEL: String = "Attack with everything — confirm"
+
+/** How each declaration explains itself. One of these is on screen; never both (§7.4). */
+const val DECLARE_ATTACKERS_NOTE: String = "Tap each creature you want to attack with."
+
+const val DECLARE_BLOCKERS_NOTE: String = "Tap each creature you want to block with."
+
+/**
+ * What the panel says while the server is asking a **pairing** question in the middle of a declaration.
+ *
+ * The board does not decide when this is asked — upstream does, and only when the choice is real:
+ * `selectDefender` assigns silently when there is exactly one legal defender, and `selectBlockers`
+ * assigns silently when the blocker could only block one attacker (§7.5). These lines only say *which
+ * creature* the question is about, which the server's own prose does not.
+ */
+const val PAIRING_DEFENDER_PREFIX: String = "Attacking with"
+
+const val PAIRING_DEFENDER_QUESTION: String = "— choose what it attacks"
+
+const val PAIRING_BLOCKER_PREFIX: String = "Blocking with"
+
+const val PAIRING_BLOCKER_QUESTION: String = "— choose which attacker it blocks"
+
+/** The role headline on the floating panel, so which of the two problems this is, is never in doubt. */
+const val DECLARING_ATTACKERS_TITLE: String = "Declaring attackers"
+
+const val DECLARING_BLOCKERS_TITLE: String = "Declaring blockers"

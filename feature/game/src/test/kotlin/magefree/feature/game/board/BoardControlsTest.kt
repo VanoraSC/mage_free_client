@@ -10,6 +10,7 @@ import magefree.network.game.GameState
 import magefree.network.game.ManaPool
 import magefree.network.game.ManaType
 import magefree.network.game.MultiAmountEntry
+import magefree.network.game.PhaseStep
 import magefree.network.game.PlayableObject
 import magefree.network.game.PromptOptions
 import org.junit.Assert.assertEquals
@@ -176,6 +177,192 @@ class BoardControlsTest {
             listOf(DONE_LABEL),
             controlsFor(stateWithBoardCards().copy(prompt = required), hasPickedTarget = true)!!.buttons.map { it.label },
         )
+    }
+
+    // ---- combat: declaring attackers and blockers (story 0061) --------------------------------------
+    //
+    // Reachability (standard 2): every id these gate on is produced by the server's own
+    // `GamePrompt.Select` during `DeclareAttackers`/`DeclareBlockers` — `possibleAttackers` and
+    // `possibleBlockers` in `PromptOptions.ids`, measured live and recorded in requirements §7.2/§7.3.
+    // They travel the bridge's generic `optionsView()` (any collection-valued option becomes an id
+    // list), so nothing in `:protocol` or `:bridge` is specific to combat.
+    //
+    // **Every fixture here has `playable` empty**, because that is how the server really sends a
+    // declaration (§7.2: `playable = 0`). A fixture whose creatures also appeared in `playable` would
+    // pass against the projection that reads `playable`, and would prove nothing.
+
+    @Test
+    fun `a declaration offers the attackers the server named, with playable empty`() {
+        val controls = controlsFor(declareAttackersState())!!
+
+        assertEquals(
+            "the attackers come from possibleAttackers; playable is empty during a declaration",
+            setOf("y-1", "y-2"),
+            controls.pickableObjectIds,
+        )
+        assertEquals(BoardAction.ChooseTarget("y-1"), controls.actionFor("y-1"))
+        assertEquals(BoardAction.ChooseTarget("y-2"), controls.actionFor("y-2"))
+        assertNull("nothing the server did not offer may be declared", controls.actionFor("o-1"))
+
+        assertTrue("a declaration is its own projection, not a priority window", controls is PromptControlsUi.Declaration)
+        assertEquals(CombatRole.Attacking, (controls as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_ATTACKER_ACTION_LABEL, controls.actionLabelFor("y-1"))
+    }
+
+    @Test
+    fun `a declaration offers the blockers the server named, with playable empty`() {
+        val controls = controlsFor(declareBlockersState())!!
+
+        assertEquals(setOf("y-1", "y-2"), controls.pickableObjectIds)
+        assertEquals(BoardAction.ChooseTarget("y-1"), controls.actionFor("y-1"))
+        assertEquals(CombatRole.Blocking, (controls as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_BLOCKER_ACTION_LABEL, controls.actionLabelFor("y-1"))
+    }
+
+    @Test
+    fun `a declaration ends with a done that declines the prompt, never a pass`() {
+        // Upstream's *done* for a declaration is the same `false` arm targeting uses (`cancelPrompt`).
+        // "Pass priority" would be the wrong word for it and the wrong button on this prompt.
+        val controls = controlsFor(declareAttackersState())!!
+
+        assertTrue(controls.buttons.any { it.action == BoardAction.FinishTargeting })
+        assertFalse("a declaration is not a priority window", controls.buttons.any { it.action == BoardAction.PassPriority })
+    }
+
+    @Test
+    fun `blocking is never offered while attackers are being declared, nor the other way round`() {
+        // §7.4 (Pete): combat is two assignment problems that never belong to the same player at the
+        // same moment. The board must be in exactly one of them.
+        val attacking = controlsFor(declareAttackersState())!!
+        assertEquals("Select attackers", attacking.message)
+        assertEquals(setOf("y-1", "y-2"), attacking.pickableObjectIds)
+        assertEquals(CombatRole.Attacking, (attacking as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_ATTACKERS_NOTE, attacking.role.note())
+
+        val blocking = controlsFor(declareBlockersState())!!
+        assertEquals("Select blockers", blocking.message)
+        assertEquals(setOf("y-1", "y-2"), blocking.pickableObjectIds)
+        assertEquals(CombatRole.Blocking, (blocking as PromptControlsUi.Declaration).role)
+        assertEquals(DECLARE_BLOCKERS_NOTE, blocking.role.note())
+
+        // …and even if both keys arrived together — which the server never does — only one role's
+        // creatures are offered, never the union.
+        val both =
+            controlsFor(
+                declareAttackersState().copy(
+                    prompt =
+                        GamePrompt.Select(
+                            message = "Select attackers",
+                            options =
+                                PromptOptions(
+                                    ids =
+                                        mapOf(
+                                            PromptOptions.POSSIBLE_ATTACKERS to listOf("y-1"),
+                                            PromptOptions.POSSIBLE_BLOCKERS to listOf("y-2"),
+                                        ),
+                                ),
+                        ),
+                ),
+            )!!
+        assertEquals(setOf("y-1"), both.pickableObjectIds)
+    }
+
+    @Test
+    fun `all attack is offered only when the server sent it, and never for blocking`() {
+        // The server supplies the shortcut for attacking (§7.2) and none for blocking (§7.3). Inventing
+        // an "all block" would be inventing a reply the server has no arm for.
+        val attacking = controlsFor(declareAttackersState())!!
+        val allAttack = attacking.buttons.single { it.action == BoardAction.UseSpecial }
+        assertEquals("the label is the server's own specialButton text", "All attack", allAttack.label)
+        assertEquals(
+            "committing the whole team confirms first (§16.4)",
+            ALL_ATTACK_CONFIRM_LABEL,
+            allAttack.confirmLabel,
+        )
+        assertTrue(
+            "nothing else in a declaration confirms — a single creature is one tap",
+            attacking.buttons.filter { it.confirmLabel != null }.map { it.action } == listOf(BoardAction.UseSpecial),
+        )
+
+        val blocking = controlsFor(declareBlockersState())!!
+        assertFalse("there is no all-block", blocking.buttons.any { it.action == BoardAction.UseSpecial })
+
+        val noShortcut =
+            controlsFor(
+                declareAttackersState().copy(
+                    prompt =
+                        GamePrompt.Select(
+                            message = "Select attackers",
+                            options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to listOf("y-1"))),
+                        ),
+                ),
+            )!!
+        assertFalse(
+            "no special button means no shortcut, whatever the step",
+            noShortcut.buttons.any { it.action == BoardAction.UseSpecial },
+        )
+    }
+
+    @Test
+    fun `the pairing question the server asks mid-declaration is an ordinary target prompt`() {
+        // Both follow-ups — `TargetDefender` and `Select attacker to block` — arrive through
+        // `fireSelectTargetEvent` as `GAME_TARGET` (§7.5), which 0057 already answers with
+        // `chooseTarget`. Nothing here decides *when* the server asks.
+        val controls =
+            controlsFor(
+                declareAttackersState().copy(
+                    prompt =
+                        GamePrompt.Target(
+                            message = "Select attacker to block",
+                            targetIds = listOf("o-1", "o-2"),
+                            isRequired = true,
+                        ),
+                ),
+            )!!
+
+        assertTrue(controls is PromptControlsUi.Targeting)
+        assertEquals(setOf("o-1", "o-2"), controls.pickableObjectIds)
+        assertEquals(BoardAction.ChooseTarget("o-1"), controls.actionFor("o-1"))
+    }
+
+    @Test
+    fun `a declaration with no eligible creature is still a declaration, not a priority window`() {
+        // Read out of `HumanPlayer.selectAttackers`: `possibleAttackers` goes into the options
+        // **unconditionally**, and the prompt can still be fired — a player whose creatures all fail
+        // `canAttack` gets `Select attackers` with an empty list. Projecting that as priority would put
+        // a "Pass priority" button on a prompt that is not a priority window.
+        val controls =
+            controlsFor(
+                declareAttackersState().copy(
+                    prompt =
+                        GamePrompt.Select(
+                            message = "Select attackers",
+                            options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to emptyList())),
+                        ),
+                ),
+            )!!
+
+        assertTrue(controls is PromptControlsUi.Declaration)
+        assertEquals(CombatRole.Attacking, (controls as PromptControlsUi.Declaration).role)
+        assertEquals(emptySet<String>(), controls.pickableObjectIds)
+        assertEquals(listOf(BoardAction.FinishTargeting), controls.buttons.map { it.action })
+        assertFalse("still not a priority window", controls.buttons.any { it.action == BoardAction.PassPriority })
+    }
+
+    @Test
+    fun `a select with no combat options is still the ordinary priority window`() {
+        // The guard in the other direction: a declaration is distinguished by its options, not by its
+        // type, so an ordinary `Select` must not be mistaken for one.
+        val controls =
+            controlsFor(
+                declareAttackersState().copy(
+                    prompt = GamePrompt.Select(message = "Play spells and abilities"),
+                    playable = listOf(PlayableObject("y-1")),
+                ),
+            )!!
+
+        assertTrue(controls is PromptControlsUi.Priority)
+        assertEquals(BoardAction.PlayObject("y-1"), controls.actionFor("y-1"))
     }
 
     // ---- candidates that are not cards --------------------------------------------------------------
@@ -535,6 +722,60 @@ class BoardControlsTest {
                 },
         )
     }
+
+    /**
+     * A declaration exactly as the server sends one (§7.2/§7.3): two creatures of the viewer's own on
+     * the battlefield, two of the opponent's, the ids in the prompt's **options** — and **`playable`
+     * empty**, which is the fact the whole story turns on.
+     */
+    private fun declarationState(
+        message: String,
+        idsKey: String,
+        options: PromptOptions,
+    ): GameState {
+        val base = baseState()
+        return base.copy(
+            step = if (idsKey == PromptOptions.POSSIBLE_ATTACKERS) PhaseStep.DeclareAttackers else PhaseStep.DeclareBlockers,
+            players =
+                base.players.map { player ->
+                    if (player.isViewer) {
+                        player.copy(battlefield = listOf(creature("y-1", "Goblin Token"), creature("y-2", "Goblin Token")))
+                    } else {
+                        player.copy(battlefield = listOf(creature("o-1", "Grizzly Bears"), creature("o-2", "Grizzly Bears")))
+                    }
+                },
+            // The server sends nothing playable during a declaration; the creatures come only from the
+            // options. Stated here rather than left to the default, because it is the point.
+            playable = emptyList(),
+            prompt = GamePrompt.Select(message = message, options = options),
+        )
+    }
+
+    private fun declareAttackersState() =
+        declarationState(
+            message = "Select attackers",
+            idsKey = PromptOptions.POSSIBLE_ATTACKERS,
+            options =
+                PromptOptions(
+                    text = mapOf(PromptOptions.SPECIAL_BUTTON to "All attack"),
+                    ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to listOf("y-1", "y-2")),
+                ),
+        )
+
+    private fun declareBlockersState() =
+        declarationState(
+            message = "Select blockers",
+            idsKey = PromptOptions.POSSIBLE_BLOCKERS,
+            // No special button: blocking has no shortcut (§7.3).
+            options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-1", "y-2"))),
+        )
+
+    private fun creature(
+        id: String,
+        name: String,
+    ) = GamePermanent(
+        card = GameCard(id = id, name = name, power = "1", toughness = "1", isCreature = true),
+    )
 
     private fun baseState(pool: ManaPool = ManaPool()) =
         GameState(

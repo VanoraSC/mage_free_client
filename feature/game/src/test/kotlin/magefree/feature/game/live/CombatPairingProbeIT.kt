@@ -2,7 +2,6 @@ package magefree.feature.game.live
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -132,7 +131,10 @@ class CombatPairingProbeIT {
                         launch {
                             session.games
                                 .observeGame(starting.gameId, GameState(starting.gameId))
-                                .collect { states[who] = it; report(who, it) }
+                                .collect {
+                                    states[who] = it
+                                    report(who, it)
+                                }
                         }
                     session.games.joinGame(starting.gameId).getOrThrow()
                     jobs += launch { drive(who, session.games, starting.gameId) }
@@ -212,8 +214,15 @@ class CombatPairingProbeIT {
         ids: List<String>,
     ): List<String> =
         ids.map { id ->
-            state.players.flatMap { it.battlefield }.firstOrNull { it.card.id == id }?.card?.name
-                ?: state.players.firstOrNull { it.playerId == id }?.name?.let { "PLAYER:$it" }
+            state.players
+                .flatMap { it.battlefield }
+                .firstOrNull { it.card.id == id }
+                ?.card
+                ?.name
+                ?: state.players
+                    .firstOrNull { it.playerId == id }
+                    ?.name
+                    ?.let { "PLAYER:$it" }
                 ?: id.take(8)
         }
 
@@ -243,7 +252,11 @@ class CombatPairingProbeIT {
                     val attackers = prompt.options.possibleAttackers
                     val blockers = prompt.options.possibleBlockers
                     // Lands before spells, or the seat strands itself mid-payment (§7.6).
-                    val landIds = state.hand.filter { it.manaCost == null }.map { it.id }.toSet()
+                    val landIds =
+                        state.hand
+                            .filter { it.manaCost == null }
+                            .map { it.id }
+                            .toSet()
                     val land = state.playable.firstOrNull { it.objectId in landIds }
                     when {
                         // **One pick, then stop and watch.** Picking everything at once would answer
@@ -301,7 +314,12 @@ class CombatPairingProbeIT {
     private fun say(line: String) = println("[pairing-probe] $line")
 
     private fun username(prefix: String) =
-        prefix + "_" + UUID.randomUUID().toString().filter { it != '-' }.take(6)
+        prefix + "_" +
+            UUID
+                .randomUUID()
+                .toString()
+                .filter { it != '-' }
+                .take(6)
 
     private class LiveSession(
         private val scope: CoroutineScope,
@@ -337,7 +355,12 @@ class CombatPairingProbeIT {
     private fun requireBridge(): ServerTarget {
         val raw = System.getenv(BRIDGE_URL_ENV)
         Assume.assumeTrue("$BRIDGE_URL_ENV is not set; skipping the pairing probe", !raw.isNullOrBlank())
-        val authority = raw!!.trim().trimEnd('/').removePrefix("wss://").removePrefix("ws://")
+        val authority =
+            raw!!
+                .trim()
+                .trimEnd('/')
+                .removePrefix("wss://")
+                .removePrefix("ws://")
         val separator = authority.lastIndexOf(':')
         return ServerTarget(
             host = authority.substring(0, separator),

@@ -19,6 +19,7 @@ import magefree.network.game.GameState
 import magefree.network.game.ManaPool
 import magefree.network.game.ManaType
 import magefree.network.game.MultiAmountEntry
+import magefree.network.game.PhaseStep
 import magefree.network.game.PlayableObject
 import magefree.network.game.PromptOptions
 import org.junit.After
@@ -670,6 +671,121 @@ class GameBoardViewModelTest {
             assertEquals(listOf("choice:$GAME_ID:R:false", "choice:$GAME_ID:R:true"), client.calls)
         }
 
+    // ---- combat: declaring, and the pairing question that may follow (story 0061) -------------------
+
+    @Test
+    fun `a declaration is answered from the prompt's own ids, with playable empty`() =
+        runTest {
+            // The whole defect in one assertion: with `playable` empty — which is how the server really
+            // sends a declaration (§7.2) — the controls still offer the creatures, and a tap on one is a
+            // `chooseTarget`.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(declareAttackersState())
+            client.calls.clear()
+
+            val controls = viewModel.uiState.value.controls
+            assertTrue(controls is PromptControlsUi.Declaration)
+            assertEquals(setOf("y-1"), controls!!.pickableObjectIds)
+            assertEquals(CombatRole.Attacking, (controls as PromptControlsUi.Declaration).role)
+
+            viewModel.act(controls.actionFor("y-1")!!)
+            assertEquals(listOf("target:$GAME_ID:y-1"), client.calls)
+        }
+
+    @Test
+    fun `the panel says which role the board is in, and stops saying it when the step ends`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+
+            client.emitGameState(declareAttackersState())
+            assertEquals(DeclarationUi(role = CombatRole.Attacking), viewModel.uiState.value.declaration)
+
+            client.emitGameState(declareBlockersState())
+            assertEquals(
+                "the two roles never coexist — the later snapshot replaces the earlier role outright",
+                DeclarationUi(role = CombatRole.Blocking),
+                viewModel.uiState.value.declaration,
+            )
+
+            client.emitGameState(selectState())
+            assertNull("an ordinary priority window is not a declaration", viewModel.uiState.value.declaration)
+        }
+
+    @Test
+    fun `a pairing question is answerable, and says which creature it is about`() =
+        runTest {
+            // Upstream asks this only when the choice is real: `selectDefender` assigns silently with one
+            // legal defender, `selectBlockers` with one blockable attacker (§7.5). It arrives as an
+            // ordinary `GAME_TARGET`, which 0057 already answers — so what 0061 adds is only the
+            // sentence saying *which* creature the question is about.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(declareAttackersState())
+            viewModel.act(BoardAction.ChooseTarget("y-1"))
+            client.calls.clear()
+
+            client.emitGameState(
+                declareAttackersState().copy(
+                    prompt =
+                        GamePrompt.Target(
+                            message = "Select a defender",
+                            targetIds = listOf("p-opp", "pw-1"),
+                            isRequired = true,
+                        ),
+                ),
+            )
+
+            val state = viewModel.uiState.value
+            assertEquals(DeclarationUi(role = CombatRole.Attacking, pairingCreatureName = "Goblin Token"), state.declaration)
+            assertEquals("Attacking with Goblin Token — choose what it attacks", state.declaration?.pairingLine)
+            // …and it is answered exactly like any other target.
+            assertEquals(setOf("p-opp", "pw-1"), state.controls!!.pickableObjectIds)
+            viewModel.act(state.controls!!.actionFor("pw-1")!!)
+            assertEquals(listOf("target:$GAME_ID:pw-1"), client.calls)
+        }
+
+    @Test
+    fun `an ordinary target prompt never inherits a combat context`() =
+        runTest {
+            // The mirror of the test above: a target pick outside a declaration must not leave a
+            // creature name behind for the next combat, and a target prompt with no declaration in
+            // flight is not a pairing question.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(targetPromptState(candidates = listOf("o-1")))
+            viewModel.act(BoardAction.ChooseTarget("o-1"))
+
+            assertNull(viewModel.uiState.value.declaration)
+
+            client.emitGameState(targetPromptState(candidates = listOf("y-1")))
+            assertNull("no declaration is in flight, so this is not a pairing question", viewModel.uiState.value.declaration)
+        }
+
+    @Test
+    fun `closing a declaration sends the server's own done, not a pass`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(declareAttackersState())
+            client.calls.clear()
+
+            val done =
+                viewModel.uiState.value.controls!!
+                    .buttons
+                    .single { it.action == BoardAction.FinishTargeting }
+            assertEquals(DONE_DECLARING_ATTACKERS_LABEL, done.label)
+            viewModel.act(done.action)
+
+            assertEquals(listOf("cancel:$GAME_ID"), client.calls)
+        }
+
     // ---- fixtures ----------------------------------------------------------------------------------
 
     private fun viewModel(
@@ -713,6 +829,47 @@ class GameBoardViewModelTest {
             viewerHasPriority = true,
             playable = listOf(PlayableObject("h-1"), PlayableObject("y-1")),
             prompt = GamePrompt.Select(message = "Select an ability to play"),
+        )
+
+    /**
+     * A declaration exactly as the server sends one (§7.2): the creature in `possibleAttackers`, and
+     * **`playable` empty**. The viewer's seat carries a Goblin Token at `y-1` so the pairing context has
+     * a name to report.
+     */
+    private fun declareAttackersState() =
+        dealtState().copy(
+            step = PhaseStep.DeclareAttackers,
+            playable = emptyList(),
+            players =
+                dealtState().players.map { player ->
+                    if (player.isViewer) {
+                        player.copy(
+                            battlefield = listOf(GamePermanent(card = GameCard(id = "y-1", name = "Goblin Token", isCreature = true))),
+                        )
+                    } else {
+                        player
+                    }
+                },
+            prompt =
+                GamePrompt.Select(
+                    message = "Select attackers",
+                    options =
+                        PromptOptions(
+                            text = mapOf(PromptOptions.SPECIAL_BUTTON to "All attack"),
+                            ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to listOf("y-1")),
+                        ),
+                ),
+        )
+
+    /** The blocking half (§7.3): `possibleBlockers`, and no shortcut. */
+    private fun declareBlockersState() =
+        declareAttackersState().copy(
+            step = PhaseStep.DeclareBlockers,
+            prompt =
+                GamePrompt.Select(
+                    message = "Select blockers",
+                    options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-1"))),
+                ),
         )
 
     /** A target prompt offering [candidates], as the server sends them. */

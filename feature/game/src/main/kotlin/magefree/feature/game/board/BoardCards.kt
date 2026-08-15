@@ -180,8 +180,6 @@ internal fun PermanentCard(
                 if (permanent.isTapped) add(TAPPED_MARK)
                 // …and summoning sickness only where it means something (see [PermanentUi]).
                 if (permanent.showsSummoningSickness) add(SUMMONING_SICK_MARK)
-                if (permanent.isAttacking) add(ATTACKING_MARK)
-                if (permanent.isBlocking) add(BLOCKING_MARK)
                 if (permanent.damage > 0) add("$DAMAGE_MARK ${permanent.damage}")
             }
         if (marks.isNotEmpty()) {
@@ -190,6 +188,19 @@ internal fun PermanentCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // Combat gets its **own** line rather than a word on the marks line above, and in the accent
+        // colour: on a real board the fight is what the player is reading, and "Attacking Computer ·
+        // Blocked by Grizzly Bears" is the sentence they need — which would be the first thing
+        // ellipsised away if it shared one line with power/toughness and tapped-ness.
+        permanent.combatSummary?.let { summary ->
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = COMBAT_SUMMARY_LINES,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -316,6 +327,9 @@ private val SELECTED_BORDER: Dp = 3.dp
 /** How far a tapped permanent turns. */
 private const val TAPPED_ROTATION = 90f
 
+/** How many lines the combat sentence gets — two, because a double block names two creatures. */
+private const val COMBAT_SUMMARY_LINES = 2
+
 /** The battlefield marks, shared with the tests so both agree on the wording. */
 internal const val TAPPED_MARK: String = "Tapped"
 
@@ -324,5 +338,8 @@ internal const val SUMMONING_SICK_MARK: String = "Summoning sick"
 internal const val ATTACKING_MARK: String = "Attacking"
 
 internal const val BLOCKING_MARK: String = "Blocking"
+
+/** What an attacker says about the creatures blocking it — the other half of a legible combat (0061). */
+internal const val BLOCKED_BY_MARK: String = "Blocked by"
 
 internal const val DAMAGE_MARK: String = "Damage"

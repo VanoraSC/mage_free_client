@@ -4,6 +4,7 @@ import magefree.network.game.GameCard
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
 import magefree.network.game.ManaType
+import magefree.network.game.PromptOptions
 
 /*
  * The **answering** half of the board (story 0057): a pure projection of the server's outstanding
@@ -22,6 +23,9 @@ import magefree.network.game.ManaType
  * | whether a *special* button exists | `PromptOptions.specialButtonText` (upstream `specialButton`) — the server telling us the button is valid |
  * | which board objects may be **played** | `GameState.playable` (upstream `GameView.canPlayObjects`) |
  * | which board objects may be **targeted** | the prompt's own `targetIds` + `PromptOptions.possibleTargets` |
+ * | which creatures may be **declared as attackers** | `PromptOptions.possibleAttackers` on the server's `Select` during `DeclareAttackers` (upstream `possibleAttackers`) — **not** `playable`, which is empty there |
+ * | which creatures may be **declared as blockers** | `PromptOptions.possibleBlockers` on the server's `Select` during `DeclareBlockers` — likewise not `playable` |
+ * | which of combat's two roles the board is in | which of those two keys the server sent ([CombatRole.of]) |
  * | which targets are already chosen | `PromptOptions.chosenTargets` |
  * | candidate cards not on the board (scry, piles) | the prompt's own `cards` / `pile1` / `pile2` |
  * | which mana types may be unlocked | the viewer's own `GamePlayer.manaPool` |
@@ -75,6 +79,10 @@ sealed interface BoardAction {
     /**
      * The player's confirmation that they are done choosing targets — the final *done*
      * (`SendPlayerBoolean(false)`), which §17.2 shows is legitimate once `min` is satisfied.
+     *
+     * It closes a **combat declaration** too (story 0061): upstream ends `Select attackers` /
+     * `Select blockers` with the same shared "done / cancel" arm, and both probes closed a declaration
+     * with exactly this message. The label differs per role; the action does not.
      *
      * The same wire message as [CancelPrompt], and a **different action** on purpose: they mean opposite
      * things to the player, the board labels them differently, and a reader of [GameBoardViewModel.act]
@@ -142,12 +150,101 @@ sealed interface BoardAction {
     data object QuitMatch : BoardAction
 }
 
-/** One floating button: what it says, what it sends, and how prominent it is. */
+/**
+ * One floating button: what it says, what it sends, and how prominent it is.
+ *
+ * @property confirmLabel when non-null, the button **arms** on the first press and sends only on the
+ *   second, which presses [confirmLabel] instead. §16.4's confirm-before-submit, applied to the buttons
+ *   that commit something in one press rather than to every button. Its state belongs to the control
+ *   (nothing is held back from the server; nothing has been sent yet either), so an armed button that
+ *   is never pressed again simply does nothing.
+ */
 data class ControlButton(
     val label: String,
     val action: BoardAction,
     val isPrimary: Boolean = false,
+    val confirmLabel: String? = null,
 )
+
+/**
+ * Which half of combat the board is in — **never both** (§7.4, Pete).
+ *
+ * > *"the attacking player assigns attackers to targets, player or battle or Planeswalker, etc. the
+ * > blocker assigns blockers to attackers. we need to consider how best to represent each of these
+ * > situations as they never occur for the same player at the same time"*
+ *
+ * The server decides which: a declaration `Select` carries `possibleAttackers` **or** `possibleBlockers`,
+ * and the role is read from whichever it sent. It is a role, not a mode: there is no state here to get
+ * out of step with the game, and no snapshot can leave the board in a role the server is not in.
+ */
+enum class CombatRole {
+    /** `Select attackers` — each attacker is assigned to a defender (player, planeswalker or battle). */
+    Attacking,
+
+    /** `Select blockers` — each blocker is assigned to an attacker. */
+    Blocking,
+    ;
+
+    /** The ids this role's declaration offers, from the prompt's own options. Never from `playable`. */
+    internal fun candidatesIn(options: PromptOptions): List<String> =
+        when (this) {
+            Attacking -> options.possibleAttackers
+            Blocking -> options.possibleBlockers
+        }
+
+    /** What a tap on one of them is called. */
+    internal fun actionLabel(): String =
+        when (this) {
+            Attacking -> DECLARE_ATTACKER_ACTION_LABEL
+            Blocking -> DECLARE_BLOCKER_ACTION_LABEL
+        }
+
+    /** What the button that ends the declaration says. */
+    internal fun doneLabel(): String =
+        when (this) {
+            Attacking -> DONE_DECLARING_ATTACKERS_LABEL
+            Blocking -> DONE_DECLARING_BLOCKERS_LABEL
+        }
+
+    /** The panel's instruction line for this role — one is on screen, never both. */
+    internal fun note(): String =
+        when (this) {
+            Attacking -> DECLARE_ATTACKERS_NOTE
+            Blocking -> DECLARE_BLOCKERS_NOTE
+        }
+
+    /** The panel's headline for this role. */
+    internal fun title(): String =
+        when (this) {
+            Attacking -> DECLARING_ATTACKERS_TITLE
+            Blocking -> DECLARING_BLOCKERS_TITLE
+        }
+
+    internal companion object {
+        /**
+         * The role a `Select` is a declaration for, or null when it is an ordinary priority window.
+         *
+         * **The signal is the key, not its contents.** Upstream's `selectAttackers` puts
+         * `possibleAttackers` into the options **unconditionally** and only then decides whether to
+         * prompt, so a player whose creatures all cannot attack gets `Select attackers` with an *empty*
+         * list. Keying off "the list is non-empty" would project that as an ordinary priority window —
+         * a "Pass priority" button on a prompt that is not a priority window, and a board that says
+         * nothing about the step it is in. Keying off the key itself keeps it honest: the board is
+         * declaring attackers, and there happen to be none to declare.
+         *
+         * **Attackers win if both keys ever arrive together.** The server never sends both — the two
+         * roles never belong to the same player at the same moment (§7.4) — but if it ever did, the
+         * board must still be in exactly one of them: offering the union would be offering blocks during
+         * a declare-attackers step, which is the failure this ordering exists to make impossible.
+         */
+        fun of(options: PromptOptions): CombatRole? =
+            when {
+                options.ids.containsKey(PromptOptions.POSSIBLE_ATTACKERS) -> Attacking
+                options.ids.containsKey(PromptOptions.POSSIBLE_BLOCKERS) -> Blocking
+                else -> null
+            }
+    }
+}
 
 /** A card the *prompt itself* carried (a scry card, a pile), which is not on the board to be tapped. */
 data class CandidateCardUi(
@@ -238,6 +335,40 @@ sealed interface PromptControlsUi {
             if (objectId in pickableObjectIds) BoardAction.PlayObject(objectId) else null
 
         override fun actionLabelFor(objectId: String): String? = if (objectId in pickableObjectIds) PLAY_ACTION_LABEL else null
+    }
+
+    /**
+     * `GAME_SELECT` **during a combat declaration** — the same prompt *kind* as [Priority], and a
+     * different question entirely (story 0061).
+     *
+     * The server distinguishes it by its **options**, not by its type: a declaration carries
+     * `possibleAttackers` or `possibleBlockers` (requirements §7.2/§7.3, measured live). It is its own
+     * case rather than a [Priority] with extra ids because everything about it differs — where the ids
+     * come from, what a tap means, what the closing button says, and what the panel tells the player to
+     * do.
+     *
+     * **Why this exists at all:** `playable` is *empty* during a declaration, so [Priority] — which
+     * derives its pickable set from `playable` — offered nothing to tap. The board could attack with
+     * everything (the server's own "All attack" button) or nothing, and could not block at all.
+     *
+     * @property role which of combat's two assignment problems this is (§7.4). Exactly one, always.
+     */
+    data class Declaration(
+        override val message: String?,
+        override val pickableObjectIds: Set<String>,
+        override val buttons: List<ControlButton>,
+        val role: CombatRole,
+    ) : PromptControlsUi {
+        /**
+         * A declaration pick is a `chooseTarget` — the same verb targeting uses, which is what upstream
+         * expects here (`HumanPlayer` answers both from the same select loop, and the probes declared
+         * live this way). It is sent per tap, never batched: the server re-prompts after each pick with
+         * the remaining candidates, exactly as it does for targets (§17.2).
+         */
+        override fun actionFor(objectId: String): BoardAction? =
+            if (objectId in pickableObjectIds) BoardAction.ChooseTarget(objectId) else null
+
+        override fun actionLabelFor(objectId: String): String? = if (objectId in pickableObjectIds) role.actionLabel() else null
     }
 
     /**
@@ -339,21 +470,29 @@ internal fun controlsFor(
     val offeredIds = state.playable.map { it.objectId }.toSet()
 
     return when (prompt) {
+        // A `Select` is **two** different questions, told apart by its options and not by its type: a
+        // combat declaration when it carries `possibleAttackers`/`possibleBlockers` (§7.2/§7.3), an
+        // ordinary priority window otherwise.
         is GamePrompt.Select ->
-            PromptControlsUi.Priority(
-                message = message,
-                pickableObjectIds = offeredIds,
-                buttons =
-                    buildList {
-                        // Pass stays first: it is the single most repeated interaction in a game (§9.1).
-                        add(ControlButton(label = PASS_LABEL, action = BoardAction.PassPriority, isPrimary = true))
-                        prompt.options.specialButtonText?.cleanedOrNull()?.let {
-                            add(ControlButton(label = it, action = BoardAction.UseSpecial))
-                        }
-                        // An offer the board cannot draw is still an offer — see [offBoardCandidateButtons].
-                        addAll(offBoardCandidateButtons(state, offeredIds, BoardAction::PlayObject))
-                    },
-            )
+            when (val role = CombatRole.of(prompt.options)) {
+                null ->
+                    PromptControlsUi.Priority(
+                        message = message,
+                        pickableObjectIds = offeredIds,
+                        buttons =
+                            buildList {
+                                // Pass stays first: it is the single most repeated interaction in a game (§9.1).
+                                add(ControlButton(label = PASS_LABEL, action = BoardAction.PassPriority, isPrimary = true))
+                                prompt.options.specialButtonText?.cleanedOrNull()?.let {
+                                    add(ControlButton(label = it, action = BoardAction.UseSpecial))
+                                }
+                                // An offer the board cannot draw is still an offer — see [offBoardCandidateButtons].
+                                addAll(offBoardCandidateButtons(state, offeredIds, BoardAction::PlayObject))
+                            },
+                    )
+
+                else -> declarationControls(state, prompt, message, role)
+            }
 
         is GamePrompt.Target -> {
             // Both halves of the server's own answer: what may still be picked, and what it already
@@ -532,6 +671,59 @@ internal fun controlsFor(
         // No answering method exists, so no control is offered — only the notice.
         is GamePrompt.Unrecognised -> PromptControlsUi.Notice(message = UNRECOGNISED_PROMPT_NOTICE)
     }
+}
+
+/**
+ * The controls for one half of combat — story 0061's whole answer to *"the board cannot declare"*.
+ *
+ * **Where the ids come from, and why it matters.** `role.candidatesIn(options)` reads
+ * `possibleAttackers` / `possibleBlockers` off the prompt the server just sent. It does **not** read
+ * `state.playable`, which is empty during a declaration (§7.2, measured live) — that is the defect this
+ * function exists to fix, and it is why the tests build their fixtures with `playable` empty.
+ *
+ * **The server's set is never widened.** `getCreaturesForcedToAttack` is consulted upstream before
+ * `selectDefender`, so a creature *forced* to attack has a narrower legal-defender set than the general
+ * one. Whatever the server offers is what is offered here, in full and no further.
+ */
+private fun declarationControls(
+    state: GameState,
+    prompt: GamePrompt.Select,
+    message: String?,
+    role: CombatRole,
+): PromptControlsUi.Declaration {
+    val candidates = role.candidatesIn(prompt.options)
+    return PromptControlsUi.Declaration(
+        message = message,
+        role = role,
+        // Exactly this role's candidates: never the union of both roles, never `playable`, never a set
+        // this app worked out for itself.
+        pickableObjectIds = candidates.toSet(),
+        buttons =
+            buildList {
+                // A candidate the board cannot draw is still a candidate — the same promotion every
+                // other prompt gets. A creature is normally on a battlefield the board draws, so this
+                // is usually empty; it costs nothing and it cannot be the reason a declaration is
+                // unanswerable.
+                addAll(offBoardCandidateButtons(state, candidates, BoardAction::ChooseTarget))
+                // The *done*: upstream's shared "done / cancel" arm, which is how a declaration is
+                // closed (both probes closed one exactly this way). Never a pass — a declaration is not
+                // a priority window, whatever prompt kind it arrives as.
+                add(
+                    ControlButton(
+                        label = prompt.options.rightButtonText?.cleanedOrNull() ?: role.doneLabel(),
+                        action = BoardAction.FinishTargeting,
+                        isPrimary = true,
+                    ),
+                )
+                // "All attack" — the server's own shortcut, kept because it is the server's and it is
+                // proven to work live, and **confirmed** because it commits the whole team in one press
+                // (§16.4 / §7.5, Pete). Blocking gets no equivalent and none is invented: this button
+                // exists only where the server sent a `specialButton`, which it does only for attacking.
+                prompt.options.specialButtonText?.cleanedOrNull()?.let {
+                    add(ControlButton(label = it, action = BoardAction.UseSpecial, confirmLabel = ALL_ATTACK_CONFIRM_LABEL))
+                }
+            },
+    )
 }
 
 /**
