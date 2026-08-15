@@ -609,13 +609,55 @@ were **not** mapped by 0051 — a `:protocol` + `:bridge` fix, independent of th
 **Decision (Pete).** A dedicated sideboard screen for swapping cards between deck and sideboard,
 running on the server's timer.
 
-**Data.** A match is best-of-N (`winsNeeded`/`wins` are in the snapshot), and story 0036 already maps
-the server's **`ConstructPrompt`/`SideboardPrompt`** — so the trigger and the deck payload exist; this
-is a UI to build, not a protocol gap.
+**Data — corrected 2026-08-15, traced from `../mage`, not assumed.** The line below was never actually
+verified against source and turns out to be **wrong**:
+
+> ~~A match is best-of-N (`winsNeeded`/`wins` are in the snapshot), and story 0036 already maps the
+> server's `ConstructPrompt`/`SideboardPrompt` — so the trigger and the deck payload exist; this is a UI
+> to build, not a protocol gap.~~
+
+The **trigger** exists (0036 maps `SIDEBOARD`/`CONSTRUCT` to `SideboardPrompt`/`ConstructPrompt`), but
+the **deck payload does not cross the bridge at all** — this *is* a protocol gap, not only a UI one.
+Read from `Mage.Server/.../TableController.java` and `Mage.Common/.../mage/view/TableClientMessage.java`:
+
+- Upstream's `TableClientMessage` (what the `SIDEBOARD` callback actually carries) has a `getDeck():
+  DeckView` field, populated from the player's **real registered deck**
+  (`MatchImpl.sideboard()` → `player.getPlayer().sideboard(this, player.getDeck())`, `TableController`
+  line 773 → `user1.ccSideboard(deck, tableId, parentTableId, remaining, options.isLimited())`).
+- `bridge/.../mapping/table/SideboardMapper.kt` maps `tableId`/`parentTableId`/`remainingSeconds`/
+  `isConstruct` — and **never reads `message.getDeck()`**. `SideboardPrompt` (`:protocol`) has no
+  `deck` field to put it in. Nothing downstream (`:core:network`'s `TableState`) carries a deck either.
+- **Contrast with `CONSTRUCT`:** `ConstructMapper.kt` *also* omits the deck, but says why — draft/pool
+  construction is built from picks the app already tracks client-side. `SideboardMapper` has no such
+  justification, because there is none: between games of an ordinary constructed match, the app has
+  **no other way to know what the player's registered deck currently is**. Without this field, a
+  sideboard screen cannot be built at all — there is nothing to show cards from.
+
+**The real mechanism, in full (grounds the screen's design):**
+- Sideboarding is **match-level, not game-level** — a `TableEvent.SIDEBOARD` per player, entirely
+  separate from the `GAME_*` prompt machinery this document otherwise covers (§0–§19). It fires from
+  `TableController.endGameAndStartNextGame()` when the format allows it
+  (`game.getGameType().isSideboardingAllowed()`), between one game ending and the next starting.
+- It is **timed and self-resolving, not blocking on one player forever**:
+  `Match.SIDEBOARD_TIME = 180` seconds (upstream default). The match thread blocks
+  (`MatchImpl.sideboard()`) until **every** player has submitted or the timer expires; on expiry,
+  `TableController.autoSideboard()` auto-completes any straggler's deck
+  (`player.autoCompleteDeck(validator)`) and submits it **on their behalf, silently** — the app receives
+  no distinct "you ran out of time" event, only whatever comes next (the next game starting, or match
+  end). The board must treat timer expiry as authoritative without expecting a graceful signal.
+- **Two save verbs, already implemented** (0037's `TableClient`, built for join-time submission but
+  state-gated server-side, not verb-specific — `TableController.submitDeck`/`updateDeck` both check
+  `table.getState() == SIDEBOARDING || CONSTRUCTING`): `updateDeck` is the *live auto-save* upstream's
+  own desktop client calls continuously while the player edits (server comment: "used for auto-save
+  deck"); `submitDeck` is the final, binding commit that also ends that player's wait early.
+- **`isConstruct`/`isLimited`** distinguishes strict constructed sideboarding (swap only within your
+  registered 15-card sideboard, no added cards) from a limited/draft-style construct (basics are free
+  and unlimited). This changes what 0033's `DeckLegality` must validate against — the *pool* the swap
+  is constrained to, not just format legality.
 
 **Note.** The construction surface is close to the deck builder (0035) but not the same thing: it is
-timed, match-scoped, and constrained to the registered pool. Reusing the builder was considered and
-rejected in favour of a purpose-built screen.
+timed, match-scoped, and constrained to the registered pool (or the limited pool, per `isConstruct`).
+Reusing the builder was considered and rejected in favour of a purpose-built screen.
 
 ### 12.2 Concede and quit are separate actions
 **Decision (Pete).** **Concede** (this game — the opponent wins it) and **quit match** (leave the whole

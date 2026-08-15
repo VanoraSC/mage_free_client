@@ -407,6 +407,7 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0061 | Combat: declaring attackers and blockers | 0057, 0058, 0055 | Combat cannot be played today: a declaration is projected as ordinary priority with `pickableObjectIds` empty, so the board offers "attack with everything or nothing" and **no way to block**. `playable` is empty during a declaration — the creatures come only from `possibleAttackers`/`possibleBlockers`, which the bridge already carries. Pairing questions are upstream's own (`selectDefender` / `Select attacker to block`), asked only when ambiguous, and arrive as ordinary target prompts 0057 already answers. |
 | 0062 | Alternative costs: convoke, delve | 0057 | **Defect fix, traced from `../mage`.** `GameState.specialActionsAvailable` is mapped end to end and never read — the board has no way to trigger a `SpecialAction` (convoke, delve), so decks using them are unplayable. No new prompt kind needed: the fix is a board affordance wired to the existing field, then live verification. |
 | 0063 | Priority: stops and configurable auto-pass | 0057, 0061 | **Mechanism traced from `../mage`'s desktop client** (§14.3): six explicit skip-to-X actions, persistent stop settings (global + per-phase-step × your/opponent turn), and a separate hold-priority concept — entirely client-local, no protocol change. First cut: the global stop flags + one or two skip actions through the existing `PassPolicy` seam. Touch-first presentation of the full desktop matrix is a later design pass. |
+| 0064 | Between-games sideboard | 0036, 0037, 0033, 0059, 0057 | **Full-match gap, and a genuine `:protocol`/`:bridge` fix — corrects requirements §12.1's original claim.** `SideboardPrompt`'s deck payload is dropped by `SideboardMapper` (upstream's `TableClientMessage.getDeck()` is never read), so today's board has no way to build a sideboard screen at all. Adds the payload, then the timed swap screen itself, reusing 0037's existing `submitDeck`/`updateDeck` verbs and 0033's deck model/legality. |
 | 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
 
 ## Known issues (accepted, not scheduled)
@@ -453,26 +454,26 @@ bridge). Stories **0001–0022 are complete and merged**:
     **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
 11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built;
-    **0062 + 0063 specified**. ⚠️
+    **0062 + 0063 + 0064 specified**. ⚠️
 
 **Current state — a game is playable from the app, including combat.** Hosting works end to end, and
 the board renders a live game and answers the server's prompts: a full turn has been played on-device
 against an AI — mulligan, land, cast, cancel, recast, targeting, mana, resolution, priority and turn
 advance. Combat (0061) is built: attackers and blockers are declared by tapping, with the server's
-pairing questions answered the same way.
+pairing questions answered the same way. **A full best-of-N match is not yet playable** — see 0064.
 
 **Known gaps toward "a full game/match is playable end to end."** A 2026-08-15 pass through `../mage`
-source (not guesswork) found two concrete gaps and closed one open question:
+source (not guesswork) found three concrete gaps and closed one open question:
 - **0062** (convoke/delve) — a confirmed defect: the board has no way to pay these costs at all today.
 - **0063** (stops/auto-pass) — manual-only priority (§9.1/§14.1) works but is tedious over a full game;
   the desktop mechanism it should eventually match is now traced and specified (§14.3).
+- **0064** (between-games sideboard) — the one piece of "a full **match**," not just one game: today's
+  board has no story, no UI, and (unlike 0062/0063) a genuine **`:protocol`/`:bridge` gap** — requirements
+  §12.1's original claim that the deck payload already crossed the bridge was checked against source and
+  is wrong; `SideboardMapper` drops it. A match that reaches game 2 has nothing to sideboard with.
 - Combat damage among multiple blockers/trample (requirements §19) is **not** an open design
   question — it is the same `GetMultiAmount` prompt already proven live for Forked Bolt's damage
   division. Needs a short live combat probe to confirm, not new design.
-- **Full-match play** (sideboarding between games, §12.1) has **no story number assigned yet** — it is
-  the one piece of "play a full match, not just one game" with no story at all today. `joinTable` binds
-  a deck at table creation, so a single game or the first game of a match plays fine; sideboarding into
-  game 2 has nothing built.
 
 Two Epic 7 defects found while hosting by hand are specified as **0059** (deck submission offered in
 states where upstream ignores it) and **0060** (the host form hardcodes 7 of the server's 52 deck
