@@ -2,16 +2,20 @@
 
 - **Epic:** EPIC-11 — In-Game Play
 - **Depends on:** 0057 (board interaction), 0061 (combat declaration)
-- **Status:** ready — **mechanism traced from source; touch-first presentation is not yet designed**
+- **Status:** ready — **scope resolved (Pete, 2026-08-15): full mechanism parity with upstream, not a
+  narrowed v1; touch-first presentation is a separate, still-undesigned pass**
 
 ## 1. Objective
 
 Answering every single priority window by hand, for an entire game, is a lot of taps — manual-only
 priority (§9.1/§14.1) is correct for the first playable board but is not, by itself, a comfortable way
 to play a full match. This story grounds the eventual "stops and configurable auto-pass" feature (named
-in §14.1: *"similar functions to Arena and MTGO"*) in what desktop XMage **actually does**, then scopes
-a first cut of it. §14.1's constraint — passing priority stays a policy decision made in one place — is
-what makes this possible without touching anything else in `feature/game`.
+in §14.1: *"similar functions to Arena and MTGO"*) in what desktop XMage **actually does**, then builds
+**the whole mechanism** — Pete's resolution of the scope question: *"implement parity with the server
+code."* Not a narrowed v1 subset; every skip action and every stop setting upstream has. §14.1's
+constraint — passing priority stays a policy decision made in one place — is what makes this possible
+without touching anything else in `feature/game`. Parity is of **mechanism**, not **presentation** —
+see §3's out-of-scope note on why desktop's own UI is not what's being matched.
 
 ## 2. Context & background — traced from `../mage`, not guessed
 
@@ -54,33 +58,37 @@ would silently decline to attack or block.
 
 ## 3. Scope
 
-**In scope**
+**In scope — the full mechanism, matching upstream one for one**
 - A `SkipState`/equivalent that tracks whether a skip is currently active and which one, consulted by a
   new `PassPolicy` implementation that returns `PassImmediately` while armed and disarms itself the
   moment a stop condition fires. `ManualPassPolicy` stays the default/only policy until this lands; the
   new policy replaces it behind `BoardModule`, per `PassPolicy`'s own documented seam.
-- The **global stop flags** (§14.3.2) as the first cut of configurable stops — sensible defaults matching
-  upstream's (stop on your own main phases, stop on declare-attackers/declare-blockers-with-permanents,
-  stop when anything new hits the stack), before attempting the full per-phase-step ×
-  your-turn/opponent-turn matrix.
-- At minimum **one or two skip actions** to prove the mechanism end to end — "skip to next turn" and
-  "skip until the stack resolves" are the strongest candidates: they cover the two most common reasons
-  a player wants to stop tapping through their own or the opponent's empty turn.
+- **All six skip actions** (§14.3.1): skip to next turn, skip to the opponent's-or-next end step, skip
+  to the opponent's-or-next main phase, skip to your turn, skip until the stack resolves (with its own
+  "or stop early on a new stack object" toggle), skip to the end step before your turn.
+- **The full stop-settings matrix** (§14.3.2): the global flags (`stopOnDeclareAttackers`,
+  `stopOnDeclareBlockersWithAnyPermanents`/`WithZeroPermanents`, `stopOnAllMainPhases`,
+  `stopOnAllEndPhases`, `stopOnStackNewObjects`, upstream's defaults) **and** the per-phase-step
+  settings, tracked **separately for your turn and the opponent's turn**
+  (upkeep/draw/main1/before-combat/end-of-combat/main2/end-of-turn).
+- **Hold priority** (§14.3.3) — the third mechanism, genuinely independent of the skip/stop state:
+  after the player's own action, don't auto-pass, so a second action can be chained before priority
+  moves on. In scope alongside the rest, since parity means the whole mechanism, not two of three
+  pieces.
 - Explicit interaction with floating mana (§14.2): a skip must not silently pass with mana in the pool
   unless the player has said that's fine — flagged in §14.2 as needing deliberate handling, not
   inherited by default.
 
-**Out of scope — deliberately, and named so this doesn't grow unbounded**
-- The **full** six-skip-action set and the full per-phase-step × per-turn stop matrix from desktop.
-  Desktop's presentation (seven buttons + a settings dialog with per-phase checkboxes ×2) is
-  Swing-desktop-shaped; porting it verbatim would be exactly the "don't port the Desktop UI" mistake
-  `AGENTS.md` warns against (see [`docs/ux-principles.md`](../ux-principles.md)). A touch-first
-  presentation of "which stops matter enough for a phone" is a **separate design pass**, not this
-  story's implementation step.
-- Hold-priority (§14.3.3) — genuinely independent of the skip/stop mechanism; worth its own story once
-  the pattern for "act again without passing" is needed.
+**Out of scope**
+- **The touch-first presentation itself.** Building the full mechanism does not mean porting desktop's
+  UI — seven buttons plus a settings dialog with per-phase checkboxes ×2 turns is Swing-desktop-shaped,
+  and porting *that* verbatim would be exactly the "don't port the Desktop UI" mistake `AGENTS.md` warns
+  against (see [`docs/ux-principles.md`](../ux-principles.md)). How six skip actions and a full stop
+  matrix become something usable on a phone is its own design pass, informed by this story's mechanism
+  but not decided by it.
 - Per-user persisted settings (DataStore-backed preferences) — start with in-session defaults; whether
-  these need to survive across games is a product question, not a mechanism one.
+  stop settings need to survive across games/app launches is a separate app-infrastructure question, not
+  part of matching the server-code mechanism itself.
 
 ## 4. Design & approach
 
@@ -104,25 +112,35 @@ would silently decline to attack or block.
 
 - **Standard 1**, per behavior: a test proving a policy that ignores the combat-declaration exception
   fails first (mirrors 0061's own failing-first test for the same trap), then passes once discriminated.
-- **Hermetic:** `PassPolicy` tests over fakes for: skip stays armed across consecutive ordinary
-  `Select`s until its stop condition; skip disarms on a new stack object; skip never auto-passes a
-  combat declaration regardless of settings; floating mana at the moment a skip would pass is handled
-  per whatever §14.2 policy this story lands (documented explicitly, not left implicit).
-- **Live:** drive a real game where a skip is armed across several turns/phases and confirm it stops
-  exactly where expected — both for "your turn" defaults and "opponent's turn" defaults.
-- **Eyes-on (standard 3):** hand Pete a short checklist confirming the skip control is discoverable and
-  its stop is legible (the player must always be able to tell *why* control came back to them).
+- **Hermetic:** `PassPolicy` tests over fakes for **each of the six skip actions** reaching its own stop
+  condition correctly; the **full stop matrix** (every global flag, every per-phase-step setting on both
+  your-turn and opponent-turn) interrupting an active skip at the right moment; hold-priority preventing
+  auto-pass immediately after the player's own action; skip never auto-passing a combat declaration
+  regardless of settings; floating mana at the moment a skip would pass handled per whatever §14.2
+  policy this story lands (documented explicitly, not left implicit).
+- **Live:** drive a real game exercising a representative sample of the six skip actions across several
+  turns/phases and confirm each stops exactly where expected — both for "your turn" defaults and
+  "opponent's turn" defaults, and confirm hold-priority chains a second action without an intervening
+  pass.
+- **Eyes-on (standard 3):** hand Pete a short checklist confirming the skip controls are discoverable,
+  their stops are legible (the player must always be able to tell *why* control came back to them), and
+  the full settings surface doesn't overwhelm a phone screen — flag to a follow-up presentation pass
+  anything that does, per §3's out-of-scope note.
 
 ## 6. Acceptance criteria
 
 - [ ] `PassPolicy`'s seam is unchanged in shape; the new policy is swapped in via `BoardModule` only.
-- [ ] At least one skip action works end to end and disarms itself at the documented stop condition.
-- [ ] The global stop flags (§14.3.2, sensible defaults) are consulted and can interrupt an active skip.
+- [ ] **All six** skip actions work end to end and each disarms itself at its own documented stop
+      condition.
+- [ ] The **full** stop-settings matrix (global flags **and** per-phase-step, tracked separately for
+      your turn and the opponent's) is consulted and can interrupt an active skip.
+- [ ] Hold-priority prevents auto-pass immediately following the player's own action, independent of
+      the skip/stop state.
 - [ ] A combat declaration (`Select` with `CombatRole.of(prompt.options) != null`) is **never**
       auto-passed by this policy, under any setting.
 - [ ] Floating mana's interaction with an active skip is handled deliberately, not silently (§14.2).
 - [ ] No `:protocol`/`:bridge` change, or the need for one is called out explicitly.
-- [ ] Live-verified across at least one full turn cycle with a skip active.
+- [ ] Live-verified across at least one full turn cycle with each skip action exercised.
 
 ## 7. References
 

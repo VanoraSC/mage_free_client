@@ -124,8 +124,12 @@ see your hand.
 **Implication.** The hand's empty/loading state (§1.2) must work in the *peeking* form too — the very
 first thing the player sees is the peek edge with no cards behind it.
 
-**Open question (3.2a):** does the expanded hand stay open while you act (play a card, answer a
-prompt), or collapse on each action? — *pending*
+**Resolved (3.2a) — confirmed from the built code.** The expanded hand **stays open through actions**;
+nothing auto-collapses it. `GameBoardViewModel.isHandExpanded` is set **only** by the player's own
+explicit toggle (`setHandExpanded`) — no `BoardAction` handler touches it, and its own KDoc states the
+reasoning directly: *"View state, not game state: opening the hand looks at cards the player already
+holds and sends nothing to the server."* Acting (playing a card, answering a prompt) is orthogonal to
+whether the hand happens to be visible while it's done.
 
 ---
 
@@ -146,7 +150,8 @@ less spatially intuitive there than "between" the players.
 sensibly empty, and must not reflow the battlefields when it fills.
 
 **Open question (4.1a):** which edge, and what else shares the panel (log, life totals, phase)? —
-*pending*
+resolved further down (just before §4.3), then superseded by the portrait revision (§16.1) — see that
+note for the shape actually built.
 
 ### 4.2 Priority is stated explicitly, not just implied
 **Decision.** A persistent indicator — "Your turn to act" / "Waiting for opponent" — **in addition to**
@@ -186,9 +191,19 @@ appears at game start (in the runs where the toss was won).
 
 ---
 
-**Resolved (4.1a).** **Right edge, stack + phase only.** The game log moves to an on-demand overlay
-rather than living permanently in the panel — which also contains the HTML-narration problem to a
-surface the player opens deliberately, instead of it being always on screen.
+**Resolved (4.1a), then superseded by portrait — see below for the shape actually built.**
+~~Right edge, stack + phase only.~~ The game log moves to an on-demand overlay rather than living
+permanently in the panel — which also contains the HTML-narration problem to a surface the player opens
+deliberately, instead of it being always on screen. **The log-as-overlay half survives**; the
+"right edge" half does not, because portrait (§16.1) has no landscape edge to put it on.
+
+**4.1a's real, current answer — confirmed from the built code (`BoardRegions.kt`'s `StatusRail`,
+story 0055, merged).** Not an edge panel: a **single horizontal band between the two battlefields**,
+fixed height regardless of contents. It holds, top to bottom: the turn/phase/whose-turn line, the
+explicit priority banner (§4.2), then a fixed-height stack strip (§4.1's "must not reflow the
+battlefields" requirement, honoured by reserving the space unconditionally rather than collapsing an
+empty stack). Life totals and zone counts live separately, in each seat's own vitals bar (§4.3) — they
+never shared the panel. The log stays an on-demand overlay, as resolved above.
 
 ### 4.3 Player info is a compact bar per player
 **Decision.** A thin persistent strip per player — life prominent, zone counts small — separate from
@@ -242,8 +257,10 @@ non-blocking, non-answerable notice rather than a modal the player cannot dismis
 **Implication.** Mana payment becomes one of the most frequent interactions in the game, so it must be
 fast and forgiving — and it is board-interactive, hence §6.2.
 
-**Open question (6.3a):** does a mana prompt need a visible "mana produced so far / still required"
-readout, and where? — *pending*
+**Resolved (6.3a, Pete).** **No dedicated readout.** The server's own prompt message plus the visibly
+shrinking set of offered/tappable sources is enough — consistent with the board rendering what the
+server offers rather than inventing UI it didn't ask for. Revisit only if live testing shows the
+message text alone is unclear for a costly spell.
 
 ---
 
@@ -507,9 +524,10 @@ the bridge. Moot, since the server already applies it.
 Per Pete: *"if the server doesn't support auto tap calculations, we don't need to implement them at
 this time."* It does support them — server-side — so nothing client-side is needed.
 
-**Still open (6.5a):** paying mana *before* casting (floating mana into the pool deliberately) is a
-distinct flow from paying *when prompted*. `manaPool` is in the snapshot, and mana abilities appear in
-`playable`, so it is reachable — but the interaction has not been designed. — *pending*
+**Resolved (6.5a, Pete).** **Reuse the existing generic flow — no dedicated affordance.** A land's mana
+ability is just another entry in `playable` during ordinary priority; the same tap-to-play model
+(§5.1: first tap opens detail, confirm activates) already reaches it. Floating mana deliberately before
+casting anything needs nothing beyond what 0057 already ships.
 
 ---
 
@@ -778,12 +796,14 @@ a third, independent piece of state consulted after *our own* `playObject`/abili
 the ordinary phase-step list, confirms declare-attackers/blockers need their own stop handling — the
 same conclusion §14.1 already reached from 0061, now corroborated by upstream treating it the same way.
 
-**Not yet decided (deliberately, for a later pass):** which of these six skip actions and which stop
-settings ship in v1 vs. later, and how they're surfaced as UI on a phone (desktop exposes seven buttons
-+ a settings dialog with per-phase checkboxes ×2 turns — that is Swing-desktop-shaped, and porting it
-verbatim would be exactly the "don't port the Desktop UI" mistake `AGENTS.md` warns against). This
-section only fixes the *mechanism* (what upstream actually does and why our seam is the right shape);
-the touch-first presentation of it is a separate design pass.
+**Resolved — mechanism parity with upstream (Pete, 2026-08-15).** Build **all six** skip actions and the
+**full** stop-settings matrix (global flags, plus per-phase-step tracked separately for your turn and
+the opponent's), not a narrowed v1 subset — the feature should do everything desktop's does, mechanism
+for mechanism. **This is parity of *mechanism*, not of *presentation*:** desktop's seven buttons + a
+settings dialog with per-phase checkboxes ×2 turns is Swing-desktop-shaped, and porting *that* verbatim
+would be exactly the "don't port the Desktop UI" mistake `AGENTS.md` warns against. The touch-first
+presentation of the same complete mechanism — how six skip actions and a full stop matrix become
+something usable on a phone — is still its own design pass, not decided here.
 
 ---
 
@@ -810,9 +830,10 @@ Everything below is **not yet designed** and is deliberately out of the first pl
 - **Commander** (§21.3, story 0067) — **parked, a future increment.** Fully traced and specified (the
   command zone, tax, the "move to command zone" replacement, partner/background) so nothing needs
   re-deriving when it's picked up; not in the first playable board.
-- **Stops / configurable auto-pass** (§14.1/§14.3) — the *mechanism* is now grounded from upstream
-  source (six skip actions + persistent stop settings + hold-priority, §14.3); what ships in v1 and its
-  touch-first presentation are still undesigned.
+- **Stops / configurable auto-pass** (§14.1/§14.3) — the *mechanism* is grounded from upstream source
+  and its scope is resolved: **full parity** (all six skip actions, the complete stop-settings matrix,
+  hold-priority), not a narrowed v1. Only the **touch-first presentation** of that complete mechanism on
+  a phone is still undesigned.
 - **Auto-pass with floating mana** (§14.2) — must be handled when the skip/stop mechanism (§14.3) is
   built.
 - **Library-position knowledge** (§11.2) — **resolved, not deliverable** (§11.3): there is no
