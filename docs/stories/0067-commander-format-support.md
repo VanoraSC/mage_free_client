@@ -3,8 +3,10 @@
 - **Epic:** EPIC-11 — In-Game Play
 - **Depends on:** 0051/0052 (`GameClient`/`GameState`), 0055 (board rendering), 0066 (the same shape of
   card-identity mapping this story's command zone reuses)
-- **Status:** ready — **§21.3a (commander damage) is a genuine product decision, not a default;
-  resolve it before building anything that depends on the answer**
+- **Status:** planned — **parked, a future increment (Pete, 2026-08-15), not the first playable board.**
+  Fully traced and specified below so nothing needs re-deriving when it's picked up.
+  **§21.3a (commander damage) is a genuine product decision, not a default; resolve it before building
+  anything that depends on the answer.**
 
 ## 1. Objective
 

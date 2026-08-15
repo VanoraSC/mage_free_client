@@ -807,6 +807,9 @@ prose parsing.
 Everything below is **not yet designed** and is deliberately out of the first playable board:
 
 - **Spectating** (§13) — capability exists end to end; scope choice only.
+- **Commander** (§21.3, story 0067) — **parked, a future increment.** Fully traced and specified (the
+  command zone, tax, the "move to command zone" replacement, partner/background) so nothing needs
+  re-deriving when it's picked up; not in the first playable board.
 - **Stops / configurable auto-pass** (§14.1/§14.3) — the *mechanism* is now grounded from upstream
   source (six skip actions + persistent stop settings + hold-priority, §14.3); what ships in v1 and its
   touch-first presentation are still undesigned.
@@ -832,9 +835,10 @@ Everything below is **not yet designed** and is deliberately out of the first pl
   `PlayerView.graveyard` is a full `CardsView`, sent always, and our bridge reads only its size, so a
   graveyard-castable spell (Flashback and its relatives) renders as `"Unnamed candidate N"` today. The
   interaction already works; only the name is missing.
-- **Commander damage** (§21.3a, story 0067) — a genuine, unresolved product decision: upstream exposes
-  it only via narration text, never structurally (confirmed even absent from desktop XMage). Show the
-  narration as-is, or accumulate it client-side from combat snapshots — neither is decided.
+- **Commander damage** (§21.3a) — parked with the rest of Commander (above); a genuine, unresolved
+  product decision when it's picked up: upstream exposes it only via narration text, never structurally
+  (confirmed even absent from desktop XMage). Show the narration as-is, or accumulate it client-side
+  from combat snapshots — neither is decided, and doesn't need to be until the format is in scope.
 
 ## Work this design implies beyond the board itself
 
@@ -849,9 +853,9 @@ Everything below is **not yet designed** and is deliberately out of the first pl
   reuses this design with zero extra work once §21.2's card-identity fix lands.
 - **Card identity for graveyard/companion/looked-at** (§21.2, story 0066) — a `:protocol` + `:bridge`
   fix: map `CardsView` collections that already exist upstream and are currently dropped to a count.
-- **Command zone / Commander format** (§21.3, story 0067) — a whole zone (`commandList`) mapped nowhere
-  today; tax is automatic once casting from the zone works, but commander damage (§21.3a above) needs a
-  decision first.
+- **Command zone / Commander format** (§21.3, story 0067) — **parked, future increment.** A whole zone
+  (`commandList`) mapped nowhere today; tax is automatic once casting from the zone works, but commander
+  damage (§21.3a above) needs a decision first, when this is picked up.
 
 ---
 
@@ -1305,7 +1309,12 @@ own card list** — i.e., knowing a graveyard-castable spell exists and what it 
 independent of the board."* Graveyard is the same shape of fix, and worth doing together — see story
 0066.
 
-### 21.3 Commander — traced from `GameCommanderImpl`, `Commander`, and the view layer
+### 21.3 Commander — traced from `GameCommanderImpl`, `Commander`, and the view layer — deferred
+
+**Decision (Pete, 2026-08-15).** **Parked — a future increment, not the first playable board.** The
+trace below stays on record as grounded, verified requirements for whenever the format is picked up;
+nothing here blocks 1v1 constructed play. See story 0067 for the deferred scope, and §21.5 for how it
+now relates to 0062/0066 (both of which remain in scope and do **not** depend on Commander).
 
 Commander identity is chosen at **deck registration**, not asked mid-game: at game init, every card in
 the player's sideboard is checked, and cards are moved into the command zone
@@ -1376,10 +1385,11 @@ named independently. Folding this into story 0066 makes it one fix instead of tw
 - **New: story 0066** — map the individual card identities that already exist upstream and are
   currently dropped: `PlayerView.graveyard` (§21.2), `companion` and `lookedAt` (§11.3, already flagged,
   now given a story number). One shape of fix, three fields.
-- **New: story 0067** — Commander format support: map `PlayerView.commandList` (command zone rendering,
-  reusing `CommanderView`'s `CardView` shape), verify tax is correct for free once casting from the
-  zone works, and **resolve 21.3a** (the commander-damage decision) before building anything that
-  depends on its answer.
+- **New: story 0067 — parked (§21.3).** Commander format support: map `PlayerView.commandList` (command
+  zone rendering, reusing `CommanderView`'s `CardView` shape), verify tax is correct for free once
+  casting from the zone works, and **resolve 21.3a** (the commander-damage decision) before building
+  anything that depends on its answer. Deferred to a future increment — the trace stays on record so it
+  doesn't need re-deriving when picked up. **Independent of 0062/0066** — neither depends on Commander.
 - **Modal spells / Spree (§21.1)** need no new story — the mechanism is already built into 0057's
   `ChooseAbility` handling. Worth a live probe (a Charm or a Spree card) to move it from "traced" to
   "proven," the same standard already applied everywhere else in this document, but not a design gap.

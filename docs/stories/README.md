@@ -410,8 +410,8 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0064 | Between-games sideboard | 0036, 0037, 0033, 0059, 0057 | **Full-match gap, and a genuine `:protocol`/`:bridge` fix — corrects requirements §12.1's original claim.** `SideboardPrompt`'s deck payload is dropped by `SideboardMapper` (upstream's `TableClientMessage.getDeck()` is never read), so today's board has no way to build a sideboard screen at all. Adds the payload, then the timed swap screen itself, reusing 0037's existing `submitDeck`/`updateDeck` verbs and 0033's deck model/legality. |
 | 0065 | Battlefield stacking | 0055, 0057, 0058, 0061 | **Board-space feature, no protocol change.** Every permanent renders full-size in a scrolling row today, so a battlefield with many of the same land/token costs as much space as one with ten different spells. Groups same-name permanents into a compact pile **only when every rendered field matches** (tapped, damage, counters, summoning sickness, combat state, pick-eligibility) — a correctness requirement, not a preference, so a pile never hides what the server's per-object state actually distinguishes. Fans up to 3 members, caps at 3 with a count badge beyond that. |
 | 0066 | Card identity: graveyard, companion, looked-at | 0051, 0052, 0055 | **Defect fix, traced from `../mage`.** `PlayerView.graveyard` is a full `CardsView`, sent always (graveyard is public info) — our bridge reads only its size. `playable` already includes graveyard-castable spells (Flashback, Escape, …), so they render as `"Unnamed candidate N"` today, not broken, just unnamed. Folds in `companion`/`lookedAt`, already flagged separately in requirements §11.3. |
-| 0067 | Commander format support | 0051, 0052, 0055, 0066 | **Whole zone missing, traced from `../mage`.** `PlayerView.commandList` (commander/emblem/dungeon/plane) is mapped nowhere — Commander cannot be played at all today. Tax is automatic server-side and needs no board work once casting from the zone works; commander damage is a genuine upstream data constraint (not exposed structurally anywhere, even on desktop) requiring a product decision (§21.3a) before any damage UI is built. |
 | 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
+| 0067 | Commander format support | 0051, 0052, 0055, 0066 | **Parked — a future increment (Pete, 2026-08-15), not the first playable board.** Fully traced and specified so nothing needs re-deriving when picked up: `PlayerView.commandList` (commander/emblem/dungeon/plane) is mapped nowhere today — Commander cannot be played at all. Tax is automatic server-side and needs no board work once casting from the zone works; commander damage is a genuine upstream data constraint (not exposed structurally anywhere, even on desktop) requiring a product decision (§21.3a) before any damage UI is built. |
 
 ## Known issues (accepted, not scheduled)
 
@@ -457,7 +457,7 @@ bridge). Stories **0001–0022 are complete and merged**:
     **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
 11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built;
-    **0062 + 0063 + 0064 + 0065 + 0066 + 0067 specified**. ⚠️
+    **0062 + 0063 + 0064 + 0065 + 0066 specified**. ⚠️ **0067 (Commander) parked** — a future increment.
 
 **Current state — a game is playable from the app, including combat.** Hosting works end to end, and
 the board renders a live game and answers the server's prompts: a full turn has been played on-device
@@ -477,6 +477,17 @@ source (not guesswork) found three concrete gaps and closed one open question:
 - Combat damage among multiple blockers/trample (requirements §19) is **not** an open design
   question — it is the same `GetMultiAmount` prompt already proven live for Forked Bolt's damage
   division. Needs a short live combat probe to confirm, not new design.
+- **0065** (battlefield stacking) — a board-space feature (lands/tokens crowding the battlefield), no
+  protocol change; see requirements §20.
+- **0066** (graveyard/companion/looked-at card identity) — a confirmed defect: `playable` already
+  includes graveyard-castable spells (Flashback and its relatives), but they render as
+  `"Unnamed candidate N"` because the bridge only reads the graveyard's *size*, not its cards.
+
+A **2026-08-15 systematic review of alternative/activation costs, Commander, and companion**
+(requirements §21) found every mechanic checked already routes through the existing prompt set — no new
+protocol work needed there — except the graveyard-identity gap above (0066) and the whole Commander
+format, which is **parked as story 0067** for a future increment (Pete's call, not in the first
+playable board) but fully traced and specified so it needs no re-deriving when picked up.
 
 Two Epic 7 defects found while hosting by hand are specified as **0059** (deck submission offered in
 states where upstream ignores it) and **0060** (the host form hardcodes 7 of the server's 52 deck
