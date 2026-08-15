@@ -1119,3 +1119,104 @@ already-shipped `GetMultiAmount` renderer. **Still open:** this has not been exe
 combat specifically (only for a spell) — worth a short live probe (a creature with two blockers) before
 calling it proven, the same standard applied to every other measured claim in this document, but it is
 no longer an open design question.
+
+---
+
+## 20. Battlefield stacking — conserving board space for duplicate permanents
+
+**Decision (Pete).** *"For any card with the same name, multiples should be stacked horizontally. They
+should be turned 90 degrees when tapped and moved into a new pile. If there are more than 3, they
+should be rendered as a pile of 3 with a numerical indicator of how many are in the stack. This will
+happen very often with lands and sometimes with tokens."*
+
+This is a pure **board-rendering** feature — no server behaviour to trace (this is not a protocol
+question), but real correctness hazards to get right: the server's per-object pick/targeting state
+(§0, §5.2, §7) must never be hidden by a visual merge. Today's `BattlefieldBand`
+(`feature/game/.../board/BoardRegions.kt`) renders every `PermanentUi` as its own full-size card in a
+single scrolling row — confirmed by reading the code, not assumed — so ten basic lands cost the same
+board space as ten different spells. This is the concrete gap the feature closes.
+
+### 20.1 What may share a pile — the grouping key, resolved
+
+**Decision (Pete, resolved 2026-08-15).** Two permanents may share a pile **only when every rendered
+field of [`PermanentUi`](../feature/game/src/main/kotlin/magefree/feature/game/board/BoardUi.kt) matches
+exactly** — not name alone. Concretely: `card.name`, `isTapped`, `damage`, `card.counters` (name **and**
+count), `showsSummoningSickness`, `isAttacking`, `isBlocking`, `attackingDefenderName`,
+`blockedByNames`/`blockingAttackerNames`, and the object's **current pick-eligibility** for whatever
+prompt is outstanding (`isOfferedByServer`, plus — during an active `Target`/`Select`/`PlayMana`
+prompt — whether this specific id is in the server's candidate set and whether it is already chosen).
+
+**Why this is not optional.** Piling is a pure rendering optimisation; it must never let two permanents
+that are *not* fungible right now look identical. A land with 2 damage marked, a creature carrying a
+counter the others lack, or one specific untapped Mountain the server did *not* list as a legal mana
+source while its neighbours are — none of these may be merged. **Pete's own resolution confirms this
+directly**, naming summoning sickness specifically: *"split summoning sick items into a new stack"* —
+a freshly-played land-turned-creature (Dryad Arbor, an animated Mutavault, §7.6/0058) is not
+interchangeable with an established one even if the name matches.
+
+**Deliberately excluded from the key: printing/art.** Two Mountains from different sets are still the
+same pile — the feature exists precisely for the common case of a deck's basic lands, which very often
+carry mixed art on purpose. The pile shows **one representative card face** (the first member's art);
+this is a considered exception to "match every field," stated explicitly rather than silently assumed.
+
+**Combat is not a special case — the same key already produces Pete's described behaviour.** Combat
+fields (`isAttacking`, `isBlocking`, `attackingDefenderName`, `blockedByNames`, `blockingAttackerNames`)
+are just more fields in the same key, which is why no separate combat rule is needed:
+*"there are times when grouping makes sense in combat. If there are a large number of tokens involved,
+stack them. As tokens are assigned blockers, split them out. Then, if we're in a situation where a
+large number of creatures are attacking and a large number of blockers are blocking, organize them into
+stacks when all permanents in the stack are the same card with the same state, for example +1/+1
+counters."* Concretely: a wide token attack with no blocks assigned yet stays one pile (identical name,
+identical `isAttacking`, identical `attackingDefenderName`, no `blockedByNames` yet); the moment a
+blocker is assigned to one attacker, that attacker's `blockedByNames` diverges from its still-unblocked
+siblings and it falls out of the pile automatically — this is the grouping key doing its job, not a
+new rule. The same applies during an active declare-attackers/blockers prompt (0061): the pile still
+renders, and a tap on it sends one pick, exactly as below.
+
+### 20.2 Rendering: fan up to 3, then cap with a count
+
+**Decision (Pete).** 1 member renders as today (an ordinary single card — no change). 2 or 3 members
+render as a **horizontal fan of that many real card faces**, each slightly offset, so the count is
+visible by inspection with no extra label. **More than 3** caps the fan at **3** layered faces plus a
+**numeric badge** showing the true count (e.g. `×7`) — the pile never grows taller/wider than a 3-card
+fan regardless of how many members it actually holds, which is the whole point: board space stops
+scaling with duplicate count.
+
+**Tapped state moves a permanent into a different pile, visually.** A tapped permanent already renders
+rotated 90° (`BoardCards.kt`, `TAPPED_ROTATION` — this part already exists, built for 0055). Since
+`isTapped` is part of the grouping key (§20.1), tapping the last untapped member of an N-pile is not a
+special case either: the next snapshot simply has one more tapped-and-rotated permanent, which forms
+or joins the tapped pile while the untapped pile shrinks to N−1 — exactly *"turned 90 degrees when
+tapped and moved into a new pile,"* falling out of the same general mechanism.
+
+### 20.3 Interaction — resolved 2026-08-15
+
+- **Tapping a pile while a prompt is asking for one of its members** (mana payment, targeting, playing
+  a land, a combat declaration) sends **one pick — the first id in the pile the server actually
+  offered** — never invented, never widened, the same discipline as every other prompt in this document.
+  *"One tap = one member consumed"*: the pile visually shrinks by one member per tap, the same feedback
+  a player already gets tapping individual lands today, just space-efficient. Paying `{3}` from a pile
+  of 5 untapped Mountains is three taps on the same pile, watching it count down 5 → 4 → 3.
+- **Tapping a pile with no prompt outstanding** (ordinary inspection) opens the **existing**
+  `CardDetailOverlay` (0057) on an arbitrary representative member's id. No new detail component is
+  needed: every member of a pile is, by construction of §20.1's key, currently indistinguishable from
+  every other, so "which one" genuinely does not matter — reusing 0057's single-card detail path was
+  chosen over building a dedicated pile-member list for exactly this reason.
+- **Piling is a pure, re-derived view, never persisted state.** Every render recomputes piles fresh from
+  the current `PermanentUi` list (plus live pick-state) — there is no separate "this is a pile" flag the
+  server or the app invents and must keep in sync. A snapshot that changes one member's state (a
+  counter added, a block assigned, priority moving so pick-eligibility changes) reshapes the piles
+  automatically as a side effect of the same key, with nothing bespoke to maintain.
+
+### 20.4 Where this lives, architecturally
+
+- A pure function — `groupPermanents(permanents: List<PermanentUi>, picks: (String) -> CardPickState):
+  List<PermanentPile>` or equivalent — sits between `seat.battlefield` and `BattlefieldBand`'s render
+  loop, unit-testable in isolation against §20.1's key with no Compose/UI dependency (the project's
+  established preference for pure, fake-testable logic over UI-embedded rules).
+- **The tap contract does not change.** `BattlefieldBand`'s `onCardTap: ((String) -> Unit)?` already
+  takes a single object id; a pile resolves *which* id to send internally (§20.3), so nothing above
+  `BattlefieldBand` needs to become pile-aware. This keeps the blast radius small — `GameBoardScreen`,
+  `controlsFor`, and the pick-state plumbing are all unchanged.
+- Applies to **both** battlefield bands — an opponent with ten lands is exactly as cluttered as the
+  viewer's own, and the grouping key reads the same `PermanentUi` fields either side.

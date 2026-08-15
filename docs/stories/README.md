@@ -408,6 +408,7 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0062 | Alternative costs: convoke, delve | 0057 | **Defect fix, traced from `../mage`.** `GameState.specialActionsAvailable` is mapped end to end and never read — the board has no way to trigger a `SpecialAction` (convoke, delve), so decks using them are unplayable. No new prompt kind needed: the fix is a board affordance wired to the existing field, then live verification. |
 | 0063 | Priority: stops and configurable auto-pass | 0057, 0061 | **Mechanism traced from `../mage`'s desktop client** (§14.3): six explicit skip-to-X actions, persistent stop settings (global + per-phase-step × your/opponent turn), and a separate hold-priority concept — entirely client-local, no protocol change. First cut: the global stop flags + one or two skip actions through the existing `PassPolicy` seam. Touch-first presentation of the full desktop matrix is a later design pass. |
 | 0064 | Between-games sideboard | 0036, 0037, 0033, 0059, 0057 | **Full-match gap, and a genuine `:protocol`/`:bridge` fix — corrects requirements §12.1's original claim.** `SideboardPrompt`'s deck payload is dropped by `SideboardMapper` (upstream's `TableClientMessage.getDeck()` is never read), so today's board has no way to build a sideboard screen at all. Adds the payload, then the timed swap screen itself, reusing 0037's existing `submitDeck`/`updateDeck` verbs and 0033's deck model/legality. |
+| 0065 | Battlefield stacking | 0055, 0057, 0058, 0061 | **Board-space feature, no protocol change.** Every permanent renders full-size in a scrolling row today, so a battlefield with many of the same land/token costs as much space as one with ten different spells. Groups same-name permanents into a compact pile **only when every rendered field matches** (tapped, damage, counters, summoning sickness, combat state, pick-eligibility) — a correctness requirement, not a preference, so a pile never hides what the server's per-object state actually distinguishes. Fans up to 3 members, caps at 3 with a count badge beyond that. |
 | 0053 | Bridge known-information tracking | the board increment | **Post-initial-release.** Remembering information the player has already been shown (reveals, look-at, scry) so they need not. Distinct from 0054: that caches the latest snapshot verbatim, this accumulates knowledge over time — where **invalidation** is the hard part. |
 
 ## Known issues (accepted, not scheduled)
@@ -454,7 +455,7 @@ bridge). Stories **0001–0022 are complete and merged**:
     **0059 + 0060 outstanding** (two defects found while hosting by hand during 0057). ⚠️
 
 11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built;
-    **0062 + 0063 + 0064 specified**. ⚠️
+    **0062 + 0063 + 0064 + 0065 specified**. ⚠️
 
 **Current state — a game is playable from the app, including combat.** Hosting works end to end, and
 the board renders a live game and answers the server's prompts: a full turn has been played on-device
