@@ -218,6 +218,12 @@ public enum class TableFailureCode {
  * a [TableList] carries — including the server's own [TableStateCode] (the readiness truth: a table is
  * [TableStateCode.READY_TO_START] once every seat is filled) — and [seats] adds the per-seat detail the
  * list form reduces to counts. [requestId] echoes the request's id.
+ *
+ * @property activeGameId the match's current game id (story 0069) — `mage.view.TableView.getGames()`'s
+ *   last element, carried on **every** read, unlike [magefree.protocol.MatchStarting], which is a
+ *   one-shot push that fires only at the instant the game starts. This is what lets a client that opens
+ *   (or re-opens) the table room *after* that instant still find its way into the game. `null` before
+ *   the match has produced a game.
  */
 @Serializable
 @SerialName("table_detail")
@@ -225,6 +231,7 @@ public data class TableDetail(
     val table: TableSummary,
     val seats: List<TableSeatSummary> = emptyList(),
     val requestId: String? = null,
+    val activeGameId: String? = null,
 ) : ServerMessage
 
 /**

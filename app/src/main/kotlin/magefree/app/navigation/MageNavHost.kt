@@ -214,7 +214,15 @@ fun MageNavHost(
             // "your game exists and its id is this" push (story 0037's `TableState.matchStarting`); the
             // board is opened with that id and the room is popped, so Back from a live game returns to
             // the lobby rather than to a room whose match has already begun.
-            val startedGameId = roomState.matchStarting?.gameId
+            //
+            // Story 0069: `matchStarting` is a *one-shot* push — it fires only for whichever client is
+            // sitting in the room at the instant the game starts. A client that opens (or re-opens) the
+            // room afterwards — back from the lobby, or after a relaunch — never receives it again, and
+            // was stranded with no way back into its own active game. `TableState.resumableGameId` also
+            // considers `activeGameId`, which `observeTable`'s unconditional open-time table read
+            // populates on *every* read, so this now fires for a late arrival exactly as it does for the
+            // live push.
+            val startedGameId = roomState.table.resumableGameId
             LaunchedEffect(startedGameId) {
                 startedGameId?.let { gameId ->
                     navController.navigate(GameBoardNavRoute(gameId = gameId)) {

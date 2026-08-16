@@ -62,6 +62,7 @@ internal fun ProtocolTableDetail.toDetails(): TableDetails =
                     isOccupied = seat.occupied,
                 )
             },
+        activeGameId = activeGameId,
     )
 
 /** Wire [TableStateCode] → app-schema [TableServerState]; total, so a new code cannot go unhandled. */
