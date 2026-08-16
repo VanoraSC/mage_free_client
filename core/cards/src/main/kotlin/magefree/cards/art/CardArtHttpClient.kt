@@ -23,6 +23,12 @@ import okhttp3.logging.HttpLoggingInterceptor
  * [CardImageLoader] previously built its fetcher from a bare `OkHttpNetworkFetcherFactory()`, whose
  * client sends OkHttp's own `okhttp/<version>` — so **every** card image request in the app was
  * refused, and every art surface degraded silently to its placeholder.
+ *
+ * **2026-08-16 addendum, found live (Pete):** setting `User-Agent` alone stopped being sufficient.
+ * Wire-level capture (`HttpLoggingInterceptor`, `Level.BODY`) showed every request carrying the
+ * correct `User-Agent` and still failing HTTP 400, with a response body reading: *"HTTP requests to
+ * api.scryfall.com must contain a User-Agent **and Accept** header."* — Scryfall's API now also
+ * requires an `Accept` header, which this client never sent. [ScryfallHeadersInterceptor] sets both.
  */
 internal object CardArtUserAgent {
     /** The application token — the "descriptive" part Scryfall looks for. */
@@ -63,19 +69,15 @@ internal object CardArtUserAgent {
 }
 
 /**
- * Replaces the request's `User-Agent` (rather than appending to it) so exactly one value goes out —
- * an added header would leave OkHttp's generic default on the wire alongside ours.
+ * Sets the two headers Scryfall's API requires (`User-Agent` and `Accept`), replacing rather than
+ * appending so exactly one value of each goes out — an added header would leave OkHttp's generic
+ * defaults on the wire alongside ours.
  *
- * Registered as a **network** interceptor ([defaultArtCallFactory]'s `addNetworkInterceptor`, not
- * `addInterceptor`) — Coil's own docs (coil-kt.github.io/coil/network/) call this out specifically as
- * what "ensures headers apply to every image request handled by your ImageLoader". An *application*
- * interceptor does not reliably do so through Coil's network fetcher: registering this one that way
- * looked correct (it compiled, every unit test using a fake `Call.Factory` passed, since a fake never
- * exercises Coil's real dispatch) but silently never reached Scryfall's server — every art fetch,
- * everywhere in the app, failed with HTTP 400 `generic_user_agent`, Scryfall's rejection for OkHttp's
- * own default UA, exactly as if this interceptor did not exist (found live, Pete, 2026-08-16).
+ * Registered as a **network** interceptor ([defaultArtCallFactory]'s `addNetworkInterceptor`) per
+ * Coil's own docs (coil-kt.github.io/coil/network/), which call this out specifically as what
+ * "ensures headers apply to every image request handled by your ImageLoader".
  */
-internal class UserAgentInterceptor(
+internal class ScryfallHeadersInterceptor(
     private val userAgent: String,
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response =
@@ -84,22 +86,26 @@ internal class UserAgentInterceptor(
                 .request()
                 .newBuilder()
                 .header("User-Agent", userAgent)
+                // Scryfall's own error text: "HTTP requests to api.scryfall.com must contain a
+                // User-Agent and Accept header." `*/*` is the same permissive value curl sends by
+                // default, which Scryfall's docs confirm is accepted.
+                .header("Accept", "*/*")
                 .build(),
         )
 }
 
 /**
  * The `Call.Factory` [CardImageLoader] uses when no test double is injected — i.e. the one that ships.
- * It is a stock [OkHttpClient] plus [UserAgentInterceptor]; no other behaviour is altered.
+ * It is a stock [OkHttpClient] plus [ScryfallHeadersInterceptor]; no other behaviour is altered.
  */
 internal fun defaultArtCallFactory(context: Context): Call.Factory =
     OkHttpClient
         .Builder()
-        .addNetworkInterceptor(UserAgentInterceptor(CardArtUserAgent.value(context)))
+        .addNetworkInterceptor(ScryfallHeadersInterceptor(CardArtUserAgent.value(context)))
         // Temporary diagnostic (2026-08-16): OkHttp's own documented wire-logging tool
         // (square/okhttp's HttpLoggingInterceptor), registered as a network interceptor so its
         // output is the literal bytes on the wire — headers *and* status line — for every art
-        // fetch. Logcat tag "OkHttp". Remove once the User-Agent defect is confirmed fixed.
+        // fetch. Logcat tag "OkHttp". Remove once the Accept-header fix is confirmed live.
         .addNetworkInterceptor(
             HttpLoggingInterceptor { message -> Log.d("OkHttp", message) }
                 .apply { level = HttpLoggingInterceptor.Level.BODY },
