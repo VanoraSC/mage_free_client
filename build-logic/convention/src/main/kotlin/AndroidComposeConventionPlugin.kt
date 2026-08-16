@@ -19,8 +19,11 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
 
             // The "android" extension's concrete type differs (application vs library), so configure
             // via whichever is present rather than the CommonExtension supertype.
-            val configure: (CommonExtension<*, *, *, *, *, *>) -> Unit = { commonExtension ->
-                commonExtension.buildFeatures {
+            //
+            // AGP 9 dropped CommonExtension's generic type parameters, and with them the
+            // `buildFeatures { }` lambda-block sugar — configured via the plain property instead.
+            val configure: (CommonExtension) -> Unit = { commonExtension ->
+                commonExtension.buildFeatures.apply {
                     compose = true
                 }
                 dependencies {
