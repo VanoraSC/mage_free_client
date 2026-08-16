@@ -114,15 +114,19 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 
 ## Bridge (server-side)
 
-### Bridge binds to a hardcoded `0.0.0.0`
+### Bridge binds to a hardcoded `0.0.0.0` — now story [0068](stories/0068-bridge-transport-security-and-access-control.md)
 - **Surfaced:** story 0001 (reviewed retroactively; PR #3, already merged).
 - **What:** `bridge/src/main/kotlin/magefree/bridge/Application.kt` starts Netty with
   `host = "0.0.0.0"` (all interfaces). The port is config-driven (`application.conf` /
-  `BRIDGE_PORT`), but the bind address is a literal.
-- **Why non-blocking:** correct/convenient for a local dev scaffold whose only route is `/health`.
-- **Revisit:** before the bridge carries real traffic — make the bind address configurable and
-  make network exposure a deliberate decision, and pair it with the WebSocket endpoint's
-  transport security (TLS) and auth as those land (EPIC-01 stories 0004–0005 / deployment).
+  `BRIDGE_PORT`), but the bind address is a literal. Confirmed 2026-08-15, alongside this: there is
+  **no TLS connector at all** (the bridge cannot speak `wss://` today, embedded or otherwise) and **no
+  bridge-level authentication** — anyone who can reach the port can open a session.
+- **Why non-blocking:** correct for a bridge reachable only on the developer's own trusted LAN, which
+  is the setup `docs/verification-test-plan.md` walks through for testing from a real phone. Becomes a
+  real problem the moment the bridge is reachable by anyone else.
+- **Revisit:** formalized as story 0068 (parked, a future increment) — bind address, TLS termination,
+  and bridge-level access control, scoped together since a fix to one without the others doesn't
+  actually close the gap.
 
 ### Hand-rolled `main()` instead of Ktor `EngineMain`
 - **Surfaced:** story 0001 (PR #3, already merged).
