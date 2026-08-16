@@ -133,6 +133,21 @@ class CardArtUserAgentTest {
     }
 
     @Test
+    fun `the default loader sends an Accept header on the wire`() {
+        // Found live (Pete, 2026-08-16): Scryfall's API rejects a request missing this header too —
+        // "HTTP requests to api.scryfall.com must contain a User-Agent and Accept header" — with a
+        // *different* HTTP 400 body than the generic-User-Agent case, so a User-Agent-only fix looks
+        // complete (compiles, passes the User-Agent tests above) while still failing every request.
+        val accept = warmAndRecord().getHeader("Accept")
+
+        assertNotNull(
+            "card art requests must carry an Accept header; Scryfall answers HTTP 400 without one",
+            accept,
+        )
+        assertFalse("Accept must not be blank", accept!!.isBlank())
+    }
+
+    @Test
     fun `the User-Agent is not a generic client default`() {
         val userAgent = warmAndRecord().getHeader("User-Agent")!!
 

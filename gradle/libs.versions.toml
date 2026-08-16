@@ -109,6 +109,12 @@ coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version
 # the client under test are the same generation.
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
 
+# Temporary diagnostic (2026-08-16): OkHttp's own documented wire-level logging tool, so a live
+# Logcat capture shows the literal request/response headers on the wire rather than anything read
+# back through Coil/OkHttp's own request-object plumbing (which does not reflect network-interceptor
+# additions to the caller). Remove once the card-art User-Agent defect is confirmed fixed.
+okhttp-logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okhttp" }
+
 # Story 0033: Room-backed offline deck library. room-ktx adds coroutines/Flow query support; the
 # compiler runs through KSP (already applied by the magefree.hilt convention).
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
