@@ -10,6 +10,7 @@ import mage.view.CombatGroupView
 import mage.view.GameView
 import mage.view.PermanentView
 import mage.view.PlayerView
+import mage.view.StackAbilityView
 import magefree.protocol.CardTypeCode
 import magefree.protocol.GameCardView
 import magefree.protocol.GameCombatGroupView
@@ -188,15 +189,22 @@ public object GameViewMapper {
      * sent, including the `"0"` a noncreature permanent reports. Deciding whether to *show* them is the
      * board's job, not the mapper's.
      *
-     * **`AbilityView` naming (story 0072).** A `CardsView` built from a `Collection<Ability>` — the
-     * ordering-simultaneous-triggers prompt (`GAME_TARGET`/`PICK_ABILITY`) is the only case that
-     * reaches this mapper — wraps each ability in an `AbilityView` (`mage.view.AbilityView`), whose
-     * own constructor hardcodes `name = "Ability"` for the ordinary battlefield/stack/hand case
-     * (`setName(...)` is called only for the emblem/dungeon/plane special cases upstream, neither of
-     * which this prompt produces). The real identifying name is upstream's own `getSourceCard()` — a
-     * nested `CardView` for the triggering permanent/card — which this function otherwise never
-     * reads. [displayName] resolves it; `rules` (the trigger's actual text, `ability.getRule()`) was
-     * already correct and is untouched.
+     * **Ability naming (story 0072).** Two distinct upstream view types wrap a non-card ability object,
+     * both read directly, and **both** hardcode a generic `name`:
+     * - `AbilityView` (`mage.view.AbilityView`) — a `CardsView` built from a `Collection<Ability>`,
+     *   which is how the ordering-simultaneous-triggers prompt (`GAME_TARGET`/`PICK_ABILITY`) sends its
+     *   candidates. Its constructor sets `name = "Ability"` unconditionally for the ordinary
+     *   battlefield/stack/hand case (`setName(...)` is called only for the emblem/dungeon/plane special
+     *   cases, neither of which this prompt produces).
+     * - `StackAbilityView` (`mage.view.StackAbilityView`) — a **separate, sibling** class (does *not*
+     *   extend `AbilityView`), used for the ordinary game stack (`GameView.stack`, i.e. every triggered
+     *   or activated ability sitting on the stack during normal play, not just the ordering prompt).
+     *   Also sets `name = "Ability"` unconditionally — confirmed by reading the constructor directly,
+     *   not assumed from the symptom looking similar.
+     *
+     * Both expose the real identifying name via their own `getSourceCard()` — a nested `CardView` for
+     * the source permanent/card — which this function otherwise never reads. [displayName] resolves
+     * whichever one applies; `rules` (the ability's actual text, already correct upstream) is untouched.
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
@@ -227,16 +235,17 @@ public object GameViewMapper {
 
     /**
      * The name to display for [card] — see [mapCard]'s KDoc. For an ordinary `CardView` this is just
-     * `card.name`. For an `AbilityView` (only ever produced by the ordering-simultaneous-triggers
-     * prompt), `card.name` is upstream's literal placeholder `"Ability"`; the real name is on the
-     * nested `getSourceCard()`, itself falling back to the placeholder only if that is somehow absent
-     * too (defensive — every triggered ability upstream sends has a resolvable source object).
+     * `card.name`. For an `AbilityView` (the ordering-simultaneous-triggers prompt) or a
+     * `StackAbilityView` (the ordinary game stack), `card.name` is upstream's literal placeholder
+     * `"Ability"`; the real name is on the nested `getSourceCard()`, itself falling back to the
+     * placeholder only if that is somehow absent too (defensive — every ability upstream sends has a
+     * resolvable source object).
      */
     private fun displayName(card: CardView): String =
-        if (card is AbilityView) {
-            card.sourceCard?.name.orNullIfBlank() ?: card.name.orEmpty()
-        } else {
-            card.name.orEmpty()
+        when (card) {
+            is AbilityView -> card.sourceCard?.name.orNullIfBlank() ?: card.name.orEmpty()
+            is StackAbilityView -> card.sourceCard?.name.orNullIfBlank() ?: card.name.orEmpty()
+            else -> card.name.orEmpty()
         }
 
     /**

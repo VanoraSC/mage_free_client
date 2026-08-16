@@ -8,6 +8,7 @@ import mage.constants.TurnPhase
 import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.GameView
+import mage.view.StackAbilityView
 import magefree.protocol.CardTypeCode
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.TurnPhaseCode
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import sun.misc.Unsafe
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Proxy
 import java.util.UUID
@@ -539,6 +541,41 @@ class GameViewMapperTest {
         val abilityView = AbilityView(fakeAbility(), "Unknown", null)
 
         assertEquals("Ability", GameViewMapper.mapCard(abilityView).name)
+    }
+
+    @Test
+    fun `mapCard names a StackAbilityView from its source card too (story 0072)`() {
+        // StackAbilityView is a *separate* sibling class from AbilityView (does not extend it) --
+        // upstream's own comment on the field says its view "will be replaced by sourceCard" in the
+        // GUI, confirming this is the sanctioned way to read it, not a guess. Its real constructor
+        // needs a full Game/StackAbility context impractical to fabricate hermetically, so this
+        // allocates the instance directly (bypassing the constructor, same idea as this file's
+        // existing nullOutCounters/breakComposedText reflection helpers) and sets only the two
+        // fields displayName() reads.
+        val stackAbilityView = allocateStackAbilityView(name = "Ability", sourceCardName = "Guide of Souls")
+
+        assertEquals("Guide of Souls", GameViewMapper.mapCard(stackAbilityView).name)
+    }
+
+    /** Allocates a [StackAbilityView] without running its constructor and sets [name]/`sourceCard`. */
+    private fun allocateStackAbilityView(
+        name: String,
+        sourceCardName: String,
+    ): StackAbilityView {
+        val unsafeField = Unsafe::class.java.getDeclaredField("theUnsafe")
+        unsafeField.isAccessible = true
+        val unsafe = unsafeField.get(null) as Unsafe
+        val instance = unsafe.allocateInstance(StackAbilityView::class.java) as StackAbilityView
+
+        val nameField = CardView::class.java.getDeclaredField("name")
+        nameField.isAccessible = true
+        nameField.set(instance, name)
+
+        val sourceCardField = StackAbilityView::class.java.getDeclaredField("sourceCard")
+        sourceCardField.isAccessible = true
+        sourceCardField.set(instance, GameViews.card(name = sourceCardName))
+
+        return instance
     }
 
     /**
