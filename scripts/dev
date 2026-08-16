@@ -5,6 +5,7 @@
 # Usage (from the repo root):
 #   ./scripts/dev gradle <args>    # e.g. ./scripts/dev gradle :bridge:check
 #   ./scripts/dev mvn <args>       # maven inside the build container
+#   ./scripts/dev build <service>  # e.g. ./scripts/dev build bridge      (rebuild an image)
 #   ./scripts/dev up <service>     # e.g. ./scripts/dev up xmage-server   (added in story 0022)
 #   ./scripts/dev down
 #   ./scripts/dev sh               # interactive shell in the build container
@@ -29,11 +30,12 @@ fi
 case "$cmd" in
   gradle) exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build sh ./gradlew "$@" ;;
   mvn)    exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build mvn "$@" ;;
+  build)  exec "${COMPOSE[@]}" build "$@" ;;
   up)     exec "${COMPOSE[@]}" up -d "$@" ;;
   down)   exec "${COMPOSE[@]}" down "$@" ;;
   sh)     exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build bash ;;
   *)
-    echo "usage: ./scripts/dev {gradle|mvn|up|down|sh} ..." >&2
+    echo "usage: ./scripts/dev {gradle|mvn|build|up|down|sh} ..." >&2
     exit 2
     ;;
 esac
