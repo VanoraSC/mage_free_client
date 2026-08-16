@@ -3,6 +3,7 @@ package magefree.bridge.mapping
 import mage.constants.CardType
 import mage.constants.PhaseStep
 import mage.constants.TurnPhase
+import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.CardsView
 import mage.view.CombatGroupView
@@ -186,11 +187,21 @@ public object GameViewMapper {
      * `power`/`toughness` stay strings on purpose — `*` is a real value — and are carried exactly as
      * sent, including the `"0"` a noncreature permanent reports. Deciding whether to *show* them is the
      * board's job, not the mapper's.
+     *
+     * **`AbilityView` naming (story 0072).** A `CardsView` built from a `Collection<Ability>` — the
+     * ordering-simultaneous-triggers prompt (`GAME_TARGET`/`PICK_ABILITY`) is the only case that
+     * reaches this mapper — wraps each ability in an `AbilityView` (`mage.view.AbilityView`), whose
+     * own constructor hardcodes `name = "Ability"` for the ordinary battlefield/stack/hand case
+     * (`setName(...)` is called only for the emblem/dungeon/plane special cases upstream, neither of
+     * which this prompt produces). The real identifying name is upstream's own `getSourceCard()` — a
+     * nested `CardView` for the triggering permanent/card — which this function otherwise never
+     * reads. [displayName] resolves it; `rules` (the trigger's actual text, `ability.getRule()`) was
+     * already correct and is untouched.
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
             id = card.id?.toString().orEmpty(),
-            name = card.name.orEmpty(),
+            name = displayName(card),
             setCode = card.expansionSetCode.orNullIfBlank(),
             collectorNumber = card.cardNumber.orNullIfBlank(),
             manaCost = text { card.manaCostStr }.orNullIfBlank(),
@@ -213,6 +224,20 @@ public object GameViewMapper {
                     GameCounterView(name = counter.name.orEmpty(), count = counter.count)
                 },
         )
+
+    /**
+     * The name to display for [card] — see [mapCard]'s KDoc. For an ordinary `CardView` this is just
+     * `card.name`. For an `AbilityView` (only ever produced by the ordering-simultaneous-triggers
+     * prompt), `card.name` is upstream's literal placeholder `"Ability"`; the real name is on the
+     * nested `getSourceCard()`, itself falling back to the placeholder only if that is somehow absent
+     * too (defensive — every triggered ability upstream sends has a resolvable source object).
+     */
+    private fun displayName(card: CardView): String =
+        if (card is AbilityView) {
+            card.sourceCard?.name.orNullIfBlank() ?: card.name.orEmpty()
+        } else {
+            card.name.orEmpty()
+        }
 
     /**
      * Maps `CardType` to its app-schema code. Exhaustive on purpose: a card type added upstream becomes

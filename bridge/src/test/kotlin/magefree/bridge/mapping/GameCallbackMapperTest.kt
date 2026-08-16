@@ -189,6 +189,33 @@ class GameCallbackMapperTest {
     }
 
     @Test
+    fun `GAME_TARGET with null targets falls back to every candidate being pickable (story 0072)`() {
+        // GameController.java's PICK_ABILITY overload (ordering simultaneous triggered abilities)
+        // always sends `targets = null` -- unlike PICK_TARGET, which always sends a real, possibly
+        // empty Set. Prove the fix discriminates the actual bug: against the unfixed mapper,
+        // targetIds came back empty here and every rendered candidate was unpickable.
+        val first = GameViews.card(name = "Guide of Souls")
+        val second = GameViews.card(name = "Ajani, Nacatl Pariah")
+        val payload =
+            GameClientMessage(
+                view(),
+                null,
+                "Pick triggered ability (goes to the stack first)",
+                GameViews.cardsView(listOf(first, second)),
+                null,
+                false,
+            )
+
+        val prompt = (CallbackMapper.map(callback(ClientCallbackMethod.GAME_TARGET, payload)) as GamePrompted).prompt as TargetPrompt
+
+        assertEquals(
+            setOf(first.id.toString(), second.id.toString()),
+            prompt.targetIds.toSet(),
+            "with null targets, every card in cardsView1 must be pickable",
+        )
+    }
+
+    @Test
     fun `GAME_ASK maps to an AskPrompt carrying the server's own button labels`() {
         val options: Map<String, Serializable> =
             mapOf(

@@ -1,9 +1,11 @@
 package magefree.bridge.mapping
 
+import mage.abilities.Ability
 import mage.constants.CardType
 import mage.constants.PhaseStep
 import mage.constants.SubType
 import mage.constants.TurnPhase
+import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.GameView
 import magefree.protocol.CardTypeCode
@@ -14,6 +16,8 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.Proxy
 import java.util.UUID
 
 /**
@@ -513,6 +517,50 @@ class GameViewMapperTest {
 
             assertEquals(upstream.name, mapped.name, "upstream's $upstream has no code of its own")
         }
+    }
+
+    @Test
+    fun `mapCard names an AbilityView from its source card, not upstream's literal placeholder (story 0072)`() {
+        // AbilityView.java (mage-common) hardcodes `this.name = "Ability"` for the ordinary case --
+        // confirmed by reading the constructor directly, not assumed. The real name is only on the
+        // nested getSourceCard(). Prove the fix reads it, and that `rules` (already correct) survives.
+        val sourceCard = GameViews.card(name = "Guide of Souls")
+        val abilityView = AbilityView(fakeAbility(rule = "Whenever another creature enters, gain 1 life."), "Guide of Souls", sourceCard)
+
+        val mapped = GameViewMapper.mapCard(abilityView)
+
+        assertEquals("Ability", abilityView.name, "sanity check: upstream's own placeholder is literally this")
+        assertEquals("Guide of Souls", mapped.name, "the mapper must read the source card's name, not the placeholder")
+        assertEquals(listOf("Whenever another creature enters, gain 1 life."), mapped.rules)
+    }
+
+    @Test
+    fun `mapCard falls back to the placeholder if an AbilityView somehow has no source card`() {
+        val abilityView = AbilityView(fakeAbility(), "Unknown", null)
+
+        assertEquals("Ability", GameViewMapper.mapCard(abilityView).name)
+    }
+
+    /**
+     * A minimal [Ability] double via [Proxy] — [Ability] is a large interface with no simple concrete
+     * implementation that doesn't require a live `Game`/permanent context. [AbilityView]'s constructor
+     * only calls three methods on it (verified by reading the constructor directly), so only those need
+     * real answers; everything else returns `null`/defaults, which is never reached.
+     */
+    private fun fakeAbility(rule: String = "Test rule text."): Ability {
+        val handler =
+            InvocationHandler { _, method, _ ->
+                when (method.name) {
+                    "getId" -> UUID.randomUUID()
+                    "getRule" -> rule
+                    "getManaCostSymbols" -> emptyList<String>()
+                    "hashCode" -> 0
+                    "equals" -> false
+                    "toString" -> "fakeAbility"
+                    else -> null
+                }
+            }
+        return Proxy.newProxyInstance(Ability::class.java.classLoader, arrayOf(Ability::class.java), handler) as Ability
     }
 
     /** Nulls out every collection field of a [GameView], standing in for a sparse upstream view. */
