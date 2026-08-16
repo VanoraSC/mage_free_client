@@ -21,8 +21,9 @@ import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The wiring half of story 0054: that a [LiveSession]'s **own** cache is fed by its outbound pump, that
- * it survives (and keeps advancing across) a park, and that it dies with the session.
+ * The wiring half of stories 0054 + 0070: that a [LiveSession]'s cache is fed by its outbound pump,
+ * that it survives (and keeps advancing across) a park, and that it survives the *session itself*
+ * ending too — outliving eviction for the same username, though never crossing between usernames.
  *
  * [GameStateCacheTest] proves the cache's own rules; this proves the thing that actually fills it in
  * production. Standard 2 in test form: the producer named in the design is the producer under test.
@@ -128,20 +129,47 @@ class SessionGameStateCacheTest {
         }
 
     @Test
-    fun `evicting the session drops its cache`() =
+    fun `evicting the session preserves its cache for the same username's next session`() =
         registryScenario { registry ->
-            // The cache must not outlive the session it describes.
-            val fake = FakeUpstreamSession(listOf(SessionStatus(SessionStateCode.CONNECTED)))
-            val live = registry.createSession(fake, Credentials("alice", null))
-            val resumeId = registry.register(live)
+            // Story 0070's defect, reproduced: an eviction is not necessarily the game ending, or even
+            // the same person leaving — a resume-TTL expiry, a sign-out, or (the live case) an upstream
+            // keepalive failure all evict, and XMage gives a rejoining player no way to ask for a fresh
+            // state (GameController.join's rejoin path only logs; watch refuses a seated player). So the
+            // cache must survive to hand to whichever session is next for that username, not die here.
+            val firstUpstream = FakeUpstreamSession(listOf(SessionStatus(SessionStateCode.CONNECTED)))
+            val first = registry.createSession(firstUpstream, Credentials("alice", null))
+            val resumeId = registry.register(first)
 
-            fake.emit(GameStateUpdated(gameId = GAME, state = view(turn = 3)))
-            awaitCache(live, "the snapshot") { it.cachedGameCount() == 1 }
+            firstUpstream.emit(GameStateUpdated(gameId = GAME, state = view(turn = 3)))
+            awaitCache(first, "the snapshot") { it.cachedGameCount() == 1 }
 
             registry.evict(resumeId)
 
-            awaitCache(live, "the evicted session's cache to be emptied") { it.cachedGameCount() == 0 }
-            assertInstanceOf(GameStateUnavailable::class.java, live.gameState(GetGameState(gameId = GAME)))
+            // A brand-new session for the same username — not a resume of the evicted one — must still
+            // answer from the preserved snapshot rather than starting blank.
+            val secondUpstream = FakeUpstreamSession(listOf(SessionStatus(SessionStateCode.CONNECTED)))
+            val second = registry.createSession(secondUpstream, Credentials("alice", null))
+
+            assertEquals(3, snapshotOf(second, GAME).state.turn)
+        }
+
+    @Test
+    fun `a fresh session for a different username never inherits another user's cache`() =
+        registryScenario { registry ->
+            // The falsifying test for "per username, not bridge-wide": alice's evicted cache must not
+            // leak into a brand-new session for a different person, including one that never played GAME.
+            val aliceUpstream = FakeUpstreamSession(listOf(SessionStatus(SessionStateCode.CONNECTED)))
+            val alice = registry.createSession(aliceUpstream, Credentials("alice", null))
+            val resumeId = registry.register(alice)
+
+            aliceUpstream.emit(GameStateUpdated(gameId = GAME, state = view(turn = 3)))
+            awaitCache(alice, "alice's snapshot") { it.cachedGameCount() == 1 }
+            registry.evict(resumeId)
+
+            val bobUpstream = FakeUpstreamSession(listOf(SessionStatus(SessionStateCode.CONNECTED)))
+            val bob = registry.createSession(bobUpstream, Credentials("bob", null))
+
+            assertInstanceOf(GameStateUnavailable::class.java, bob.gameState(GetGameState(gameId = GAME)))
         }
 
     @Test
