@@ -124,9 +124,11 @@ Each item records **where it surfaced**, **what** it is, **why it's non-blocking
 - **Why non-blocking:** correct for a bridge reachable only on the developer's own trusted LAN, which
   is the setup `docs/verification-test-plan.md` walks through for testing from a real phone. Becomes a
   real problem the moment the bridge is reachable by anyone else.
-- **Revisit:** formalized as story 0068 (parked, a future increment) — bind address, TLS termination,
-  and bridge-level access control, scoped together since a fix to one without the others doesn't
-  actually close the gap.
+- **Revisit:** formalized as story 0068. **Scope resolved (Pete):** TLS termination via an nginx
+  reverse proxy — resolves the bind-address concern topologically (only nginx's port gets published to
+  the host) without touching `Application.kt`. **Bridge-level access control is explicitly out of
+  scope, an accepted risk** — *"I'm not super worried about access control. I just need to build what
+  the app needs."* Revisit only if the bridge is ever exposed beyond a network the operator controls.
 
 ### Hand-rolled `main()` instead of Ktor `EngineMain`
 - **Surfaced:** story 0001 (PR #3, already merged).
