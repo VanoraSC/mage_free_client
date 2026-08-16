@@ -7,7 +7,12 @@ import magefree.model.SkillLevel
 import magefree.protocol.RangeCode
 import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.SkillLevelCode
+import magefree.protocol.TableDetail
+import magefree.protocol.TableSeatSummary
+import magefree.protocol.TableStateCode
+import magefree.protocol.TableSummary
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -66,5 +71,60 @@ class DeckAndOptionsMapperTest {
         assertEquals(SkillLevelCode.SERIOUS, wire.skillLevel)
         assertEquals(RangeCode.ONE, wire.range)
         assertEquals("secret", wire.password)
+    }
+
+    @Test
+    fun aTableDetailCarriesTheActiveGameIdThroughToTheAppSchema() {
+        // Story 0069: the wire's activeGameId — present on every GetTable reply once a match has
+        // produced a game, not only on the one-shot MatchStarting push — must survive this boundary.
+        val summary =
+            TableSummary(
+                tableId = "t-1",
+                name = "Duel Night",
+                controllerName = "pete",
+                gameType = "Two Player Duel",
+                deckType = "Constructed",
+                state = TableStateCode.DUELING,
+                seatsFilled = 2,
+                seatsTotal = 2,
+                isTournament = false,
+                isRated = false,
+                isPassworded = false,
+                isLimited = false,
+                skillLevel = SkillLevelCode.CASUAL,
+                createdAtEpochMs = 0L,
+            )
+        val wire =
+            TableDetail(
+                table = summary,
+                seats = listOf(TableSeatSummary(index = 0, playerName = "pete", playerType = SeatPlayerTypeCode.HUMAN, occupied = true)),
+                activeGameId = "g-9",
+            )
+
+        assertEquals("g-9", wire.toDetails().activeGameId)
+    }
+
+    @Test
+    fun aTableDetailWithNoGameYetMapsToANullActiveGameId() {
+        val summary =
+            TableSummary(
+                tableId = "t-1",
+                name = "Duel Night",
+                controllerName = "pete",
+                gameType = "Two Player Duel",
+                deckType = "Constructed",
+                state = TableStateCode.WAITING,
+                seatsFilled = 1,
+                seatsTotal = 2,
+                isTournament = false,
+                isRated = false,
+                isPassworded = false,
+                isLimited = false,
+                skillLevel = SkillLevelCode.CASUAL,
+                createdAtEpochMs = 0L,
+            )
+        val wire = TableDetail(table = summary)
+
+        assertNull(wire.toDetails().activeGameId)
     }
 }

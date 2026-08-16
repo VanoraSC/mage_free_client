@@ -29,6 +29,10 @@ import magefree.model.SkillLevel
  * @property phase where the table is in the client-observed join→construct→start lifecycle.
  * @property matchStarting the one-shot game-start signal once the server pushes it (the boundary to
  *   Epic 11), else `null`.
+ * @property activeGameId the match's current game id (story 0069), from the last [TableDetails] read —
+ *   present on every read, unlike [matchStarting]'s one-shot push. Set by [withDetails]. This is what
+ *   lets a client that opens the room *after* the match has already started still find its way in: see
+ *   [resumableGameId].
  */
 data class TableState(
     val tableId: String,
@@ -38,7 +42,15 @@ data class TableState(
     val serverState: TableServerState = TableServerState.Unknown,
     val phase: TablePhase = TablePhase.Waiting,
     val matchStarting: MatchStarting? = null,
+    val activeGameId: String? = null,
 ) {
+    /**
+     * The game id to open, from whichever source knows it (story 0069): the live [matchStarting] push
+     * when this client caught the transition, else the last [activeGameId] a table read reported. Both
+     * name the same thing — the match's current game — so a caller never needs to know which one fired.
+     */
+    val resumableGameId: String? get() = matchStarting?.gameId ?: activeGameId
+
     /**
      * Whether the **server** says the table is ready to start — every seat filled
      * (`mage.constants.TableState.READY_TO_START`, which is exactly the gate `startMatch` enforces
@@ -65,8 +77,18 @@ data class TableState(
                 serverState == TableServerState.Dueling ||
                 serverState == TableServerState.Finished
 
-    /** Apply a [TableDetails] read: refresh the seats and the server's lifecycle state. */
-    fun withDetails(details: TableDetails): TableState = copy(seats = details.seats, serverState = details.serverState)
+    /**
+     * Apply a [TableDetails] read: refresh the seats, the server's lifecycle state, and the match's
+     * current game id (story 0069) — the read's [TableDetails.activeGameId] replaces the held value
+     * whether it moves forward (a game just started) or stays `null` (no game yet); it never resets a
+     * value the live [matchStarting] push already set, since a `null` read merely confirms "unknown".
+     */
+    fun withDetails(details: TableDetails): TableState =
+        copy(
+            seats = details.seats,
+            serverState = details.serverState,
+            activeGameId = details.activeGameId ?: activeGameId,
+        )
 }
 
 /**
@@ -141,6 +163,8 @@ enum class TableServerState {
  * @property deckType the deck/construction type label.
  * @property serverState the server's lifecycle state (readiness lives here, not per seat).
  * @property seats the table's seats in server order — filled and empty alike.
+ * @property activeGameId the match's current game id (story 0069), or `null` before it has produced one
+ *   — carried on every read, unlike [MatchStarting]'s one-shot push.
  */
 data class TableDetails(
     val tableId: String,
@@ -149,6 +173,7 @@ data class TableDetails(
     val deckType: String = "",
     val serverState: TableServerState = TableServerState.Unknown,
     val seats: List<Seat> = emptyList(),
+    val activeGameId: String? = null,
 )
 
 /** Where a [TableState] is in the join→construct→start lifecycle (app-schema; stops at the match). */

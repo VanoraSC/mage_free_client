@@ -250,6 +250,21 @@ class TableRelayIT {
                 )
                 assertNotNull(event.playerId, "MatchStarting should identify our own seat")
 
+                // 5. Story 0069 — a *read* of the table after the match started must independently
+                //    report the same game id `MatchStarting` pushed, proving `TableView.getGames()`
+                //    really is populated at this point and not just in theory. This is what lets a
+                //    client that missed the one-shot push (it opened the room afterwards) still learn
+                //    the game id.
+                val started =
+                    awaitDetail(session, roomId, tableId, "the table read to report the started game") {
+                        it.activeGameId != null
+                    }
+                assertEquals(
+                    event.gameId,
+                    started.activeGameId,
+                    "a table read after match-start should report the same game id MatchStarting pushed",
+                )
+
                 // The join also pushed a JOINED_TABLE, which maps to a TableUpdated for our table —
                 // the other half of the table-lifecycle callback path.
                 assertTrue(

@@ -37,6 +37,11 @@ import java.util.Date
  * **Per-seat detail (story 0040).** [mapDetail] adds the seat list the summary form reduces to counts:
  * each [mage.view.SeatView] becomes a [TableSeatSummary] via the pure [buildSeat]. The counting
  * behaviour of [map]/[build] is unchanged — [mapDetail] is purely additive.
+ *
+ * **Active game id (story 0069).** [mapDetail] also carries [TableView.getGames]' last element as
+ * `activeGameId` — the match's current game, present on every read rather than only on the one-shot
+ * `MatchStarting` push, so a client that opens the room after the match has already started can still
+ * find its way into the game.
  */
 public object TableMapper {
     /** Maps [view] to its app-schema summary by extracting the browse-relevant getters into [build]. */
@@ -98,8 +103,10 @@ public object TableMapper {
 
     /**
      * Maps [view] to a [TableDetail]: the same [TableSummary] [map] produces, plus one
-     * [TableSeatSummary] per `mage.view.SeatView` in seat order (story 0040). This is the reply to a
-     * `GetTable` — the room's real seat state, which the summary form reduces to filled/total counts.
+     * [TableSeatSummary] per `mage.view.SeatView` in seat order (story 0040), plus the match's current
+     * game id (story 0069) — [TableView.getGames]'s last element, or `null` before the match has
+     * produced a game. This is the reply to a `GetTable` — the room's real seat state, which the summary
+     * form reduces to filled/total counts.
      */
     public fun mapDetail(view: TableView): TableDetail =
         TableDetail(
@@ -113,6 +120,7 @@ public object TableMapper {
                         playerType = seat.playerType,
                     )
                 },
+            activeGameId = view.games.lastOrNull()?.toString(),
         )
 
     /**

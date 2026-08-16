@@ -96,6 +96,22 @@ class ObserveTableTest {
                 ),
         )
 
+    /**
+     * A table whose match is already under way (story 0069) — the shape a late-opening client's very
+     * first `GetTable` read sees. Carries [activeGameId] the way `TableView.getGames()` does; carries no
+     * `MatchStarting`, because that push already fired for whichever client caught the live transition.
+     */
+    private fun duelingDetail(activeGameId: String) =
+        TableDetail(
+            table = summary(TableStateCode.DUELING, filled = 2),
+            seats =
+                listOf(
+                    TableSeatSummary(index = 0, playerName = "pete", playerType = SeatPlayerTypeCode.HUMAN, occupied = true),
+                    TableSeatSummary(index = 1, playerName = "Computer", playerType = SeatPlayerTypeCode.COMPUTER_MAD, occupied = true),
+                ),
+            activeGameId = activeGameId,
+        )
+
     private fun clientOver(
         reads: Reads,
         connection: MutableStateFlow<ConnectionState> = MutableStateFlow(ConnectionState.Connected),
@@ -131,6 +147,43 @@ class ObserveTableTest {
             }
 
             assertEquals(listOf("t-1"), reads.requests.map { it.tableId })
+        }
+
+    @Test
+    fun aClientThatOpensAnAlreadyStartedTableLearnsTheGameIdFromTheOpenTimeReadAlone() =
+        runTest {
+            // Story 0069's defect, reproduced: this client never receives MatchStarting at all — it
+            // opens the room *after* the game already started (back from the lobby, or a relaunch), so
+            // the one-shot push already fired for someone else. A test built only on the MatchStarting
+            // path would pass against the unfixed code; this one does not touch that path at all.
+            val reads = Reads(listOf(duelingDetail(activeGameId = "g-9")))
+            val (client, _) = clientOver(reads)
+
+            client.observeTable("t-1", seed).test {
+                assertEquals(seed, awaitItem())
+                assertEquals("resumableGameId must come from activeGameId with no push at all", "g-9", awaitItem().resumableGameId)
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun aLateActiveGameIdReadDoesNotOverwriteAnAlreadyKnownMatchStarting() =
+        runTest {
+            // The live push, when it does arrive, is authoritative; a later read reporting null (its own
+            // scripted reply has not caught up yet) must not blank a resumableGameId already known.
+            val reads = Reads(listOf(waitingDetail()))
+            val (client, fake) = clientOver(reads)
+
+            client.observeTable("t-1", seed).test {
+                assertEquals(seed, awaitItem())
+                assertEquals(null, awaitItem().resumableGameId)
+
+                fake.emitPush(MatchStartingMessage(gameId = "g-9", tableId = "t-1", playerId = "p-1"))
+                assertEquals("g-9", awaitItem().resumableGameId)
+
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
     @Test
