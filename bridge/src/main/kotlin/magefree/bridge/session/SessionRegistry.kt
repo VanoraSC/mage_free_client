@@ -41,6 +41,7 @@ import magefree.protocol.UpdateDeck
 import magefree.protocol.WatchTable
 import org.slf4j.LoggerFactory
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration
@@ -116,22 +117,28 @@ public class LiveSession internal constructor(
     public val credentials: Credentials,
     private val upstream: UpstreamSession,
     scope: CoroutineScope,
+    /**
+     * The latest game snapshot per game (story 0054), fed by the pump below — handed in by
+     * [SessionRegistry.createSession] rather than owned here (story 0070).
+     *
+     * It is scoped **per username**, not per [LiveSession]: a `GameView` is built for a specific
+     * player (that player's own hand, `canPlayObjects` only for the priority holder), so two different
+     * usernames must never share an instance — a bridge-wide single cache would serve one player
+     * another player's view, and every single-client test would still pass. But *this* session ending
+     * — a park-TTL expiry, a sign-out, an upstream keepalive failure — says nothing about whether the
+     * same person is about to reconnect and needs their last known board back, and XMage gives a
+     * rejoining player no way to ask for a fresh one (`GameController.join`'s rejoin path only logs;
+     * `watch` refuses an already-seated player outright — confirmed against the pinned source). So the
+     * cache must outlive any one [LiveSession] and is instead owned by [SessionRegistry], keyed by
+     * [Credentials.username], and only handed to whichever session is currently live for that person.
+     */
+    private val gameStates: GameStateCache,
 ) {
     private val outbound =
         Channel<ServerMessage>(capacity = 256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     /** The durable outbound stream a socket forwarder binds to; rebindable across app-socket drops. */
     public val messages: ReceiveChannel<ServerMessage> get() = outbound
-
-    /**
-     * **This session's** latest game snapshot per game (story 0054), fed by the pump below.
-     *
-     * It lives here — one cache per [LiveSession] — because a `GameView` is built for a specific
-     * player: it carries that player's own hand and `canPlayObjects` only for the priority holder. A
-     * bridge-wide cache would serve one player another player's view, and every single-client test
-     * would still pass. See [GameStateCache].
-     */
-    private val gameStates = GameStateCache()
 
     /** Completes when the upstream link ends (clean drop, death, or [close]); watched for eviction. */
     internal val ended: CompletableDeferred<Unit> = CompletableDeferred()
@@ -144,6 +151,11 @@ public class LiveSession internal constructor(
     // so a snapshot pushed while the session is parked (no socket attached, pump still running — story
     // 0023) is cached exactly as one pushed to a bound socket is. That is what keeps the cached board
     // advancing during a disconnection instead of freezing at the moment the socket died.
+    //
+    // Story 0070: the cache is deliberately NOT cleared here on teardown. It is owned by the registry,
+    // keyed by username, so it outlives this one LiveSession — a later session for the same person
+    // inherits it warm instead of starting blank. Only GameOver (inside GameStateCache itself) ever
+    // drops an entry.
     private val pump: Job =
         scope.launch(CoroutineName("session-pump")) {
             try {
@@ -153,7 +165,6 @@ public class LiveSession internal constructor(
                 }
             } finally {
                 outbound.close()
-                gameStates.clear()
                 ended.complete(Unit)
             }
         }
@@ -235,12 +246,14 @@ public class LiveSession internal constructor(
     /** How many games this session currently has cached (story 0054) — for assertions about eviction. */
     internal fun cachedGameCount(): Int = gameStates.size()
 
-    /** Cancels the pump, drops the game-state cache, and disconnects the upstream. Idempotent. */
+    /**
+     * Cancels the pump and disconnects the upstream. Idempotent.
+     *
+     * Does **not** touch the game-state cache (story 0070) — it is owned by [SessionRegistry], keyed by
+     * username, and outlives this one session so a later reconnect for the same person starts warm.
+     */
     internal suspend fun close() {
         pump.cancel()
-        // Story 0054: the cache must not outlive the session it describes. The pump's own `finally`
-        // clears it too; doing it here as well covers an eviction that races the pump's teardown.
-        gameStates.clear()
         withContext(NonCancellable) { upstream.disconnect() }
     }
 }
@@ -285,6 +298,14 @@ public class SessionRegistry(
     private val mutex = Mutex()
     private val entries = HashMap<String, Entry>()
 
+    /**
+     * Per-username game-state caches (story 0070), outliving any one [LiveSession] — see the
+     * [LiveSession] constructor doc for why. [ConcurrentHashMap] because [createSession] can run
+     * concurrently for different sockets/usernames; [GameStateCache] is itself internally synchronized,
+     * so handing the same instance to a later session for the same username is safe.
+     */
+    private val gameStateCaches = ConcurrentHashMap<String, GameStateCache>()
+
     private class Entry(
         val resumeId: String,
         val live: LiveSession,
@@ -303,12 +324,17 @@ public class SessionRegistry(
      * registry's scope. Wires upstream-death to eviction so a dead session (bound or parked) can
      * never be resumed. The session is not yet registered — call [register] once it reaches
      * `CONNECTED`.
+     *
+     * Story 0070: hands the session [credentials.username]'s game-state cache — the same instance a
+     * previous session for that username left behind, if any, so a reconnect after any session
+     * discontinuity (not only a park/resume) starts warm rather than blank.
      */
     public fun createSession(
         upstream: UpstreamSession,
         credentials: Credentials,
     ): LiveSession {
-        val live = LiveSession(credentials, upstream, scope)
+        val gameStates = gameStateCaches.getOrPut(credentials.username) { GameStateCache() }
+        val live = LiveSession(credentials, upstream, scope, gameStates)
         live.ended.invokeOnCompletion {
             scope.launch { evictByLive(live) }
         }
