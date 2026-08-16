@@ -1,14 +1,11 @@
 package magefree.bridge.mapping
 
-import mage.abilities.Ability
 import mage.constants.CardType
 import mage.constants.PhaseStep
 import mage.constants.SubType
 import mage.constants.TurnPhase
-import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.GameView
-import mage.view.StackAbilityView
 import magefree.protocol.CardTypeCode
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.TurnPhaseCode
@@ -17,9 +14,6 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import sun.misc.Unsafe
-import java.lang.reflect.InvocationHandler
-import java.lang.reflect.Proxy
 import java.util.UUID
 
 /**
@@ -526,8 +520,11 @@ class GameViewMapperTest {
         // AbilityView.java (mage-common) hardcodes `this.name = "Ability"` for the ordinary case --
         // confirmed by reading the constructor directly, not assumed. The real name is only on the
         // nested getSourceCard(). Prove the fix reads it, and that `rules` (already correct) survives.
-        val sourceCard = GameViews.card(name = "Guide of Souls")
-        val abilityView = AbilityView(fakeAbility(rule = "Whenever another creature enters, gain 1 life."), "Guide of Souls", sourceCard)
+        val abilityView =
+            GameViews.abilityView(
+                sourceCard = GameViews.card(name = "Guide of Souls"),
+                rules = listOf("Whenever another creature enters, gain 1 life."),
+            )
 
         val mapped = GameViewMapper.mapCard(abilityView)
 
@@ -538,66 +535,42 @@ class GameViewMapperTest {
 
     @Test
     fun `mapCard falls back to the placeholder if an AbilityView somehow has no source card`() {
-        val abilityView = AbilityView(fakeAbility(), "Unknown", null)
-
-        assertEquals("Ability", GameViewMapper.mapCard(abilityView).name)
+        assertEquals("Ability", GameViewMapper.mapCard(GameViews.abilityView(sourceCard = null)).name)
     }
 
     @Test
     fun `mapCard names a StackAbilityView from its source card too (story 0072)`() {
         // StackAbilityView is a *separate* sibling class from AbilityView (does not extend it) --
         // upstream's own comment on the field says its view "will be replaced by sourceCard" in the
-        // GUI, confirming this is the sanctioned way to read it, not a guess. Its real constructor
-        // needs a full Game/StackAbility context impractical to fabricate hermetically, so this
-        // allocates the instance directly (bypassing the constructor, same idea as this file's
-        // existing nullOutCounters/breakComposedText reflection helpers) and sets only the two
-        // fields displayName() reads.
-        val stackAbilityView = allocateStackAbilityView(name = "Ability", sourceCardName = "Guide of Souls")
+        // GUI, confirming this is the sanctioned way to read it, not a guess.
+        val stackAbilityView = GameViews.stackAbilityView(sourceCard = GameViews.card(name = "Guide of Souls"))
 
         assertEquals("Guide of Souls", GameViewMapper.mapCard(stackAbilityView).name)
     }
 
-    /** Allocates a [StackAbilityView] without running its constructor and sets [name]/`sourceCard`. */
-    private fun allocateStackAbilityView(
-        name: String,
-        sourceCardName: String,
-    ): StackAbilityView {
-        val unsafeField = Unsafe::class.java.getDeclaredField("theUnsafe")
-        unsafeField.isAccessible = true
-        val unsafe = unsafeField.get(null) as Unsafe
-        val instance = unsafe.allocateInstance(StackAbilityView::class.java) as StackAbilityView
+    @Test
+    fun `mapCard resolves art for an AbilityView from its source card, not its own (blank) identity (story 0072)`() {
+        // Found live (Pete, 2026-08-16) after the naming fix above shipped: Soul Warden's own
+        // triggered ability had no art at all. AbilityView never sets expansionSetCode/cardNumber on
+        // itself -- only the nested sourceCard carries the real printing, which the art loader keys
+        // requests on. Distinct defect from the naming one: this stays broken even once the name
+        // renders correctly, since it's a different pair of fields.
+        val abilityView = GameViews.abilityView(sourceCard = GameViews.card(setCode = "SOI", collectorNumber = "17"))
 
-        val nameField = CardView::class.java.getDeclaredField("name")
-        nameField.isAccessible = true
-        nameField.set(instance, name)
+        val mapped = GameViewMapper.mapCard(abilityView)
 
-        val sourceCardField = StackAbilityView::class.java.getDeclaredField("sourceCard")
-        sourceCardField.isAccessible = true
-        sourceCardField.set(instance, GameViews.card(name = sourceCardName))
-
-        return instance
+        assertEquals("SOI", mapped.setCode)
+        assertEquals("17", mapped.collectorNumber)
     }
 
-    /**
-     * A minimal [Ability] double via [Proxy] — [Ability] is a large interface with no simple concrete
-     * implementation that doesn't require a live `Game`/permanent context. [AbilityView]'s constructor
-     * only calls three methods on it (verified by reading the constructor directly), so only those need
-     * real answers; everything else returns `null`/defaults, which is never reached.
-     */
-    private fun fakeAbility(rule: String = "Test rule text."): Ability {
-        val handler =
-            InvocationHandler { _, method, _ ->
-                when (method.name) {
-                    "getId" -> UUID.randomUUID()
-                    "getRule" -> rule
-                    "getManaCostSymbols" -> emptyList<String>()
-                    "hashCode" -> 0
-                    "equals" -> false
-                    "toString" -> "fakeAbility"
-                    else -> null
-                }
-            }
-        return Proxy.newProxyInstance(Ability::class.java.classLoader, arrayOf(Ability::class.java), handler) as Ability
+    @Test
+    fun `mapCard resolves art for a StackAbilityView from its source card too (story 0072)`() {
+        val stackAbilityView = GameViews.stackAbilityView(sourceCard = GameViews.card(setCode = "SOI", collectorNumber = "17"))
+
+        val mapped = GameViewMapper.mapCard(stackAbilityView)
+
+        assertEquals("SOI", mapped.setCode)
+        assertEquals("17", mapped.collectorNumber)
     }
 
     /** Nulls out every collection field of a [GameView], standing in for a sparse upstream view. */
