@@ -64,8 +64,14 @@ internal object CardArtUserAgent {
  * Replaces the request's `User-Agent` (rather than appending to it) so exactly one value goes out —
  * an added header would leave OkHttp's generic default on the wire alongside ours.
  *
- * Registered as an *application* interceptor, which runs before OkHttp's `BridgeInterceptor` fills in
- * its default, so the header set here is the one that survives.
+ * Registered as a **network** interceptor ([defaultArtCallFactory]'s `addNetworkInterceptor`, not
+ * `addInterceptor`) — Coil's own docs (coil-kt.github.io/coil/network/) call this out specifically as
+ * what "ensures headers apply to every image request handled by your ImageLoader". An *application*
+ * interceptor does not reliably do so through Coil's network fetcher: registering this one that way
+ * looked correct (it compiled, every unit test using a fake `Call.Factory` passed, since a fake never
+ * exercises Coil's real dispatch) but silently never reached Scryfall's server — every art fetch,
+ * everywhere in the app, failed with HTTP 400 `generic_user_agent`, Scryfall's rejection for OkHttp's
+ * own default UA, exactly as if this interceptor did not exist (found live, Pete, 2026-08-16).
  */
 internal class UserAgentInterceptor(
     private val userAgent: String,
@@ -87,5 +93,5 @@ internal class UserAgentInterceptor(
 internal fun defaultArtCallFactory(context: Context): Call.Factory =
     OkHttpClient
         .Builder()
-        .addInterceptor(UserAgentInterceptor(CardArtUserAgent.value(context)))
+        .addNetworkInterceptor(UserAgentInterceptor(CardArtUserAgent.value(context)))
         .build()
