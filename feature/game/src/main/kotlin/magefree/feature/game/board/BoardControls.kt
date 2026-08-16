@@ -464,7 +464,8 @@ internal fun controlsFor(
     state: GameState,
     hasPickedTarget: Boolean = false,
 ): PromptControlsUi? {
-    val prompt = state.prompt ?: return null
+    val prompt =
+        state.prompt ?: return priorityFallbackControls(state)
     val message = prompt.message.cleanedOrNull()
     // The server's own list of what may be played/tapped right now. Never recomputed, never widened.
     val offeredIds = state.playable.map { it.objectId }.toSet()
@@ -785,6 +786,34 @@ private fun offBoardCandidateButtons(
         val label = state.nameFor(id) ?: "$UNNAMED_CANDIDATE_LABEL ${++unnamed}"
         ControlButton(label = label, action = action(id))
     }
+}
+
+/**
+ * Story 0071's fallback: `state.prompt == null` does not mean "nothing to do" — a 0070-restored
+ * rejoin snapshot never carries `prompt` (only a live push does, by `GameViewMapper.apply`'s own
+ * explicit design; see that function's doc comment), so a viewer correctly shown as holding priority
+ * right after such a rejoin would otherwise see no controls at all, not even Pass.
+ *
+ * `sendPlayerAction`/`PASS_PRIORITY_*` is out-of-band (`bridge/.../mapping/GameRelay.kt:97`) — not
+ * tied to answering a specific open prompt — so sending it here needs no server round-trip first.
+ * `state.playable` **is** carried by a snapshot restore (only `prompt` itself is withheld), so it is
+ * read directly here in place of a prompt's own `options`, which do not exist in this case.
+ *
+ * Returns `null` when the viewer does not hold priority or no snapshot has folded yet — there is
+ * nothing this fallback can honestly offer in either case.
+ */
+private fun priorityFallbackControls(state: GameState): PromptControlsUi? {
+    if (!state.viewerHasPriority || !state.hasSnapshot) return null
+    val offeredIds = state.playable.map { it.objectId }.toSet()
+    return PromptControlsUi.Priority(
+        message = PRIORITY_FALLBACK_MESSAGE,
+        pickableObjectIds = offeredIds,
+        buttons =
+            buildList {
+                add(ControlButton(label = PASS_LABEL, action = BoardAction.PassPriority, isPrimary = true))
+                addAll(offBoardCandidateButtons(state, offeredIds, BoardAction::PlayObject))
+            },
+    )
 }
 
 /** The mana types actually floating in [pool], with their counts — never the empty ones. */

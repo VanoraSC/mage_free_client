@@ -34,12 +34,47 @@ class BoardControlsTest {
 
     @Test
     fun `offers no controls at all when the server is not waiting on the viewer`() {
-        // `GameState.prompt` is 0052's "**the** outstanding question, or null when the server is not
-        // waiting on the viewer". No prompt means no question, so there is nothing to answer — and in
-        // particular a board with playable objects but no prompt offers nothing.
-        val state = baseState().copy(prompt = null, playable = listOf(PlayableObject("h-1")))
+        // `baseState()` defaults `viewerHasPriority = true`, which — since story 0071 — is itself
+        // enough to offer fallback controls even with `prompt = null` (see the next test). So the
+        // actual "server is not waiting" case must say so explicitly, not just null the prompt; a
+        // version of this test that left `viewerHasPriority` at the default would pass against the
+        // unfixed *and* the fixed code (it would assert null for the wrong reason before 0071, and
+        // wrongly fail after it) and prove nothing either way.
+        val state = baseState().copy(prompt = null, viewerHasPriority = false, playable = listOf(PlayableObject("h-1")))
 
         assertNull(controlsFor(state))
+    }
+
+    @Test
+    fun `offers no controls when no snapshot has folded yet, even if viewerHasPriority is somehow set`() {
+        val state = baseState().copy(prompt = null, hasSnapshot = false)
+
+        assertNull(controlsFor(state))
+    }
+
+    @Test
+    fun `falls back to Pass when priority is held but no live prompt exists (story 0071)`() {
+        // The defect: a 0070-restored rejoin snapshot never carries `prompt` (only a live push does,
+        // by GameViewMapper.apply's own design) — so a viewer correctly shown holding priority right
+        // after such a rejoin would otherwise see no controls at all, not even Pass. Proven to fail
+        // against the unfixed `controlsFor` (a bare `state.prompt ?: return null`) — see PR notes.
+        val state = baseState().copy(prompt = null, playable = listOf(PlayableObject("h-1")))
+
+        val controls = controlsFor(state)
+
+        assertTrue("expected fallback Priority controls, got $controls", controls is PromptControlsUi.Priority)
+        assertEquals(PRIORITY_FALLBACK_MESSAGE, controls!!.message)
+        assertEquals(setOf("h-1"), controls.pickableObjectIds)
+        assertEquals(BoardAction.PlayObject("h-1"), controls.actionFor("h-1"))
+        assertTrue(controls.buttons.any { it.action == BoardAction.PassPriority })
+        assertEquals(PASS_LABEL, controls.buttons.first().label)
+    }
+
+    @Test
+    fun `the fallback offers only Pass when nothing is playable`() {
+        val controls = controlsFor(baseState().copy(prompt = null, playable = emptyList()))
+
+        assertEquals(listOf(BoardAction.PassPriority), controls!!.buttons.map { it.action })
     }
 
     // ---- Select: play what the server offered, or pass ----------------------------------------------

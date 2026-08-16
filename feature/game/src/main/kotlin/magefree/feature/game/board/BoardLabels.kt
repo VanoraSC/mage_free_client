@@ -136,6 +136,15 @@ const val WAITING_ON_YOU_WHILE_HIDDEN: String = "Waiting on you — show the con
 /** Pass priority — the most repeated interaction in a game (§9.1), so it is always the primary button. */
 const val PASS_LABEL: String = "Pass priority"
 
+/**
+ * The message for [controlsFor]'s no-live-prompt-but-priority-held fallback (story 0071) —
+ * `viewerHasPriority == true` with `prompt == null`, the shape a 0070-restored rejoin snapshot always
+ * has, since a snapshot cannot itself carry a one-shot prompt. Deliberately distinct wording from any
+ * real prompt's `message` — this is never something the server actually said, and must not read as if
+ * it were.
+ */
+const val PRIORITY_FALLBACK_MESSAGE: String = "Your priority — nothing new from the server since you reconnected"
+
 /** The player's confirmation that they have chosen enough targets: the final *done* (§17.2). */
 const val DONE_LABEL: String = "Done choosing"
 
