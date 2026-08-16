@@ -13,7 +13,7 @@ ktlint = "13.1.0"
 mage = "1.4.60"
 
 # Android / Compose / DI (story 0007)
-agp = "9.3.1"
+agp = "8.13.2"
 ksp = "2.3.10"
 hilt = "2.57.2"
 androidx-core-ktx = "1.16.0"

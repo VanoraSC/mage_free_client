@@ -16,18 +16,15 @@ internal val Project.libs: VersionCatalog
  * `compileSdk`/`minSdk`, Java 17, and Kotlin `jvmTarget` 17. Keeping this in one place is why a
  * module never re-declares SDK/Java/Kotlin versions — see the Project toolchain baseline.
  */
-internal fun Project.configureKotlinAndroid(commonExtension: CommonExtension) {
+internal fun Project.configureKotlinAndroid(
+    commonExtension: CommonExtension<*, *, *, *, *, *>,
+) {
     commonExtension.apply {
         compileSdk = 36
-        // AGP 9 dropped CommonExtension's generic type parameters, and with them the lambda-block
-        // sugar (`defaultConfig { }`, `compileOptions { }`) that came from the old app/library-typed
-        // generics — that sugar survives only on the concrete ApplicationExtension/LibraryExtension
-        // subtypes now. configureKotlinAndroid is shared across both, so it configures the plain
-        // property instead.
-        defaultConfig.apply {
+        defaultConfig {
             minSdk = 26
         }
-        compileOptions.apply {
+        compileOptions {
             sourceCompatibility = JavaVersion.VERSION_17
             targetCompatibility = JavaVersion.VERSION_17
         }
