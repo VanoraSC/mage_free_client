@@ -21,6 +21,10 @@ run in Docker containers. The Android `:app` build stays on the host. Full desig
 ./scripts/dev up bridge
 curl http://localhost:8080/health          # {"status":"ok","service":"mage-bridge"}
 
+# Rebuild an image after a source change (`up` alone does not rebuild an existing image).
+./scripts/dev build bridge
+./scripts/dev up bridge
+
 # A shell in the build container, or raw maven.
 ./scripts/dev sh
 ./scripts/dev mvn -version
