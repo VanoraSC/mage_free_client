@@ -5,22 +5,18 @@
 FROM mage-free-client/build:latest AS build
 ARG MAGE_REPO=https://github.com/magefree/mage
 ARG MAGE_REF=e0fe4b6f6a
-# Clone is its own layer, separate from the install below — kept cached across rebuilds by
-# Docker's normal layer cache (a MAGE_REF bump is the only thing that invalidates it) instead of
-# being re-fetched every time something about the install step changes.
-RUN git clone --filter=tree:0 "${MAGE_REPO}" /tmp/mage \
-    && git -C /tmp/mage checkout "${MAGE_REF}"
-
-# Expensive layer: full-reactor install — every module incl. the card database (Mage.Sets) and
-# the runtime plugins the server distribution bundles.
+# Expensive, cached layer: clone the pinned ref and full-reactor install — every module incl. the
+# card database (Mage.Sets) and the runtime plugins the server distribution bundles.
 #
-# The cache mount only speeds up *rebuilds* of this layer — it must not persist into the image,
-# and it does not: only /opt/xmage (staged below) is copied into the final stage, so anything
-# Maven downloads under /root/.m2 here is pure build-time cache, safe to keep out of the image
-# layer entirely (unlike jvm/Dockerfile's own mvn install, which deliberately bakes mage-common
-# into /root/.m2 for downstream images to inherit — do not add a cache mount there).
+# The cache mount only speeds up *rebuilds* of this layer (a MAGE_REF bump, say) — it must not
+# persist into the image, and it does not: only /opt/xmage (staged below) is copied into the final
+# stage, so anything Maven downloads under /root/.m2 here is pure build-time cache, safe to keep out
+# of the image layer entirely (unlike jvm/Dockerfile's own mvn install, which deliberately bakes
+# mage-common into /root/.m2 for downstream images to inherit — do not add a cache mount there).
 RUN --mount=type=cache,target=/root/.m2,sharing=locked \
-    cd /tmp/mage && mvn -q -DskipTests -B install
+    git clone --filter=tree:0 "${MAGE_REPO}" /tmp/mage \
+    && git -C /tmp/mage checkout "${MAGE_REF}" \
+    && (cd /tmp/mage && mvn -q -DskipTests -B install)
 # Cheap layer: package the server + assemble the distribution in ONE invocation (so the project's
 # own mage-server jar is attached and included — the assembly plugin isn't bound to a phase), then
 # stage the unpacked distribution. Kept separate so assembly/runtime tweaks don't re-run the install.
