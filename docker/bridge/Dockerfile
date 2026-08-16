@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Runnable bridge service (story 0045) — the Ktor app from `:bridge`, pointed at the reference
 # XMage server, so the **app's** networking stack (`:core:network`'s KtorBridgeClient) has something
 # real to talk to. Until now `:bridge` was only ever *built* and *tested* in a container; nothing ran it.
@@ -25,7 +26,16 @@ COPY core/model/ core/model/
 COPY bridge/ bridge/
 # `installDist` (not `run`): the application plugin's start script honours JAVA_OPTS, which is how the
 # JDK-17 `--add-opens` flags below reach the process without touching bridge/build.gradle.kts.
-RUN sh ./gradlew --no-daemon --console=plain :bridge:installDist
+#
+# The cache mount is what makes this reliable: a plain `RUN` gets none of the Gradle User Home
+# (~/.gradle) that a normal host build accumulates, so every rebuild whose source layers invalidate
+# this step re-downloads the Gradle distribution itself *and* every Maven/Gradle dependency from
+# scratch — the exact thing that kept timing out (`Read timed out` fetching Gradle's zip, then again
+# fetching `kotlin-compiler-embeddable`). A BuildKit cache mount persists ~/.gradle across builds in
+# its own cache store, independent of the image-layer cache the COPYs above invalidate, so a source
+# change only re-resolves what actually changed instead of everything.
+RUN --mount=type=cache,target=/root/.gradle,sharing=locked \
+    sh ./gradlew --no-daemon --console=plain :bridge:installDist
 
 FROM eclipse-temurin:17-jre
 COPY --from=build /workspace/bridge/build/install/bridge /opt/bridge
