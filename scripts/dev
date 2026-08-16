@@ -11,6 +11,15 @@
 #   ./scripts/dev sh               # interactive shell in the build container
 set -euo pipefail
 
+# Without this, BuildKit's default provenance/SBOM attestations embed a build timestamp, so every
+# image gets a new ID on every rebuild even when every layer is a cache hit. `build`'s image is a
+# FROM base for server/Dockerfile and bridge/Dockerfile, so that churn busts their cache too,
+# forcing their multi-minute upstream-mage clone+install to redo for no real reason. Confirmed by
+# rebuilding twice and diffing `docker image inspect --format '{{.Id}}'` — this env var was the
+# only thing (of several tried, incl. the compose-level provenance/sbom: false fields) that
+# actually kept the ID stable.
+export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+
 # Resolve the repo root so the script works from anywhere.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE=(docker compose -f "$ROOT/docker/docker-compose.yml")
@@ -30,7 +39,23 @@ fi
 case "$cmd" in
   gradle) exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build sh ./gradlew "$@" ;;
   mvn)    exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build mvn "$@" ;;
-  build)  exec "${COMPOSE[@]}" build "$@" ;;
+  build)
+    if [ "$#" -eq 0 ]; then
+      # No service named: build all of them, but sequentially and in dependency order rather than
+      # via a single multi-target `compose build`. Compose's bake builder (default since Compose
+      # v5) does not know that server/Dockerfile and bridge/Dockerfile's `FROM
+      # mage-free-client/build:latest` is the `build` service's own image — building all three at
+      # once, it tries to *pull* that tag from Docker Hub, gets `pull access denied` (the image
+      # only exists locally), and cancels the other in-flight targets. Building `build` first,
+      # then the others as separate single-target invocations, sidesteps this: by the time
+      # xmage-server/bridge build, the base image already exists in the local Docker image store.
+      "${COMPOSE[@]}" build build
+      "${COMPOSE[@]}" build xmage-server
+      exec "${COMPOSE[@]}" build bridge
+    else
+      exec "${COMPOSE[@]}" build "$@"
+    fi
+    ;;
   up)     exec "${COMPOSE[@]}" up -d "$@" ;;
   down)   exec "${COMPOSE[@]}" down "$@" ;;
   sh)     exec "${COMPOSE[@]}" run --rm "${RUN_ENV[@]}" build bash ;;

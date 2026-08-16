@@ -7,6 +7,15 @@ services:
     build:
       context: .
       dockerfile: jvm/Dockerfile
+      # BuildKit's default provenance/SBOM attestations embed a build timestamp, so the image gets
+      # a new ID on every rebuild even when every layer is a cache hit — that new ID then busts
+      # xmage-server's and bridge's `FROM mage-free-client/build:latest` cache downstream, forcing
+      # their multi-minute upstream-mage clone+install to redo for no real reason. These fields
+      # alone did not fix it (confirmed by rebuilding twice and diffing image IDs) — the
+      # BUILDX_NO_DEFAULT_ATTESTATIONS=1 env var scripts/dev sets is what actually disables them;
+      # kept here too as documentation/best-effort for anyone invoking `docker compose` directly.
+      provenance: false
+      sbom: false
     image: mage-free-client/build:latest
     environment:
       # No Android SDK in this image — skip Android modules so :bridge configures/builds cleanly.
@@ -25,6 +34,8 @@ services:
       context: .
       dockerfile: server/Dockerfile
     image: mage-free-client/xmage-server:latest
+    depends_on:
+      - build
     ports:
       - "17171:17171"
     # Startup loads the card database (~1–2 min); readiness is a TCP connect to 17171.
@@ -41,6 +52,7 @@ services:
       dockerfile: docker/bridge/Dockerfile
     image: mage-free-client/bridge:latest
     depends_on:
+      - build
       - xmage-server
     environment:
       # Pinned-server posture (architecture.md decision #6): the app never names an XMage host — the
