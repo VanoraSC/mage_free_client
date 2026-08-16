@@ -2,6 +2,7 @@ package magefree.bridge.session
 
 import magefree.protocol.GameInformed
 import magefree.protocol.GameOver
+import magefree.protocol.GamePrompt
 import magefree.protocol.GamePrompted
 import magefree.protocol.GameStarted
 import magefree.protocol.GameStateSnapshot
@@ -50,6 +51,7 @@ public class GameStateCache(
     private class Entry(
         val state: GameStateView,
         val capturedAtEpochMs: Long,
+        val prompt: GamePrompt?,
     )
 
     /**
@@ -78,14 +80,21 @@ public class GameStateCache(
      * snapshot pushed while the session is parked (story 0023 keeps the pump running with no socket
      * attached) is cached just the same. That is what makes the cache keep advancing while the app is
      * away rather than freezing at the moment the socket died.
+     *
+     * **The prompt half (story 0074).** Only [GamePrompted] ever carries a `prompt` — every other
+     * branch here passes `null`, which *clears* whatever was cached: a plain state push or narration
+     * arriving after a prompt means the prompt is no longer the live truth (answered, superseded, or
+     * the moment passed), so serving it again on a later resync would be wrong. `GamePrompted` is
+     * therefore the only producer of a non-null cached prompt, and any other observed message is what
+     * retires one.
      */
     public fun observe(message: ServerMessage) {
         when (message) {
-            is GameStarted -> put(message.gameId, message.state)
-            is GameStateUpdated -> put(message.gameId, message.state)
+            is GameStarted -> put(message.gameId, message.state, prompt = null)
+            is GameStateUpdated -> put(message.gameId, message.state, prompt = null)
             // The snapshot is optional on this one (0051 models it as nullable); the narration is not.
-            is GameInformed -> message.state?.let { put(message.gameId, it) }
-            is GamePrompted -> put(message.gameId, message.state)
+            is GameInformed -> message.state?.let { put(message.gameId, it, prompt = null) }
+            is GamePrompted -> put(message.gameId, message.state, prompt = message.prompt)
             // The game is over: the cache must not outlive the thing it describes. The final snapshot is
             // deliberately not kept — a client that reconnects after the end is told there is no state
             // rather than being handed a board that no longer exists, and the `GameOver` push itself is
@@ -102,6 +111,10 @@ public class GameStateCache(
      * A miss is **never** an empty [GameStateSnapshot]. An all-defaults [GameStateView] is a perfectly
      * legal snapshot — no players, no hand, nothing playable — so a client cannot tell it from a real
      * board and would show it, and let a player act on it, as though it were true.
+     *
+     * [GameStateSnapshot.prompt] (story 0074) is [Entry.prompt] verbatim — `null` unless the most
+     * recent thing [observe] recorded for this game was a [GamePrompted] with nothing since to retire
+     * it. See [observe]'s KDoc for why re-serving it is correct, not a guess.
      */
     public fun answer(request: GetGameState): ServerMessage {
         val entry = snapshots[request.gameId] ?: return unavailable(request.gameId)
@@ -109,6 +122,7 @@ public class GameStateCache(
             gameId = request.gameId,
             state = entry.state,
             capturedAtEpochMs = entry.capturedAtEpochMs,
+            prompt = entry.prompt,
         )
     }
 
@@ -123,8 +137,9 @@ public class GameStateCache(
     private fun put(
         gameId: String,
         state: GameStateView,
+        prompt: GamePrompt?,
     ) {
-        snapshots[gameId] = Entry(state = state, capturedAtEpochMs = now())
+        snapshots[gameId] = Entry(state = state, capturedAtEpochMs = now(), prompt = prompt)
     }
 
     private fun unavailable(gameId: String): GameStateUnavailable =

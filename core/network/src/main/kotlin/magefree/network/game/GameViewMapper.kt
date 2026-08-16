@@ -45,13 +45,21 @@ internal object GameViewMapper {
      * the server sends the whole `GameView` each time, so a value missing from this snapshot is genuinely
      * absent rather than "unchanged" (see the file header of [GameState]).
      *
-     * The fields *not* owned by a snapshot — [GameState.prompt], [GameState.lastMessage],
-     * [GameState.lastError], [GameState.result], [GameState.isWatching] — are left alone here and moved
-     * only by the event that produces them, in [GameEventFold].
+     * The fields *not* owned by a snapshot — [GameState.lastMessage], [GameState.lastError],
+     * [GameState.result], [GameState.isWatching] — are left alone here and moved only by the event that
+     * produces them, in [GameEventFold].
+     *
+     * [GameState.prompt] is the **one narrow exception** (story 0074): [resyncPrompt], when non-null, is
+     * this session's last-cached outstanding question (`GameStateSnapshot.prompt`, itself only ever set
+     * from a real `GamePrompted` the bridge relayed — see `GameStateCache`'s own KDoc for why re-serving
+     * it is correct rather than a guess). A resync **restores** a prompt that would otherwise be missing;
+     * it never **clears** one a live push already set — [resyncPrompt] being `null` leaves [state]'s
+     * existing [GameState.prompt] alone, it does not null it out.
      */
     fun apply(
         state: GameState,
         view: GameStateView,
+        resyncPrompt: GamePromptMessage? = null,
     ): GameState =
         state.copy(
             turn = view.turn,
@@ -73,6 +81,7 @@ internal object GameViewMapper {
             priorityTimeSeconds = view.priorityTimeSeconds,
             bufferTimeSeconds = view.bufferTimeSeconds,
             hasSnapshot = true,
+            prompt = resyncPrompt?.let { toPrompt(it) } ?: state.prompt,
         )
 
     /** The app-schema face of a wire prompt. Total over 0051's closed set. */
