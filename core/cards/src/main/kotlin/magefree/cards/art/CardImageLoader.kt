@@ -1,6 +1,7 @@
 package magefree.cards.art
 
 import android.content.Context
+import android.util.Log
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
@@ -126,7 +127,19 @@ class CardImageLoader(
         val result = _imageLoader.value.execute(buildRequest(request))
         return when (result) {
             is SuccessResult -> true
-            is ErrorResult -> false
+            is ErrorResult -> {
+                // ArtDownloadManager only counts failures, it does not see why — without this, a
+                // systemic problem (every request 4xx-ing, DNS down, TLS failure) is
+                // indistinguishable from ordinary per-card misses (a bad printing, an offline
+                // device) in anything short of attaching a debugger. Logcat is the only place this
+                // is currently visible; there is no in-app diagnostic surface for it yet.
+                Log.w(
+                    LOG_TAG,
+                    "Art fetch failed for ${request.setCode} #${request.collectorNumber} " +
+                        "(${source.primaryUrl(request)}): ${result.throwable}",
+                )
+                false
+            }
         }
     }
 
@@ -176,6 +189,7 @@ class CardImageLoader(
     }
 
     private companion object {
+        const val LOG_TAG = "CardImageLoader"
         const val DISK_CACHE_DIR = "card_art"
         const val DISK_CACHE_MAX_BYTES = 512L * 1024 * 1024 // 512 MB ceiling for warmed art
         const val MEMORY_CACHE_PERCENT = 0.20
