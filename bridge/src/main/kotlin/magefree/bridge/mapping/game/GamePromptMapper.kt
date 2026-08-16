@@ -54,20 +54,29 @@ public object GamePromptMapper {
     /**
      * `GAME_TARGET` → [TargetPrompt]. `cardsView1` is the candidate set the server chose to show,
      * `targets` the ids it marked, and the payload's `flag` is upstream's `required`.
+     *
+     * `targets` is `null` (not merely empty) for exactly one shape: `PICK_ABILITY` — ordering
+     * simultaneous triggered abilities — whose `GameController.java` overload never populates it
+     * (`Mage.Server/.../GameController.java:881-885`, read directly), because for that prompt the
+     * candidate set *is* the answer set; there is no separate narrowing the way `PICK_TARGET`
+     * always sends (a real, possibly-empty `Set`). Story 0072: without this fallback every
+     * candidate in `cardsView1` is unpickable, since [TargetPrompt.targetIds] is the app's only
+     * source of "what may be tapped" for this prompt kind.
      */
     public fun target(
         gameId: UUID?,
         message: GameClientMessage,
     ): GamePrompted =
         prompted(gameId, message.gameView) {
+            val cards = GameViewMapper.mapCards(message.cardsView1)
             TargetPrompt(
                 message = message.text(),
-                cards = GameViewMapper.mapCards(message.cardsView1),
+                cards = cards,
                 targetIds =
                     message.targets
-                        .orEmpty()
-                        .filterNotNull()
-                        .map { it.toString() },
+                        ?.filterNotNull()
+                        ?.map { it.toString() }
+                        ?: cards.map { it.id },
                 required = message.isFlag,
                 options = message.optionsView(),
             )

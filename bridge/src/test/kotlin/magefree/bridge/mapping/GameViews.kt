@@ -9,6 +9,7 @@ import mage.counters.Counter
 import mage.players.PlayableObjectStats
 import mage.players.PlayableObjectsList
 import mage.util.SubTypes
+import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.CardsView
 import mage.view.CombatGroupView
@@ -19,6 +20,7 @@ import mage.view.ManaPoolView
 import mage.view.PermanentView
 import mage.view.PlayerView
 import mage.view.RevealedView
+import mage.view.StackAbilityView
 import java.util.UUID
 
 /**
@@ -111,6 +113,42 @@ internal object GameViews {
             set("manaCostLeftStr", manaCost)
             set("manaCostRightStr", emptyList<String>())
             set("faceDown", faceDown)
+        }
+
+    /**
+     * An `AbilityView` (story 0072) — what upstream wraps a triggered ability in for the
+     * ordering-simultaneous-triggers prompt (`CardsView(Collection<Ability>, Game)`). Real upstream
+     * instances always carry the literal placeholder `name = "Ability"` for the ordinary case (its
+     * constructor hardcodes this — never `sourceCard`'s real name, never `expansionSetCode`/
+     * `cardNumber` of its own), so this builder mirrors that shape exactly rather than a corrected one
+     * — the mapper is what corrects it, and a fixture that pre-corrects the input would let a
+     * regression there pass unnoticed.
+     */
+    fun abilityView(
+        sourceCard: CardView? = card(),
+        rules: List<String> = listOf("Whenever another creature enters, gain 1 life."),
+    ): AbilityView =
+        allocate(AbilityView::class.java).apply {
+            set("id", UUID.randomUUID())
+            set("name", "Ability")
+            set("sourceCard", sourceCard)
+            set("rules", rules)
+        }
+
+    /**
+     * A `StackAbilityView` (story 0072) — the *separate* sibling type upstream uses for the ordinary
+     * game stack (`GameView.stack`), not to be confused with [abilityView]. Same "carries upstream's
+     * literal placeholder, uncorrected" rationale.
+     */
+    fun stackAbilityView(
+        sourceCard: CardView? = card(),
+        rules: List<String> = listOf("Whenever another creature enters, you gain 1 life."),
+    ): StackAbilityView =
+        allocate(StackAbilityView::class.java).apply {
+            set("id", UUID.randomUUID())
+            set("name", "Ability")
+            set("sourceCard", sourceCard)
+            set("rules", rules)
         }
 
     /** A `PermanentView` (a `CardView` plus battlefield state). */

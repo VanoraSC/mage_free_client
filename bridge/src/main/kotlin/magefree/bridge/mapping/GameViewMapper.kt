@@ -3,12 +3,14 @@ package magefree.bridge.mapping
 import mage.constants.CardType
 import mage.constants.PhaseStep
 import mage.constants.TurnPhase
+import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.CardsView
 import mage.view.CombatGroupView
 import mage.view.GameView
 import mage.view.PermanentView
 import mage.view.PlayerView
+import mage.view.StackAbilityView
 import magefree.protocol.CardTypeCode
 import magefree.protocol.GameCardView
 import magefree.protocol.GameCombatGroupView
@@ -186,13 +188,38 @@ public object GameViewMapper {
      * `power`/`toughness` stay strings on purpose — `*` is a real value — and are carried exactly as
      * sent, including the `"0"` a noncreature permanent reports. Deciding whether to *show* them is the
      * board's job, not the mapper's.
+     *
+     * **Ability naming (story 0072).** Two distinct upstream view types wrap a non-card ability object,
+     * both read directly, and **both** hardcode a generic `name`:
+     * - `AbilityView` (`mage.view.AbilityView`) — a `CardsView` built from a `Collection<Ability>`,
+     *   which is how the ordering-simultaneous-triggers prompt (`GAME_TARGET`/`PICK_ABILITY`) sends its
+     *   candidates. Its constructor sets `name = "Ability"` unconditionally for the ordinary
+     *   battlefield/stack/hand case (`setName(...)` is called only for the emblem/dungeon/plane special
+     *   cases, neither of which this prompt produces).
+     * - `StackAbilityView` (`mage.view.StackAbilityView`) — a **separate, sibling** class (does *not*
+     *   extend `AbilityView`), used for the ordinary game stack (`GameView.stack`, i.e. every triggered
+     *   or activated ability sitting on the stack during normal play, not just the ordering prompt).
+     *   Also sets `name = "Ability"` unconditionally — confirmed by reading the constructor directly,
+     *   not assumed from the symptom looking similar.
+     *
+     * Both expose the real identifying name via their own `getSourceCard()` — a nested `CardView` for
+     * the source permanent/card — which this function otherwise never reads. [displayName] resolves
+     * whichever one applies; `rules` (the ability's actual text, already correct upstream) is untouched.
+     *
+     * **No art (found live, Pete, 2026-08-16 — Soul Warden's own triggered ability was the reported
+     * example).** Same root cause, different field: neither `AbilityView` nor `StackAbilityView` ever
+     * sets `expansionSetCode`/`cardNumber` on *itself* — only the nested `sourceCard` carries the real
+     * printing identity, which [setCode]/[collectorNumber] now read instead. Without this, the app's
+     * card-art loader receives a blank set/number pair, resolves to a request with no valid art, and
+     * the object renders with no image at all — a distinct symptom from the naming bug (this one stays
+     * broken even after the name displays correctly).
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
             id = card.id?.toString().orEmpty(),
-            name = card.name.orEmpty(),
-            setCode = card.expansionSetCode.orNullIfBlank(),
-            collectorNumber = card.cardNumber.orNullIfBlank(),
+            name = displayName(card),
+            setCode = setCode(card),
+            collectorNumber = collectorNumber(card),
             manaCost = text { card.manaCostStr }.orNullIfBlank(),
             typeLine = text { card.typeText }?.trim().orNullIfBlank(),
             power = card.power.orNullIfBlank(),
@@ -213,6 +240,29 @@ public object GameViewMapper {
                     GameCounterView(name = counter.name.orEmpty(), count = counter.count)
                 },
         )
+
+    /** The nested source `CardView` for an `AbilityView`/`StackAbilityView`, `null` for anything else. */
+    private fun sourceCardOf(card: CardView): CardView? =
+        when (card) {
+            is AbilityView -> card.sourceCard
+            is StackAbilityView -> card.sourceCard
+            else -> null
+        }
+
+    /**
+     * The name to display for [card] — see [mapCard]'s KDoc. For an ordinary `CardView` this is just
+     * `card.name`. For an `AbilityView`/`StackAbilityView`, `card.name` is upstream's literal
+     * placeholder `"Ability"`; the real name is on [sourceCardOf], itself falling back to the
+     * placeholder only if that is somehow absent too (defensive — every ability upstream sends has a
+     * resolvable source object).
+     */
+    private fun displayName(card: CardView): String = sourceCardOf(card)?.name.orNullIfBlank() ?: card.name.orEmpty()
+
+    /** The set code to resolve art by — see [mapCard]'s KDoc on the "No art" defect. */
+    private fun setCode(card: CardView): String? = (sourceCardOf(card) ?: card).expansionSetCode.orNullIfBlank()
+
+    /** The collector number to resolve art by — see [mapCard]'s KDoc on the "No art" defect. */
+    private fun collectorNumber(card: CardView): String? = (sourceCardOf(card) ?: card).cardNumber.orNullIfBlank()
 
     /**
      * Maps `CardType` to its app-schema code. Exhaustive on purpose: a card type added upstream becomes
