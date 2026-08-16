@@ -31,9 +31,6 @@ dependencies {
     // `coil3.ImageLoader` that 0032's UI (with coil-compose) binds `AsyncImage` to.
     api(libs.coil.core)
     implementation(libs.coil.network.okhttp)
-    // Temporary diagnostic (2026-08-16): logs the literal request/response headers OkHttp puts on
-    // the wire for every art fetch. Remove once the card-art User-Agent defect is confirmed fixed.
-    implementation(libs.okhttp.logging.interceptor)
     // Story 0031: cache-policy setting persisted the AGENTS.md way (DataStore for prefs).
     implementation(libs.androidx.datastore.preferences)
 

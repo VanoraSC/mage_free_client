@@ -5,7 +5,6 @@ import android.util.Log
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
-import coil3.network.HttpException
 import coil3.network.NetworkFetcher
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ErrorResult
@@ -134,22 +133,10 @@ class CardImageLoader(
                 // indistinguishable from ordinary per-card misses (a bad printing, an offline
                 // device) in anything short of attaching a debugger. Logcat is the only place this
                 // is currently visible; there is no in-app diagnostic surface for it yet.
-                //
-                // For an HttpException specifically, also read the *actual* outgoing request back
-                // off Coil's NetworkResponse.delegate (the real okhttp3.Response) rather than
-                // trusting what we intended to send — this is what settles whether the User-Agent
-                // this client sets is actually the one that reached the wire for this call.
-                val throwable = result.throwable
-                val wireDetail =
-                    (throwable as? HttpException)?.response?.delegate?.let { delegate ->
-                        (delegate as? okhttp3.Response)?.let { response ->
-                            " [wire request User-Agent: ${response.request.header("User-Agent")}]"
-                        }
-                    }.orEmpty()
                 Log.w(
                     LOG_TAG,
                     "Art fetch failed for ${request.setCode} #${request.collectorNumber} " +
-                        "(${source.primaryUrl(request)}): $throwable$wireDetail",
+                        "(${source.primaryUrl(request)}): ${result.throwable}",
                 )
                 false
             }

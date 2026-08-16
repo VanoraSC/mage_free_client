@@ -2,12 +2,10 @@ package magefree.cards.art
 
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Log
 import okhttp3.Call
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
-import okhttp3.logging.HttpLoggingInterceptor
 
 /**
  * The `User-Agent` every card-art request carries (story 0056).
@@ -102,11 +100,4 @@ internal fun defaultArtCallFactory(context: Context): Call.Factory =
     OkHttpClient
         .Builder()
         .addNetworkInterceptor(ScryfallHeadersInterceptor(CardArtUserAgent.value(context)))
-        // Temporary diagnostic (2026-08-16): OkHttp's own documented wire-logging tool
-        // (square/okhttp's HttpLoggingInterceptor), registered as a network interceptor so its
-        // output is the literal bytes on the wire — headers *and* status line — for every art
-        // fetch. Logcat tag "OkHttp". Remove once the Accept-header fix is confirmed live.
-        .addNetworkInterceptor(
-            HttpLoggingInterceptor { message -> Log.d("OkHttp", message) }
-                .apply { level = HttpLoggingInterceptor.Level.BODY },
-        ).build()
+        .build()
