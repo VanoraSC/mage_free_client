@@ -102,5 +102,5 @@ internal fun defaultArtCallFactory(context: Context): Call.Factory =
         // fetch. Logcat tag "OkHttp". Remove once the User-Agent defect is confirmed fixed.
         .addNetworkInterceptor(
             HttpLoggingInterceptor { message -> Log.d("OkHttp", message) }
-                .apply { level = HttpLoggingInterceptor.Level.HEADERS },
+                .apply { level = HttpLoggingInterceptor.Level.BODY },
         ).build()
