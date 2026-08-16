@@ -7,6 +7,12 @@ pluginManagement {
     }
 }
 
+plugins {
+    // Lets Gradle auto-provision a JDK matching gradle/gradle-daemon-jvm.properties' criteria when no
+    // already-installed JDK satisfies it (https://docs.gradle.org/current/userguide/toolchains.html).
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
