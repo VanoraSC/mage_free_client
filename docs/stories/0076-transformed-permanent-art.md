@@ -48,26 +48,42 @@ names."* This is exactly why Pete saw the correct name ("Gideon, Battle-Forged")
 shared identity for both faces (Scryfall/XMage do not give the two faces of one printing separate
 collector numbers), and nothing downstream ever asks for the *back* rendering of that one identity.
 
-**The fix does not need a new upstream signal.** The bundled catalog (story 0030) already knows
-both faces of a DFC printing: `CardFaces.doubleFaced`/`modalDoubleFaced` and
-`CardFaces.secondSideName` (`core/cards/src/main/kotlin/magefree/cards/model/CardAttributes.kt:76-79`).
-Given a live `GameCard`'s `setCode`+`collectorNumber` (the printing) and its current `name`, the
-catalog can answer "is this name the *second* side's name for this printing?" — and that is a
-sufficient signal for `CardArtFace.BACK` vs `FRONT`, without upstream ever telling us so directly.
+**Superseded during implementation:** this section originally proposed resolving the face by
+matching the live `name` against the catalog's `CardFaces.secondSideName` for the printing. Reading
+further into upstream's own `PermanentView` constructor (same file) turned up a simpler, more
+direct signal that makes the catalog lookup unnecessary:
+
+```java
+if (original != null && !original.getName().equals(this.getName())) {
+    ...
+    this.alternateName = original.getName();
+}
+```
+
+`CardView.alternateName` (`getAlternateName()`) is set by upstream itself, on the object we already
+map, exactly when the live name differs from the card's own original name — i.e. a transformed DFC
+permanent, a name-changing copy, or a flip card in its flipped state. It is `null` in the ordinary
+case. This is upstream's own "is this not the front face" signal, already computed for us — no
+catalog lookup, no dependency on 0030's face-name data, and no guessing at name equality ourselves.
+The fix threads this one field through all four layers (`protocol` → `bridge` → `core:network` →
+`feature:game`) and uses `alternateName != null` as the sole condition for `CardArtFace.BACK`.
 
 ## 3. Scope
 
 **In scope**
-- `toCardUi()` (or its call sites) gains a way to resolve `CardArtFace` from the live `name` +
-  printing identity against the catalog, instead of the hardcoded `FRONT` — reusing 0043's existing
-  `CardArtFace.BACK` request shape (already used for a card's back face elsewhere; only the
-  *permanent-on-board* path never reaches for it).
+- Thread upstream's `CardView.alternateName` through the mapping pipeline: `GameCardView.alternateName`
+  (protocol) → `GameViewMapper.mapCard()` (bridge) → `GameCard.alternateName` (core:network) →
+  `toCardUi()`/`artRequestOf()` (feature:game), replacing the hardcoded `FRONT` with
+  `if (alternateName != null) BACK else FRONT` — reusing 0043's existing `CardArtFace.BACK` request
+  shape (already used for a card's back face elsewhere; only the *permanent-on-board* path never
+  reached for it).
 - Applies to every place `toCardUi()`/its art-request builder is used: battlefield permanents, the
   stack, and anywhere else a live game object's current face matters. Hand cards are not
   transformable while in hand (transform is a battlefield-only state change for a permanent), so
   this is a non-issue there, but confirm rather than assume.
-- A hermetic test: given a `GameCard` whose `name` matches a catalog entry's `secondSideName` for
-  its printing, the resulting `CardArtRequest.face` must be `BACK`.
+- Hermetic tests at each layer: given a fixture whose `alternateName` is non-null, the value must
+  survive mapping/folding unchanged; given `toCardUi()`/`artRequestOf()` a `GameCard` with a non-null
+  `alternateName`, the resulting `CardArtRequest.face` must be `BACK`.
 
 **Out of scope**
 - Flip cards (the *old* Kamigawa mechanic, `GamePermanentView.flipped`) — a genuinely different
@@ -84,18 +100,20 @@ sufficient signal for `CardArtFace.BACK` vs `FRONT`, without upstream ever telli
 - `PermanentView.flipped` is the *old* flip-card mechanic, not transform state — confirmed by
   upstream's own field name and the surrounding "for fipped, transformed or copied cards, switch
   the names" comment treating them as three separate things.
-- The catalog already carries `CardFaces.secondSideName` per printing (`CardAttributes.kt:79`) —
-  no new catalog data needs to be added for this fix, only a new *use* of what is already there.
+- `CardView.alternateName`/`getAlternateName()` is set by upstream's own `PermanentView` constructor
+  exactly when the live name differs from the card's original name — confirmed by reading the
+  constructor directly. This was previously completely unmapped anywhere in this codebase
+  (confirmed by a repo-wide grep before adding it).
 
 ## 5. Verification
 
-- **Standard 1**, discriminating test: a `GameCard`/`GamePermanent` fixture whose `name` equals a
-  catalog printing's `secondSideName` must resolve to `CardArtFace.BACK`; the same printing's
-  front-face name must resolve to `FRONT`. Proven to fail against the unfixed hardcoded `FRONT`
-  first.
-- **Standard 2 (reachability):** name what produces the face decision — the catalog's
-  `CardFaces.secondSideName` for the request's `(setCode, collectorNumber)`, compared against the
-  live `GameCard.name` the current snapshot carries.
+- **Standard 1**, discriminating tests at each layer: a fixture with non-null `alternateName` must
+  carry it through mapping (bridge), folding (core:network), and resolve to `CardArtFace.BACK`
+  (feature:game); a fixture with null `alternateName` must resolve to `FRONT`. Each proven to fail
+  against the unfixed code first (bridge/core:network: compile error on the new field before it
+  existed; feature:game: assertion failure against the hardcoded `FRONT`).
+- **Standard 2 (reachability):** name what produces the face decision — `GameCard.alternateName != null`,
+  itself threaded unchanged from upstream's own `CardView.getAlternateName()`.
 - **Hermetic gate:** `feature/game/src/test` (or wherever `toCardUi()`'s existing coverage lives).
 - **Live, if practical:** transform a permanent (Kytheon → Gideon or any other transform DFC),
   confirm the board's art switches to the back face while the name is (already, correctly) current.
@@ -106,19 +124,22 @@ sufficient signal for `CardArtFace.BACK` vs `FRONT`, without upstream ever telli
 
 ## 6. Acceptance criteria
 
-- [ ] A transformed permanent's rendered art matches its current face, using the catalog's own
-      face-name data — no new upstream field required.
+- [ ] A transformed permanent's rendered art matches its current face, using upstream's own
+      `CardView.alternateName` signal, threaded through all four layers.
 - [ ] The front-face case (untransformed, or any ordinary card) is unaffected.
 - [ ] Pete has completed the eyes-on checklist.
 
 ## 7. References
 
-- `feature/game/src/main/kotlin/magefree/feature/game/board/BoardUi.kt` — `toCardUi()`, where the
-  hardcoded `CardArtFace.FRONT` lives.
-- `core/cards/src/main/kotlin/magefree/cards/model/CardAttributes.kt` — `CardFaces`,
-  `secondSideName`, the existing catalog data this story reuses.
+- `feature/game/src/main/kotlin/magefree/feature/game/board/BoardUi.kt` — `toCardUi()`/
+  `artRequestOf()`, where the hardcoded `CardArtFace.FRONT` lived.
+- `protocol/src/main/kotlin/magefree/protocol/GameMessages.kt` — `GameCardView.alternateName`.
+- `bridge/src/main/kotlin/magefree/bridge/mapping/GameViewMapper.kt` — `mapCard()`, where
+  `CardView.alternateName` is read off the upstream view object.
+- `core/network/src/main/kotlin/magefree/network/game/GameState.kt` — `GameCard.alternateName`.
 - `Mage.Common/src/main/java/mage/view/PermanentView.java` (pinned ref `e0fe4b6f6a`) — the
-  commented-out `transformed` field and the name-switching logic, both read directly.
+  commented-out `transformed` field, the name-switching logic, and the `alternateName` assignment
+  this story's fix relies on, all read directly.
 - `docs/stories/0043-artwork-pipeline-fixes.md` — where `CardArtFace.BACK` requests were first
   built, for a different call site (hand-zone DFC lookup); this story is the missing sibling for
   the battlefield/live-game path.

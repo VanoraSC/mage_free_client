@@ -206,6 +206,7 @@ internal object GameViewMapper {
             cardTypes = cardTypes.map { it.toCardType() },
             isCreature = creature,
             counters = counters.map { GameCounter(name = it.name, count = it.count) },
+            alternateName = alternateName,
         )
 
     private fun GamePermanentView.toPermanent(): GamePermanent =

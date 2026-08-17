@@ -607,7 +607,7 @@ internal fun GameCard.toCardUi(): CardUi {
                 typeLine = if (isFaceDown) null else typeLine?.cleanedOrNull(),
                 oracleText = if (isFaceDown) null else rules.mapNotNull { it.cleanedOrNull() }.joinToString("\n").ifBlank { null },
             ),
-        art = if (isFaceDown) null else artRequestOf(setCode, collectorNumber),
+        art = if (isFaceDown) null else artRequestOf(setCode, collectorNumber, isShowingAlternateFace = alternateName != null),
         powerToughness = if (isFaceDown) null else pt,
         isCreature = isCreature,
         counters = counters.map { CounterUi(name = it.name, count = it.count) },
@@ -618,16 +618,23 @@ internal fun GameCard.toCardUi(): CardUi {
 /**
  * The 0031 art identity for a printing, or null when the server did not name one — in which case the
  * design-system placeholder is what renders, and the card's text stays readable.
+ *
+ * [isShowingAlternateFace] (story 0076) is `GameCard.alternateName != null` — the only signal
+ * anywhere for "this object is not currently showing its front face" (a transformed double-faced
+ * permanent, most commonly; see [GameCard.alternateName]'s own KDoc for why no dedicated boolean
+ * exists upstream). A DFC/MDFC's two faces share one [setCode]/[collectorNumber] (one printing), so
+ * telling them apart is entirely down to which [CardArtFace] the request asks for.
  */
 internal fun artRequestOf(
     setCode: String?,
     collectorNumber: String?,
+    isShowingAlternateFace: Boolean = false,
 ): CardArtRequest? {
     if (setCode.isNullOrBlank() || collectorNumber.isNullOrBlank()) return null
     return CardArtRequest(
         setCode = setCode,
         collectorNumber = collectorNumber,
-        face = CardArtFace.FRONT,
+        face = if (isShowingAlternateFace) CardArtFace.BACK else CardArtFace.FRONT,
         size = CardArtSize.SMALL,
     )
 }

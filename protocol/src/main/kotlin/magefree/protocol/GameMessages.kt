@@ -778,6 +778,13 @@ public data class GamePlayerView(
  * @property counters every counter on the object, by name and count. **Not battlefield-only**: upstream
  *   populates them on `CardView` (from `Card.getCounters(game)`) as well as on `PermanentView`, so a
  *   card outside the battlefield can carry them too.
+ * @property alternateName upstream `CardView.getAlternateName()` (story 0076). For a permanent, set
+ *   only when the live name differs from the card's own original name — i.e. a transformed
+ *   double-faced permanent (its value is then the *original*, front-face name), a name-changing copy,
+ *   or a flip card in its flipped state. `null` in the ordinary case (front face, no copy effect).
+ *   Non-null is therefore the client's signal that art should be requested for the back face, not the
+ *   front — there is no separate "is this transformed" boolean anywhere upstream (`PermanentView`'s
+ *   own `transformed` field is dead code, commented out at the pinned ref).
  */
 @Serializable
 public data class GameCardView(
@@ -794,6 +801,7 @@ public data class GameCardView(
     val cardTypes: List<CardTypeCode> = emptyList(),
     val creature: Boolean = false,
     val counters: List<GameCounterView> = emptyList(),
+    val alternateName: String? = null,
 )
 
 /**

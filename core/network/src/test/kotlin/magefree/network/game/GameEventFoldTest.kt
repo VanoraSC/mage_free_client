@@ -356,6 +356,51 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun alternateNameSurvivesFoldingTheOnlySignalForWhichFaceIsCurrentlyUp() {
+        // Story 0076: found live -- Kytheon, Hero of Akros transformed into Gideon, Battle-Forged,
+        // but the board kept showing Kytheon's art. alternateName (non-null exactly when the live
+        // name differs from the card's own original name) is the only signal for this anywhere --
+        // upstream's PermanentView.transformed is dead code -- so this proves it reaches GameState.
+        val transformed =
+            GamePermanentView(
+                card =
+                    GameCardView(
+                        id = "perm-1",
+                        name = "Gideon, Battle-Forged",
+                        setCode = "ORI",
+                        collectorNumber = "23",
+                        alternateName = "Kytheon, Hero of Akros",
+                    ),
+                controlledByViewer = true,
+            )
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 1,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(playerId = "p-1", name = "pete", viewer = true, battlefield = listOf(transformed)),
+                                ),
+                        ),
+                ),
+            )!!
+
+        assertEquals(
+            "Kytheon, Hero of Akros",
+            folded.viewer!!
+                .battlefield
+                .single()
+                .card
+                .alternateName,
+        )
+    }
+
+    @Test
     fun aCardCarriesWhatItCurrentlyIsAndTheCountersOnIt() {
         // Story 0058. Creature-ness is game state: the same Mountain is a land in one snapshot and a
         // 0/3 creature in the next, and only the server can say which. The fold carries all three

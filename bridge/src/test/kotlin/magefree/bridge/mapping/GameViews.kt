@@ -97,6 +97,7 @@ internal object GameViews {
         rules: List<String> = listOf("({T}: Add {G}.)"),
         faceDown: Boolean = false,
         counters: List<Pair<String, Int>> = emptyList(),
+        alternateName: String? = null,
     ): CardView =
         allocate(CardView::class.java).apply {
             set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
@@ -113,6 +114,7 @@ internal object GameViews {
             set("manaCostLeftStr", manaCost)
             set("manaCostRightStr", emptyList<String>())
             set("faceDown", faceDown)
+            set("alternateName", alternateName)
         }
 
     /**
@@ -189,6 +191,7 @@ internal object GameViews {
         set("manaCostLeftStr", card.manaCostSymbols)
         set("manaCostRightStr", emptyList<String>())
         set("faceDown", card.isFaceDown)
+        set("alternateName", card.alternateName)
     }
 
     /** A `ManaPoolView` with the given floating mana. */

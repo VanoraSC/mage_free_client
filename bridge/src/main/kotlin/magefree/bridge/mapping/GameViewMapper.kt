@@ -213,6 +213,11 @@ public object GameViewMapper {
      * card-art loader receives a blank set/number pair, resolves to a request with no valid art, and
      * the object renders with no image at all — a distinct symptom from the naming bug (this one stays
      * broken even after the name displays correctly).
+     *
+     * **`alternateName` (story 0076, found live — a transformed permanent showed its front-face art
+     * forever).** Read straight off `CardView.getAlternateName()`, no special-casing needed here — see
+     * `GameCardView.alternateName`'s own KDoc for what it means and why it is the only signal
+     * available for "which face is currently up" (upstream never exposes a dedicated boolean for it).
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
@@ -239,6 +244,10 @@ public object GameViewMapper {
                 card.counters.orEmpty().filterNotNull().map { counter ->
                     GameCounterView(name = counter.name.orEmpty(), count = counter.count)
                 },
+            // Story 0076: upstream's own signal for "this is not the card's original face" — see
+            // GameCardView.alternateName's KDoc for the full reasoning (there is no separate
+            // "transformed" boolean; PermanentView's own field of that name is dead code upstream).
+            alternateName = card.alternateName.orNullIfBlank(),
         )
 
     /** The nested source `CardView` for an `AbilityView`/`StackAbilityView`, `null` for anything else. */

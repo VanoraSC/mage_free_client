@@ -489,6 +489,35 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `alternateName survives mapping, the only signal for which face is currently up (story 0076)`() {
+        // Found live (Pete, 2026-08-17): Kytheon, Hero of Akros transformed into Gideon,
+        // Battle-Forged, but the board kept showing Kytheon's art. Upstream's own
+        // PermanentView.transformed is dead code (commented out at the pinned ref) -- alternateName
+        // (non-null exactly when the live name differs from the card's own original name) is the
+        // only signal available, and this proves it reaches the mapped GameCardView.
+        val transformed =
+            GameViews.permanent(
+                card =
+                    GameViews.card(
+                        name = "Gideon, Battle-Forged",
+                        cardTypes = listOf(CardType.PLANESWALKER),
+                        superTypes = emptyList(),
+                        subTypes = emptyList(),
+                        alternateName = "Kytheon, Hero of Akros",
+                    ),
+            )
+
+        assertEquals("Kytheon, Hero of Akros", GameViewMapper.mapCard(transformed).alternateName)
+    }
+
+    @Test
+    fun `alternateName is null for an ordinary card, never fabricated`() {
+        val bear = GameViews.card(name = "Grizzly Bears")
+
+        assertNull(GameViewMapper.mapCard(bear).alternateName)
+    }
+
+    @Test
     fun `a counter list upstream never populated maps to empty rather than throwing`() {
         // `CardView.counters` is left null unless the object actually has counters (upstream only
         // allocates the list when `Card.getCounters(game)` is non-empty), so null is the ordinary case

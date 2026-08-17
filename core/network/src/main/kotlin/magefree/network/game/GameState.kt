@@ -187,6 +187,10 @@ data class GamePlayer(
  *   creature-ness — never the printed type, never [typeLine].
  * @property counters every counter on the object, by name and count. Not battlefield-only: a card in
  *   another zone can carry them, because upstream puts them on `CardView`.
+ * @property alternateName upstream `CardView.getAlternateName()` (story 0076). Non-null exactly when
+ *   this object's live name differs from its own original name — the only signal available anywhere
+ *   for "this permanent is currently showing a face other than its front" (a transformed
+ *   double-faced permanent, most commonly). There is no separate boolean for it upstream.
  */
 data class GameCard(
     val id: String,
@@ -202,6 +206,7 @@ data class GameCard(
     val cardTypes: List<CardType> = emptyList(),
     val isCreature: Boolean = false,
     val counters: List<GameCounter> = emptyList(),
+    val alternateName: String? = null,
 )
 
 /**
