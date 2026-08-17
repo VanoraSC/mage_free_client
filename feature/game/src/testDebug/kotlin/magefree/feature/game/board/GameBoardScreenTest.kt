@@ -690,7 +690,11 @@ class GameBoardScreenTest {
     }
 
     @Test
-    fun `the target step offers a cancel before a pick and a done after one`() {
+    fun `the target step offers both done and cancel for an optional prompt, even before a pick (story 0075)`() {
+        // Story 0075: an optional (`isRequired = false`) prompt is answerable with zero targets by
+        // definition, so Done must render from the moment it arrives — not only after a pick. Before
+        // this fix, an "up to N" prompt with no picks left only the (correctly-working, but
+        // confusingly-labeled for this case) cast-cancel button visible.
         val prompt =
             GamePrompt.Target(
                 message = "Select targets (selected 0 of 2, min 1) to divide 2 damage",
@@ -700,9 +704,9 @@ class GameBoardScreenTest {
 
         render(runningGame().copy(prompt = prompt), cast = CastUi("Forked Bolt", CAST_STEP_TARGETS))
         composeTestRule.onNodeWithText(CANCEL_CAST_LABEL).assertIsDisplayed()
-        composeTestRule.onNodeWithText(DONE_LABEL).assertDoesNotExist()
-        composeTestRule.onNodeWithText(CANCEL_CAST_LABEL).performClick()
-        assertEquals(listOf(BoardAction.CancelPrompt), actions)
+        composeTestRule.onNodeWithText(DONE_LABEL).assertIsDisplayed()
+        composeTestRule.onNodeWithText(DONE_LABEL).performClick()
+        assertEquals(listOf(BoardAction.FinishTargeting), actions)
     }
 
     @Test

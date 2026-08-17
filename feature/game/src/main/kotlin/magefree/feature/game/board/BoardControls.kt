@@ -515,7 +515,14 @@ internal fun controlsFor(
                         addAll(offBoardCandidateButtons(state, pickable, BoardAction::ChooseTarget))
                         // The player's confirmation *is* the final done (§17.2) — it is not a
                         // client-side accumulator being flushed, because every pick was already sent.
-                        if (hasPicked) {
+                        // An *optional* prompt (`!prompt.isRequired`) is answerable with zero picks by
+                        // definition — the server's own "Select up to N" phrasing and its own `Done`
+                        // button label say so — so Done must be offered from the moment such a prompt
+                        // arrives, not only once something has been picked (story 0075, found live: an
+                        // "up to one" target with no legal candidates left the board with no honestly
+                        // labeled way to finish — only the unrelated cast-cancel button, which happens
+                        // to share the same wire answer but reads as aborting the whole action).
+                        if (hasPicked || !prompt.isRequired) {
                             add(
                                 ControlButton(
                                     label = prompt.options.rightButtonText?.cleanedOrNull() ?: DONE_LABEL,
