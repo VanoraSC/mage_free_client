@@ -215,9 +215,12 @@ public object GameViewMapper {
      * broken even after the name displays correctly).
      *
      * **`alternateName` (story 0076, found live — a transformed permanent showed its front-face art
-     * forever).** Read straight off `CardView.getAlternateName()`, no special-casing needed here — see
-     * `GameCardView.alternateName`'s own KDoc for what it means and why it is the only signal
-     * available for "which face is currently up" (upstream never exposes a dedicated boolean for it).
+     * forever, then a hand card was found showing the *wrong* face's art the same way).** Read only
+     * off a `PermanentView`'s `getAlternateName()`, never a plain `CardView`'s — see
+     * `GameCardView.alternateName`'s own KDoc for why: `CardView`'s own constructor sets this field
+     * unconditionally for any transformable card regardless of current face (it means "the other
+     * face's name," not "which face is up"), and only `PermanentView`'s constructor re-derives it
+     * into the correct "did the name actually change" signal this client depends on.
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
@@ -244,10 +247,11 @@ public object GameViewMapper {
                 card.counters.orEmpty().filterNotNull().map { counter ->
                     GameCounterView(name = counter.name.orEmpty(), count = counter.count)
                 },
-            // Story 0076: upstream's own signal for "this is not the card's original face" — see
-            // GameCardView.alternateName's KDoc for the full reasoning (there is no separate
-            // "transformed" boolean; PermanentView's own field of that name is dead code upstream).
-            alternateName = card.alternateName.orNullIfBlank(),
+            // Story 0076: only a PermanentView's alternateName means "showing the back face" — a
+            // plain CardView (hand/library/exile/stack) sets the same field unconditionally for any
+            // transformable card, front or back, so it is never trustworthy for that zone. See
+            // GameCardView.alternateName's KDoc for the full reasoning.
+            alternateName = (card as? PermanentView)?.alternateName.orNullIfBlank(),
         )
 
     /** The nested source `CardView` for an `AbilityView`/`StackAbilityView`, `null` for anything else. */

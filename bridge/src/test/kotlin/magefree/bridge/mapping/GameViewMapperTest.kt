@@ -518,6 +518,29 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `a plain CardView's alternateName is dropped, not trusted as a face signal (story 0076 follow-up)`() {
+        // Found live (Pete, 2026-08-17): an untransformed Kytheon sitting in hand showed Gideon's
+        // art. Upstream's own CardView constructor sets alternateName unconditionally for any
+        // transformable card, to the name of its OTHER face, regardless of which face is showing --
+        // only PermanentView's constructor re-derives it into "did the name actually change". A card
+        // in hand is a plain CardView, never a PermanentView, so it always carries this naive value
+        // even though it has never transformed. Trusting it here would be exactly the bug Pete hit.
+        val kytheonInHand =
+            GameViews.card(
+                name = "Kytheon, Hero of Akros",
+                cardTypes = listOf(CardType.CREATURE),
+                superTypes = emptyList(),
+                subTypes = emptyList(),
+                // Mirrors upstream's own unconditional assignment for a transformable card: the
+                // OTHER face's name, set even though this object was never a PermanentView and never
+                // transformed.
+                alternateName = "Gideon, Battle-Forged",
+            )
+
+        assertNull(GameViewMapper.mapCard(kytheonInHand).alternateName)
+    }
+
+    @Test
     fun `a counter list upstream never populated maps to empty rather than throwing`() {
         // `CardView.counters` is left null unless the object actually has counters (upstream only
         // allocates the list when `Card.getCounters(game)` is non-empty), so null is the ordinary case

@@ -68,6 +68,23 @@ catalog lookup, no dependency on 0030's face-name data, and no guessing at name 
 The fix threads this one field through all four layers (`protocol` → `bridge` → `core:network` →
 `feature:game`) and uses `alternateName != null` as the sole condition for `CardArtFace.BACK`.
 
+**Follow-up defect, found live the same session (Pete, 2026-08-17): an untransformed Kytheon in
+hand showed Gideon's art.** The "hand cards are not transformable, non-issue" assumption in the
+original scope section below was wrong — not because a hand card can transform, but because
+`CardView.alternateName` means something different depending on *which* upstream class actually
+built the object. Reading `CardView.java`'s own constructor (not just `PermanentView`'s) turned up
+five more `this.alternateName = ...` assignments, all unconditional: any `card instanceof
+DoubleFacedCard` (or transformable `PermanentCard`, flip card, or meld card) gets `alternateName`
+set to its *other* face's name **regardless of which face is currently showing** — this is how
+upstream's own GUI labels a day/night flip button, not a "which face is up" signal. `PermanentView`
+extends `CardView` and its constructor calls `super()` first (running that unconditional
+assignment) and then *overwrites* the field with the correct "did the name actually change" value —
+but only `PermanentView` does that overwrite. A card sitting untransformed in hand is a plain
+`CardView`, never a `PermanentView`, so it keeps the naive always-set value, which reads as "showing
+the back face" if trusted the same way a permanent's is. Fixed by gating the bridge's read on
+`card is PermanentView` — `GameCardView.alternateName` is now `null` for every zone except the
+battlefield, where `PermanentView`'s own correctly-overwritten value is what's read.
+
 ## 3. Scope
 
 **In scope**
@@ -78,9 +95,10 @@ The fix threads this one field through all four layers (`protocol` → `bridge` 
   shape (already used for a card's back face elsewhere; only the *permanent-on-board* path never
   reached for it).
 - Applies to every place `toCardUi()`/its art-request builder is used: battlefield permanents, the
-  stack, and anywhere else a live game object's current face matters. Hand cards are not
-  transformable while in hand (transform is a battlefield-only state change for a permanent), so
-  this is a non-issue there, but confirm rather than assume.
+  stack, and anywhere else a live game object's current face matters. `GameCardView.alternateName`
+  is populated **only** from a `PermanentView` (battlefield); every other zone (hand, library,
+  exile, stack) maps it to `null` — see the follow-up defect above for why trusting a plain
+  `CardView`'s copy of the same field is wrong, not merely redundant.
 - Hermetic tests at each layer: given a fixture whose `alternateName` is non-null, the value must
   survive mapping/folding unchanged; given `toCardUi()`/`artRequestOf()` a `GameCard` with a non-null
   `alternateName`, the resulting `CardArtRequest.face` must be `BACK`.
@@ -104,6 +122,10 @@ The fix threads this one field through all four layers (`protocol` → `bridge` 
   exactly when the live name differs from the card's original name — confirmed by reading the
   constructor directly. This was previously completely unmapped anywhere in this codebase
   (confirmed by a repo-wide grep before adding it).
+- `CardView`'s own (non-`PermanentView`) constructor sets the same field **unconditionally** for any
+  transformable/double-faced/flip/meld card, to the *other* face's name, regardless of which face is
+  showing — confirmed by reading `CardView.java` directly. Only trust `alternateName` off a
+  `PermanentView` instance; a plain `CardView` (hand/library/exile/stack) carries the naive value.
 
 ## 5. Verification
 

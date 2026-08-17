@@ -778,13 +778,26 @@ public data class GamePlayerView(
  * @property counters every counter on the object, by name and count. **Not battlefield-only**: upstream
  *   populates them on `CardView` (from `Card.getCounters(game)`) as well as on `PermanentView`, so a
  *   card outside the battlefield can carry them too.
- * @property alternateName upstream `CardView.getAlternateName()` (story 0076). For a permanent, set
- *   only when the live name differs from the card's own original name — i.e. a transformed
- *   double-faced permanent (its value is then the *original*, front-face name), a name-changing copy,
- *   or a flip card in its flipped state. `null` in the ordinary case (front face, no copy effect).
- *   Non-null is therefore the client's signal that art should be requested for the back face, not the
- *   front — there is no separate "is this transformed" boolean anywhere upstream (`PermanentView`'s
- *   own `transformed` field is dead code, commented out at the pinned ref).
+ * @property alternateName upstream `CardView.getAlternateName()` (story 0076), **battlefield
+ *   permanents only** — the bridge deliberately drops it for every other zone. On a `PermanentView`,
+ *   it is set only when the live name differs from the card's own original name — i.e. an actually
+ *   transformed double-faced permanent (its value is then the *original*, front-face name), a
+ *   name-changing copy, or a flip card in its flipped state. `null` in the ordinary case (front face,
+ *   no copy effect). Non-null is therefore the client's signal that art should be requested for the
+ *   back face, not the front — there is no separate "is this transformed" boolean anywhere upstream
+ *   (`PermanentView`'s own `transformed` field is dead code, commented out at the pinned ref).
+ *
+ *   **Found live, Pete, 2026-08-17 — a hand card showed the wrong face's art.** Plain `CardView`
+ *   (hand, library, exile, stack spells — anything that isn't a `PermanentView`) sets this same field
+ *   *unconditionally* for any transformable/double-faced/flip/meld card, to the name of its **other**
+ *   face, regardless of which face is actually showing (it exists so upstream's own GUI can label a
+ *   day/night flip button, not to answer "which face is up"). `PermanentView`'s constructor calls
+ *   `super()` first (running that unconditional assignment) and then overwrites the field with the
+ *   correct "did the name actually change" value — but only `PermanentView` does that overwrite. A
+ *   card sitting untransformed in hand is never a `PermanentView`, so it keeps the naive value and
+ *   would wrongly read as "showing its back face" if trusted the same way. The bridge maps this field
+ *   from `PermanentView` only for exactly this reason; do not widen it to plain `CardView` without
+ *   re-deriving the "did the name change" check yourself.
  */
 @Serializable
 public data class GameCardView(
