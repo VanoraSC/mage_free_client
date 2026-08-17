@@ -23,6 +23,7 @@ import magefree.protocol.SessionStatus
 import magefree.protocol.WatchingGame
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -97,6 +98,32 @@ class GameStateCacheTest {
         )
         assertEquals(4, snapshotOf(cache, "g-1").state.turn, "the latest snapshot replaces the previous one wholesale")
         assertEquals(1, cache.size())
+    }
+
+    @Test
+    fun `a GamePrompted's prompt is cached and served on the next answer (story 0074)`() {
+        // The root cause this story fixes: GamePrompted already carries the prompt alongside the
+        // state, but the cache used to discard it. Prove it now survives into the reply.
+        val cache = GameStateCache()
+        val prompt = SelectPrompt(message = "Play a land")
+
+        cache.observe(GamePrompted(gameId = "g-1", state = view(turn = 4), prompt = prompt))
+
+        assertEquals(prompt, snapshotOf(cache, "g-1").prompt)
+    }
+
+    @Test
+    fun `a later state-only push retires a previously cached prompt (story 0074)`() {
+        // A plain state push or narration after a prompt means the prompt is no longer live truth --
+        // re-serving it on a later resync would tell a rejoining client to answer a question that is
+        // no longer outstanding.
+        val cache = GameStateCache()
+        cache.observe(GamePrompted(gameId = "g-1", state = view(turn = 4), prompt = SelectPrompt(message = "Play a land")))
+        assertNotEquals(null, snapshotOf(cache, "g-1").prompt, "sanity check: the prompt is cached first")
+
+        cache.observe(GameStateUpdated(gameId = "g-1", state = view(turn = 5)))
+
+        assertEquals(null, snapshotOf(cache, "g-1").prompt)
     }
 
     @Test

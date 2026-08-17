@@ -237,6 +237,13 @@ public data class GetGameState(
  * @property capturedAtEpochMs when the bridge captured this snapshot (wall clock, `System.currentTimeMillis`).
  *   Staleness is bounded and *knowable* rather than guessed: the snapshot is current as of the last push,
  *   and this says when that was. Null only from a bridge older than this story.
+ * @property prompt the outstanding question this session was last shown for [gameId], if the most recent
+ *   thing the bridge relayed for it was a [GamePrompted] and nothing has superseded that prompt since
+ *   (story 0074). `null` when the session's last relayed message carried no prompt (an ordinary state
+ *   push, or no snapshot has ever included one), which is the ordinary case — not every rejoin lands
+ *   mid-question. Safe to re-serve as live truth rather than a guess: XMage never re-asks a one-shot
+ *   prompt on rejoin (`GameController.join`/`watch`, confirmed by story 0070), so if nothing newer
+ *   replaced it, the server is still, genuinely, waiting on exactly this answer.
  */
 @Serializable
 @SerialName("game_state_snapshot")
@@ -245,6 +252,7 @@ public data class GameStateSnapshot(
     val state: GameStateView,
     val capturedAtEpochMs: Long? = null,
     val requestId: String? = null,
+    val prompt: GamePrompt? = null,
 ) : ServerMessage
 
 /**

@@ -30,6 +30,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import magefree.protocol.GamePrompt as GamePromptMessage
 
 /**
  * Hermetic Turbine coverage of [DefaultGameClient.observeGame]: it seeds current state, folds the 0051
@@ -309,7 +310,9 @@ class ObserveGameTest {
                 assertTrue("the read fills the board with no push involved", read.hasSnapshot)
                 assertEquals(4, read.turn)
                 assertEquals(7, read.hand.size)
-                assertNull("a read says what the board looks like, never that the server is waiting on us", read.prompt)
+                // Story 0074: a read *can* restore a cached prompt now — this fixture's snapshot simply
+                // did not carry one, so null is the right answer here, not an absolute rule.
+                assertNull("this snapshot cached no outstanding prompt for the session", read.prompt)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -368,9 +371,11 @@ class ObserveGameTest {
     @Test
     fun aReadNeverOverwritesTheOutstandingPromptOrARunningGamesResult() =
         runTest {
-            // A read carries a `GameView` and nothing else, so it must move exactly the fields a snapshot
-            // owns. A prompt that survived a resume would be answerable after the read; a prompt the read
-            // *cleared* would leave the server waiting forever for an answer the UI no longer offers.
+            // Story 0074: a read *can* restore a cached prompt now (see the dedicated test for that),
+            // but it must never *clear* one already held just because this particular reply's own
+            // snapshot happened to cache none — that would leave the server waiting forever for an
+            // answer the UI no longer offers. This fixture's snapshot() call below carries no prompt on
+            // purpose, to prove exactly that half.
             val reads = Reads(noState(GAME, "r-1"), snapshot(view(turn = 5)))
             val fake = FakeBridgeClient(responder = reads)
             val connection = MutableStateFlow(ConnectionState.Connected)
@@ -393,6 +398,30 @@ class ObserveGameTest {
                     "the question the server is still waiting on must survive a read",
                     GamePrompt.Ask("Mulligan?"),
                     afterRead.prompt,
+                )
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun aReadRestoresACachedPromptWhenNoneIsCurrentlyHeld() =
+        runTest {
+            // The exact scenario story 0074 exists for: the client left mid-question (a mulligan, say),
+            // so it holds no live prompt (viewerHasPriority is false pre-priority, and 0071's fallback
+            // correctly does not apply here either). The bridge, however, cached the last GamePrompted
+            // it relayed for this session, and now serves it back on the opening read.
+            val reads = Reads(snapshot(view(turn = 1, hand = 7), prompt = AskPrompt("Mulligan?")))
+            val fake = FakeBridgeClient(responder = reads)
+
+            clientOver(fake).observeGame(GAME, seed).test {
+                assertEquals(seed, awaitItem())
+
+                val read = awaitItem()
+                assertEquals(
+                    "the read restores the outstanding question, not just the board",
+                    GamePrompt.Ask("Mulligan?"),
+                    read.prompt,
                 )
 
                 cancelAndIgnoreRemainingEvents()
@@ -498,7 +527,8 @@ class ObserveGameTest {
         fun snapshot(
             state: GameStateView,
             capturedAtEpochMs: Long = 1_700_000_000_000L,
-        ): ServerMessage = GameStateSnapshot(gameId = GAME, state = state, capturedAtEpochMs = capturedAtEpochMs)
+            prompt: GamePromptMessage? = null,
+        ): ServerMessage = GameStateSnapshot(gameId = GAME, state = state, capturedAtEpochMs = capturedAtEpochMs, prompt = prompt)
 
         /** The bridge's typed miss — the reply that must never be rendered as a board. */
         fun noState(

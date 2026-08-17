@@ -281,12 +281,14 @@ internal class DefaultGameClient(
 
                         // A completed read. The snapshot is applied exactly as a pushed one is —
                         // replacing every field a `GameView` owns and touching none it does not, so the
-                        // outstanding prompt, the last narration and a terminal result all survive it.
-                        // A finished game is left alone: re-applying a board to it would resurrect one
-                        // that no longer exists.
+                        // last narration and a terminal result survive it. The outstanding prompt is the
+                        // one exception (story 0074): `intent.reply.prompt` is this session's last-cached
+                        // question, and GameViewMapper.apply *restores* it when non-null (never clears an
+                        // existing one when it is null — see that function's KDoc). A finished game is
+                        // left alone: re-applying a board to it would resurrect one that no longer exists.
                         is Intent.Snapshot ->
                             if (!state.isOver) {
-                                val next = GameViewMapper.apply(state, intent.reply.state)
+                                val next = GameViewMapper.apply(state, intent.reply.state, intent.reply.prompt)
                                 if (next != state) {
                                     state = next
                                     trySend(next)
