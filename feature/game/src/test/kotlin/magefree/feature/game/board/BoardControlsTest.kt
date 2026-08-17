@@ -127,14 +127,20 @@ class BoardControlsTest {
     }
 
     @Test
-    fun `the closing button reads cancel before a pick and done after one`() {
-        // The candidate is a permanent the board draws, so this is only about the closing button —
-        // promotion to a panel button is a different concern, covered above.
+    fun `an optional target prompt offers both done and cancel from the start (story 0075)`() {
+        // Story 0075: an optional (`isRequired = false`) prompt is answerable with zero targets by
+        // definition, so Done must be offered from the moment it arrives, not only after a pick — the
+        // previous behavior (Done withheld until `hasPicked`) left an "up to one, no legal targets"
+        // prompt with no honestly-labeled way to finish, only the unrelated cast-cancel button.
         val prompt = GamePrompt.Target(message = "Select targets", targetIds = listOf("o-1"), isRequired = false)
 
         val beforeAPick = controlsFor(stateWithBoardCards().copy(prompt = prompt), hasPickedTarget = false)!!
-        assertEquals(listOf(CANCEL_CAST_LABEL), beforeAPick.buttons.map { it.label })
-        assertEquals(listOf(BoardAction.CancelPrompt), beforeAPick.buttons.map { it.action })
+        assertEquals(
+            "Done must be available with zero picks on an optional prompt",
+            BoardAction.FinishTargeting,
+            beforeAPick.buttons.first { it.label == DONE_LABEL }.action,
+        )
+        assertTrue("cancel is still offered too", beforeAPick.buttons.any { it.action == BoardAction.CancelPrompt })
 
         val afterAPick = controlsFor(stateWithBoardCards().copy(prompt = prompt), hasPickedTarget = true)!!
         assertEquals(
@@ -163,6 +169,29 @@ class BoardControlsTest {
         assertEquals(setOf("y-1"), controls!!.chosenObjectIds)
         assertTrue((controls as PromptControlsUi.Targeting).hasPicked)
         assertTrue(controls.buttons.any { it.label == DONE_LABEL })
+    }
+
+    @Test
+    fun `an up-to-one target prompt with no legal candidates uses the server's own Done label (story 0075)`() {
+        // The exact live scenario: Gideon, Battle-Forged's +2 ("up to one target creature an opponent
+        // controls") against a board with no opposing creatures — targetIds empty, required false,
+        // and upstream sends its own "Done" label rather than relying on our fallback.
+        val controls =
+            controlsFor(
+                baseState().copy(
+                    prompt =
+                        GamePrompt.Target(
+                            message = "Select up to one creature an opponent controls",
+                            targetIds = emptyList(),
+                            isRequired = false,
+                            options = PromptOptions(text = mapOf(PromptOptions.RIGHT_BUTTON_TEXT to "Done")),
+                        ),
+                ),
+                hasPickedTarget = false,
+            )!!
+
+        val doneButton = controls.buttons.singleOrNull { it.action == BoardAction.FinishTargeting }
+        assertEquals("the server's own Done label must be used, not our fallback", "Done", doneButton?.label)
     }
 
     @Test
