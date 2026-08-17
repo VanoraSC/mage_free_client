@@ -12,6 +12,7 @@ import magefree.protocol.GameStateUpdated
 import magefree.protocol.GameStateView
 import magefree.protocol.GetGameState
 import magefree.protocol.ServerMessage
+import org.slf4j.LoggerFactory
 import java.util.Collections
 
 /**
@@ -89,6 +90,12 @@ public class GameStateCache(
      * retires one.
      */
     public fun observe(message: ServerMessage) {
+        // Temporary diagnostic (story 0074 follow-up, 2026-08-16): Pete reproduced the mulligan
+        // resync case again after rebuilding both the app and the bridge from this exact fix, so the
+        // failure is real, not stale code. This traces every observation this cache makes for a game,
+        // so a live repro's bridge log shows exactly what retired the cached prompt (if anything did)
+        // rather than guessing from source alone. Remove once the root cause is confirmed and fixed.
+        val before = message.gameIdOrNull()?.let { snapshots[it]?.prompt }
         when (message) {
             is GameStarted -> put(message.gameId, message.state, prompt = null)
             is GameStateUpdated -> put(message.gameId, message.state, prompt = null)
@@ -102,7 +109,30 @@ public class GameStateCache(
             is GameOver -> snapshots.remove(message.gameId)
             else -> Unit
         }
+        message.gameIdOrNull()?.let { gameId ->
+            val after = snapshots[gameId]?.prompt
+            if (before != after) {
+                LOGGER.info(
+                    "GameStateCache[{}] observed {} -> prompt {} (was {})",
+                    gameId,
+                    message::class.simpleName,
+                    after,
+                    before,
+                )
+            }
+        }
     }
+
+    /** The game id [message] carries, for messages this cache keys on — `null` for everything else. */
+    private fun ServerMessage.gameIdOrNull(): String? =
+        when (this) {
+            is GameStarted -> gameId
+            is GameStateUpdated -> gameId
+            is GameInformed -> gameId
+            is GamePrompted -> gameId
+            is GameOver -> gameId
+            else -> null
+        }
 
     /**
      * The reply to [request]: a [GameStateSnapshot] carrying the last snapshot this session was sent for
@@ -117,7 +147,10 @@ public class GameStateCache(
      * it. See [observe]'s KDoc for why re-serving it is correct, not a guess.
      */
     public fun answer(request: GetGameState): ServerMessage {
-        val entry = snapshots[request.gameId] ?: return unavailable(request.gameId)
+        val entry = snapshots[request.gameId]
+        // Temporary diagnostic (story 0074 follow-up) — see observe()'s KDoc.
+        LOGGER.info("GameStateCache[{}] answer -> prompt {}", request.gameId, entry?.prompt)
+        if (entry == null) return unavailable(request.gameId)
         return GameStateSnapshot(
             gameId = request.gameId,
             state = entry.state,
@@ -158,5 +191,7 @@ public class GameStateCache(
 
         private const val INITIAL_CAPACITY: Int = 16
         private const val LOAD_FACTOR: Float = 0.75f
+
+        private val LOGGER = LoggerFactory.getLogger(GameStateCache::class.java)
     }
 }
