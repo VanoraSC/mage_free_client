@@ -465,6 +465,11 @@ data class ClockUi(
  *   sent no P/T at all, so a half-filled view cannot produce "null/2".
  * @property counters every counter on the card, by name and count, in the server's order. Present on a
  *   card in any zone, not only on a permanent.
+ * @property alternateName `GameCard.alternateName` (story 0076), carried through unchanged — non-null
+ *   only for a battlefield permanent currently showing its back face, in which case this is the
+ *   *front*-face name (see [GameCard.alternateName]'s own KDoc). Exposed here so a manual "peek at
+ *   the other face" control (story 0077) can compute the card's front-face name — `alternateName ?:
+ *   name` — regardless of which face [art] currently requests.
  */
 data class CardUi(
     val name: String,
@@ -474,6 +479,7 @@ data class CardUi(
     val isCreature: Boolean,
     val counters: List<CounterUi>,
     val isFaceDown: Boolean,
+    val alternateName: String? = null,
 )
 
 /** One counter on a card, as the board draws it. */
@@ -612,6 +618,7 @@ internal fun GameCard.toCardUi(): CardUi {
         isCreature = isCreature,
         counters = counters.map { CounterUi(name = it.name, count = it.count) },
         isFaceDown = isFaceDown,
+        alternateName = if (isFaceDown) null else alternateName,
     )
 }
 

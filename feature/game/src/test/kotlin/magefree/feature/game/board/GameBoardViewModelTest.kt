@@ -7,6 +7,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import magefree.cards.CardCatalog
+import magefree.cards.art.CardArtFace
+import magefree.cards.model.CardFaces
 import magefree.network.fake.FakeGameClient
 import magefree.network.game.AbilityChoice
 import magefree.network.game.ChoiceOption
@@ -786,12 +789,190 @@ class GameBoardViewModelTest {
             assertEquals(listOf("cancel:$GAME_ID"), client.calls)
         }
 
+    // ---- story 0077: manual peek at a DFC's other face ----------------------------------------------
+
+    @Test
+    fun `tapping a double-faced hand card offers a flip control once the catalog answers`() =
+        runTest {
+            val client = FakeGameClient()
+            val catalog =
+                FakeCardCatalog(
+                    byName =
+                        mapOf(
+                            "Delver of Secrets" to
+                                testCard(
+                                    name = "Delver of Secrets",
+                                    faces = CardFaces(doubleFaced = true, secondSideName = "Insectile Aberration"),
+                                ),
+                        ),
+                )
+            val viewModel = viewModel(client, catalog = catalog)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(
+                dealtState().copy(hand = listOf(GameCard(id = "h-1", name = "Delver of Secrets", setCode = "ISD", collectorNumber = "51"))),
+            )
+
+            viewModel.selectCard("h-1")
+
+            val detail = viewModel.uiState.value.detailFace
+            assertNotNull(detail)
+            assertTrue(detail!!.canFlip)
+            assertEquals(CardArtFace.FRONT, detail.face)
+            assertEquals("Delver of Secrets", detail.displayName)
+        }
+
+    @Test
+    fun `flipping a hand card's detail shows the catalog's back-face name and art`() =
+        runTest {
+            val client = FakeGameClient()
+            val catalog =
+                FakeCardCatalog(
+                    byName =
+                        mapOf(
+                            "Delver of Secrets" to
+                                testCard(
+                                    name = "Delver of Secrets",
+                                    faces = CardFaces(doubleFaced = true, secondSideName = "Insectile Aberration"),
+                                ),
+                        ),
+                )
+            val viewModel = viewModel(client, catalog = catalog)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(
+                dealtState().copy(hand = listOf(GameCard(id = "h-1", name = "Delver of Secrets", setCode = "ISD", collectorNumber = "51"))),
+            )
+            viewModel.selectCard("h-1")
+
+            viewModel.flipDetailFace()
+
+            val detail = viewModel.uiState.value.detailFace!!
+            assertEquals(CardArtFace.BACK, detail.face)
+            assertEquals("Insectile Aberration", detail.displayName)
+
+            viewModel.flipDetailFace()
+            assertEquals(
+                CardArtFace.FRONT,
+                viewModel.uiState.value.detailFace!!
+                    .face,
+            )
+            assertEquals(
+                "Delver of Secrets",
+                viewModel.uiState.value.detailFace!!
+                    .displayName,
+            )
+        }
+
+    @Test
+    fun `an ordinary card offers no flip control`() =
+        runTest {
+            val client = FakeGameClient()
+            val catalog = FakeCardCatalog(byName = mapOf("Forest" to testCard(name = "Forest")))
+            val viewModel = viewModel(client, catalog = catalog)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(dealtState())
+
+            viewModel.selectCard("h-1")
+
+            assertFalse(
+                viewModel.uiState.value.detailFace!!
+                    .canFlip,
+            )
+        }
+
+    @Test
+    fun `a transformed permanent's detail opens already showing the back face, and flips to the front`() =
+        runTest {
+            val client = FakeGameClient()
+            val catalog =
+                FakeCardCatalog(
+                    byName =
+                        mapOf(
+                            "Kytheon, Hero of Akros" to
+                                testCard(
+                                    name = "Kytheon, Hero of Akros",
+                                    faces = CardFaces(doubleFaced = true, secondSideName = "Gideon, Battle-Forged"),
+                                ),
+                        ),
+                )
+            val viewModel = viewModel(client, catalog = catalog)
+            viewModel.observe(GAME_ID)
+            val transformed =
+                GameCard(
+                    id = "y-1",
+                    name = "Gideon, Battle-Forged",
+                    setCode = "ORI",
+                    collectorNumber = "23",
+                    alternateName = "Kytheon, Hero of Akros",
+                )
+            client.emitGameState(
+                dealtState().copy(
+                    players =
+                        dealtState().players.map { player ->
+                            if (player.isViewer) player.copy(battlefield = listOf(GamePermanent(card = transformed))) else player
+                        },
+                ),
+            )
+
+            viewModel.selectCard("y-1")
+
+            val opened = viewModel.uiState.value.detailFace!!
+            assertTrue(opened.canFlip)
+            assertEquals(CardArtFace.BACK, opened.face)
+            assertEquals("Gideon, Battle-Forged", opened.displayName)
+
+            viewModel.flipDetailFace()
+
+            val flipped = viewModel.uiState.value.detailFace!!
+            assertEquals(CardArtFace.FRONT, flipped.face)
+            assertEquals("Kytheon, Hero of Akros", flipped.displayName)
+        }
+
+    @Test
+    fun `closing and reselecting a card resets the flip state`() =
+        runTest {
+            val client = FakeGameClient()
+            val catalog =
+                FakeCardCatalog(
+                    byName =
+                        mapOf(
+                            "Delver of Secrets" to
+                                testCard(
+                                    name = "Delver of Secrets",
+                                    faces = CardFaces(doubleFaced = true, secondSideName = "Insectile Aberration"),
+                                ),
+                        ),
+                )
+            val viewModel = viewModel(client, catalog = catalog)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(
+                dealtState().copy(hand = listOf(GameCard(id = "h-1", name = "Delver of Secrets", setCode = "ISD", collectorNumber = "51"))),
+            )
+            viewModel.selectCard("h-1")
+            viewModel.flipDetailFace()
+            assertEquals(
+                CardArtFace.BACK,
+                viewModel.uiState.value.detailFace!!
+                    .face,
+            )
+
+            viewModel.selectCard("h-1") // closes it
+            assertNull(viewModel.uiState.value.detailFace)
+
+            viewModel.selectCard("h-1") // reopens it
+            assertEquals(
+                CardArtFace.FRONT,
+                viewModel.uiState.value.detailFace!!
+                    .face,
+            )
+        }
+
     // ---- fixtures ----------------------------------------------------------------------------------
 
     private fun viewModel(
         client: FakeGameClient,
         policy: PassPolicy = ManualPassPolicy,
-    ) = GameBoardViewModel(client, policy)
+        catalog: CardCatalog = FakeCardCatalog(),
+    ) = GameBoardViewModel(client, policy, catalog)
 
     private fun forest(id: String) = GameCard(id = id, name = "Forest", setCode = "M21", collectorNumber = "272")
 

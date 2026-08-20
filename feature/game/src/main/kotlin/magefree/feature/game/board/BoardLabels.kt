@@ -183,6 +183,9 @@ const val MANA_ACTION_LABEL: String = "Tap for mana"
 /** Closes the tapped-card detail without acting (§11.1: any tap elsewhere closes it). */
 const val CLOSE_DETAIL_LABEL: String = "Close"
 
+/** Toggles the tapped-card detail between its front and back art (story 0077). Local peek, never sent. */
+const val FLIP_FACE_LABEL: String = "Flip"
+
 /**
  * What the controls say for a prompt kind this build does not recognise.
  *

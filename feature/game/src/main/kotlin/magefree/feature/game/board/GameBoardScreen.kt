@@ -109,6 +109,7 @@ fun GameBoardScreen(
     onAction: (BoardAction) -> Unit,
     artRenderer: CardArtRenderer,
     modifier: Modifier = Modifier,
+    onFlipDetailFace: () -> Unit = {},
 ) {
     val board = uiState.board
     val controls = uiState.controls
@@ -227,6 +228,8 @@ fun GameBoardScreen(
                         onCommit = { controls?.actionFor(objectId)?.let(onAction) },
                         onClose = { onCardTap(null) },
                         modifier = Modifier.zIndex(DETAIL_LAYER_Z),
+                        detailFace = uiState.detailFace,
+                        onFlip = onFlipDetailFace,
                     )
                 }
             }
