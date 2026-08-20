@@ -8,16 +8,36 @@ import magefree.decks.model.DeckZone
 
 /**
  * MTGO/deckstats plain-text grammar, ported from `mage.cards.decks.importer.TxtDeckImporter` and
- * `mage.cards.decks.exporter.MtgOnlineDeckExporter` (ref e0fe4b6f6a).
+ * `mage.cards.decks.exporter.MtgOnlineDeckExporter` (ref e0fe4b6f6a), plus explicit section-header
+ * recognition for exports (MTGGoldfish and others) that label their sections instead of relying on a
+ * blank line — see the "found live" note below.
  *
  * Grammar (per line, trimmed):
  * - `//…` comment → skipped; `//sideboard` switches subsequent cards to the sideboard.
  * - inner `#…` comment stripped from the line (deckstats style).
- * - a blank line (once any card has been seen) switches to the sideboard (`switchSideboardByEmptyLine`).
+ * - `Deck` / `Mainboard` → subsequent cards are main; `Sideboard` / `Commander` / `Maybeboard` →
+ *   subsequent cards are sideboard. Matched as a whole trimmed line, case-insensitive — narrower than
+ *   [MtgaFormat]'s prefix match, deliberately: [IGNORE_NAMES] already has a "sideboard cards" *label*
+ *   (used inline within one list, not as a zone divider) that a prefix match would misfire on. `About`
+ *   and a leading `Name …` line, while no card has been seen yet, are skipped as file metadata rather
+ *   than parsed as 1-count cards named "About"/"Name …".
+ * - otherwise, a blank line (once any card has been seen) switches to the sideboard
+ *   (`switchSideboardByEmptyLine`) — the fallback for files with no headers at all.
  * - `SB: N Name` marks a single sideboard card.
  * - `N Name` (count optional → defaults to 1). Non-digits in the count are stripped (`4x` → `4`); a
  *   count `<= 0` or `>= 100` is reported as malformed. Section headers in [IGNORE_NAMES] are skipped.
  * - names have no set/number, so the catalog picks the printing.
+ *
+ * **Found live (Pete, 2026-08-20): an MTGGoldfish export put all 75 cards in the sideboard.**
+ * Goldfish's plain-text export looks like `About` / `Name <deck>` / blank / `Deck` / … / blank /
+ * `Sideboard` / … — upstream's own blank-line rule has no way back to the main deck once it fires
+ * (confirmed by reading `TxtDeckImporter.readLine` directly: `sideboard` is only ever set, never
+ * cleared, unlike [MtgaFormat.parse]'s explicit `Deck`/`Mainboard` reset), so the blank line between
+ * the `About`/`Name` preamble and `Deck` latched `sideboard = true` for the rest of the file — the
+ * real `Deck` section included. Recognizing `Deck`/`Mainboard` as an explicit reset (as [MtgaFormat]
+ * already does) fixes it structurally, and skipping `About`/`Name …` before any card is seen means
+ * the blank line right after them is treated as ordinary pre-card whitespace (already skipped by the
+ * `!wasCardLines` rule) rather than the trigger.
  */
 internal object TextFormat {
     private val IGNORE_NAMES =
@@ -43,6 +63,7 @@ internal object TextFormat {
         val malformed = ArrayList<DeckImportIssue>()
         var sideboard = false
         var wasCardLines = false
+        var name: String? = null
 
         text.lineSequence().forEachIndexed { index, rawLine ->
             val lineNumber = index + 1
@@ -55,6 +76,20 @@ internal object TextFormat {
             }
             val hashIndex = line.indexOf('#')
             if (hashIndex >= 0) line = line.substring(0, hashIndex).trim()
+
+            if (lower == "deck" || lower == "mainboard") {
+                sideboard = false
+                return@forEachIndexed
+            }
+            if (lower == "sideboard" || lower == "commander" || lower == "maybeboard") {
+                sideboard = true
+                return@forEachIndexed
+            }
+            if (!wasCardLines && lower == "about") return@forEachIndexed
+            if (!wasCardLines && lower.startsWith("name ")) {
+                name = line.substring(5).trim().ifEmpty { null }
+                return@forEachIndexed
+            }
 
             if (line.isEmpty() && !wasCardLines) return@forEachIndexed
             if (line.isEmpty()) { // blank line after cards → switch to sideboard (mtgo style)
@@ -115,7 +150,7 @@ internal object TextFormat {
                     lineNumber = lineNumber,
                 )
         }
-        return ParsedDeck(entries = entries, malformed = malformed)
+        return ParsedDeck(name = name, entries = entries, malformed = malformed)
     }
 
     /**

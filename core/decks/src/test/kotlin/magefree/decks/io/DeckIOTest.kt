@@ -106,6 +106,39 @@ class DeckIOTest {
         }
 
     @Test
+    fun `text import recognizes an MTGGoldfish export's About Name Deck Sideboard headers`() =
+        runTest {
+            // Found live (Pete, 2026-08-20): this exact shape put all 75 cards in the sideboard. The
+            // blank line between the About/Name preamble and Deck latched the old empty-line-switches-
+            // to-sideboard heuristic, and nothing ever switched it back -- including the real Deck
+            // section. Recognizing Deck/Sideboard as explicit headers (as MtgaFormat already does for
+            // its own format) is what fixes it.
+            val text =
+                """
+                About
+                Name Boros
+
+                Deck
+                4 Lightning Bolt
+                20 Island
+
+                Sideboard
+                2 Counterspell
+                """.trimIndent()
+            val result = io().import(text, DeckFileFormat.TEXT)
+
+            assertEquals("Boros", result.deck.name)
+            assertEquals(2, result.deck.main.size)
+            assertEquals(
+                "Island",
+                result.deck.main
+                    .first { it.cardName == "Island" }
+                    .cardName,
+            )
+            assertEquals(listOf(DeckEntry("Counterspell", "MMQ", "68", 2)), result.deck.sideboard)
+        }
+
+    @Test
     fun `text round-trips`() = assertRoundTrips(DeckFileFormat.TEXT)
 
     // --- .dec ---
