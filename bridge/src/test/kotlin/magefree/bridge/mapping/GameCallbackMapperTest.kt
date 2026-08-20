@@ -216,6 +216,38 @@ class GameCallbackMapperTest {
     }
 
     @Test
+    fun `GAME_TARGET for a library search prefers possibleTargets over the whole cardsView1 (story 0079)`() {
+        // Found live (Pete, 2026-08-20): activating Marsh Flats offered no usable candidates.
+        // TargetCardInLibrary sends cardsView1 as the WHOLE remaining library (read directly against
+        // HumanPlayer.chooseTarget/GameController.target), with targets = null and the real, narrow
+        // answer only in options[possibleTargets] -- a different shape from story 0072's PICK_ABILITY,
+        // where the whole cardsView1 candidate set really is the answer set. Falling back to
+        // cardsView1 here (as 0072's fix does) would offer the entire library as if every card were a
+        // legal fetch.
+        val plains = GameViews.card(name = "Plains")
+        val forest = GameViews.card(name = "Forest") // not a legal Marsh Flats target
+        val mountain = GameViews.card(name = "Mountain")
+        val payload =
+            GameClientMessage(
+                view(),
+                mapOf(GamePromptOptions.POSSIBLE_TARGETS to ArrayList(listOf(plains.id, mountain.id))),
+                "Search your library for a Plains or Island card",
+                GameViews.cardsView(listOf(plains, forest, mountain)),
+                null,
+                false,
+            )
+
+        val prompt = (CallbackMapper.map(callback(ClientCallbackMethod.GAME_TARGET, payload)) as GamePrompted).prompt as TargetPrompt
+
+        assertEquals(3, prompt.cards.size, "the server's own whole-library view is still carried through")
+        assertEquals(
+            setOf(plains.id.toString(), mountain.id.toString()),
+            prompt.targetIds.toSet(),
+            "targetIds must be the narrow possibleTargets answer, not every card in the library",
+        )
+    }
+
+    @Test
     fun `GAME_ASK maps to an AskPrompt carrying the server's own button labels`() {
         val options: Map<String, Serializable> =
             mapOf(
