@@ -1,6 +1,8 @@
 # UI/UX Modernization Plan
 
-**Status:** proposal, for Pete's decision. Nothing here is committed until he says so.
+**Status:** the platform decision (§8) is **committed — Compose Multiplatform**, decided by Pete
+on 2026-08-22. The UX system (§7), feature tiering (§6) and roadmap (§11) remain proposals pending
+review, and §12 still lists open questions.
 **Date:** 2026-08-22.
 
 This plan answers three questions in order, because they depend on each other:
@@ -464,7 +466,7 @@ transitions and `graphicsLayer` are sufficient for that, and CMP's rendering pat
 same engine lineage Flutter used until Impeller. The animation argument is real but it is not worth
 ~22k lines of re-derived, bug-prone logic.
 
-### 8.5 Recommendation
+### 8.5 Decision — committed 2026-08-22
 
 > **Compose Multiplatform**, with Android + iOS + **Desktop** targets. Not Flutter.
 
@@ -480,9 +482,14 @@ Three reasons, in order of weight:
    a desktop target is the fastest possible path to *eyes on the board* — for both of us. It also
    happens to be what a serious XMage player actually wants.
 
-**This recommendation is gated on a spike, not asserted.** See Phase 0 in §11. If the spike shows
-CMP cannot hit frame budget on the board or the iOS build story is worse than advertised, Flutter
-is the fallback and we will have lost one spike rather than a quarter.
+This was originally written as a recommendation gated on a decision-spike. **Pete decided in favour
+of CMP on 2026-08-22 without the gate**, so the spike is no longer a decision instrument. The
+residual risk it was meant to retire — can CMP hit frame budget on a populated board, and is the
+iOS build story as advertised — is real and still needs retiring, so Phase 1 is sequenced to prove
+it **vertically and early** rather than in a throwaway (see §11).
+
+Flutter remains the documented fallback if that vertical proof fails badly, but the bar for
+reopening this is a measured failure, not a preference.
 
 ### 8.6 Explicitly rejected
 
@@ -574,22 +581,34 @@ mid-animation.
 Phased so that **the Android app keeps working at every step** and each phase is independently
 valuable.
 
-### Phase 0 — Decide (one spike, gates everything)
+### Phase 0 — ~~Decide~~ *(closed: decided 2026-08-22, CMP)*
 
-Build a throwaway CMP spike: `:protocol` + `:core:model` as KMP modules, one screen rendering a
-**recorded real board snapshot** with card art and a zone-move animation, running on Android, iOS
-simulator, and desktop.
-
-**Measure and report:** frame time on a populated board, iOS binary size, build/iteration time,
-and how much friction the Hilt→Koin swap actually creates. **Pete decides CMP vs Flutter on that
-data.** Nothing else starts first.
+Originally a decision-spike. Its risk-retirement purpose is folded into Phase 1a below, which
+proves the whole vertical — including iOS and a real animated board frame — before the broad
+mechanical port begins.
 
 ### Phase 1 — Multiplatform the core (no UI change)
 
 Convert `:protocol`, `:core:model`, `:core:network`, `:core:cards`, `:core:decks` to KMP.
 Hilt → Koin. Coil → `coil-network-ktor3`. Room → KMP. Robolectric tests → common/JVM.
-**Success criterion: the existing Android app is byte-for-byte behaviourally identical and every
-existing test still passes.** Highest value, lowest risk, mostly mechanical.
+**Success criterion: the existing Android app is behaviourally identical and every existing test
+still passes.** Highest value, lowest risk, mostly mechanical.
+
+Sequenced **narrow-and-deep first, wide second**, so nothing large is ported before the platform
+is proven end to end:
+
+- **Phase 1a — the vertical proof.** Take the two smallest, dependency-free modules —
+  `:core:model` (389 LOC, zero dependencies, pure Kotlin) and `:protocol` (2,411 LOC, only
+  kotlinx-serialization) — to KMP, and stand up an Android + iOS + desktop CMP app target that
+  renders **one recorded real board snapshot** with card art (Coil 3) and one zone-move animation.
+  This is simultaneously Phase 1's first step and the risk retirement Phase 0 was for.
+
+  **Measure and report before continuing:** frame time on a populated board, iOS binary size,
+  build/iteration time on each target, and the actual friction of the Hilt→Koin swap. A bad result
+  here costs two small modules, not the port.
+
+- **Phase 1b — the wide port.** `:core:cards`, `:core:decks`, `:core:network`, and the DI swap
+  across the app. Only after 1a reports clean.
 
 ### Phase 2 — Design system v2
 
@@ -633,8 +652,8 @@ The existing epics stay; these are added or amended:
 
 These change the plan and I am not deciding them:
 
-1. **Framework — confirm the spike gate.** Do you want Phase 0 run as described, with the decision
-   made on its measurements? Or have you already decided (either way), in which case we skip it?
+1. ~~**Framework — confirm the spike gate.**~~ **Answered 2026-08-22: Compose Multiplatform, no
+   gate.** The spike's risk-retirement role is folded into Phase 1a (§11).
 2. **App Store risk (§9.4).** Is an iOS App Store release actually the goal, or is iOS for personal
    / TestFlight / sideload use? This changes how much the Phase 5 investment is worth and whether
    the art-hotlinking approach needs to change at all.
