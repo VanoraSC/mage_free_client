@@ -1,8 +1,9 @@
 # UI/UX Modernization Plan
 
-**Status:** the platform decision (§8) is **committed — Compose Multiplatform**, decided by Pete
-on 2026-08-22. The UX system (§7), feature tiering (§6) and roadmap (§11) remain proposals pending
-review, and §12 still lists open questions.
+**Status:** the platform decision (§8) is **committed — stay on Compose; do not move to Flutter**,
+decided by Pete on 2026-08-22. **Ship target is Android only for now**; iOS is deferred but must
+stay *architecturally possible* (§9), which is a coding discipline rather than a work item. The UX
+system (§7), feature tiering (§6) and roadmap (§11) remain proposals pending review.
 **Date:** 2026-08-22.
 
 This plan answers three questions in order, because they depend on each other:
@@ -468,28 +469,49 @@ same engine lineage Flutter used until Impeller. The animation argument is real 
 
 ### 8.5 Decision — committed 2026-08-22
 
-> **Compose Multiplatform**, with Android + iOS + **Desktop** targets. Not Flutter.
+> **Stay on Compose. Do not move to Flutter. Ship Android only for now, and keep iOS possible.**
 
-Three reasons, in order of weight:
+Pete's second decision, same day, narrowed the first: *"don't worry about iOS, I just need to know
+that the tech stack could support it, we're sticking to Android for now."*
+
+That narrowing matters more than it sounds, so state the practical content plainly:
+
+- **On Android, Compose Multiplatform *is* Jetpack Compose.** CMP's Android target compiles to the
+  same Jetpack Compose we already ship. So for an Android-only present, "we chose CMP" and "we
+  stayed on Compose" are the same sentence. There is no migration to perform today.
+- **The real content of the decision is a rejection**, and it is a valuable one: we are not
+  rewriting ~22,400 lines of working, live-verified client logic and its tests in Dart. The
+  original question — *should we move to a UI-focused framework like Flutter?* — is answered **no**,
+  with reasons, and it should not be reopened without a measured failure.
+- **The multiplatform port is therefore deferred, not scheduled** (§11). Converting `:core:*` to
+  KMP, swapping Hilt for Koin, and replacing the Robolectric tests would deliver **zero
+  user-visible value on an Android-only target**. Doing it now would be speculative work for a
+  platform we are not building.
+- **What we do keep is the discipline** that makes the port cheap whenever it is wanted — see §9.
+  That costs approximately nothing if applied from the start and is expensive to retrofit, which is
+  the entire reason it is worth writing down now.
+
+Two reasons carried the rejection of Flutter, in order of weight:
 
 1. **It does not re-open solved problems.** The ~9.6k lines of client logic and ~10.4k lines of
    tests that encode everything we have learned from live play survive untouched.
-2. **The port is unusually cheap** because every dependency is already multiplatform. Hilt is the
-   only genuine swap.
-3. **Desktop comes free, and it is a development accelerator.** A desktop build of the board runs
-   against the bridge with no emulator, no APK install, no `adb`. Given the standing directions
-   that Pete builds and deploys APKs himself and that we do not drive screens programmatically,
-   a desktop target is the fastest possible path to *eyes on the board* — for both of us. It also
-   happens to be what a serious XMage player actually wants.
+2. **Whenever a second platform is wanted, the port is unusually cheap**, because every dependency
+   is already multiplatform. Hilt is the only genuine swap.
 
-This was originally written as a recommendation gated on a decision-spike. **Pete decided in favour
-of CMP on 2026-08-22 without the gate**, so the spike is no longer a decision instrument. The
-residual risk it was meant to retire — can CMP hit frame budget on a populated board, and is the
-iOS build story as advertised — is real and still needs retiring, so Phase 1 is sequenced to prove
-it **vertically and early** rather than in a throwaway (see §11).
+A third argument — *desktop comes free, and a desktop build of the board is a development
+accelerator: no emulator, no APK install, no `adb`, given that Pete builds and deploys APKs himself
+and we do not drive screens programmatically* — is **not** claimed here any more. Desktop is a CMP
+target, and reaching it needs the same deferred KMP port that iOS does. It is still the one
+near-term reason to do that port, and it is the live question in §12.
 
-Flutter remains the documented fallback if that vertical proof fails badly, but the bar for
-reopening this is a measured failure, not a preference.
+This was originally written as a recommendation gated on a decision-spike. That spike is closed: it
+existed to choose between CMP and Flutter, and the choice is made. Its other purpose — proving the
+iOS build story — is moot while we are Android-only.
+
+The one risk it was retiring that **still applies** is whether Compose can hold frame budget on a
+populated, animated board. That is now retired inside Phase 1 instead (§11), by building the
+animation host standalone and measuring it before any board depends on it — which we would want to
+do regardless.
 
 ### 8.6 Explicitly rejected
 
@@ -500,51 +522,74 @@ reopening this is a measured failure, not a preference.
 
 ---
 
-## 9. Cross-platform and iOS concerns
+## 9. Keeping iOS possible (without building it)
 
-Design decisions to make **now**, so the iOS port later is mechanical rather than a redesign.
+**We are shipping Android.** This section is not a work plan. It is the evidence that a second
+platform stays reachable, plus the small set of habits that keep it cheap.
 
-### 9.1 Hard prerequisite: transport security
+### 9.1 Why the stack supports iOS — the evidence
 
-iOS App Transport Security requires HTTPS/WSS by default. Our bridge currently serves plain
-WebSocket to a LAN address. **Story 0068's TLS/nginx work is not optional for iOS — it is a hard
-prerequisite**, and it should be re-scoped with that in mind. (That branch is currently unmerged
-and untouched pending Pete's direction; this plan does not change that.)
+The question Pete asked was whether the stack *could* support iOS, not when we would do it. It can,
+and three of these four are already true today with no work:
 
-Related: the WSL portproxy problem (bridge reachable only on loopback, needing an IP-specific
-`netsh portproxy` that breaks on DHCP change) is a *development* blocker that will bite twice as
-hard with a second device platform. Worth solving properly as part of the same work.
+1. **The bridge is a network service, not an on-device library** (§8.1). It runs on a JVM, embeds
+   `mage-common`, and speaks JBoss Remoting to the XMage server on one side and **WebSocket + JSON**
+   on the other. None of that stack ever runs on a phone. An iOS client only has to open a socket
+   and parse JSON — no JVM, no Kotlin/Native-vs-JVM problem, no `mage-common`, no Java-serialization
+   interop. **This is the structural one, and it is the reason iOS is a client-side-only project.**
+2. **Every dependency in use is already multiplatform** — Ktor 3 (which selects NSURLSession on
+   iOS automatically), Coil 3, Room 2.7, DataStore, Lifecycle/ViewModel, kotlinx-serialization,
+   coroutines, Compose/Material 3. See the table in §8.3. This was not planned for; it fell out of
+   choosing modern libraries, and it is worth not squandering.
+3. **Compose Multiplatform's iOS target is stable** (1.8.0, May 2025) with substantial production
+   adoption.
+4. **Hilt is the only genuine blocker**, and it is a swap to Koin or a hand-written graph — a
+   mechanical change, not a rewrite.
 
-### 9.2 Design constraints that keep iOS cheap
+### 9.2 The discipline that keeps it cheap
 
-- **No Android-shaped navigation.** No hardware back as the only path — every "back" affordance
-  must exist on screen. Our Back-cancels-innermost rule (§7.1) needs a visible equivalent.
-- **Safe areas and gesture zones as first-class layout inputs.** The iPhone home indicator sits
-  exactly where the "thumb-reachable primary actions" live. `:core:designsystem/layout/Insets.kt`
-  already exists — it must be the *only* place insets are handled.
-- **Platform-idiomatic where it is cheap, ours where it matters.** The board is entirely ours on
-  both platforms. Settings lists, sheets and scroll physics should feel native — CMP's Material
-  components will not, so budget for a small platform-adaptive component set.
-- **No platform APIs in shared code.** Everything device-specific behind `expect`/`actual`:
-  storage paths, notifications, secure credential storage, share sheets, haptics.
+These cost approximately nothing applied from the start and are expensive to retrofit. They are
+also, independently, good Android practice — which is why adopting them now is not speculative
+work for a platform we are not building.
 
-### 9.3 Platform work that is genuinely separate
+- **No Android APIs in the logic layers.** `:core:model`, `:core:network`, `:core:decks` and the
+  non-UI half of `:core:cards` should depend on Kotlin, coroutines, serialization and Ktor — and
+  nothing from `android.*`. Where something device-specific is genuinely needed (storage paths,
+  notifications, secure storage, haptics), put it behind an interface at the module boundary. That
+  interface is exactly where an `expect`/`actual` would go later.
+- **Check KMP support before adopting a new dependency.** A single Android-only library in a
+  `:core:*` module is what turns a mechanical port into a rewrite. If an Android-only library is
+  the right call anyway, that is fine — but make it knowingly, and keep it above the logic layers.
+- **Insets in exactly one place.** `:core:designsystem/layout/Insets.kt` already exists and must
+  stay the only handler. The iPhone home indicator sits precisely where our "thumb-reachable
+  primary actions" live (§7.1), so a single seam now is a one-file change later.
+- **Never make hardware Back the only path.** Every "back"/cancel affordance also exists on screen.
+  This is already required by our own touch vocabulary (§7.1) and is straightforwardly better on
+  Android too.
+- **Keep `:protocol` free of platform types.** It is already pure Kotlin + serialization. Keep it
+  that way; it is the module a second client would consume first.
 
-- **Push notifications** — FCM (Android) vs APNs (iOS). "It's your turn" (EPIC-05) needs a
-  **bridge-side push service**, which does not exist yet and is a backend story, not a UI one.
-- **Background socket behaviour** — iOS suspends sockets aggressively. The reconnect/resync path
-  (0024, 0070, 0074) is already good; it needs iOS-specific testing, not redesign.
-- **The bundled card catalog** (~14 MB SQLite asset, `AssetManager`-based on Android) needs a
+*Proposed to be lifted into [`AGENTS.md`](../AGENTS.md) as a standing rule once this plan is
+reviewed — flagged for Pete's approval rather than assumed, since that file is canonical.*
+
+### 9.3 Deferred with iOS — do not do these now
+
+Recorded so they are not lost, and so nobody starts them by accident:
+
+- **Transport security.** iOS App Transport Security requires WSS; our bridge serves plain
+  WebSocket to a LAN address. Story 0068's TLS/nginx work would be a **hard prerequisite for iOS**
+  — but with iOS deferred it is no longer on any critical path, and reverts to being worth doing
+  whenever Pete wants it. That branch stays unmerged and untouched.
+- **Push notifications.** FCM vs APNs. "It's your turn" (EPIC-05) needs a bridge-side push service
+  that does not exist yet — a backend story, and one that is Android-only-shaped for now.
+- **Background socket behaviour.** iOS suspends sockets aggressively. The reconnect/resync path
+  (0024, 0070, 0074) is already sound and would need iOS-specific testing, not redesign.
+- **The bundled card catalog** (~14 MB SQLite asset, `AssetManager`-based) would need a
   multiplatform resource story.
-- **Coil's network layer** must move from `coil-network-okhttp` to `coil-network-ktor3` so it works
-  on both.
-
-### 9.4 The risk that is not technical
-
-**App Store review.** An unofficial Magic client that displays Wizards' card names and hotlinked
-card art has a materially different risk profile inside Apple's review process than it does as a
-sideloaded APK. This is a Pete decision, not an engineering one, and it should be made *before*
-we spend on the iOS target — see §12.
+- **Coil's network layer** would move from `coil-network-okhttp` to `coil-network-ktor3`.
+- **App Store review risk.** An unofficial Magic client showing Wizards' card names and hotlinked
+  art has a materially different risk profile inside Apple's review than it does as a sideloaded
+  APK. A Pete decision, not an engineering one — and now not one that needs making.
 
 ---
 
@@ -578,73 +623,58 @@ mid-animation.
 
 ## 11. Roadmap
 
-Phased so that **the Android app keeps working at every step** and each phase is independently
-valuable.
+**Android only.** Phased so the app keeps working at every step and each phase is independently
+valuable. The multiplatform port that earlier drafts opened with is **deferred** (§8.5) — with a
+single ship target it would be pure overhead, and the work below front-loads what actually makes
+the client better.
 
-### Phase 0 — ~~Decide~~ *(closed: decided 2026-08-22, CMP)*
+### Phase 1 — Design system v2 and the animation host
 
-Originally a decision-spike. Its risk-retirement purpose is folded into Phase 1a below, which
-proves the whole vertical — including iOS and a real animated board frame — before the broad
-mechanical port begins.
+New tokens (colour, type, elevation, **motion**), the three-tier card component family (§7.5), and
+the Prompt component (§7.2).
 
-### Phase 1 — Multiplatform the core (no UI change)
+The load-bearing piece is the **object-identity animation host** (§7.3), and it gets built **and
+measured standalone before any board depends on it** — a synthetic board of realistic size, driven
+by a recorded sequence of real snapshots, asserting frame budget under interruption. This is the
+one genuine unknown left in the platform choice (§8.5), so it is retired first and cheaply.
 
-Convert `:protocol`, `:core:model`, `:core:network`, `:core:cards`, `:core:decks` to KMP.
-Hilt → Koin. Coil → `coil-network-ktor3`. Room → KMP. Robolectric tests → common/JVM.
-**Success criterion: the existing Android app is behaviourally identical and every existing test
-still passes.** Highest value, lowest risk, mostly mechanical.
+Also lands the **performance test gate** (§10.5), because a frame-timing regression that is not
+caught pre-merge will not be caught at all — nobody is driving these screens programmatically.
 
-Sequenced **narrow-and-deep first, wide second**, so nothing large is ported before the platform
-is proven end to end:
+### Phase 2 — The board
 
-- **Phase 1a — the vertical proof.** Take the two smallest, dependency-free modules —
-  `:core:model` (389 LOC, zero dependencies, pure Kotlin) and `:protocol` (2,411 LOC, only
-  kotlinx-serialization) — to KMP, and stand up an Android + iOS + desktop CMP app target that
-  renders **one recorded real board snapshot** with card art (Coil 3) and one zone-move animation.
-  This is simultaneously Phase 1's first step and the risk retirement Phase 0 was for.
+**Pete-led design session first, per standing direction — that session is not this document.**
+P0 items 1–12. The largest phase; broken into stories only after that session, against §7.
 
-  **Measure and report before continuing:** frame time on a populated board, iOS binary size,
-  build/iteration time on each target, and the actual friction of the Hilt→Koin swap. A bad result
-  here costs two small modules, not the port.
+### Phase 3 — The rest of the app
 
-- **Phase 1b — the wide port.** `:core:cards`, `:core:decks`, `:core:network`, and the DI swap
-  across the app. Only after 1a reports clean.
-
-### Phase 2 — Design system v2
-
-New tokens (colour, type, elevation, motion), the three-tier card component family (§7.5), the
-Prompt component (§7.2), and — the new subsystem — the **object-identity animation host** (§7.3),
-built and tested standalone before any board depends on it.
-
-### Phase 3 — The board
-
-**Pete-led design session first, per standing direction.** P0 items 1–12. This is the largest
-phase and should be broken into stories only after that session, against this document's §7.
-
-### Phase 4 — The rest of the app
-
-Home, lobby, tables, deck library and builder v2, card search, settings — rebuilt on the Phase 2
+Home, lobby, tables, deck library and builder v2, card search, settings — rebuilt on the Phase 1
 system. P1 items 18–22.
 
-### Phase 5 — iOS
+### Phase 4 — Polish
 
-Nav shell, `expect`/`actual` platform layer, safe-area pass, push service (bridge-side), TLS
-prerequisite (§9.1). Gated on the §12 App Store decision.
+P2 items: damage floats, gameplay warnings, emotes, sound and haptics, spectating on the new board.
 
-### Phase 6 — Desktop and polish
+### Deferred (recorded, not scheduled)
 
-Desktop target with hotkeys and resizable panels (§4.5), P2 items.
+- **Multiplatform foundation** — `:core:*` to KMP, Hilt → Koin, Coil → `coil-network-ktor3`,
+  Room → KMP, Robolectric tests → common. Prerequisite for *any* second target. Zero
+  user-visible value on Android alone, so it waits until a second target is actually wanted.
+  §9.2's discipline is what keeps this cheap in the meantime.
+- **iOS** — see §9.3.
+- **Desktop** — the same KMP prerequisite as iOS. Still the one near-term argument for doing that
+  port early, since a desktop board would run against the bridge with no emulator or APK install;
+  open question in §12.
 
 ### Proposed new epics
 
 The existing epics stay; these are added or amended:
 
-- **EPIC-18 — Multiplatform Foundation.** Phase 1. Shared client core across Android/iOS/desktop.
-- **EPIC-19 — Motion & Board Presentation.** The animation host, card tiers, layout system.
-  Amends EPIC-11 rather than replacing it.
+- **EPIC-19 — Motion & Board Presentation.** Phase 1–2. The animation host, card tiers, layout
+  system. Amends EPIC-11 rather than replacing it.
 - **EPIC-20 — Automation Ledger.** Extends EPIC-12 with MTGO-style visible, revocable automation.
-- **EPIC-21 — iOS Client.** Phase 5.
-- **EPIC-22 — Desktop Client.** Phase 6.
+- **EPIC-18 — Multiplatform Foundation** *(deferred)*, **EPIC-21 — iOS Client** *(deferred)*,
+  **EPIC-22 — Desktop Client** *(deferred)*. Numbered so they are not re-invented later.
 
 ---
 
@@ -653,10 +683,9 @@ The existing epics stay; these are added or amended:
 These change the plan and I am not deciding them:
 
 1. ~~**Framework — confirm the spike gate.**~~ **Answered 2026-08-22: Compose Multiplatform, no
-   gate.** The spike's risk-retirement role is folded into Phase 1a (§11).
-2. **App Store risk (§9.4).** Is an iOS App Store release actually the goal, or is iOS for personal
-   / TestFlight / sideload use? This changes how much the Phase 5 investment is worth and whether
-   the art-hotlinking approach needs to change at all.
+   gate.** Narrowed the same day to **Android only for now, iOS deferred but kept possible** — see
+   §8.5 and §9.
+2. ~~**App Store risk.**~~ **Moot** while iOS is deferred. Recorded in §9.3 so it is not lost.
 3. **Clocks (§4.4).** Do we want per-player chess clocks? First question is whether the *server*
    drives them — that needs verifying in upstream source before it is a story, and it is a
    bridge/protocol change, not a UI one.
@@ -664,10 +693,17 @@ These change the plan and I am not deciding them:
    the grounds that our audience chose an XMage client. Confirm, or say which should default on.
 5. **Effects & Emblems zone (§4.3).** Worth verifying against upstream `GameView` before it becomes
    a story — want that investigated now or deferred?
-6. **Desktop target.** I am recommending it partly as a *development* accelerator (§8.5). Do you
-   want it treated as a real shipping target, or purely a dev tool?
-7. **Story 0068 (TLS/nginx).** It is a hard prerequisite for iOS (§9.1) and it is sitting unmerged
-   with no PR. Standing direction is to ask before touching it — asking.
+6. **Desktop target — now the only live reason to do the deferred KMP port.** A desktop build of
+   the board would run against the bridge with no emulator, no APK install and no `adb`, which is
+   the fastest path to eyes on the board given that Pete builds and deploys APKs himself and we do
+   not drive screens programmatically. It costs the same KMP port iOS would (§11, Deferred). Worth
+   it as a dev accelerator, or leave it deferred too?
+7. ~~**Story 0068 (TLS/nginx).**~~ **No longer on any critical path** now that iOS is deferred
+   (§9.3). Still unmerged, still untouched, still worth doing whenever you want it — but it is not
+   blocking anything in this plan.
+8. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
+   expensive to retrofit, and they are good Android practice regardless. `AGENTS.md` is canonical,
+   so I am asking rather than editing it.
 
 ---
 
