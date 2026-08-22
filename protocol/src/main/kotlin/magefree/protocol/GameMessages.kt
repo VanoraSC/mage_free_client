@@ -778,6 +778,24 @@ public data class GamePlayerView(
  * @property counters every counter on the object, by name and count. **Not battlefield-only**: upstream
  *   populates them on `CardView` (from `Card.getCounters(game)`) as well as on `PermanentView`, so a
  *   card outside the battlefield can carry them too.
+ * @property alternateName upstream `CardView.getAlternateName()` (story 0076), threaded through
+ *   unchanged, exactly as upstream's own client (`CardPanel.java`) treats it: a **catalog fact**, set
+ *   unconditionally on any transformable/double-faced/flip/meld object regardless of which face is
+ *   currently showing, to the name of its *other* face. It answers "does this have another face, and
+ *   what's it called" — never "which face is up right now" (see [transformed] for that). `null` for an
+ *   ordinary card with no other face.
+ * @property transformed upstream `CardView.isTransformed()` (story 0076) — the live "is this permanent
+ *   currently showing its back face" fact, set by upstream's own `CardView` constructor
+ *   (`if (permanent.isTransformed()) transformed = true`) for any battlefield permanent, and inherited
+ *   by `PermanentView` via its `super()` call. `false` for anything that is not a permanent, and for an
+ *   untransformed permanent — only `true` once the permanent has actually flipped to its back face.
+ *   This, not [alternateName], is the signal for which face's art to request.
+ *
+ *   **Found live three times over (Pete, 2026-08-16 through 2026-08-22)** before these two fields were
+ *   traced fully against upstream source: a transformed permanent stuck showing front art, a hand card
+ *   showing its other face's art, and an untransformed permanent showing back-face art with no flip
+ *   button — all from treating `alternateName != null` as "currently transformed," which upstream never
+ *   does anywhere, including in its own client.
  */
 @Serializable
 public data class GameCardView(
@@ -794,6 +812,8 @@ public data class GameCardView(
     val cardTypes: List<CardTypeCode> = emptyList(),
     val creature: Boolean = false,
     val counters: List<GameCounterView> = emptyList(),
+    val alternateName: String? = null,
+    val transformed: Boolean = false,
 )
 
 /**

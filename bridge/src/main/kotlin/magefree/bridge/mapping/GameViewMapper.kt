@@ -213,6 +213,34 @@ public object GameViewMapper {
      * card-art loader receives a blank set/number pair, resolves to a request with no valid art, and
      * the object renders with no image at all — a distinct symptom from the naming bug (this one stays
      * broken even after the name displays correctly).
+     *
+     * **`transformed`/`alternateName` (story 0076) are two separate upstream signals, read straight —
+     * do not derive one from the other.** Traced directly against upstream's `CardView`/`PermanentView`
+     * constructors (pinned ref `e0fe4b6f6a`), the same way the real desktop client (`CardPanel.java`)
+     * reads them, rather than reverse-engineered from the symptom:
+     *
+     * - [CardView.isTransformed] is the live "is this permanent currently showing its back face" fact.
+     *   `CardView`'s own constructor sets it — `if (permanent.isTransformed()) transformed = true` — for
+     *   any `Permanent`, and `PermanentView` inherits that unchanged via its `super(permanent, game,
+     *   ...)` call (its own `this.transformed = permanent.isTransformed()` is commented out at the
+     *   pinned ref, but only because `super()` already did it — not because upstream never computes
+     *   this). It is `false` for anything that is not a permanent (hand, library, stack, exile), exactly
+     *   as it should be: only a permanent transforms. This is the one signal [mapCard] uses to pick a
+     *   currently-showing face, mirroring `CardPanel.isTransformed()`'s own reads directly.
+     * - [CardView.getAlternateName] means something different: "does this object have another face at
+     *   all, and what is it called" — a **catalog fact**, set unconditionally on *any* transformable,
+     *   flip, meld, or modal-double-faced object regardless of current state (`CardView`'s own
+     *   constructor: `card instanceof PermanentCard && card.isTransformable()` → `alternateName =
+     *   getOtherFace().getName()`, no transform check at all). It is never a signal for "which face is
+     *   showing," and threading it through unfiltered — matching upstream's own field exactly — is what
+     *   the client's flip-button/peek feature (story 0077) needs: whether a flip control should exist,
+     *   and the other face's name.
+     *
+     * Three live bugs (Pete, 2026-08-16 through 2026-08-22 — a transformed permanent frozen on its
+     * front art; a hand card showing its other face's art; an untransformed permanent showing its back
+     * face's art with no flip button) were all one mistake: treating `alternateName != null` as "is
+     * this currently transformed," when upstream never uses it that way anywhere, including in its own
+     * client. [CardView.isTransformed] already answers that question directly and needs no rederiving.
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
@@ -239,6 +267,12 @@ public object GameViewMapper {
                 card.counters.orEmpty().filterNotNull().map { counter ->
                     GameCounterView(name = counter.name.orEmpty(), count = counter.count)
                 },
+            // Story 0076: upstream's own field for "does this have another face, and what's it called" —
+            // a catalog fact, unconditional, never a signal for which face is currently up. See mapCard's
+            // KDoc.
+            alternateName = card.alternateName,
+            // Story 0076: upstream's own field for "which face is currently up" — see mapCard's KDoc.
+            transformed = card.isTransformed,
         )
 
     /** The nested source `CardView` for an `AbilityView`/`StackAbilityView`, `null` for anything else. */

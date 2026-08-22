@@ -49,5 +49,6 @@ fun GameBoardRoute(
         onAction = viewModel::act,
         artRenderer = artRenderer,
         modifier = modifier,
+        onFlipDetailFace = viewModel::flipDetailFace,
     )
 }

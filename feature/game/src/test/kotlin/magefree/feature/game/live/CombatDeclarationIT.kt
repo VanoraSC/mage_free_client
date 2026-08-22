@@ -17,6 +17,7 @@ import magefree.decks.model.DeckId
 import magefree.feature.game.board.BoardAction
 import magefree.feature.game.board.BoardUi
 import magefree.feature.game.board.CombatRole
+import magefree.feature.game.board.FakeCardCatalog
 import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
@@ -169,7 +170,7 @@ class CombatDeclarationIT {
                                     noteCombat(who, it)
                                 }
                         }
-                    val viewModel = GameBoardViewModel(session.games, ManualPassPolicy)
+                    val viewModel = GameBoardViewModel(session.games, ManualPassPolicy, FakeCardCatalog())
                     viewModel.observe(starting.gameId)
                     jobs += launch { drive(who, viewModel) }
                 }

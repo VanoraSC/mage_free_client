@@ -608,7 +608,21 @@ internal fun CardDetailOverlay(
     onCommit: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    detailFace: CardDetailFaceUi? = null,
+    onFlip: () -> Unit = {},
 ) {
+    // Story 0077: a manual peek at the other face, entirely local to this overlay — it never touches
+    // the object's actual live face ([CardUi.art]/[CardUi.name], story 0076's automatic selection).
+    val shownCard =
+        if (detailFace != null) {
+            card.copy(
+                name = detailFace.displayName,
+                display = card.display.copy(name = detailFace.displayName),
+                art = card.art?.copy(face = detailFace.face),
+            )
+        } else {
+            card
+        }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // The "tap elsewhere closes it" surface. It is transparent: the board stays fully visible, which
         // is the whole point of §16.2 — the detail floats, it does not black the game out.
@@ -633,9 +647,9 @@ internal fun CardDetailOverlay(
                 verticalArrangement = Arrangement.spacedBy(Spacing.extraSmall),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                BoardCardFace(card = card, artRenderer = artRenderer, modifier = Modifier.width(DETAIL_ART_WIDTH))
+                BoardCardFace(card = shownCard, artRenderer = artRenderer, modifier = Modifier.width(DETAIL_ART_WIDTH))
                 Text(
-                    text = card.name,
+                    text = shownCard.name,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -688,6 +702,9 @@ internal fun CardDetailOverlay(
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small), verticalAlignment = Alignment.CenterVertically) {
                     actionLabel?.let { label ->
                         Button(onClick = onCommit) { Text(text = label, maxLines = 1) }
+                    }
+                    if (detailFace?.canFlip == true) {
+                        OutlinedButton(onClick = onFlip) { Text(text = FLIP_FACE_LABEL, maxLines = 1) }
                     }
                     TextButton(onClick = onClose) { Text(text = CLOSE_DETAIL_LABEL) }
                 }

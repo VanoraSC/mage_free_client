@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import magefree.cards.CardCatalog
+import magefree.cards.art.CardArtFace
 import magefree.network.game.GameClient
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
@@ -91,6 +93,8 @@ data class DeclarationUi(
  * @property declaration the combat declaration in flight (§7.4/§7.5), or null when the server has the
  *   board in neither role. Never both roles at once — [DeclarationUi.role] holds exactly one.
  * @property actionError the server's own reason for declining the last action, else null.
+ * @property detailFace the peek state for the tapped card's art (story 0077) — null while no card is
+ *   selected, or before the catalog has answered whether it is even a double-faced card.
  */
 data class GameBoardUiState(
     val board: BoardUi,
@@ -103,6 +107,29 @@ data class GameBoardUiState(
     val cast: CastUi? = null,
     val declaration: DeclarationUi? = null,
     val actionError: String? = null,
+    val detailFace: CardDetailFaceUi? = null,
+)
+
+/**
+ * The manual "peek at the other face" control for the tapped-card detail (story 0077) — distinct from
+ * story 0076's automatic face selection, which reflects the *live* transform state and cannot be
+ * overridden. This is purely a local viewing choice: it never sends anything to the server and never
+ * changes what [BoardUi.from] reports as the object's actual, current face.
+ *
+ * @property face which face is currently being *shown in the detail overlay*, independent of the
+ *   card's live transform state.
+ * @property canFlip whether the tapped object is a double-faced/modal-double-faced card at all — the
+ *   bundled catalog's own answer (`CardFaces.doubleFaced`/`modalDoubleFaced`), looked up by the card's
+ *   *front*-face name (see [GameBoardViewModel.resolveDetailFace]). `false` until the catalog has
+ *   answered, so the control never flashes on and then disappears.
+ * @property displayName the name to show for [face] — the front name for [CardArtFace.FRONT], the
+ *   catalog's `secondSideName` for [CardArtFace.BACK] (falling back to the live name if the catalog
+ *   somehow has none, rather than showing a blank title).
+ */
+data class CardDetailFaceUi(
+    val face: CardArtFace,
+    val canFlip: Boolean,
+    val displayName: String,
 )
 
 /**
@@ -143,6 +170,7 @@ class GameBoardViewModel
     constructor(
         private val gameClient: GameClient,
         private val passPolicy: PassPolicy,
+        private val cardCatalog: CardCatalog,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(GameBoardUiState(board = BoardUi(gameId = "")))
 
@@ -234,6 +262,7 @@ class GameBoardViewModel
                     selectedObjectId = if (promptChanged) null else previous.selectedObjectId,
                     cast = previous.cast.advancedBy(state.prompt),
                     declaration = previous.declaration.advancedBy(state.prompt),
+                    detailFace = if (promptChanged) null else previous.detailFace,
                 )
 
             // The one place the app decides *when* to answer a priority prompt (§14.1). Asked once per
@@ -411,7 +440,61 @@ class GameBoardViewModel
          */
         fun selectCard(objectId: String?) {
             val current = _uiState.value.selectedObjectId
-            _uiState.value = _uiState.value.copy(selectedObjectId = if (objectId == current) null else objectId)
+            val next = if (objectId == current) null else objectId
+            _uiState.value = _uiState.value.copy(selectedObjectId = next, detailFace = null)
+            detailFaceNames = null
+            if (next != null) resolveDetailFace(next)
+        }
+
+        /**
+         * The front/back names resolved for [detailFace]'s card, kept only for as long as that same
+         * object stays selected — [resolveDetailFace] and [flipDetailFace] are the sole readers/writers.
+         */
+        private var detailFaceNames: Pair<String, String?>? = null
+
+        /**
+         * Look up [objectId]'s catalog entry to decide whether the manual flip control (story 0077)
+         * should appear at all, and what to call its back face.
+         *
+         * Seeds [GameBoardUiState.detailFace] immediately with `canFlip = false` and the card's own live
+         * name/face — so the overlay renders correctly (no flip button) before the catalog answers — then
+         * upgrades it once the (suspend, offline-but-still-async) catalog lookup returns, provided the
+         * same object is still selected.
+         *
+         * Looked up by the card's **front**-face name: the bundled catalog only ever stores a DFC under
+         * its front face's name, and a transformed permanent's live `name` is the *back* face's name and
+         * would never match a row. `GameCard.transformed` (story 0076) says whether that substitution is
+         * needed at all; `alternateName` (a catalog fact, not a face signal — see its own KDoc) supplies
+         * the other face's name when it is.
+         */
+        private fun resolveDetailFace(objectId: String) {
+            val card = _uiState.value.board.cardFor(objectId) ?: return
+            if (card.isFaceDown || card.art == null) return
+            val liveFace = if (card.transformed) CardArtFace.BACK else CardArtFace.FRONT
+            val frontName = if (card.transformed) (card.alternateName ?: card.name) else card.name
+            _uiState.value = _uiState.value.copy(detailFace = CardDetailFaceUi(face = liveFace, canFlip = false, displayName = card.name))
+            viewModelScope.launch {
+                val faces = runCatching { cardCatalog.cardByName(frontName) }.getOrNull()?.faces
+                val flippable = faces != null && (faces.doubleFaced || faces.modalDoubleFaced)
+                if (!flippable || _uiState.value.selectedObjectId != objectId) return@launch
+                detailFaceNames = frontName to faces.otherFaceName
+                _uiState.value =
+                    _uiState.value.copy(detailFace = CardDetailFaceUi(face = liveFace, canFlip = true, displayName = card.name))
+            }
+        }
+
+        /**
+         * Toggle the tapped card's detail between its front and back art (story 0077). A no-op when
+         * nothing is selected or [CardDetailFaceUi.canFlip] is false — the control is hidden in that case
+         * regardless, so this is a defensive no-op, not the normal gate.
+         */
+        fun flipDetailFace() {
+            val current = _uiState.value.detailFace ?: return
+            if (!current.canFlip) return
+            val (frontName, backName) = detailFaceNames ?: return
+            val nextFace = if (current.face == CardArtFace.FRONT) CardArtFace.BACK else CardArtFace.FRONT
+            val nextName = if (nextFace == CardArtFace.FRONT) frontName else (backName ?: frontName)
+            _uiState.value = _uiState.value.copy(detailFace = current.copy(face = nextFace, displayName = nextName))
         }
     }
 

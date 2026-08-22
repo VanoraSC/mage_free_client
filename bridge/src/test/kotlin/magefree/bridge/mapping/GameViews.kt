@@ -97,6 +97,8 @@ internal object GameViews {
         rules: List<String> = listOf("({T}: Add {G}.)"),
         faceDown: Boolean = false,
         counters: List<Pair<String, Int>> = emptyList(),
+        alternateName: String? = null,
+        transformed: Boolean = false,
     ): CardView =
         allocate(CardView::class.java).apply {
             set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
@@ -113,6 +115,8 @@ internal object GameViews {
             set("manaCostLeftStr", manaCost)
             set("manaCostRightStr", emptyList<String>())
             set("faceDown", faceDown)
+            set("alternateName", alternateName)
+            set("transformed", transformed)
         }
 
     /**
@@ -151,7 +155,18 @@ internal object GameViews {
             set("rules", rules)
         }
 
-    /** A `PermanentView` (a `CardView` plus battlefield state). */
+    /**
+     * A `PermanentView` (a `CardView` plus battlefield state).
+     *
+     * [transformed] sets the `transformed` field exactly as upstream's own `CardView(GameObject, Game,
+     * ...)` constructor does for any `Permanent` — `if (permanent.isTransformed()) transformed = true`
+     * — which `PermanentView`'s constructor inherits unchanged via its `super(permanent, game, ...)`
+     * call (its own `this.transformed = permanent.isTransformed()` is commented out at the pinned ref
+     * precisely *because* `super()` already set it correctly; it is not dead in the sense of "never
+     * computed"). This is [GameViewMapper]'s real "which face is this permanent currently showing"
+     * signal — never `alternateName`, which upstream sets unconditionally on any transformable
+     * permanent regardless of current state (see [card]'s own `alternateName` param).
+     */
     fun permanent(
         card: CardView = card(),
         tapped: Boolean = false,
@@ -161,6 +176,7 @@ internal object GameViews {
         damage: Int = 0,
         attachedTo: UUID? = null,
         controlled: Boolean = true,
+        transformed: Boolean = false,
     ): PermanentView =
         allocate(PermanentView::class.java).apply {
             copyCardFieldsFrom(card)
@@ -171,6 +187,7 @@ internal object GameViews {
             set("damage", damage)
             set("attachedTo", attachedTo)
             set("controlled", controlled)
+            set("transformed", transformed)
         }
 
     /** Copies the `CardView` half of a permanent from an already-built [card]. */
@@ -189,6 +206,7 @@ internal object GameViews {
         set("manaCostLeftStr", card.manaCostSymbols)
         set("manaCostRightStr", emptyList<String>())
         set("faceDown", card.isFaceDown)
+        set("alternateName", card.alternateName)
     }
 
     /** A `ManaPoolView` with the given floating mana. */

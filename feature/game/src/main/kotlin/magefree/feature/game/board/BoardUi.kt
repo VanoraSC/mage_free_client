@@ -465,6 +465,14 @@ data class ClockUi(
  *   sent no P/T at all, so a half-filled view cannot produce "null/2".
  * @property counters every counter on the card, by name and count, in the server's order. Present on a
  *   card in any zone, not only on a permanent.
+ * @property alternateName `GameCard.alternateName` (story 0076), carried through unchanged — a catalog
+ *   fact, non-null whenever the card has another face at all, to that other face's name, regardless of
+ *   which face is currently showing (see [GameCard.alternateName]'s own KDoc). Exposed here so a manual
+ *   "peek at the other face" control (story 0077) knows whether one exists and what to call it; [transformed]
+ *   is what says which face is currently up.
+ * @property transformed `GameCard.transformed` (story 0076), carried through unchanged — the live "is
+ *   this permanent currently showing its back face" fact. This, not [alternateName], is what [art]'s
+ *   requested face is chosen from.
  */
 data class CardUi(
     val name: String,
@@ -474,6 +482,8 @@ data class CardUi(
     val isCreature: Boolean,
     val counters: List<CounterUi>,
     val isFaceDown: Boolean,
+    val alternateName: String? = null,
+    val transformed: Boolean = false,
 )
 
 /** One counter on a card, as the board draws it. */
@@ -607,27 +617,36 @@ internal fun GameCard.toCardUi(): CardUi {
                 typeLine = if (isFaceDown) null else typeLine?.cleanedOrNull(),
                 oracleText = if (isFaceDown) null else rules.mapNotNull { it.cleanedOrNull() }.joinToString("\n").ifBlank { null },
             ),
-        art = if (isFaceDown) null else artRequestOf(setCode, collectorNumber),
+        art = if (isFaceDown) null else artRequestOf(setCode, collectorNumber, isShowingAlternateFace = transformed),
         powerToughness = if (isFaceDown) null else pt,
         isCreature = isCreature,
         counters = counters.map { CounterUi(name = it.name, count = it.count) },
         isFaceDown = isFaceDown,
+        alternateName = if (isFaceDown) null else alternateName,
+        transformed = transformed,
     )
 }
 
 /**
  * The 0031 art identity for a printing, or null when the server did not name one — in which case the
  * design-system placeholder is what renders, and the card's text stays readable.
+ *
+ * [isShowingAlternateFace] (story 0076) is `GameCard.transformed` — upstream's own live "is this
+ * permanent currently showing its back face" fact (see [GameCard.transformed]'s own KDoc), not
+ * `alternateName`, which means something else entirely (whether another face *exists*, not which one is
+ * up). A DFC/MDFC's two faces share one [setCode]/[collectorNumber] (one printing), so telling them
+ * apart is entirely down to which [CardArtFace] the request asks for.
  */
 internal fun artRequestOf(
     setCode: String?,
     collectorNumber: String?,
+    isShowingAlternateFace: Boolean = false,
 ): CardArtRequest? {
     if (setCode.isNullOrBlank() || collectorNumber.isNullOrBlank()) return null
     return CardArtRequest(
         setCode = setCode,
         collectorNumber = collectorNumber,
-        face = CardArtFace.FRONT,
+        face = if (isShowingAlternateFace) CardArtFace.BACK else CardArtFace.FRONT,
         size = CardArtSize.SMALL,
     )
 }

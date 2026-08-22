@@ -15,6 +15,7 @@ import magefree.decks.model.Deck
 import magefree.decks.model.DeckEntry
 import magefree.decks.model.DeckId
 import magefree.feature.game.board.BoardAction
+import magefree.feature.game.board.FakeCardCatalog
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
 import magefree.feature.game.board.PromptControlsUi
@@ -149,7 +150,7 @@ class CombatProbeIT {
                 opponent.games.joinGame(starting.gameId).getOrThrow()
                 jobs += launch { driveOpponent(opponent.games, starting.gameId) }
 
-                val viewModel = GameBoardViewModel(app.games, ManualPassPolicy)
+                val viewModel = GameBoardViewModel(app.games, ManualPassPolicy, FakeCardCatalog())
                 jobs +=
                     launch {
                         app.games

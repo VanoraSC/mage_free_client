@@ -16,6 +16,7 @@ import magefree.decks.model.Deck
 import magefree.decks.model.DeckEntry
 import magefree.decks.model.DeckId
 import magefree.feature.game.board.BoardAction
+import magefree.feature.game.board.FakeCardCatalog
 import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
@@ -183,7 +184,7 @@ class BoardPlaysAGameIT {
                 // --- the two seats ---------------------------------------------------------------------
                 //
                 // The app seat is a real ViewModel. Nothing below ever calls a GameClient verb for it.
-                val viewModel = GameBoardViewModel(app.games, ManualPassPolicy)
+                val viewModel = GameBoardViewModel(app.games, ManualPassPolicy, FakeCardCatalog())
 
                 jobs +=
                     launch {

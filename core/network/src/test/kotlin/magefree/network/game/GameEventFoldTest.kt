@@ -356,6 +356,51 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun transformedAndAlternateNameSurviveFoldingTheRealSignalForWhichFaceIsCurrentlyUp() {
+        // Story 0076: found live -- Kytheon, Hero of Akros transformed into Gideon, Battle-Forged,
+        // but the board kept showing Kytheon's art. `transformed` (upstream's own CardView.isTransformed(),
+        // correctly computed for any permanent) is the real signal for which face is up; `alternateName`
+        // is a separate catalog fact (has another face, what it's called) carried through unchanged.
+        val transformed =
+            GamePermanentView(
+                card =
+                    GameCardView(
+                        id = "perm-1",
+                        name = "Gideon, Battle-Forged",
+                        setCode = "ORI",
+                        collectorNumber = "23",
+                        alternateName = "Kytheon, Hero of Akros",
+                        transformed = true,
+                    ),
+                controlledByViewer = true,
+            )
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 1,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(playerId = "p-1", name = "pete", viewer = true, battlefield = listOf(transformed)),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val card =
+            folded.viewer!!
+                .battlefield
+                .single()
+                .card
+        assertTrue(card.transformed)
+        assertEquals("Kytheon, Hero of Akros", card.alternateName)
+    }
+
+    @Test
     fun aCardCarriesWhatItCurrentlyIsAndTheCountersOnIt() {
         // Story 0058. Creature-ness is game state: the same Mountain is a land in one snapshot and a
         // 0/3 creature in the next, and only the server can say which. The fold carries all three

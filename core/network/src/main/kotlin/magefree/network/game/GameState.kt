@@ -187,6 +187,12 @@ data class GamePlayer(
  *   creature-ness — never the printed type, never [typeLine].
  * @property counters every counter on the object, by name and count. Not battlefield-only: a card in
  *   another zone can carry them, because upstream puts them on `CardView`.
+ * @property alternateName upstream `CardView.getAlternateName()` (story 0076): a catalog fact, set
+ *   unconditionally on any transformable/double-faced/flip/meld object to its *other* face's name,
+ *   regardless of which face is currently showing. Not a signal for current face — see [transformed].
+ * @property transformed upstream `CardView.isTransformed()` (story 0076) — the live "is this permanent
+ *   currently showing its back face" fact. `false` for anything that is not a permanent, and for an
+ *   untransformed permanent. This is the signal for which face's art to request, never [alternateName].
  */
 data class GameCard(
     val id: String,
@@ -202,6 +208,8 @@ data class GameCard(
     val cardTypes: List<CardType> = emptyList(),
     val isCreature: Boolean = false,
     val counters: List<GameCounter> = emptyList(),
+    val alternateName: String? = null,
+    val transformed: Boolean = false,
 )
 
 /**

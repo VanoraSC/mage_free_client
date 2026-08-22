@@ -489,6 +489,88 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `transformed survives mapping, the real signal for which face is currently up (story 0076)`() {
+        // Found live (Pete, 2026-08-17): Kytheon, Hero of Akros transformed into Gideon,
+        // Battle-Forged, but the board kept showing Kytheon's art. Confirmed against upstream source:
+        // CardView.isTransformed() is set correctly for any permanent by CardView's own constructor
+        // (`if (permanent.isTransformed()) transformed = true`), inherited unchanged by PermanentView
+        // via its super() call -- it was never actually unavailable, just unread.
+        val transformed =
+            GameViews.permanent(
+                card =
+                    GameViews.card(
+                        name = "Gideon, Battle-Forged",
+                        cardTypes = listOf(CardType.PLANESWALKER),
+                        superTypes = emptyList(),
+                        subTypes = emptyList(),
+                    ),
+                transformed = true,
+            )
+
+        assertTrue(GameViewMapper.mapCard(transformed).transformed)
+    }
+
+    @Test
+    fun `transformed is false for an untransformed permanent even though alternateName is set (story 0076, found live again)`() {
+        // Found live (Pete, 2026-08-22): Ajani, Nacatl Pariah on the battlefield, UNTRANSFORMED,
+        // showed Ajani, Nacatl Avenger's (the back face's) art -- and the manual flip control (story
+        // 0077) never appeared until it actually transformed. Root cause: alternateName was being
+        // treated as the "currently transformed" signal, but upstream sets it unconditionally on any
+        // transformable permanent regardless of state -- it means "has another face", not "is
+        // showing it". `transformed` is upstream's own dedicated, correctly-computed field for that.
+        val untransformed =
+            GameViews.permanent(
+                card =
+                    GameViews.card(
+                        name = "Ajani, Nacatl Pariah",
+                        cardTypes = listOf(CardType.PLANESWALKER),
+                        superTypes = emptyList(),
+                        subTypes = emptyList(),
+                        // Mirrors upstream's own unconditional assignment: the OTHER face's name, set
+                        // even though this permanent has never transformed.
+                        alternateName = "Ajani, Nacatl Avenger",
+                    ),
+                transformed = false,
+            )
+
+        val mapped = GameViewMapper.mapCard(untransformed)
+        assertFalse(mapped.transformed, "an untransformed permanent's art must stay on the front face")
+        assertEquals(
+            "Ajani, Nacatl Avenger",
+            mapped.alternateName,
+            "alternateName is a catalog fact (has another face, what it's called) and is threaded through as-is",
+        )
+    }
+
+    @Test
+    fun `alternateName is null for an ordinary card, never fabricated`() {
+        val bear = GameViews.card(name = "Grizzly Bears")
+
+        assertNull(GameViewMapper.mapCard(bear).alternateName)
+    }
+
+    @Test
+    fun `a plain CardView's alternateName is threaded through unchanged, story 0076 follow-up`() {
+        // Found live (Pete, 2026-08-17): an untransformed Kytheon sitting in hand showed Gideon's
+        // art -- from treating a non-null alternateName as a face signal. Upstream sets alternateName
+        // unconditionally for any transformable card, to the name of its OTHER face, regardless of
+        // which face is showing; a hand card's `transformed` is simply false (only permanents
+        // transform), which is the correct signal the board now reads instead.
+        val kytheonInHand =
+            GameViews.card(
+                name = "Kytheon, Hero of Akros",
+                cardTypes = listOf(CardType.CREATURE),
+                superTypes = emptyList(),
+                subTypes = emptyList(),
+                alternateName = "Gideon, Battle-Forged",
+            )
+
+        val mapped = GameViewMapper.mapCard(kytheonInHand)
+        assertEquals("Gideon, Battle-Forged", mapped.alternateName)
+        assertFalse(mapped.transformed)
+    }
+
+    @Test
     fun `a counter list upstream never populated maps to empty rather than throwing`() {
         // `CardView.counters` is left null unless the object actually has counters (upstream only
         // allocates the list when `Card.getCounters(game)` is non-empty), so null is the ordinary case
