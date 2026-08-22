@@ -56,7 +56,8 @@ mage_free_client/
 ├── docs/
 │   ├── project-plan.md    # feature plan — epics & user stories (start here)
 │   ├── architecture.md    # XMage integration analysis + transport challenge
-│   └── ux-principles.md   # mobile-first UX direction (how we diverge)
+│   ├── ux-principles.md   # mobile-first UX direction (how we diverge)
+│   └── ui-modernization-plan.md  # UI/UX research + platform (KMP/CMP) plan — proposal
 └── (bridge/, app/, core/, feature/ modules to come)
 ```
 
