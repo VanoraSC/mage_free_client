@@ -356,11 +356,11 @@ class GameEventFoldTest {
     }
 
     @Test
-    fun alternateNameSurvivesFoldingTheOnlySignalForWhichFaceIsCurrentlyUp() {
+    fun transformedAndAlternateNameSurviveFoldingTheRealSignalForWhichFaceIsCurrentlyUp() {
         // Story 0076: found live -- Kytheon, Hero of Akros transformed into Gideon, Battle-Forged,
-        // but the board kept showing Kytheon's art. alternateName (non-null exactly when the live
-        // name differs from the card's own original name) is the only signal for this anywhere --
-        // upstream's PermanentView.transformed is dead code -- so this proves it reaches GameState.
+        // but the board kept showing Kytheon's art. `transformed` (upstream's own CardView.isTransformed(),
+        // correctly computed for any permanent) is the real signal for which face is up; `alternateName`
+        // is a separate catalog fact (has another face, what it's called) carried through unchanged.
         val transformed =
             GamePermanentView(
                 card =
@@ -370,6 +370,7 @@ class GameEventFoldTest {
                         setCode = "ORI",
                         collectorNumber = "23",
                         alternateName = "Kytheon, Hero of Akros",
+                        transformed = true,
                     ),
                 controlledByViewer = true,
             )
@@ -390,14 +391,13 @@ class GameEventFoldTest {
                 ),
             )!!
 
-        assertEquals(
-            "Kytheon, Hero of Akros",
+        val card =
             folded.viewer!!
                 .battlefield
                 .single()
                 .card
-                .alternateName,
-        )
+        assertTrue(card.transformed)
+        assertEquals("Kytheon, Hero of Akros", card.alternateName)
     }
 
     @Test

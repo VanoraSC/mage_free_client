@@ -11,185 +11,152 @@ Battle-Forged (confirmed server-side — the activated-ability prompt showed Gid
 abilities, not Kytheon's), but the board kept showing **Kytheon's art**. The name displayed
 correctly; only the art stayed on the front face.
 
-## 2. Root cause — confirmed by reading the actual code, not assumed
+## 2. Root cause — confirmed by reading upstream's own client, not reverse-engineered
 
 `toCardUi()` (`feature/game/src/main/kotlin/magefree/feature/game/board/BoardUi.kt`, the single
-place every rendered permanent's `CardArtRequest` is built) hardcodes:
+place every rendered permanent's `CardArtRequest` is built) originally hardcoded `face =
+CardArtFace.FRONT` always. There is no signal in a DFC's `setCode`/`collectorNumber` for which
+face is current — both faces of one printing share that one identity — so something else has to
+say which face's art to request.
 
-```kotlin
-return CardArtRequest(
-    setCode = setCode,
-    collectorNumber = collectorNumber,
-    face = CardArtFace.FRONT,   // always — every permanent, every hand card, every stack entry
-    size = CardArtSize.SMALL,
-)
-```
+**This was chased through three rounds of the wrong kind of fix before Pete redirected the
+investigation to upstream's own reference client, which already solves this problem correctly.**
+Rounds 1–3 (kept below for the record, since they are what the intermediate commits and PR history
+show) each treated `CardView.alternateName`/`getAlternateName()` as if it were the "which face is
+up" signal, discovering a new way that assumption failed each time. The actual upstream desktop
+client (`Mage.Client/src/main/java/org/mage/card/arcane/CardPanel.java`, pinned ref `e0fe4b6f6a`)
+never does this: it reads `CardView.isTransformed()` directly for exactly this question (e.g.
+`this.isTransformed()` gates the day/night button's icon and the flip animation), and treats
+`alternateName`/`getSecondCardFace()` as a completely separate fact — "does this card have another
+face, and what's on it" — used only to know *whether a flip control should exist* and where its
+label comes from, never to decide which art is currently showing.
 
-There is **no signal anywhere in the mapped data** for "this permanent is currently showing its
-back face." Read directly against the pinned upstream source (`Mage.Common/src/main/java/mage/
-view/PermanentView.java`, ref `e0fe4b6f6a`): the one field that looks like it should carry this is
-dead code —
-
-```java
-//this.transformed = permanent.isTransformed();
-```
-
-— literally commented out. `PermanentView.flipped`/`isFlipped()` (the one boolean our bridge does
-map, to `GamePermanentView.flipped`, currently unused by art selection) is upstream's **old** "flip
-card" mechanic (Kamigawa-style, a card that turns 180° and reads differently) — a different, older
-thing from a modern transforming double-faced card. Neither upstream nor our own mapping currently
-exposes "is the back face up" as a boolean at all.
-
-What upstream's `PermanentView` constructor *does* do (same file) is switch the inherited
-`CardView.name` (and the identity fields it derives from) to the current face's own values —
-confirmed by its own comment: *"for fipped [sic], transformed or copied cards, switch the
-names."* This is exactly why Pete saw the correct name ("Gideon, Battle-Forged") but the wrong art:
-`name` already reflects the live face, but `setCode`/`collectorNumber` are a DFC printing's **one**
-shared identity for both faces (Scryfall/XMage do not give the two faces of one printing separate
-collector numbers), and nothing downstream ever asks for the *back* rendering of that one identity.
-
-**Superseded during implementation:** this section originally proposed resolving the face by
-matching the live `name` against the catalog's `CardFaces.secondSideName` for the printing. Reading
-further into upstream's own `PermanentView` constructor (same file) turned up a simpler, more
-direct signal that makes the catalog lookup unnecessary:
+`CardView.isTransformed()` (`Mage.Common/src/main/java/mage/view/CardView.java`) is set correctly,
+for every permanent, by `CardView`'s own constructor:
 
 ```java
-if (original != null && !original.getName().equals(this.getName())) {
+if (card instanceof Permanent) {
+    Permanent permanent = (Permanent) card;
     ...
-    this.alternateName = original.getName();
+    if (permanent.isTransformed()) {
+        transformed = true;
+    }
 }
 ```
 
-`CardView.alternateName` (`getAlternateName()`) is set by upstream itself, on the object we already
-map, exactly when the live name differs from the card's own original name — i.e. a transformed DFC
-permanent, a name-changing copy, or a flip card in its flipped state. It is `null` in the ordinary
-case. This is upstream's own "is this not the front face" signal, already computed for us — no
-catalog lookup, no dependency on 0030's face-name data, and no guessing at name equality ourselves.
-The fix threads this one field through all four layers (`protocol` → `bridge` → `core:network` →
-`feature:game`) and uses `alternateName != null` as the sole condition for `CardArtFace.BACK`.
+`PermanentView extends CardView` and its constructor calls `super(permanent, game, ...)` first —
+running the exact block above with the live `Permanent` as `card` — so this field is already
+correct on every `PermanentView` before `PermanentView`'s own body runs a line further down. That
+line, `//this.transformed = permanent.isTransformed();`, is commented out in `PermanentView.java` —
+**not because upstream never computes this field, but because `super()` already did**, making the
+reassignment redundant. Earlier rounds of this story read that commented-out line and concluded the
+field was dead upstream entirely; it is not — it is simply inherited, unchanged, from the
+superclass constructor that always runs first. This is exactly the "solved problem" note applies
+to: the reference client already renders this correctly by reading a field upstream already
+computes for it, and the fix is to translate that field through the bridge, not to invent a
+replacement.
 
-**Follow-up defect, found live the same session (Pete, 2026-08-17): an untransformed Kytheon in
-hand showed Gideon's art.** The "hand cards are not transformable, non-issue" assumption in the
-original scope section below was wrong — not because a hand card can transform, but because
-`CardView.alternateName` means something different depending on *which* upstream class actually
-built the object. Reading `CardView.java`'s own constructor (not just `PermanentView`'s) turned up
-five more `this.alternateName = ...` assignments, all unconditional: any `card instanceof
-DoubleFacedCard` (or transformable `PermanentCard`, flip card, or meld card) gets `alternateName`
-set to its *other* face's name **regardless of which face is currently showing** — this is how
-upstream's own GUI labels a day/night flip button, not a "which face is up" signal. `PermanentView`
-extends `CardView` and its constructor calls `super()` first (running that unconditional
-assignment) and then *overwrites* the field with the correct "did the name actually change" value —
-but only `PermanentView` does that overwrite. A card sitting untransformed in hand is a plain
-`CardView`, never a `PermanentView`, so it keeps the naive always-set value, which reads as "showing
-the back face" if trusted the same way a permanent's is. Fixed by gating the bridge's read on
-`card is PermanentView` — `GameCardView.alternateName` is now `null` for every zone except the
-battlefield, where `PermanentView`'s own correctly-overwritten value is what's read.
+`CardView.alternateName` is a *different* fact: any transformable/double-faced/flip/meld object
+gets it set unconditionally, in both `CardView`'s and `PermanentView`'s constructors, to the name of
+whichever face is **not** currently showing — regardless of whether the object has ever
+transformed. It is upstream's own label source for a flip/day-night button (story 0077), not a
+face-selection signal, and was never meant to be one.
 
-**Third defect, found live a few days later (Pete, 2026-08-22): an *untransformed* battlefield
-permanent (Ajani, Nacatl Pariah) showed its *back* face's art (Ajani, Nacatl Avenger's), and the
-manual flip control (story 0077) never offered a Flip button until it actually transformed.** The
-"gate on `card is PermanentView`" fix above was necessary but not sufficient — it assumed
-`PermanentView`'s constructor always *correctly overwrites* `alternateName` before the bridge ever
-reads it, and that assumption was wrong. Reading `PermanentView.java`'s constructor line by line
-again: it calls `super(permanent, game, ...)` — running `CardView`'s own constructor **with the live
-`Permanent` itself as the `card` parameter**. That constructor's `card instanceof PermanentCard &&
-card.isTransformable()` branch (a *third* unconditional assignment, distinct from the
-`DoubleFacedCard`/flip-card/meld ones the previous round found) fires for **any** permanent of a
-transformable card, front or back, and sets `alternateName = ((PermanentCard)
-card).getOtherFace().getName()` — the *other* face's name, unconditionally, on every ordinary
-untransformed permanent too. `PermanentView`'s own body then runs its corrective reassignment — but
-only `if (original != null && !original.getName().equals(this.getName()))`, i.e. only once actually
-transformed. For an untransformed permanent that condition is false, the correction never fires, and
-the poisoned unconditional value — the back face's name — is left in the field, indistinguishable
-from "this has transformed" to anything that trusts `getAlternateName()` directly. The two cases
-happen to agree only by coincidence once actually transformed (`getOtherFace()`, now relative to the
-back face being active, happens to return the front card) — which is exactly why the first two
-rounds of this story, both of which only tested the *transformed* case or a *plain `CardView`* case,
-looked complete while an *untransformed permanent* — never covered by a test — kept leaking.
+### The three earlier rounds (superseded, kept for the record)
 
-Fixed by no longer reading `getAlternateName()` at all, even off a `PermanentView`: the bridge now
-reads `PermanentView.getOriginal()` directly (the field upstream itself builds from
-`game.getCard(permanent.getId())` — a stable, always-front-face identity, never mutated by
-transform) and compares its name against the permanent's own current name itself, replicating
-upstream's own corrective comparison rather than trusting a field upstream only conditionally
-corrects.
+- **Round 1 (2026-08-17):** noticed `alternateName` is non-null on a transformed permanent and equal
+  to the front name; wired `alternateName != null` through as "is this transformed." Worked for the
+  one case tested (an actually-transformed permanent).
+- **Round 2 (2026-08-17, same session):** an untransformed card sitting in **hand** also carried a
+  non-null `alternateName` (upstream sets it unconditionally on any plain `CardView` of a
+  transformable card too, to label a would-be flip button that a hand card obviously doesn't have
+  yet) and was wrongly read as "showing its back face." Patched by gating the bridge's read to
+  `card is PermanentView` only.
+- **Round 3 (2026-08-22):** an **untransformed permanent** (Ajani, Nacatl Pariah) still showed its
+  back face's art, because `PermanentView`'s own `super()` call sets the same unconditional
+  "other face" value before `PermanentView`'s corrective reassignment (which only fires once the
+  name has actually changed) ever runs — so an untransformed permanent's raw `alternateName` field
+  is indistinguishable from a transformed one by anything reading it directly. Patched by comparing
+  `PermanentView.getOriginal()` against the current name instead of trusting the field at all.
+
+Each round "fixed" its one reported case by deriving a same-shaped boolean from `alternateName`
+through narrower and narrower special-casing, without ever asking whether upstream already exposes
+the actual signal directly — it does, and always did, as `isTransformed()`. Pete's correction
+("read the actual code... we don't want to be reinventing the wheel for how these communications
+work, we just need to translate them through the bridge") is what prompted checking the real
+client's own source instead of continuing to patch the symptom.
 
 ## 3. Scope
 
 **In scope**
-- Thread upstream's `CardView.alternateName` through the mapping pipeline: `GameCardView.alternateName`
-  (protocol) → `GameViewMapper.mapCard()` (bridge) → `GameCard.alternateName` (core:network) →
-  `toCardUi()`/`artRequestOf()` (feature:game), replacing the hardcoded `FRONT` with
-  `if (alternateName != null) BACK else FRONT` — reusing 0043's existing `CardArtFace.BACK` request
-  shape (already used for a card's back face elsewhere; only the *permanent-on-board* path never
-  reached for it).
-- Applies to every place `toCardUi()`/its art-request builder is used: battlefield permanents, the
-  stack, and anywhere else a live game object's current face matters. `GameCardView.alternateName`
-  is populated **only** from a `PermanentView` (battlefield); every other zone (hand, library,
-  exile, stack) maps it to `null` — see the follow-up defect above for why trusting a plain
-  `CardView`'s copy of the same field is wrong, not merely redundant.
-- Hermetic tests at each layer: given a fixture whose `alternateName` is non-null, the value must
-  survive mapping/folding unchanged; given `toCardUi()`/`artRequestOf()` a `GameCard` with a non-null
-  `alternateName`, the resulting `CardArtRequest.face` must be `BACK`.
+- Thread upstream's `CardView.isTransformed()` through the mapping pipeline as its own field —
+  `GameCardView.transformed` (protocol) → `GameViewMapper.mapCard()` (bridge, `card.isTransformed`,
+  no derivation) → `GameCard.transformed` (core:network) → `toCardUi()`/`artRequestOf()`
+  (feature:game) — replacing the hardcoded `FRONT` with `if (transformed) BACK else FRONT`, reusing
+  0043's existing `CardArtFace.BACK` request shape.
+- Keep `alternateName` threaded through too, unfiltered and ungated (a plain passthrough of
+  upstream's own field, correct on any `CardView` including a plain hand card, since it was never
+  wrong for its *actual* purpose) — it is what story 0077's flip control uses to know whether
+  another face exists and what to call it, entirely independent of [transformed].
+- Hermetic tests at each layer: a fixture with `transformed = true` must resolve to `BACK`; a
+  fixture with `transformed = false` and a non-null `alternateName` (the exact shape of round 3's
+  bug) must still resolve to `FRONT`.
 
 **Out of scope**
 - Flip cards (the *old* Kamigawa mechanic, `GamePermanentView.flipped`) — a genuinely different
   card shape from modern transform DFCs, not confirmed to have the same defect, and not the
-  reported symptom. Note as a related question worth checking later, not fixed here.
+  reported symptom.
 - Meld cards, split cards, or any other multi-face shape besides transform DFC/MDFC — same reason.
-- Any change to how the *name* is displayed — that part is already correct.
+- Any change to how the *name* is displayed — that part is already correct (upstream itself swaps
+  a transformed permanent's `name` to the current face).
 
 ## 4. Constraints already verified — do not rediscover
 
-- `toCardUi()`'s hardcoded `face = CardArtFace.FRONT` — read directly, `BoardUi.kt` (line ~630).
-- `PermanentView.transformed` is commented-out dead code upstream, confirmed by reading
-  `PermanentView.java` directly at the pinned ref — do not assume it exists or try to read it.
-- `PermanentView.flipped` is the *old* flip-card mechanic, not transform state — confirmed by
-  upstream's own field name and the surrounding "for fipped, transformed or copied cards, switch
-  the names" comment treating them as three separate things.
-- `CardView.alternateName`/`getAlternateName()` is set by upstream's own `PermanentView` constructor
-  exactly when the live name differs from the card's original name — confirmed by reading the
-  constructor directly. This was previously completely unmapped anywhere in this codebase
-  (confirmed by a repo-wide grep before adding it).
-- `CardView`'s own (non-`PermanentView`) constructor sets the same field **unconditionally** for any
-  transformable/double-faced/flip/meld card, to the *other* face's name, regardless of which face is
-  showing — confirmed by reading `CardView.java` directly. A plain `CardView` (hand/library/exile/
-  stack) carries this naive value always.
-- **Gating on `card is PermanentView` alone is not enough.** `PermanentView`'s own `super()` call
-  runs the very same unconditional `CardView` assignment — with the live `Permanent` as `card` — so
-  even a `PermanentView`'s raw `alternateName` field is poisoned with the back face's name on every
-  *untransformed* permanent of a transformable card. `PermanentView`'s own corrective reassignment
-  only fires once `original.getName() != this.getName()`, i.e. only once actually transformed;
-  confirmed by reading the constructor directly, not assumed from a passing test that only exercised
-  the transformed case. Never read `getAlternateName()` at all, on anything — read
-  `PermanentView.getOriginal()` and compare its name against the permanent's own current name
-  instead (`GameViewMapper.permanentAlternateName`).
+- `CardView.isTransformed()`/the backing `transformed` field is set correctly for **any** permanent
+  by `CardView`'s own constructor (`Mage.Common/.../CardView.java`, the `card instanceof Permanent`
+  branch) — confirmed by reading the constructor directly. `PermanentView` inherits this unchanged
+  via `super()`; its own commented-out reassignment of the same field is redundant, not evidence the
+  field is unavailable.
+- `CardView.alternateName`/`getAlternateName()` is set **unconditionally** on any transformable/
+  double-faced/flip/meld object (confirmed in both `CardView`'s and `PermanentView`'s constructors),
+  to the name of whichever face is not currently active — a catalog fact ("has another face, what's
+  it called"), never a "which face is up" signal. Do not gate or filter it trying to make it answer
+  that question; it isn't built to.
+- `PermanentView.flipped`/`isFlipped()` is the *old* flip-card mechanic (Kamigawa-style), a
+  different, older thing from a modern transforming double-faced card — confirmed by upstream's own
+  field name and surrounding comments.
+- The real desktop client's own card-rendering code, `Mage.Client/src/main/java/org/mage/card/
+  arcane/CardPanel.java`, reads `isTransformed()` directly for exactly this purpose (e.g. the
+  day/night button icon, the transform animation trigger) and never derives it from
+  `alternateName`. This is the reference implementation for "how does a real client tell these two
+  facts apart," and it was not consulted until round 4.
 
 ## 5. Verification
 
-- **Standard 1**, discriminating tests at each layer: a fixture with non-null `alternateName` must
-  carry it through mapping (bridge), folding (core:network), and resolve to `CardArtFace.BACK`
-  (feature:game); a fixture with null `alternateName` must resolve to `FRONT`. Each proven to fail
-  against the unfixed code first (bridge/core:network: compile error on the new field before it
-  existed; feature:game: assertion failure against the hardcoded `FRONT`). The third round adds a
-  bridge fixture that mirrors upstream's own poisoned field exactly — a `PermanentView` whose raw
-  `alternateName` is set to the back face's name (as `super()` always sets it) while its `original`
-  matches the current name (untransformed) — proving the mapper must derive the signal from
-  `getOriginal()`, not merely gate on the object's type.
-- **Standard 2 (reachability):** name what produces the face decision — `GameCard.alternateName != null`,
-  itself threaded unchanged from upstream's own `CardView.getAlternateName()`.
-- **Hermetic gate:** `feature/game/src/test` (or wherever `toCardUi()`'s existing coverage lives).
+- **Standard 1**, discriminating tests at each layer: a fixture with `transformed = true` must
+  resolve to `CardArtFace.BACK`; a fixture with `transformed = false` — including one whose
+  `alternateName` is non-null, mirroring round 3's exact bug shape — must resolve to `FRONT`. Each
+  proven to fail against the unfixed code first.
+- **Standard 2 (reachability):** name what produces the face decision — `GameCard.transformed`,
+  threaded unchanged from upstream's own `CardView.isTransformed()`.
+- **Hermetic gate:** `bridge/src/test` (`GameViewMapperTest`), `core/network/src/test`
+  (`GameEventFoldTest`), `feature/game/src/test` (`BoardUiTest`, `GameBoardViewModelTest`).
 - **Live, if practical:** transform a permanent (Kytheon → Gideon or any other transform DFC),
-  confirm the board's art switches to the back face while the name is (already, correctly) current.
-- **Eyes-on (standard 3) — hand Pete this checklist.**
-  1. Get a transforming double-faced permanent onto the battlefield and trigger its transform.
-  2. Confirm the board's art switches to match the current face, not just the name.
+  confirm the board's art switches to the back face while the name is (already, correctly) current;
+  separately, confirm an *untransformed* DFC permanent on the battlefield shows front art and offers
+  its flip control (story 0077) from the moment it enters, not only after it transforms.
+- **Eyes-on (standard 3) — hand Pete this checklist. This is a bridge-only change: rebuild/restart
+  the bridge container first.**
+  1. Get a transforming double-faced permanent onto the battlefield **untransformed**. Confirm the
+     art is the front face and the manual flip control (story 0077) is already offered.
+  2. Trigger its transform. Confirm the board's art switches to match the current (back) face.
   3. Transform it back (if the card allows), confirm the art switches back too.
 
 ## 6. Acceptance criteria
 
 - [ ] A transformed permanent's rendered art matches its current face, using upstream's own
-      `CardView.alternateName` signal, threaded through all four layers.
+      `CardView.isTransformed()` signal, threaded through all four layers.
+- [ ] An untransformed permanent's art stays on the front face regardless of its `alternateName`.
 - [ ] The front-face case (untransformed, or any ordinary card) is unaffected.
 - [ ] Pete has completed the eyes-on checklist.
 
@@ -197,14 +164,20 @@ corrects.
 
 - `feature/game/src/main/kotlin/magefree/feature/game/board/BoardUi.kt` — `toCardUi()`/
   `artRequestOf()`, where the hardcoded `CardArtFace.FRONT` lived.
-- `protocol/src/main/kotlin/magefree/protocol/GameMessages.kt` — `GameCardView.alternateName`.
-- `bridge/src/main/kotlin/magefree/bridge/mapping/GameViewMapper.kt` — `mapCard()` and
-  `permanentAlternateName()`, which derives the signal from `PermanentView.getOriginal()` rather
-  than reading `getAlternateName()` off anything.
-- `core/network/src/main/kotlin/magefree/network/game/GameState.kt` — `GameCard.alternateName`.
-- `Mage.Common/src/main/java/mage/view/PermanentView.java` (pinned ref `e0fe4b6f6a`) — the
-  commented-out `transformed` field, the name-switching logic, and the `alternateName` assignment
-  this story's fix relies on, all read directly.
+- `protocol/src/main/kotlin/magefree/protocol/GameMessages.kt` — `GameCardView.transformed` and
+  `GameCardView.alternateName`.
+- `bridge/src/main/kotlin/magefree/bridge/mapping/GameViewMapper.kt` — `mapCard()`, reading
+  `card.isTransformed` and `card.alternateName` straight, no derivation.
+- `core/network/src/main/kotlin/magefree/network/game/GameState.kt` — `GameCard.transformed`,
+  `GameCard.alternateName`.
+- `Mage.Common/src/main/java/mage/view/CardView.java` (pinned ref `e0fe4b6f6a`) — the `transformed`
+  field and its constructor logic, and the unconditional `alternateName` assignments.
+- `Mage.Common/src/main/java/mage/view/PermanentView.java` (same ref) — the commented-out,
+  redundant `transformed` reassignment, and the conditional `alternateName` correction that only
+  ever partially covered the actual signal.
+- `Mage.Client/src/main/java/org/mage/card/arcane/CardPanel.java` (same ref) — the reference
+  desktop client's own card-face rendering logic; this is what round 4 read to find
+  `isTransformed()` as the actual, already-correct signal.
 - `docs/stories/0043-artwork-pipeline-fixes.md` — where `CardArtFace.BACK` requests were first
   built, for a different call site (hand-zone DFC lookup); this story is the missing sibling for
   the battlefield/live-game path.

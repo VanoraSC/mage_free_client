@@ -120,8 +120,8 @@ data class GameBoardUiState(
  *   card's live transform state.
  * @property canFlip whether the tapped object is a double-faced/modal-double-faced card at all — the
  *   bundled catalog's own answer (`CardFaces.doubleFaced`/`modalDoubleFaced`), looked up by the card's
- *   *front*-face name (`CardUi.alternateName ?: CardUi.name` — see [GameBoardViewModel.resolveDetailFace]).
- *   `false` until the catalog has answered, so the control never flashes on and then disappears.
+ *   *front*-face name (see [GameBoardViewModel.resolveDetailFace]). `false` until the catalog has
+ *   answered, so the control never flashes on and then disappears.
  * @property displayName the name to show for [face] — the front name for [CardArtFace.FRONT], the
  *   catalog's `secondSideName` for [CardArtFace.BACK] (falling back to the live name if the catalog
  *   somehow has none, rather than showing a blank title).
@@ -461,15 +461,17 @@ class GameBoardViewModel
          * upgrades it once the (suspend, offline-but-still-async) catalog lookup returns, provided the
          * same object is still selected.
          *
-         * Looked up by the card's **front**-face name (`alternateName ?: name`, story 0076's signal
-         * repurposed here): the bundled catalog only ever stores a DFC under its front face's name — a
-         * transformed permanent's live `name` is the *back* face's name and would never match a row.
+         * Looked up by the card's **front**-face name: the bundled catalog only ever stores a DFC under
+         * its front face's name, and a transformed permanent's live `name` is the *back* face's name and
+         * would never match a row. `GameCard.transformed` (story 0076) says whether that substitution is
+         * needed at all; `alternateName` (a catalog fact, not a face signal — see its own KDoc) supplies
+         * the other face's name when it is.
          */
         private fun resolveDetailFace(objectId: String) {
             val card = _uiState.value.board.cardFor(objectId) ?: return
             if (card.isFaceDown || card.art == null) return
-            val liveFace = if (card.alternateName != null) CardArtFace.BACK else CardArtFace.FRONT
-            val frontName = card.alternateName ?: card.name
+            val liveFace = if (card.transformed) CardArtFace.BACK else CardArtFace.FRONT
+            val frontName = if (card.transformed) (card.alternateName ?: card.name) else card.name
             _uiState.value = _uiState.value.copy(detailFace = CardDetailFaceUi(face = liveFace, canFlip = false, displayName = card.name))
             viewModelScope.launch {
                 val faces = runCatching { cardCatalog.cardByName(frontName) }.getOrNull()?.faces

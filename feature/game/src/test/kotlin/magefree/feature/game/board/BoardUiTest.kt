@@ -304,13 +304,14 @@ class BoardUiTest {
     @Test
     fun `requests the back face for a transformed permanent (story 0076)`() {
         // Found live (Pete, 2026-08-17): Kytheon, Hero of Akros transformed into Gideon,
-        // Battle-Forged, but the board kept showing Kytheon's art. alternateName non-null is the
-        // only signal available for "this is not the card's original face" (see GameCard
-        // .alternateName's own KDoc) -- a DFC's two faces share one setCode/collectorNumber, so
-        // CardArtFace is the only thing that can tell them apart.
+        // Battle-Forged, but the board kept showing Kytheon's art. `GameCard.transformed` -- upstream's
+        // own live "is this permanent currently showing its back face" fact -- is the real signal; a
+        // DFC's two faces share one setCode/collectorNumber, so CardArtFace is the only thing that can
+        // tell them apart.
         val state = twoSeatState(viewerFirst = false)
         val transformed =
-            card("perm-1", "Gideon, Battle-Forged").copy(setCode = "ORI", collectorNumber = "23", alternateName = "Kytheon, Hero of Akros")
+            card("perm-1", "Gideon, Battle-Forged")
+                .copy(setCode = "ORI", collectorNumber = "23", alternateName = "Kytheon, Hero of Akros", transformed = true)
         val board =
             BoardUi.from(
                 state.copy(players = state.players.map { it.copy(battlefield = listOf(GamePermanent(card = transformed))) }),
@@ -334,6 +335,28 @@ class BoardUiTest {
         val board =
             BoardUi.from(
                 state.copy(players = state.players.map { it.copy(battlefield = listOf(GamePermanent(card = ordinary))) }),
+            )
+
+        val art =
+            board.viewerSeat!!
+                .battlefield
+                .single()
+                .card.art!!
+        assertEquals(CardArtFace.FRONT, art.face)
+    }
+
+    @Test
+    fun `an untransformed permanent requests the front face even when alternateName is set (story 0076, found live again)`() {
+        // Found live (Pete, 2026-08-22): Ajani, Nacatl Pariah on the battlefield, UNTRANSFORMED, showed
+        // Ajani, Nacatl Avenger's (the back face's) art. Upstream sets alternateName unconditionally on
+        // any transformable permanent regardless of state, so a non-null alternateName here must not
+        // flip the requested face -- only `transformed` does that.
+        val state = twoSeatState(viewerFirst = false)
+        val untransformed =
+            card("perm-1", "Ajani, Nacatl Pariah").copy(alternateName = "Ajani, Nacatl Avenger", transformed = false)
+        val board =
+            BoardUi.from(
+                state.copy(players = state.players.map { it.copy(battlefield = listOf(GamePermanent(card = untransformed))) }),
             )
 
         val art =

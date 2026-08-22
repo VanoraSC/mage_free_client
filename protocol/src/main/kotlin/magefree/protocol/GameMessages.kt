@@ -778,26 +778,24 @@ public data class GamePlayerView(
  * @property counters every counter on the object, by name and count. **Not battlefield-only**: upstream
  *   populates them on `CardView` (from `Card.getCounters(game)`) as well as on `PermanentView`, so a
  *   card outside the battlefield can carry them too.
- * @property alternateName upstream `CardView.getAlternateName()` (story 0076), **battlefield
- *   permanents only** — the bridge deliberately drops it for every other zone. On a `PermanentView`,
- *   it is set only when the live name differs from the card's own original name — i.e. an actually
- *   transformed double-faced permanent (its value is then the *original*, front-face name), a
- *   name-changing copy, or a flip card in its flipped state. `null` in the ordinary case (front face,
- *   no copy effect). Non-null is therefore the client's signal that art should be requested for the
- *   back face, not the front — there is no separate "is this transformed" boolean anywhere upstream
- *   (`PermanentView`'s own `transformed` field is dead code, commented out at the pinned ref).
+ * @property alternateName upstream `CardView.getAlternateName()` (story 0076), threaded through
+ *   unchanged, exactly as upstream's own client (`CardPanel.java`) treats it: a **catalog fact**, set
+ *   unconditionally on any transformable/double-faced/flip/meld object regardless of which face is
+ *   currently showing, to the name of its *other* face. It answers "does this have another face, and
+ *   what's it called" — never "which face is up right now" (see [transformed] for that). `null` for an
+ *   ordinary card with no other face.
+ * @property transformed upstream `CardView.isTransformed()` (story 0076) — the live "is this permanent
+ *   currently showing its back face" fact, set by upstream's own `CardView` constructor
+ *   (`if (permanent.isTransformed()) transformed = true`) for any battlefield permanent, and inherited
+ *   by `PermanentView` via its `super()` call. `false` for anything that is not a permanent, and for an
+ *   untransformed permanent — only `true` once the permanent has actually flipped to its back face.
+ *   This, not [alternateName], is the signal for which face's art to request.
  *
- *   **Found live, Pete, 2026-08-17 — a hand card showed the wrong face's art.** Plain `CardView`
- *   (hand, library, exile, stack spells — anything that isn't a `PermanentView`) sets this same field
- *   *unconditionally* for any transformable/double-faced/flip/meld card, to the name of its **other**
- *   face, regardless of which face is actually showing (it exists so upstream's own GUI can label a
- *   day/night flip button, not to answer "which face is up"). `PermanentView`'s constructor calls
- *   `super()` first (running that unconditional assignment) and then overwrites the field with the
- *   correct "did the name actually change" value — but only `PermanentView` does that overwrite. A
- *   card sitting untransformed in hand is never a `PermanentView`, so it keeps the naive value and
- *   would wrongly read as "showing its back face" if trusted the same way. The bridge maps this field
- *   from `PermanentView` only for exactly this reason; do not widen it to plain `CardView` without
- *   re-deriving the "did the name change" check yourself.
+ *   **Found live three times over (Pete, 2026-08-16 through 2026-08-22)** before these two fields were
+ *   traced fully against upstream source: a transformed permanent stuck showing front art, a hand card
+ *   showing its other face's art, and an untransformed permanent showing back-face art with no flip
+ *   button — all from treating `alternateName != null` as "currently transformed," which upstream never
+ *   does anywhere, including in its own client.
  */
 @Serializable
 public data class GameCardView(
@@ -815,6 +813,7 @@ public data class GameCardView(
     val creature: Boolean = false,
     val counters: List<GameCounterView> = emptyList(),
     val alternateName: String? = null,
+    val transformed: Boolean = false,
 )
 
 /**

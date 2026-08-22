@@ -207,6 +207,7 @@ internal object GameViewMapper {
             isCreature = creature,
             counters = counters.map { GameCounter(name = it.name, count = it.count) },
             alternateName = alternateName,
+            transformed = transformed,
         )
 
     private fun GamePermanentView.toPermanent(): GamePermanent =

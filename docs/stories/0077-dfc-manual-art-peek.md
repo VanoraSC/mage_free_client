@@ -1,7 +1,7 @@
 # 0077 — Manual "flip" control to peek at a DFC's other face
 
 - **Epic:** EPIC-11 — In-Game Play
-- **Depends on:** 0055 (board rendering), 0076 (`GameCard.alternateName`, the automatic face signal
+- **Depends on:** 0055 (board rendering), 0076 (`GameCard.transformed`, the automatic face signal
   this story deliberately does not reuse for flippability — see §2)
 
 ## 1. Objective
@@ -14,16 +14,16 @@ independent of whether the card has actually transformed on the battlefield.
 
 **This is a local viewing choice, not a game-state change.** It never sends anything to the server
 and never affects [BoardUi]'s own, automatic face selection (0076): a battlefield permanent's *live*
-art (drawn everywhere else on the board) always reflects `GameCard.alternateName`, exactly as before.
+art (drawn everywhere else on the board) always reflects `GameCard.transformed`, exactly as before.
 The peek only affects what the tapped-card detail overlay shows while it's open.
 
-**Flippability is a catalog fact, not a live-state one.** `GameCard.alternateName` (0076) tells you
-*whether a permanent is currently showing its back face* — it is `null` for an untransformed
-permanent and for every non-permanent zone (hand, stack, …), by design (see 0076's own follow-up
-fix). That is the wrong question for this feature: an untransformed Kytheon in hand should still
-offer a flip button, because it *is* a DFC, it just isn't showing its back face right now. The
-bundled catalog (`:core:cards`, story 0030) is what actually knows "is this printing double-faced at
-all" (`CardFaces.doubleFaced`/`modalDoubleFaced`) and "what's the other face called"
+**Flippability is a catalog fact, not a live-state one.** `GameCard.transformed` (0076) tells you
+*whether a permanent is currently showing its back face* — it is `false` for an untransformed
+permanent and for every non-permanent zone (hand, stack, …), by design (only a permanent transforms).
+That is the wrong question for this feature: an untransformed Kytheon in hand should still offer a
+flip button, because it *is* a DFC, it just isn't showing its back face right now. The bundled
+catalog (`:core:cards`, story 0030) is what actually knows "is this printing double-faced at all"
+(`CardFaces.doubleFaced`/`modalDoubleFaced`) and "what's the other face called"
 (`CardFaces.secondSideName`) — the same two facts `:feature:cards`' `CardInspectionViewModel`
 already uses for its own flip control (story 0032), reused here rather than re-derived.
 
@@ -31,9 +31,10 @@ already uses for its own flip control (story 0032), reused here rather than re-d
 name (confirmed by reading `SqliteCardCatalog`'s query: `SELECT ... FROM card WHERE name ...`, one
 row per printing, `second_side_name` a column on that row — there is no separate row for the back
 face). A transformed permanent's live `GameCard.name` is the *back* face's name and would never
-match. `alternateName ?: name` (0076's signal, repurposed) reliably gives the front name in both
-cases: non-null exactly when the permanent has transformed, in which case it already holds the
-original/front name.
+match. `if (transformed) alternateName ?: name else name` reliably gives the front name in both
+cases: `GameCard.transformed` says whether `name` is currently the back face at all, and
+`GameCard.alternateName` — upstream's own "other face" name, unconditionally present on any DFC
+regardless of state — supplies the front name precisely when it's needed.
 
 **Resolved asynchronously, off the pure projection.** `BoardUi.from()` is a deliberately pure,
 synchronous function (0055) — no IO, hermetically testable on a plain JVM. The catalog lookup is a
@@ -52,8 +53,8 @@ landing after the selection has already changed.
 - `CardDetailOverlay` gains a `detailFace`/`onFlip`; when `canFlip`, an outlined "Flip" button
   appears next to the existing action/close buttons. The overlay's art and title swap to the peeked
   face via a local `card.copy(...)` — no change to the live `CardUi` the rest of the board draws from.
-- `CardUi.alternateName`, exposed (previously internal to `BoardUi.toCardUi()`) so the ViewModel can
-  compute the front-face name without re-deriving 0076's logic.
+- `CardUi.alternateName`/`CardUi.transformed`, exposed (previously internal to `BoardUi.toCardUi()`)
+  so the ViewModel can compute the front-face name without re-deriving 0076's logic.
 - Reset on prompt change (closing the detail also drops the peek state) and on reselecting the same
   card (closing then reopening always starts back at the live face).
 
@@ -107,6 +108,6 @@ landing after the selection has already changed.
 - `feature/cards/src/main/kotlin/magefree/feature/cards/CardInspectionViewModel.kt` — the sibling
   flip control this story's `canFlip`/back-name logic mirrors (`artFlippable`, `faces.otherFaceName`).
 - `core/cards/src/main/kotlin/magefree/cards/internal/SqliteCardCatalog.kt` — confirms the catalog
-  indexes a DFC by its front-face name only, which is why lookups here use `alternateName ?: name`.
-- `docs/stories/0076-transformed-permanent-art.md` — `GameCard.alternateName`'s own semantics, and
-  why it answers a different question than this story's `canFlip`.
+  indexes a DFC by its front-face name only, which is why lookups here account for `transformed`.
+- `docs/stories/0076-transformed-permanent-art.md` — `GameCard.transformed`/`GameCard.alternateName`'s
+  own semantics, and why they answer different questions than this story's `canFlip`.

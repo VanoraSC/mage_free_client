@@ -903,6 +903,7 @@ class GameBoardViewModelTest {
                     setCode = "ORI",
                     collectorNumber = "23",
                     alternateName = "Kytheon, Hero of Akros",
+                    transformed = true,
                 )
             client.emitGameState(
                 dealtState().copy(
