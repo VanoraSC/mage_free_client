@@ -85,6 +85,35 @@ the back face" if trusted the same way a permanent's is. Fixed by gating the bri
 `card is PermanentView` — `GameCardView.alternateName` is now `null` for every zone except the
 battlefield, where `PermanentView`'s own correctly-overwritten value is what's read.
 
+**Third defect, found live a few days later (Pete, 2026-08-22): an *untransformed* battlefield
+permanent (Ajani, Nacatl Pariah) showed its *back* face's art (Ajani, Nacatl Avenger's), and the
+manual flip control (story 0077) never offered a Flip button until it actually transformed.** The
+"gate on `card is PermanentView`" fix above was necessary but not sufficient — it assumed
+`PermanentView`'s constructor always *correctly overwrites* `alternateName` before the bridge ever
+reads it, and that assumption was wrong. Reading `PermanentView.java`'s constructor line by line
+again: it calls `super(permanent, game, ...)` — running `CardView`'s own constructor **with the live
+`Permanent` itself as the `card` parameter**. That constructor's `card instanceof PermanentCard &&
+card.isTransformable()` branch (a *third* unconditional assignment, distinct from the
+`DoubleFacedCard`/flip-card/meld ones the previous round found) fires for **any** permanent of a
+transformable card, front or back, and sets `alternateName = ((PermanentCard)
+card).getOtherFace().getName()` — the *other* face's name, unconditionally, on every ordinary
+untransformed permanent too. `PermanentView`'s own body then runs its corrective reassignment — but
+only `if (original != null && !original.getName().equals(this.getName()))`, i.e. only once actually
+transformed. For an untransformed permanent that condition is false, the correction never fires, and
+the poisoned unconditional value — the back face's name — is left in the field, indistinguishable
+from "this has transformed" to anything that trusts `getAlternateName()` directly. The two cases
+happen to agree only by coincidence once actually transformed (`getOtherFace()`, now relative to the
+back face being active, happens to return the front card) — which is exactly why the first two
+rounds of this story, both of which only tested the *transformed* case or a *plain `CardView`* case,
+looked complete while an *untransformed permanent* — never covered by a test — kept leaking.
+
+Fixed by no longer reading `getAlternateName()` at all, even off a `PermanentView`: the bridge now
+reads `PermanentView.getOriginal()` directly (the field upstream itself builds from
+`game.getCard(permanent.getId())` — a stable, always-front-face identity, never mutated by
+transform) and compares its name against the permanent's own current name itself, replicating
+upstream's own corrective comparison rather than trusting a field upstream only conditionally
+corrects.
+
 ## 3. Scope
 
 **In scope**
@@ -124,8 +153,17 @@ battlefield, where `PermanentView`'s own correctly-overwritten value is what's r
   (confirmed by a repo-wide grep before adding it).
 - `CardView`'s own (non-`PermanentView`) constructor sets the same field **unconditionally** for any
   transformable/double-faced/flip/meld card, to the *other* face's name, regardless of which face is
-  showing — confirmed by reading `CardView.java` directly. Only trust `alternateName` off a
-  `PermanentView` instance; a plain `CardView` (hand/library/exile/stack) carries the naive value.
+  showing — confirmed by reading `CardView.java` directly. A plain `CardView` (hand/library/exile/
+  stack) carries this naive value always.
+- **Gating on `card is PermanentView` alone is not enough.** `PermanentView`'s own `super()` call
+  runs the very same unconditional `CardView` assignment — with the live `Permanent` as `card` — so
+  even a `PermanentView`'s raw `alternateName` field is poisoned with the back face's name on every
+  *untransformed* permanent of a transformable card. `PermanentView`'s own corrective reassignment
+  only fires once `original.getName() != this.getName()`, i.e. only once actually transformed;
+  confirmed by reading the constructor directly, not assumed from a passing test that only exercised
+  the transformed case. Never read `getAlternateName()` at all, on anything — read
+  `PermanentView.getOriginal()` and compare its name against the permanent's own current name
+  instead (`GameViewMapper.permanentAlternateName`).
 
 ## 5. Verification
 
@@ -133,7 +171,11 @@ battlefield, where `PermanentView`'s own correctly-overwritten value is what's r
   carry it through mapping (bridge), folding (core:network), and resolve to `CardArtFace.BACK`
   (feature:game); a fixture with null `alternateName` must resolve to `FRONT`. Each proven to fail
   against the unfixed code first (bridge/core:network: compile error on the new field before it
-  existed; feature:game: assertion failure against the hardcoded `FRONT`).
+  existed; feature:game: assertion failure against the hardcoded `FRONT`). The third round adds a
+  bridge fixture that mirrors upstream's own poisoned field exactly — a `PermanentView` whose raw
+  `alternateName` is set to the back face's name (as `super()` always sets it) while its `original`
+  matches the current name (untransformed) — proving the mapper must derive the signal from
+  `getOriginal()`, not merely gate on the object's type.
 - **Standard 2 (reachability):** name what produces the face decision — `GameCard.alternateName != null`,
   itself threaded unchanged from upstream's own `CardView.getAlternateName()`.
 - **Hermetic gate:** `feature/game/src/test` (or wherever `toCardUi()`'s existing coverage lives).
@@ -156,8 +198,9 @@ battlefield, where `PermanentView`'s own correctly-overwritten value is what's r
 - `feature/game/src/main/kotlin/magefree/feature/game/board/BoardUi.kt` — `toCardUi()`/
   `artRequestOf()`, where the hardcoded `CardArtFace.FRONT` lived.
 - `protocol/src/main/kotlin/magefree/protocol/GameMessages.kt` — `GameCardView.alternateName`.
-- `bridge/src/main/kotlin/magefree/bridge/mapping/GameViewMapper.kt` — `mapCard()`, where
-  `CardView.alternateName` is read off the upstream view object.
+- `bridge/src/main/kotlin/magefree/bridge/mapping/GameViewMapper.kt` — `mapCard()` and
+  `permanentAlternateName()`, which derives the signal from `PermanentView.getOriginal()` rather
+  than reading `getAlternateName()` off anything.
 - `core/network/src/main/kotlin/magefree/network/game/GameState.kt` — `GameCard.alternateName`.
 - `Mage.Common/src/main/java/mage/view/PermanentView.java` (pinned ref `e0fe4b6f6a`) — the
   commented-out `transformed` field, the name-switching logic, and the `alternateName` assignment

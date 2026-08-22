@@ -153,7 +153,21 @@ internal object GameViews {
             set("rules", rules)
         }
 
-    /** A `PermanentView` (a `CardView` plus battlefield state). */
+    /**
+     * A `PermanentView` (a `CardView` plus battlefield state).
+     *
+     * [originalName], when non-null, sets the private `original` field exactly as upstream's own
+     * `PermanentView` constructor does (`original = new CardView(card.copy(), null)`, from
+     * `game.getCard(permanent.getId())` — the stable, always-front-face identity, story 0076's real
+     * signal): a small `CardView` carrying just that name. Comparing it against [card]'s own `name` is
+     * how [GameViewMapper] now derives whether this permanent is showing something other than its
+     * original face — never the raw `alternateName` field, which upstream's own `CardView` constructor
+     * sets unconditionally to the *other* face's name regardless of current state (see
+     * `GameViewMapper.permanentAlternateName`'s KDoc). Pass a value equal to [card]'s `name` to model an
+     * *untransformed* permanent whose raw `alternateName` field is nonetheless poisoned (set [card]'s
+     * own `alternateName` to the back face's name to mirror that exactly) — the story 0076 defect this
+     * fixture exists to reproduce.
+     */
     fun permanent(
         card: CardView = card(),
         tapped: Boolean = false,
@@ -163,6 +177,7 @@ internal object GameViews {
         damage: Int = 0,
         attachedTo: UUID? = null,
         controlled: Boolean = true,
+        originalName: String? = card.name,
     ): PermanentView =
         allocate(PermanentView::class.java).apply {
             copyCardFieldsFrom(card)
@@ -173,6 +188,7 @@ internal object GameViews {
             set("damage", damage)
             set("attachedTo", attachedTo)
             set("controlled", controlled)
+            set("original", originalName?.let { this@GameViews.card(name = it) })
         }
 
     /** Copies the `CardView` half of a permanent from an already-built [card]. */

@@ -492,9 +492,9 @@ class GameViewMapperTest {
     fun `alternateName survives mapping, the only signal for which face is currently up (story 0076)`() {
         // Found live (Pete, 2026-08-17): Kytheon, Hero of Akros transformed into Gideon,
         // Battle-Forged, but the board kept showing Kytheon's art. Upstream's own
-        // PermanentView.transformed is dead code (commented out at the pinned ref) -- alternateName
-        // (non-null exactly when the live name differs from the card's own original name) is the
-        // only signal available, and this proves it reaches the mapped GameCardView.
+        // PermanentView.transformed is dead code (commented out at the pinned ref); the real signal
+        // (see GameViewMapper.permanentAlternateName) is PermanentView.getOriginal() — the stable
+        // front-face identity — differing from the permanent's own current name.
         val transformed =
             GameViews.permanent(
                 card =
@@ -503,11 +503,46 @@ class GameViewMapperTest {
                         cardTypes = listOf(CardType.PLANESWALKER),
                         superTypes = emptyList(),
                         subTypes = emptyList(),
-                        alternateName = "Kytheon, Hero of Akros",
                     ),
+                originalName = "Kytheon, Hero of Akros",
             )
 
         assertEquals("Kytheon, Hero of Akros", GameViewMapper.mapCard(transformed).alternateName)
+    }
+
+    @Test
+    fun `an untransformed permanent's poisoned alternateName field is never trusted (story 0076, found live again)`() {
+        // Found live (Pete, 2026-08-22): Ajani, Nacatl Pariah on the battlefield, UNTRANSFORMED,
+        // showed Ajani, Nacatl Avenger's (the back face's) art -- and the manual flip control (story
+        // 0077) never appeared until it actually transformed. Traced directly against upstream:
+        // PermanentView's super() call runs CardView's own constructor with the live Permanent as its
+        // `card` param, whose `card instanceof PermanentCard && card.isTransformable()` branch sets
+        // alternateName = getOtherFace().getName() UNCONDITIONALLY -- the back face's name, on every
+        // permanent of a transformable card, transformed or not. PermanentView's own corrective
+        // reassignment only fires `if (original.getName() != this.getName())`, i.e. only once actually
+        // transformed -- so an untransformed permanent's alternateName is left holding the back face's
+        // name the whole time, indistinguishable from "this is transformed" by anything reading the
+        // raw field. GameViewMapper.permanentAlternateName fixes this by reading
+        // PermanentView.getOriginal() (the stable front identity) directly instead.
+        val untransformed =
+            GameViews.permanent(
+                card =
+                    GameViews.card(
+                        name = "Ajani, Nacatl Pariah",
+                        cardTypes = listOf(CardType.PLANESWALKER),
+                        superTypes = emptyList(),
+                        subTypes = emptyList(),
+                        // Mirrors upstream's own unconditional assignment: the OTHER face's name, set
+                        // even though this permanent has never transformed.
+                        alternateName = "Ajani, Nacatl Avenger",
+                    ),
+                originalName = "Ajani, Nacatl Pariah",
+            )
+
+        assertNull(
+            GameViewMapper.mapCard(untransformed).alternateName,
+            "an untransformed permanent's art must stay on the front face",
+        )
     }
 
     @Test
