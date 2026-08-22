@@ -55,13 +55,21 @@ public object GamePromptMapper {
      * `GAME_TARGET` → [TargetPrompt]. `cardsView1` is the candidate set the server chose to show,
      * `targets` the ids it marked, and the payload's `flag` is upstream's `required`.
      *
-     * `targets` is `null` (not merely empty) for exactly one shape: `PICK_ABILITY` — ordering
-     * simultaneous triggered abilities — whose `GameController.java` overload never populates it
-     * (`Mage.Server/.../GameController.java:881-885`, read directly), because for that prompt the
-     * candidate set *is* the answer set; there is no separate narrowing the way `PICK_TARGET`
-     * always sends (a real, possibly-empty `Set`). Story 0072: without this fallback every
-     * candidate in `cardsView1` is unpickable, since [TargetPrompt.targetIds] is the app's only
-     * source of "what may be tapped" for this prompt kind.
+     * `targets` is `null` (not merely empty) for two different shapes, which need two different
+     * fallbacks:
+     * - `PICK_ABILITY` — ordering simultaneous triggered abilities — whose `GameController.java`
+     *   overload never populates it (`Mage.Server/.../GameController.java:881-885`, read directly),
+     *   because for that prompt the candidate set *is* the answer set. Story 0072: falling back to
+     *   `cards.map { it.id }` is correct here — there is no separate narrowing.
+     * - `TargetCardInLibrary` — a fetchland's "search your library" — whose `HumanPlayer.chooseTarget`
+     *   overload (read directly) sends `cardsView1` as the **entire searched zone** (the whole
+     *   library, often dozens of cards) while the real, narrow answer set only ever exists in
+     *   `options["possibleTargets"]` (`target.possibleTargets(...)`, computed before the event fires).
+     *   Falling back to `cards.map { it.id }` here — as the `PICK_ABILITY` case does — would offer
+     *   every card in the library as if it were a legal fetch, indistinguishable from the 1-4 that
+     *   actually are (**found live, Pete, 2026-08-20**: a Marsh Flats activation with no way to tell
+     *   which of ~30 library cards could actually be picked). `possibleTargets`, when present, is
+     *   therefore preferred over the whole-`cardsView1` fallback.
      */
     public fun target(
         gameId: UUID?,
@@ -69,6 +77,8 @@ public object GamePromptMapper {
     ): GamePrompted =
         prompted(gameId, message.gameView) {
             val cards = GameViewMapper.mapCards(message.cardsView1)
+            val options = message.optionsView()
+            val possibleTargets = options.ids[GamePromptOptions.POSSIBLE_TARGETS]
             TargetPrompt(
                 message = message.text(),
                 cards = cards,
@@ -76,9 +86,10 @@ public object GamePromptMapper {
                     message.targets
                         ?.filterNotNull()
                         ?.map { it.toString() }
+                        ?: possibleTargets
                         ?: cards.map { it.id },
                 required = message.isFlag,
-                options = message.optionsView(),
+                options = options,
             )
         }
 

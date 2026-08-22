@@ -522,6 +522,32 @@ class BoardControlsTest {
         assertEquals(BoardAction.ChooseTarget("c-1"), controls.actionFor("c-1"))
     }
 
+    @Test
+    fun `a library search offers only the legal fetches, not the whole searched library (story 0079)`() {
+        // Found live (Pete, 2026-08-20): Marsh Flats offered no usable candidates. The bridge now maps
+        // a library search's targetIds from the server's own possibleTargets (see GamePromptMapper),
+        // but prompt.cards still carries the whole library it was given -- this is the UI-side half of
+        // the fix, narrowing what is actually shown to what is actually pickable.
+        val plains = GameCard(id = "lib-1", name = "Plains")
+        val forest = GameCard(id = "lib-2", name = "Forest") // not a legal Marsh Flats target
+        val mountain = GameCard(id = "lib-3", name = "Mountain")
+        val controls =
+            controlsFor(
+                baseState().copy(
+                    prompt =
+                        GamePrompt.Target(
+                            message = "Search your library for a Plains or Island card",
+                            cards = listOf(plains, forest, mountain),
+                            targetIds = listOf("lib-1", "lib-3"),
+                        ),
+                ),
+            )
+
+        assertEquals(setOf("Plains", "Mountain"), controls!!.candidateCards.map { it.card.name }.toSet())
+        assertEquals(BoardAction.ChooseTarget("lib-1"), controls.actionFor("lib-1"))
+        assertNull("a card the server did not mark as a target must not be offered", controls.actionFor("lib-2"))
+    }
+
     // ---- mana: render the choice, never compute a payment -------------------------------------------
 
     @Test

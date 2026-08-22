@@ -27,7 +27,7 @@ import magefree.network.game.PromptOptions
  * | which creatures may be **declared as blockers** | `PromptOptions.possibleBlockers` on the server's `Select` during `DeclareBlockers` — likewise not `playable` |
  * | which of combat's two roles the board is in | which of those two keys the server sent ([CombatRole.of]) |
  * | which targets are already chosen | `PromptOptions.chosenTargets` |
- * | candidate cards not on the board (scry, piles) | the prompt's own `cards` / `pile1` / `pile2` |
+ * | candidate cards not on the board (scry, piles, a library search) | the prompt's own `cards` / `pile1` / `pile2`, narrowed to what is actually pickable for a `Target` prompt (story 0078 follow-up) |
  * | which mana types may be unlocked | the viewer's own `GamePlayer.manaPool` |
  * | whether cancel may be offered | `GamePrompt.Target.isRequired` / `ChooseChoice.isRequired`, and 0052's list of the four prompts `cancelPrompt` actually answers |
  *
@@ -506,7 +506,15 @@ internal fun controlsFor(
                 message = message,
                 pickableObjectIds = pickable,
                 chosenObjectIds = chosen,
-                candidateCards = prompt.cards.map { it.toCandidate(chosen) },
+                // Narrowed to what may actually be picked, not shown verbatim: for a library search
+                // (a fetchland), `prompt.cards` is the server's *entire searched zone* — often dozens
+                // of cards — while `pickable` already carries only the legal answers (bridge's
+                // `GamePromptMapper.target`, story 0078 follow-up). Showing the unfiltered zone here
+                // would put every unfetchable card in the same row as the real candidates with no way
+                // to tell them apart (found live, Pete, 2026-08-20: a Marsh Flats activation nobody
+                // could complete). A prompt whose whole candidate set *is* the answer set (e.g.
+                // PICK_ABILITY) is unaffected, since `pickable` there already equals `prompt.cards`.
+                candidateCards = prompt.cards.filter { it.id in pickable }.map { it.toCandidate(chosen) },
                 hasPicked = hasPicked,
                 buttons =
                     buildList {
