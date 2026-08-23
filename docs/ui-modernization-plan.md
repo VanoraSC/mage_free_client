@@ -1168,32 +1168,24 @@ cover.
 
 ### Epics
 
-Existing epics stand; these are added or amended:
+Written up in [`project-plan.md`](project-plan.md), which is where they live. In summary:
 
-- **EPIC-19 — Motion & Board Presentation.** Phases 1 and 3. Animation host, card tiers, layout
-  system, attachments, vitals. Amends EPIC-11 rather than replacing it.
-- **EPIC-20 — Declared Cast Intent.** Phase 2. `CastIntent` in `:protocol`, the bridge-side intent
-  player and its bail-out contract, the one-act cast UI, and §7.7's land tapping. Spans EPIC-01 and
-  EPIC-12.
-- **EPIC-23 — Game Information We Do Not Yet Map.** The mapping work §7 depends on, which is bridge
-  and protocol rather than UI: `CardView.targets` (§7.14), `PermanentView.attachments` (§7.4),
-  `PlayerView.counters`/`monarch`/`initiative`/`designationNames` (§7.15), `commandList` (§4.3),
-  graveyard and exile contents (§7.13), and token identity (§7.11). Several are independently useful
-  against the current UI. Amends EPIC-01.
-- **EPIC-24 — The Game Log.** §7.12. Consuming the `ChatKind.GAME` stream that already arrives.
-  Small, and independent of the board rebuild.
-- **EPIC-16 — Chat & Player Presence is dropped entirely.** Chat, profiles, presence, friends,
-  invites and mentions are all permanently deferred (§6). The one thing needed from it — **seeing
-  joinable tables** — is EPIC-06's lobby, which lists table state and needs no presence data. Its
-  other surviving half, the `ChatKind.GAME` log stream, is EPIC-24 and is not chat.
-- **EPIC-05 — Session Resilience & Notifications** narrows to resilience plus the one notification
-  that is about the game rather than about people: "it's your turn." Invite and mention
-  notifications go with EPIC-16.
-- **EPIC-17 — Settings, Preferences & Accessibility** loses its accessibility third (§6). Its
-  gameplay preferences half grows: §7.9's `isStopOnStackNewObjects` is a server-side user setting we
-  must set, not merely expose.
-- **EPIC-18 — Multiplatform Foundation**, **EPIC-21 — iOS Client**, **EPIC-22 — Desktop Client** —
-  all deferred, numbered so they are not re-invented.
+| Epic | Carries | Phase |
+|---|---|---|
+| **EPIC-19 — Motion & Board Presentation** | §7.3 motion, §7.4 layout, piling, attachments | 1 and 3 |
+| **EPIC-20 — Declared Cast Intent** | §7.6 cast flow, §7.7 land tapping | 2 |
+| **EPIC-23 — Game Information We Do Not Yet Map** | targets, attachments, player counters, `commandList`, zone contents, token identity | before what needs it |
+| **EPIC-24 — The Game Log** | §7.12 | any time |
+| **EPIC-03** | §7.2 Prompt, §7.5 card tiers, the grey/information palette | 1 |
+| **EPIC-11** | §7.13 zone browser, §7.14 stack entries, §7.15 vitals | 3 |
+| **EPIC-12** | §7.9 priority passing, the phase bar | 3 |
+| **EPIC-13** | §7.2 Prompt states, §7.8 trigger ordering, spatial targeting and combat | 3 |
+| **EPIC-14** | §7.16 mulligan and match flow | 3 |
+| **EPIC-05** | §7.17 notices and session state | 3 |
+| **EPIC-18 / 21 / 22** | multiplatform foundation, iOS, desktop | deferred |
+
+The board work concentrates in EPIC-19 and the mapping it depends on in EPIC-23, which is why
+EPIC-23 is worth starting early: several of its items improve the current UI on their own.
 
 ---
 
