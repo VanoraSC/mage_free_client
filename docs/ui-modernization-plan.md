@@ -290,16 +290,29 @@ One component, one position, three states:
 
 The load-bearing new subsystem.
 
+**An animation exists because a game action happened.** It is not decoration and it is not a
+transition between two renderings — it is how the player finds out what the game did. That purpose
+sets every rule below.
+
 - Every renderable object has a **stable id** and a **single owning layout slot** per snapshot.
 - The board is hosted in one shared coordinate space. When a snapshot changes an object's slot, the
   object **animates from its previous measured position to its new one** rather than being destroyed
   and recreated — `LookaheadScope` plus shared-element transitions, not hand-rolled coordinators.
+- **Every state change gets its turn on screen.** When actions arrive faster than they can be shown
+  — a chain of triggers resolving, a sequence of tokens entering — they **play in order** rather
+  than collapsing into a single move that lands on the final state. Collapsing them is the failure
+  case: the player sees the board end up somewhere and has no idea how it got there.
+- **The board's presentation may trail the server, and that is intended.** Trailing by a moment
+  while a sequence plays out costs nothing, because a player watching a sequence resolve has no
+  decision to make during it.
+- **Being asked to act is the sync point.** When the server wants a decision, the board shows
+  current state — the remaining sequence finishes quickly rather than making the player wait on it.
+  Nobody acts on a stale board.
+- **A resync is not a sequence.** After a reconnect (0074) the board snaps to current state; there
+  is no backlog to replay, and pretending otherwise would narrate events the player already missed.
 - **Durations encode meaning:** zone moves ~250 ms, taps ~150 ms, counter changes ~120 ms,
-  resolution spotlight ~400 ms hold. A player must be able to follow a five-trigger chain without it
-  feeling like a slideshow, so a **reduce-motion/fast setting is P1** and it **shortens** durations
-  rather than removing animation — removing it removes the information.
-- **Snapshots can arrive faster than animations finish.** The host handles interruption by
-  **retargeting in flight, never queueing**; queueing desynchronises the board from the server.
+  resolution spotlight ~400 ms hold. A **reduce-motion/fast setting is P1**, and it **shortens**
+  durations rather than removing animation — removing it removes the information.
 
 ### 7.4 Board layout
 
@@ -509,7 +522,22 @@ There are two mechanisms here and they are not the same thing, so §12 asks whic
   time, overriding whatever printing the server names. It never touches the game, works for cards
   from any source, and is the only mechanism that could apply to the opponent's cards.
 
-#### 4. Token art is choosable too
+#### 4. Art that is downloading says so
+
+Art can take a moment to arrive — first sight of a card, a cold cache, a slow connection. While it
+is in flight the card shows an **indeterminate spinner**, so the player knows a download is
+happening rather than wondering whether the card is broken or the art is simply missing.
+
+This applies everywhere art loads — board, hand, zone browsers, deck builder, card search — and it
+is distinct from the two states around it: a card with **no printing to resolve** shows the
+placeholder (nothing is coming), and a card whose art has **arrived** shows the art. The spinner
+only ever means "in flight."
+
+Prefetching both decklists at match start (§10) is what keeps this rare in a game; it is not a
+substitute for it, since the opponent can play cards from outside their opening deck and the cache
+can be cold.
+
+#### 5. Token art is choosable too
 
 A card that creates a token — where the token is its own thing, not a copy of a card — should let
 the player choose that token's art in the builder, the same way card art is chosen.
@@ -530,10 +558,9 @@ token art works offline.
 
 ---
 
-Two of these four rest on data questions rather than design decisions — what the game view reports
-about a token, and what our catalog holds. Both are answered by reading upstream and the catalog,
-which is the work that comes first: guessing at what the server reports is how story 0076 took four
-rounds.
+Two of these rest on data questions rather than design decisions — what the game view reports about
+a token, and what our catalog holds. Both are answered by reading upstream and the catalog, which is
+the work that comes first: guessing at what the server reports is how story 0076 took four rounds.
 
 ### 7.12 The game log
 
@@ -570,15 +597,6 @@ the client logic and its tests, and the UI.
 
 The board's animation requirements (§7.3) are met with `Animatable`, `LookaheadScope`,
 shared-element transitions and `graphicsLayer`.
-
-**The animation host is unproven at board scale**, and it is the one open risk in the plan. A full
-board animating many objects at once, retargeting mid-flight as new snapshots arrive, does more
-measure and layout work per frame than the usual Compose workload, and nothing tells us in advance
-whether it fits a 16.7 ms frame. If it does not, the remedy is structural — cards stop being nested
-composables inside a lookahead layout and become positions drawn by one custom layout — which is a
-different component API for everything built on top. Phase 1 therefore builds and measures the host
-standalone, against recorded snapshots at realistic board size, before the card components or the
-board depend on its shape.
 
 **The bridge is a network service, not a library.** It runs on a JVM, embeds `mage-common`, and
 speaks JBoss Remoting to the XMage server on one side and **WebSocket + JSON** on the other
@@ -653,23 +671,18 @@ Not scheduled; recorded so it is not rediscovered:
 
 ## 10. Performance
 
-**Targets:** 60 fps sustained on the board on a mid-range Android device, 120 fps where the display
-allows; board interactive within 1 s of the first snapshot; no frame drop when a snapshot arrives
-mid-animation.
+**No frame-rate target.** Build the board the way §7 describes and assume it performs. If some
+situations do not hold 60 fps, that is acceptable for now — a dropped frame during a trigger chain
+costs far less than a design bent around a budget nobody has measured a need for.
 
-1. **Snapshot payload size.** [`architecture.md`](architecture.md) open question #7 — how much of
-   `GameView` a phone needs per frame, and whether to delta it — is unresolved and now matters.
-   Measure real payloads before optimizing.
-2. **Recomposition scoping.** The board must not recompose wholesale per snapshot: stable keys per
-   object id, `derivedStateOf` for computed board facts, and a fold producing structurally-shared
-   state so unchanged objects stay `equals`-identical across snapshots. `GameEventFold` already
-   folds events into state — this is a property to assert in tests.
-3. **Art pipeline.** Two decoded sizes (board token, full inspection), never one. Prefetch both
-   decklists at match start. Explicit memory and disk cache budgets.
-4. **Animation host cost.** One shared layout pass, not per-card coordinators. Interruption
-   retargets in flight (§7.3).
-5. **A performance test gate.** Frame-timing assertions on a recorded game replayed through the
-   fold, so regressions are caught pre-merge — nobody is driving these screens by hand.
+Two things are worth doing anyway, because they are about the experience rather than the frame:
+
+1. **Art pipeline.** Two decoded sizes — Board tier and Full tier (§7.5) — never one, since decoding
+   full-resolution card art for a battlefield is wasteful on memory to no visible benefit. Prefetch
+   both decklists at match start; we know them, so the first turn need not wait on the network.
+2. **Snapshot payload size.** [`architecture.md`](architecture.md) open question #7 — how much of
+   `GameView` a phone needs per frame, and whether to delta it — is still open. It matters for
+   mobile data, not for rendering. Measure real payloads before deciding anything.
 
 ---
 
@@ -682,12 +695,9 @@ Android only. Each phase is independently valuable and the app keeps working thr
 New tokens (colour, type, elevation, **motion**), the three-tier card component family (§7.5), and
 the Prompt component (§7.2).
 
-The **object-identity animation host** (§7.3) is built **and measured standalone before any board
-depends on it** — a synthetic board of realistic size driven by a recorded sequence of real
-snapshots, asserting frame budget under interruption. This retires the one open platform risk
-(§8), cheaply.
-
-Also lands the **performance test gate** (§10.5).
+The **object-identity animation host** (§7.3) is built here, before the board depends on it, driven
+by a recorded sequence of real snapshots so the sequencing rules are exercised against real timing
+rather than a synthetic one.
 
 ### Phase 2 — The cast flow
 
