@@ -51,8 +51,13 @@ that stays true after the conversion.
   so the pattern exists once rather than being re-declared per module.
 - `:protocol` and `:core:model` converted to apply it; their `dependencies { }` blocks moved into
   `kotlin { sourceSets { commonMain / commonTest } }`.
-- Source directory layout: `src/main/kotlin` → `src/commonMain/kotlin`, `src/test/kotlin` →
-  `src/commonTest/kotlin`. Moves only, no content edits.
+- Source directory layout: `src/main/kotlin` → `src/commonMain/kotlin`, and `src/test/kotlin` →
+  **`src/jvmTest/kotlin`**, not `commonTest`. Moves only, no content edits.
+
+  `:protocol`'s suite is written against `org.junit.jupiter`, which is JVM-only — putting it in
+  `commonTest` would mean rewriting every assertion onto `kotlin.test` in the same change that ports
+  the build, which this story forbids for the reason stated below. `commonTest` becomes worth having
+  when a second target does.
 - Whatever consumer-side build changes turn out to be required for `:bridge`, `:app` and the Android
   library modules to keep resolving both modules.
 - `docs/build-environment.md` updated if the JVM-only container path changes.
@@ -80,9 +85,15 @@ complications worth separating from it: a `kotlinx-serialization` plugin that mu
 common source set, and `:bridge` as a JVM consumer.
 
 **The test tasks must keep running, and be seen to.** A converted module whose tests silently stop
-being executed looks exactly like a converted module whose tests pass. `:protocol` has real tests
-(`GameSerializationTest` among them), so the check is concrete: the same test count runs before and
-after, and a deliberately failing assertion fails the build.
+being executed looks exactly like a converted module whose tests pass. `:protocol` has **28 tests**
+(`GameSerializationTest` 18, `SerializationTest` 10), so the check is concrete: the same count runs
+before and after, and a deliberately failing assertion fails the build.
+
+**`:core:model` has no test source set at all** — no `src/test`, and `:core:model:test` reports
+`NO-SOURCE`. So there is no test guard for that module and it is dishonest to imply one: its
+conversion is verified entirely by its consumers compiling against it (`:core:network`,
+`:feature:connect`, `:feature:lobby`, `:feature:tables`, and `:feature:game` on the test classpath).
+That is a real check, but it is a different one, and worth naming rather than glossing.
 
 ## 5. Verification
 
@@ -94,8 +105,14 @@ after, and a deliberately failing assertion fails the build.
   consumer of these modules, name what resolves it. `:bridge` (JVM), `:app` (Android application),
   and each Android library that depends on either — enumerated and each one built.
 - **Hermetic gate:** `./gradlew check` clean, and `./gradlew :app:assembleDebug`.
-- **The JVM-only container path:** `MAGE_JVM_ONLY=1 ./gradlew :bridge:check` still configures and
-  passes, since `:core:model` and `:protocol` must remain buildable without the Android SDK.
+- **The JVM-only container path:** `MAGE_JVM_ONLY=1` still configures and builds both modules, since
+  they must remain buildable without the Android SDK.
+
+  **`:bridge` cannot be built on the host at all**, and that is pre-existing rather than something
+  this story introduces: `org.mage:mage-common:1.4.60` is baked into the build image's `/root/.m2`
+  (story 0021) and is absent from the host, so `:bridge:compileKotlin` fails to resolve it on an
+  unmodified `main` exactly as it does here — verified by stashing and re-running. `:bridge:check`
+  therefore runs through `./scripts/dev gradle :bridge:check`, in the container.
 - **No eyes-on checklist.** This story changes no runtime behaviour and ships no user-visible
   surface; `:app:assembleDebug` plus a launch is the whole device check. Say so rather than
   inventing a checklist — a checklist with nothing on it teaches everyone to skip the next one.
@@ -106,9 +123,10 @@ after, and a deliberately failing assertion fails the build.
 - [ ] `:protocol` and `:core:model` are KMP modules with a single `jvm()` target and no Kotlin
       source changes (verified by the diff being confined to build files and file moves).
 - [ ] `./gradlew check` and `./gradlew :app:assembleDebug` pass.
-- [ ] `MAGE_JVM_ONLY=1 ./gradlew :bridge:check` passes.
-- [ ] The same `:protocol` and `:core:model` tests run after the conversion as before, and a
-      deliberately broken assertion fails the build.
+- [ ] `./scripts/dev gradle :bridge:check` passes in the container, proving the JVM consumer
+      compiles against the converted `:protocol` and not merely resolves it.
+- [ ] `:protocol` runs the same **28** tests after the conversion as before, and a deliberately
+      broken assertion fails the build.
 - [ ] The APK launches.
 
 ## 7. References

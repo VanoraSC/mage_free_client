@@ -36,5 +36,11 @@ gradlePlugin {
             id = "magefree.hilt"
             implementationClass = "HiltConventionPlugin"
         }
+        // Story 0080 (EPIC-18): the multiplatform logic modules — `:protocol`, `:core:model`, and
+        // `:core:cards`/`:core:decks`/`:core:network` as stories 0082-0084 convert them.
+        register("kmpLibrary") {
+            id = "magefree.kmp.library"
+            implementationClass = "KmpLibraryConventionPlugin"
+        }
     }
 }

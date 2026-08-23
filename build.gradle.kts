@@ -2,6 +2,7 @@
 // logic lives here — modules (currently only :bridge) apply the plugins they need.
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.ktlint) apply false
     alias(libs.plugins.android.application) apply false
