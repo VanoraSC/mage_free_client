@@ -108,11 +108,17 @@ That is a real check, but it is a different one, and worth naming rather than gl
 - **The JVM-only container path:** `MAGE_JVM_ONLY=1` still configures and builds both modules, since
   they must remain buildable without the Android SDK.
 
-  **`:bridge` cannot be built on the host at all**, and that is pre-existing rather than something
-  this story introduces: `org.mage:mage-common:1.4.60` is baked into the build image's `/root/.m2`
-  (story 0021) and is absent from the host, so `:bridge:compileKotlin` fails to resolve it on an
-  unmodified `main` exactly as it does here — verified by stashing and re-running. `:bridge:check`
-  therefore runs through `./scripts/dev gradle :bridge:check`, in the container.
+  **`:bridge` cannot be built on the Windows host at all**, and that is pre-existing rather than
+  something this story introduces: `org.mage:mage-common:1.4.60` is baked into the build image's
+  `/root/.m2` (story 0021) and is absent from the host, so `:bridge:compileKotlin` fails to resolve
+  it on an unmodified `main` exactly as it does here — verified by stashing and re-running.
+
+  **`:bridge:check` runs in the container, from WSL2.** The Docker engine runs inside the Ubuntu
+  distro (not Docker Desktop, which is stopped), and the repo is reachable there at
+  `/mnt/c/Users/Pete/Documents/GitHub/mage_free_client`, so the command is
+  `wsl -d Ubuntu -- bash -lc "cd /mnt/c/… && ./scripts/dev gradle :bridge:check"`. The
+  `mage-free-client/build` image already exists, so this is a two-minute run rather than an upstream
+  rebuild.
 - **No eyes-on checklist.** This story changes no runtime behaviour and ships no user-visible
   surface; `:app:assembleDebug` plus a launch is the whole device check. Say so rather than
   inventing a checklist — a checklist with nothing on it teaches everyone to skip the next one.
