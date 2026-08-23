@@ -267,7 +267,7 @@ numbers prefixed **R§** below refer to that document, not to this one.
 18. **The zone browser** (§7.13) — any zone, either player, one interaction, floating over the
     board. Exile grouped by zone name, with playable cards marked wherever they sit.
 19. **Attachments rendered as relationships** (§7.4) — Auras and Equipment on their hosts, not in a
-    bucket, and part of the pile key. Needs `PermanentView.attachments` mapped.
+    bucket, and a permanent carrying one never piles. Needs `PermanentView.attachments` mapped.
 20. **Player vitals** (§7.15) — including **poison, energy and experience counters**, monarch and
     initiative. Poison is a win condition and is currently unmapped and unrendered.
 21. **Starting and finishing a game** (§7.16) — opening hand, mulligan, sideboarding, concede,
@@ -303,6 +303,9 @@ numbers prefixed **R§** below refer to that document, not to this one.
 ### Not in scope
 
 - **Emotes, and player chat of any kind** — lobby, in-game, or whisper. Permanently deferred.
+- **Player presence and social data** — profiles, online status, friends, invites, mentions.
+  Permanently deferred. **The only thing needed from that surface is seeing joinable tables**, which
+  is the lobby (EPIC-06) and carries no presence data: a table listing is table state.
 - **Sound design and haptics.** Permanently deferred.
 - **Accessibility.** Permanently deferred, including screen-reader support.
 - **Clocks and rope burn-down.** If the XMage server does not implement it, neither do we. Should
@@ -443,16 +446,23 @@ what is attached to this permanent), `attachedTo` (what this permanent is attach
 Aura but your opponent controls the creature, which is a real and easily-missed board state. The
 bridge maps **only `attachedTo`**; `attachments` and the two flags are unmapped.
 
-Attachment also constrains piling: two otherwise identical creatures are not interchangeable if one
-is enchanted, so **whether a permanent has attachments, and which, is part of the pile key** (§7.4,
-R§20). Otherwise the fan would hide a Pacifism.
+**A permanent carrying an attachment never piles.** It renders alone, with its attachments on it.
+Piling is for permanents that are interchangeable, and an attachment attaches to **one specific
+instance** — the aura is on *that* Grizzly Bears, not on the group. Two Plains are interchangeable;
+a Plains and an enchanted Plains are not, and neither are two enchanted Plains, because each carries
+its own attachment.
 
-**Piling does that work. It is fully designed and not built.** Story 0065 and R§20 resolve the whole
-thing — permanents whose every rendered field matches (name, tapped state, damage, counters, summoning
+So the rule is not "attachments are part of the pile key," which would let two identically-enchanted
+permanents share a pile. It is: **pile only permanents that are identical in every rendered way
+*and* have no attachments.** Having an attachment is disqualifying on its own.
+
+**Piling does that work. It is fully designed and not built.** Story 0065 and R§20 resolve the rest
+— permanents whose every rendered field matches (name, tapped state, damage, counters, summoning
 sickness, combat assignment, current pick-eligibility) share a pile; 2–3 members render as a fan of
 real card faces; more than 3 caps the fan at 3 plus a count badge (`×7`), so a pile never grows past
 a 3-card fan however many it holds; tapping moves a permanent into a different pile automatically
-because `isTapped` is in the key.
+because `isTapped` is in the key. The attachment rule above is an addition to 0065's key, and the
+only one.
 
 None of it exists in the client. `BattlefieldBand` renders a flat `Row` over `seat.battlefield` in
 the order the server lists it, one full-size card per permanent, with no grouping and no ordering by
@@ -1152,9 +1162,13 @@ Existing epics stand; these are added or amended:
   against the current UI. Amends EPIC-01.
 - **EPIC-24 — The Game Log.** §7.12. Consuming the `ChatKind.GAME` stream that already arrives.
   Small, and independent of the board rebuild.
-- **EPIC-16 — Chat & Player Presence** is largely superseded: chat is permanently deferred (§6). Its
-  `ChatKind.GAME` half is EPIC-24. **Whether presence and invites survive as a narrowed epic is an
-  open question** — chat was named specifically, not the whole epic.
+- **EPIC-16 — Chat & Player Presence is dropped entirely.** Chat, profiles, presence, friends,
+  invites and mentions are all permanently deferred (§6). The one thing needed from it — **seeing
+  joinable tables** — is EPIC-06's lobby, which lists table state and needs no presence data. Its
+  other surviving half, the `ChatKind.GAME` log stream, is EPIC-24 and is not chat.
+- **EPIC-05 — Session Resilience & Notifications** narrows to resilience plus the one notification
+  that is about the game rather than about people: "it's your turn." Invite and mention
+  notifications go with EPIC-16.
 - **EPIC-17 — Settings, Preferences & Accessibility** loses its accessibility third (§6). Its
   gameplay preferences half grows: §7.9's `isStopOnStackNewObjects` is a server-side user setting we
   must set, not merely expose.
