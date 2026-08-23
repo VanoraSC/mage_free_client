@@ -211,8 +211,9 @@ numbers prefixed **R§** below refer to that document, not to this one.
 2. **Low-friction land tapping** (§7.7) — prompt only when the choice is real.
 3. **Object-identity animation.** Every game object tweens between snapshots: zone changes, taps,
    counter changes, entering and leaving. Nothing teleports.
-4. **Fluid battlefield layout.** Card size scales to the population with a legibility floor;
-   grouping by role; the fan/pile system (0065) doing real work; no fixed-height scroll bands.
+4. **Fluid battlefield layout** (§7.4). Creatures in front, non-creature permanents behind them,
+   lands piled tight at the back; card size scales to the population with a legibility floor; no
+   fixed-height scroll bands.
 5. **Playable-now affordance.** Castable and activatable objects are visually distinct, everywhere.
 6. **Spatial targeting.** Legal targets highlight on the board; an arrow is drawn from source to
    each chosen target; confirm before submit (R§16.4). Candidate lists remain only for off-board
@@ -220,8 +221,8 @@ numbers prefixed **R§** below refer to that document, not to this one.
 7. **Combat as spatial assignment.** Attackers move to a red zone, blockers connect with arrows,
    and the two assignment problems stay separate (R§7.4).
 8. **The Prompt as the organizing element** (§7.2).
-9. **Stack as an expandable centre pile** with per-object inspection, present only while the stack
-   is non-empty (§7.4).
+9. **Stack as an expandable pile floating over the board** (§7.4), with per-object inspection,
+   present only while the stack is non-empty.
 10. **Counters, P/T modifications, tap state and status rendered on the card.**
 11. **Phase bar with per-phase, per-player stops** driving 0063's auto-pass.
 12. **Pass-priority control** (§7.9).
@@ -231,9 +232,9 @@ numbers prefixed **R§** below refer to that document, not to this one.
 15. **Tokens render with art and are visibly marked as tokens** (§7.11). The marking is game
     information, not decoration — a token copy must be distinguishable from the real card at Board
     tier.
-16. **Phone-landscape board layout** (§7.4), where **space is earned, not reserved** — no stack
-    region when the stack is empty, no permanent combat zone, no decorative chrome, no empty states
-    holding height. One layout target; tablets render it scaled.
+16. **Phone-landscape board layout** (§7.4) — a stable battlefield with transient information
+    floating over it, creatures front and lands piled at the back, no decorative chrome. One layout
+    target; tablets render it scaled.
 17. **The game log** (§7.12) — game state changes, not interim actions. Animation carries what
     happened while you were watching; the log is the only way to recover it afterwards.
 
@@ -273,8 +274,9 @@ numbers prefixed **R§** below refer to that document, not to this one.
 - **Decorative battlefield art** — illustrated grounds, themed playmats, avatars, pets, or any other
   original art beyond the cards themselves (§7.4). The board is grey; the cards carry the visuals.
 - **A collapsing hand** (§7.4). The hand stays visible.
-- **Statically allocated regions** (§7.4) — a permanent combat zone, a stack region that persists
-  while the stack is empty, or any band that holds height to show an empty state.
+- **Statically allocated regions** (§7.4) — a permanent combat zone, a stack region beside the
+  battlefield, or any band that holds height to show an empty state. Transient information floats
+  over the board instead.
 
 ---
 
@@ -335,42 +337,72 @@ sets every rule below.
 
 ### 7.4 Board layout
 
-#### Space is earned, not reserved
+#### Two layers: a stable base, and floating layers above it
 
-**The governing rule.** A region exists on screen only while it has something to say. Nothing holds
-space against the possibility of needing it later.
+**The battlefield is always visible and it does not move.** Everything transient — the stack, combat
+assignment, revealed and looked-at cards, prompts, notices — renders as a **floating layer over** the
+board rather than as a region that takes space beside it.
 
-- **The stack is not rendered when the stack is empty.** It appears when something is put on it and
-  goes away when it resolves.
-- **There is no permanent combat zone.** Attackers and blockers get space during combat and only
-  during combat.
-- **Revealed cards, looked-at cards and notices** appear when they exist.
-- **No decorative chrome.** Borders, banners, section headers and framing that exist to delineate
-  rather than to inform are omitted. A region is identified by its position and its shade of grey
-  (below), not by a label and a rule line.
-- **No empty states that occupy space.** Today every region has a defined empty state and a fixed
-  height — `StatusRailHeight = 132.dp`, `StackStripHeight = 56.dp` — so an empty stack and an empty
-  combat zone consume the same screen as full ones. On a phone in landscape that is most of the
-  screen spent on nothing.
+This is the whole trick. If the stack were a region, it would appear and disappear as spells came and
+went, reflowing the battlefield each time and making permanents drift for reasons that have nothing
+to do with the game. §7.3 says an animation exists because a game action happened; a battlefield that
+re-lays-out because a trigger went on the stack would be lying in exactly the way that rule forbids.
+Floating it means transient information can come and go freely **while the battlefield stays exactly
+where the player left it.**
 
-The two deliberate exceptions are the ones the player consults continuously rather than
-occasionally: **the hand** and **player vitals**. Life totals and the cards you are choosing between
-are not "sometimes relevant."
+- **Base layer** — both battlefields, the hand, player vitals. Always present, stable position.
+- **Floating layers** — the stack (only while non-empty), combat assignment (only during combat),
+  revealed/looked-at cards, the Prompt, notices.
 
-The payoff is direct: space not reserved for an empty stack is space the battlefields get, which
-means larger cards, which is the difference between reading the board and squinting at it.
+Floating layers must not hide what they are asking about: a board-interactive prompt (§7.2) still
+never blocks the board, so a layer is placed and sized to leave the permanents it concerns visible.
 
-**One caveat this creates.** Regions appearing and disappearing reflows everything around them, and
-that motion is *not* a game action — it must not read like one (§7.3). Reflow should be quick and
-subordinate: cards settle into new positions rather than appearing to move of their own accord.
+**No decorative chrome anywhere.** Borders, banners, section headers and framing that delineate
+rather than inform are omitted. A region is identified by its position and its shade of grey, not by
+a label and a rule line. No empty state ever holds height — today every region has one and a fixed
+height (`StatusRailHeight = 132.dp`, `StackStripHeight = 56.dp`), so an empty stack and an empty
+combat zone cost as much screen as full ones.
+
+The payoff is direct: space not spent on chrome and empty regions is space the battlefield gets,
+which means larger cards, which is the difference between reading the board and squinting at it.
+
+#### How the battlefield is arranged
+
+Each player's battlefield reads front-to-back by how much attention the permanent needs:
+
+```
+   ┌─ opponent's battlefield (mirrored) ──────────────┐
+   │  [ lands ]        [ other permanents ]           │   back
+   │            [ creatures ]                         │   front
+   ├──────────────────────────────────────────────────┤
+   │            [ creatures ]                         │   front
+   │  [ lands ]        [ other permanents ]           │   back
+   └─ your battlefield ───────────────────────────────┘
+```
+
+- **Creatures in front.** They attack, block, and change state constantly — they are what the player
+  looks at.
+- **Non-creature permanents behind the creatures**, beside the lands. Present and readable, but not
+  competing with the things that are about to matter in combat.
+- **Lands to the side, at the back, piled tightly.** Lands are the most numerous permanents and the
+  least individually interesting; **the goal is to minimise the space they take without hurting
+  readability.**
+
+**Piling does that work, and it already exists.** Story 0065 (R§20) is implemented: permanents whose
+every rendered field matches — name, tapped state, damage, counters, summoning sickness, combat
+assignment, current pick-eligibility — share a pile; 2–3 members render as a fan of real card faces;
+more than 3 caps the fan at 3 plus a count badge (`×7`), so a pile never grows past a 3-card fan
+however many it holds. Tapping moves a permanent into a different pile automatically, because
+`isTapped` is part of the key.
+
+Five untapped Plains are therefore one three-card fan with `×5`, not five cards' worth of screen. The
+new work here is the **arrangement**, not the piling.
 
 #### Sizing
 
-- **Regions get proportional space with minimums**, not fixed dp — divided among whichever regions
-  currently exist.
+- **The base layer's regions get proportional space with minimums**, not fixed dp.
 - **Card size is derived** from the widest populated row, floored at a legibility minimum; below the
-  floor the fan/pile system (0065) collapses duplicates and the row scrolls.
-- **Phase-aware emphasis:** during combat the battlefields take the space that is free to give.
+  floor the row scrolls.
 - **The hand never collapses.** The player reads their hand constantly to make decisions, so hiding
   it behind a peek edge and an expand gesture takes the most-consulted information on screen and
   puts it a gesture away. This also removes a class of interaction — no peek edge, no expand
