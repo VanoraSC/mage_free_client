@@ -12,9 +12,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magefree.cards.model.CardId
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * The `:feature:cards` entry route: the card search/browse surface, with the full-bleed inspection
@@ -28,9 +28,9 @@ import magefree.cards.model.CardId
 fun CardsRoute(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    searchViewModel: CardSearchViewModel = hiltViewModel(),
-    inspectionViewModel: CardInspectionViewModel = hiltViewModel(),
-    artSettingsViewModel: CardArtSettingsViewModel = hiltViewModel(),
+    searchViewModel: CardSearchViewModel = koinViewModel(),
+    inspectionViewModel: CardInspectionViewModel = koinViewModel(),
+    artSettingsViewModel: CardArtSettingsViewModel = koinViewModel(),
 ) {
     val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
     val inspectionState by inspectionViewModel.uiState.collectAsStateWithLifecycle()

@@ -8,8 +8,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import magefree.app.core.DispatcherProvider
 import magefree.network.ConnectionRepository
-import javax.inject.Inject
-import javax.inject.Singleton
 import magefree.model.ConnectionState as DomainConnectionState
 
 /**
@@ -25,9 +23,8 @@ import magefree.model.ConnectionState as DomainConnectionState
  * shared `WhileSubscribed`, so subscription pressure propagates down to the repository (and thus the
  * bridge) rather than holding a connection open forever.
  */
-@Singleton
+
 class ConnectionStatusSourceImpl
-    @Inject
     constructor(
         private val repository: ConnectionRepository,
         dispatchers: DispatcherProvider,

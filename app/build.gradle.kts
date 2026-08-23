@@ -1,7 +1,7 @@
 plugins {
     id("magefree.android.application")
     id("magefree.android.compose")
-    id("magefree.hilt")
+    id("magefree.koin")
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -73,7 +73,7 @@ dependencies {
     implementation(libs.compose.material3.window.sizeclass)
     implementation(libs.compose.material.icons.core)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.koin.compose)
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -88,6 +88,11 @@ dependencies {
     testDebugImplementation(libs.compose.ui.test.junit4)
     testDebugImplementation(libs.androidx.navigation.testing)
     testDebugImplementation(libs.robolectric)
+    // Story 0081: KoinGraphTest resolves every binding in `appModules` — the runtime replacement for
+    // Hilt's compile-time missing-binding error. Needs an Android context, hence testDebug.
+    testDebugImplementation(platform(libs.koin.bom))
+    testDebugImplementation(libs.koin.test)
+    testDebugImplementation(libs.androidx.test.ext.junit)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)

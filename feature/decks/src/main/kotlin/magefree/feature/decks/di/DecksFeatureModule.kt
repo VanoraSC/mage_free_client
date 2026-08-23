@@ -1,40 +1,48 @@
 package magefree.feature.decks.di
 
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import magefree.cards.CardCatalog
 import magefree.cards.art.CardImageLoader
 import magefree.feature.decks.art.DeckArtDownloader
 import magefree.feature.decks.art.DefaultDeckArtDownloader
-import javax.inject.Singleton
+import magefree.feature.decks.builder.BuilderViewModel
+import magefree.feature.decks.library.LibraryViewModel
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
+
+/** Long-lived scope for the deck-scoped pre-download (mirrors `:core:cards`' art scope). */
+private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
- * Hilt wiring for `:feature:decks`. Provides only the deck-scoped [DeckArtDownloader]; everything else
- * the ViewModels need — `DeckRepository`/`DeckLegality`/`DeckIO` (`:core:decks`), `CardCatalog` +
- * `CardImageLoader` (`:core:cards`), and `ArtCacheController` (`:feature:cards`) — is already provided
- * elsewhere in the singleton graph. The downloader reuses story 0031's `ArtDownloadManager` + the
- * app-wide [CardImageLoader] (as the `ArtWarmer`); only its *target set* is deck-scoped.
+ * Koin wiring for `:feature:decks` (was Hilt's `DecksFeatureModule`). Provides the deck-scoped
+ * [DeckArtDownloader] and the feature's ViewModels; everything else they need —
+ * `DeckRepository`/`DeckLegality`/`DeckIO` (`:core:decks`), `CardCatalog` + [CardImageLoader]
+ * (`:core:cards`), and `ArtCacheController` (`:feature:cards`) — is provided elsewhere in the graph.
+ *
+ * The downloader reuses story 0031's `ArtDownloadManager` and the app-wide [CardImageLoader] (as the
+ * `ArtWarmer`); only its *target set* is deck-scoped.
  */
-@Module
-@InstallIn(SingletonComponent::class)
-object DecksFeatureModule {
-    /** Long-lived scope for the deck-scoped pre-download (mirrors `:core:cards`' art scope). */
-    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+val decksFeatureModule =
+    module {
+        single<DeckArtDownloader> {
+            DefaultDeckArtDownloader(
+                catalog = get(),
+                warmer = get<CardImageLoader>(),
+                appScope = appScope,
+            )
+        }
 
-    @Provides
-    @Singleton
-    fun provideDeckArtDownloader(
-        catalog: CardCatalog,
-        loader: CardImageLoader,
-    ): DeckArtDownloader =
-        DefaultDeckArtDownloader(
-            catalog = catalog,
-            warmer = loader,
-            appScope = appScope,
-        )
-}
+        viewModel { LibraryViewModel(repository = get(), deckIO = get()) }
+
+        viewModel {
+            BuilderViewModel(
+                repository = get(),
+                catalog = get(),
+                legality = get(),
+                deckIO = get(),
+                artDownloader = get(),
+                artCache = get(),
+            )
+        }
+    }

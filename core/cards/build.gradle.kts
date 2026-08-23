@@ -1,7 +1,7 @@
 plugins {
     id("magefree.android.library")
     // Story 0030: provides the @Singleton CardCatalog binding backed by the bundled SQLite asset.
-    id("magefree.hilt")
+    id("magefree.koin")
 }
 
 android {
@@ -23,6 +23,9 @@ android {
 }
 
 dependencies {
+    // Story 0081: `androidContext()` in this module's Koin module. Removed by stories 0082/0083.
+    implementation(libs.koin.android)
+
     implementation(libs.kotlinx.coroutines.core)
 
     // Story 0031: on-demand card-art loader/cache. `coil-core` is the ImageLoader (memory+disk cache,

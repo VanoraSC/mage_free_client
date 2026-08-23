@@ -13,8 +13,6 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import magefree.model.ServerTarget
 import java.io.IOException
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Persists the user's saved bridge servers (story 0017) so the list survives restarts.
@@ -27,9 +25,8 @@ import javax.inject.Singleton
  * A server's identity is its (host, port) pair: [add] upserts on that key (updating a saved label /
  * scheme), and [remove] deletes by it.
  */
-@Singleton
+
 class ServerRepository
-    @Inject
     constructor(
         private val dataStore: DataStore<Preferences>,
     ) {

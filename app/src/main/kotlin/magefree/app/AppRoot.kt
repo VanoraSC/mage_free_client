@@ -2,10 +2,10 @@ package magefree.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import magefree.app.connection.SessionViewModel
 import magefree.app.navigation.AppNavHost
 import magefree.designsystem.theme.MageTheme
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * Application root: hosts the [AppNavHost] — the **root** Navigation-Compose graph that switches
@@ -24,7 +24,7 @@ import magefree.designsystem.theme.MageTheme
  */
 @Composable
 fun AppRoot(modifier: Modifier = Modifier) {
-    val sessionViewModel: SessionViewModel = hiltViewModel()
+    val sessionViewModel: SessionViewModel = koinViewModel()
     AppNavHost(
         modifier = modifier,
         onSignOut = sessionViewModel::signOut,

@@ -2,7 +2,6 @@ package magefree.feature.decks.builder
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +33,6 @@ import magefree.decks.model.DeckId
 import magefree.decks.model.DeckZone
 import magefree.feature.cards.ArtCacheController
 import magefree.feature.decks.art.DeckArtDownloader
-import javax.inject.Inject
 
 /** The distinct surface the builder renders. */
 enum class BuilderPhase {
@@ -98,9 +96,8 @@ data class BuilderUiState(
  * action is the opt-in, deck-scoped art pre-download via [DeckArtDownloader]. Submitting/playing the
  * deck is EPIC-07 (not wired here).
  */
-@HiltViewModel
+
 class BuilderViewModel
-    @Inject
     constructor(
         private val repository: DeckRepository,
         private val catalog: CardCatalog,

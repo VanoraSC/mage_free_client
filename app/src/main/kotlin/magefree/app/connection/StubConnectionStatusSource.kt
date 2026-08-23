@@ -3,8 +3,6 @@ package magefree.app.connection
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The default [ConnectionStatusSource] for now: a driveable in-memory holder with no real network.
@@ -14,9 +12,8 @@ import javax.inject.Singleton
  * state; an optional debug affordance could drive it in a running build. EPIC-04 replaces this with a
  * source backed by the real session.
  */
-@Singleton
+
 class StubConnectionStatusSource
-    @Inject
     constructor() : ConnectionStatusSource {
         private val mutableState = MutableStateFlow(ConnectionState.Disconnected)
 

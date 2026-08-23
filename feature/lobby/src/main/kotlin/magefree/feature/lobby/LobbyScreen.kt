@@ -31,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magefree.designsystem.component.EmptyState
 import magefree.designsystem.component.ErrorState
@@ -43,6 +42,7 @@ import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
 import magefree.model.LobbyTable
+import org.koin.androidx.compose.koinViewModel
 
 /** Screen title; shared with tests so the two agree. */
 const val LOBBY_TITLE: String = "Lobby"
@@ -73,7 +73,7 @@ fun LobbyRoute(
     onHost: () -> Unit = {},
     onJoin: (LobbyTable) -> Unit = {},
     onWatch: (LobbyTable) -> Unit = {},
-    viewModel: LobbyViewModel = hiltViewModel(),
+    viewModel: LobbyViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var detailTable by remember { mutableStateOf<LobbyTable?>(null) }

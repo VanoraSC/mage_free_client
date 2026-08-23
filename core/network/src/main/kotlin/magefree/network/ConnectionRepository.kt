@@ -20,10 +20,6 @@ import magefree.model.ConnectionStatus
 import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.model.SessionEvent
-import magefree.network.di.ApplicationScope
-import magefree.network.di.IoDispatcher
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The app-level owner of the connection lifecycle. It wraps the raw [BridgeClient] (story 0016) into
@@ -42,13 +38,11 @@ import javax.inject.Singleton
  * goes away.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@Singleton
 class ConnectionRepository
-    @Inject
     constructor(
         private val bridgeClient: BridgeClient,
-        @IoDispatcher private val dispatcher: CoroutineDispatcher,
-        @ApplicationScope scope: CoroutineScope,
+        private val dispatcher: CoroutineDispatcher,
+        scope: CoroutineScope,
     ) {
         /**
          * The current connect intent, or `null` when disconnected. [Command.attempt] increments on

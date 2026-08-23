@@ -1,17 +1,23 @@
 package magefree.feature.tables.di
 
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
+import magefree.feature.tables.host.HostTableViewModel
+import magefree.feature.tables.join.JoinTableViewModel
+import magefree.feature.tables.room.TableRoomViewModel
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
 
 /**
- * Hilt wiring for `:feature:tables`. Intentionally **empty**: every dependency the tables ViewModels
- * inject is already provided elsewhere in the singleton graph —
- * [magefree.network.table.TableClient] by `:core:network`'s `NetworkModule` (story 0037), and
- * [magefree.decks.DeckRepository] / [magefree.decks.legality.DeckLegality] by `:core:decks`'s
- * `DeckModule` (story 0033). The module exists so the feature's Hilt surface is discoverable in one
- * place and gains a provision seam without a structural change if one is later needed.
+ * Koin wiring for `:feature:tables` (was Hilt's `TablesFeatureModule`, which was empty).
+ *
+ * It now declares the feature's three ViewModels, because Koin has no equivalent of Hilt's
+ * `@HiltViewModel` — every ViewModel is an explicit binding. Their dependencies still come from
+ * elsewhere in the graph: [magefree.network.table.TableClient] from `:core:network`'s
+ * `networkModule` (story 0037), and [magefree.decks.DeckRepository] /
+ * [magefree.decks.legality.DeckLegality] from `:core:decks`' `deckModule` (story 0033).
  */
-@Module
-@InstallIn(SingletonComponent::class)
-object TablesFeatureModule
+val tablesFeatureModule =
+    module {
+        viewModel { HostTableViewModel(tableClient = get(), deckRepository = get(), deckLegality = get()) }
+        viewModel { JoinTableViewModel(tableClient = get(), deckRepository = get(), deckLegality = get()) }
+        viewModel { TableRoomViewModel(tableClient = get(), deckRepository = get()) }
+    }

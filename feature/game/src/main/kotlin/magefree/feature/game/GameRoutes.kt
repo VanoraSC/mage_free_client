@@ -4,11 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magefree.feature.cards.rememberCardArtRenderer
 import magefree.feature.game.board.GameBoardScreen
 import magefree.feature.game.board.GameBoardViewModel
+import org.koin.androidx.compose.koinViewModel
 
 /*
  * The `:feature:game` entry point (story 0055), following the same shape `:feature:tables` established:
@@ -28,7 +28,7 @@ fun GameBoardRoute(
     gameId: String,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: GameBoardViewModel = hiltViewModel(),
+    viewModel: GameBoardViewModel = koinViewModel(),
 ) {
     LaunchedEffect(gameId) { viewModel.observe(gameId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

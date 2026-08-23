@@ -1,32 +1,30 @@
 package magefree.app.di
 
-import dagger.Binds
-import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import magefree.app.connection.ConnectionStatusSource
 import magefree.app.connection.ConnectionStatusSourceImpl
+import magefree.app.connection.ConnectionStatusViewModel
+import magefree.app.connection.SessionViewModel
 import magefree.app.core.DefaultDispatcherProvider
 import magefree.app.core.DispatcherProvider
-import javax.inject.Singleton
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
 
 /**
- * Hilt bindings for the connection-status surface.
+ * Koin bindings for the connection-status surface (was Hilt's `ConnectionModule`).
  *
  * Story 0017 (EPIC-04) flips [ConnectionStatusSource] from story 0010's stub to the real,
- * repository-backed [ConnectionStatusSourceImpl] — the single seam swap that makes the shell's status
- * bar reflect the live bridge session. The `ConnectionStatusViewModel` and `ConnectionStatusBar` are
- * untouched; `StubConnectionStatusSource` remains for previews/tests. [DispatcherProvider] is also
- * bound here so ViewModels/sources inject dispatchers rather than hard-coding `Dispatchers.*`.
+ * repository-backed [ConnectionStatusSourceImpl] — the single seam swap that makes the shell's
+ * status bar reflect the live bridge session. The `ConnectionStatusViewModel` and
+ * `ConnectionStatusBar` are untouched; `StubConnectionStatusSource` remains for previews/tests.
+ * [DispatcherProvider] is also bound here so ViewModels/sources inject dispatchers rather than
+ * hard-coding `Dispatchers.*`.
  */
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class ConnectionModule {
-    @Binds
-    @Singleton
-    abstract fun bindConnectionStatusSource(impl: ConnectionStatusSourceImpl): ConnectionStatusSource
+val connectionModule =
+    module {
+        single<ConnectionStatusSource> { ConnectionStatusSourceImpl(repository = get(), dispatchers = get()) }
 
-    @Binds
-    @Singleton
-    abstract fun bindDispatcherProvider(impl: DefaultDispatcherProvider): DispatcherProvider
-}
+        single<DispatcherProvider> { DefaultDispatcherProvider() }
+
+        viewModel { ConnectionStatusViewModel(source = get(), dispatchers = get()) }
+        viewModel { SessionViewModel(connectionRepository = get()) }
+    }

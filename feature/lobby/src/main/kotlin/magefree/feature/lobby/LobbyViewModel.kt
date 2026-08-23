@@ -2,7 +2,6 @@ package magefree.feature.lobby
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,7 +12,6 @@ import magefree.model.LobbyLoadState
 import magefree.model.LobbySnapshot
 import magefree.model.LobbyTable
 import magefree.network.LobbyRepository
-import javax.inject.Inject
 
 /**
  * How the lobby list is ordered. Client-side over the snapshot ([LobbyRepository] returns the full
@@ -168,9 +166,8 @@ internal fun LobbySnapshot.toLobbyUiState(filter: LobbyFilter): LobbyUiState {
  * server push and no auto-refresh loop). The lobby is meaningful only while connected, so a
  * disconnected snapshot maps to [LobbyPhase.Disconnected] rather than an error.
  */
-@HiltViewModel
+
 class LobbyViewModel
-    @Inject
     constructor(
         private val lobbyRepository: LobbyRepository,
     ) : ViewModel() {

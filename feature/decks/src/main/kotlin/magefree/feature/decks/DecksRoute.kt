@@ -14,7 +14,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magefree.cards.model.CardId
 import magefree.decks.model.DeckId
@@ -28,6 +27,7 @@ import magefree.feature.decks.builder.BuilderViewModel
 import magefree.feature.decks.builder.DeckArtSheet
 import magefree.feature.decks.library.LibraryScreen
 import magefree.feature.decks.library.LibraryViewModel
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * The `:feature:decks` entry route: the deck **library**, with the touch-first **builder**, its
@@ -42,10 +42,10 @@ import magefree.feature.decks.library.LibraryViewModel
 fun DecksRoute(
     onBrowseCards: () -> Unit,
     modifier: Modifier = Modifier,
-    libraryViewModel: LibraryViewModel = hiltViewModel(),
-    builderViewModel: BuilderViewModel = hiltViewModel(),
-    searchViewModel: CardSearchViewModel = hiltViewModel(),
-    inspectionViewModel: CardInspectionViewModel = hiltViewModel(),
+    libraryViewModel: LibraryViewModel = koinViewModel(),
+    builderViewModel: BuilderViewModel = koinViewModel(),
+    searchViewModel: CardSearchViewModel = koinViewModel(),
+    inspectionViewModel: CardInspectionViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
 

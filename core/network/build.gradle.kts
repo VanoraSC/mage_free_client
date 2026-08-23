@@ -1,8 +1,8 @@
 plugins {
     id("magefree.android.library")
-    // Story 0017: this module now provides Hilt-injected repositories (ConnectionRepository,
-    // ServerRepository) + the BridgeClient/DataStore bindings, so it applies the shared Hilt recipe.
-    id("magefree.hilt")
+    // Story 0017: this module provides the repositories (ConnectionRepository, ServerRepository) and
+    // the BridgeClient/DataStore bindings, so it applies the shared DI recipe. Koin since 0081.
+    id("magefree.koin")
     // Story 0017: ServerRepository serializes its persisted @Serializable DTO to the DataStore. The
     // module already consumed :protocol's generated serializers via ProtocolJson; persisting a local
     // shape needs the serialization compiler plugin applied here too (same pinned Kotlin version).
@@ -30,6 +30,9 @@ dependencies {
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    // Story 0081: `androidContext()` for the connectivity observer and the DataStore file. This is
+    // the module's remaining Android tie on the DI side; story 0084 removes it.
+    implementation(libs.koin.android)
     // Story 0024: ProcessLifecycleOwner for the whole-app foreground/background reconnect hook.
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.ktor.client.core)

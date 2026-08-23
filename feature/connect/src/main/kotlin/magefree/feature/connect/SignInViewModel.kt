@@ -2,7 +2,6 @@ package magefree.feature.connect
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +11,6 @@ import kotlinx.coroutines.launch
 import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.network.ConnectionRepository
-import javax.inject.Inject
 
 /** The credential form fields, kept separate from the live connection phase. */
 private data class SignInForm(
@@ -55,9 +53,8 @@ data class SignInUiState(
  * persisted (see `AGENTS.md` / the story's credential rule). Token/secure storage is deliberately
  * deferred to a later decision.
  */
-@HiltViewModel
+
 class SignInViewModel
-    @Inject
     constructor(
         private val connectionRepository: ConnectionRepository,
     ) : ViewModel() {

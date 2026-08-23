@@ -2,7 +2,6 @@ package magefree.feature.tables.host
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +26,6 @@ import magefree.network.table.SeatPlayerType
 import magefree.network.table.SessionGoneFailure
 import magefree.network.table.TableClient
 import magefree.network.table.TableRef
-import javax.inject.Inject
 
 /** The preset game types a host may pick, mirroring the labels XMage's create-table dialog exposes. */
 val HOST_GAME_TYPES: List<String> =
@@ -191,9 +189,8 @@ data class HostTableUiState(
  * The deck pick and its legality check are entirely offline ([DeckRepository] + [DeckLegality]); only the
  * create/join/remove calls touch the network.
  */
-@HiltViewModel
+
 class HostTableViewModel
-    @Inject
     constructor(
         private val tableClient: TableClient,
         private val deckRepository: DeckRepository,
