@@ -446,31 +446,51 @@ what is attached to this permanent), `attachedTo` (what this permanent is attach
 Aura but your opponent controls the creature, which is a real and easily-missed board state. The
 bridge maps **only `attachedTo`**; `attachments` and the two flags are unmapped.
 
-**A permanent carrying an attachment never piles.** It renders alone, with its attachments on it.
-Piling is for permanents that are interchangeable, and an attachment attaches to **one specific
-instance** — the aura is on *that* Grizzly Bears, not on the group. Two Plains are interchangeable;
-a Plains and an enchanted Plains are not, and neither are two enchanted Plains, because each carries
-its own attachment.
+**Only identical objects in identical states stack.** That is the whole rule, and it is strict.
 
-So the rule is not "attachments are part of the pile key," which would let two identically-enchanted
-permanents share a pile. It is: **pile only permanents that are identical in every rendered way
-*and* have no attachments.** Having an attachment is disqualifying on its own.
+A pile says "these are interchangeable — read one, you have read them all." Anything that makes one
+member different from another breaks that promise, so anything that makes one member different keeps
+it out of the pile:
 
-**Piling does that work. It is fully designed and not built.** Story 0065 and R§20 resolve the rest
-— permanents whose every rendered field matches (name, tapped state, damage, counters, summoning
-sickness, combat assignment, current pick-eligibility) share a pile; 2–3 members render as a fan of
-real card faces; more than 3 caps the fan at 3 plus a count badge (`×7`), so a pile never grows past
-a 3-card fan however many it holds; tapping moves a permanent into a different pile automatically
-because `isTapped` is in the key. The attachment rule above is an addition to 0065's key, and the
-only one.
+- **Counters.** A Grizzly Bears with a +1/+1 counter is not a Grizzly Bears.
+- **Temporary modifiers**, including granted abilities — flying until end of turn, a pump effect, an
+  ability granted by another permanent. Two creatures with the same printed text are not the same
+  object if one of them can currently fly.
+- **Summoning sickness**, which decides whether the permanent can attack or tap this turn.
+- **Damage marked**, tap state, face-down/transformed state, phasing.
+- **Combat assignment** — attacking, blocking, blocked by.
+- **Current pick-eligibility**, so a legal target never hides inside a fan of illegal ones.
+- **Attachments**, which are absolute: **a permanent carrying an attachment never piles at all.** An
+  attachment attaches to one specific instance — the aura is on *that* Grizzly Bears, not on the
+  group. Two identically-enchanted creatures still do not pile, because each carries its own aura.
+
+So attachment is not merely another field in the key. Every other property above pairs permanents
+that match; having an attachment disqualifies a permanent outright, and it renders alone with its
+attachments on it.
+
+**The server already reports all of this**, which is what makes the strict rule cheap. `CardView`
+builds `rules` from `card.getRules(game)` — the game-aware form, so a granted "flying until end of
+turn" is in the text upstream sends us — and `power`/`toughness`, `cardTypes` and `subTypes` are all
+the current values after continuous effects, not the printing's. Piling compares what the server says
+the permanent *is right now*; it never re-derives that from the card.
+
+**Piling does the space work. It is fully designed and not built.** Story 0065 and R§20 resolve the
+presentation — 2–3 members render as a fan of real card faces; more than 3 caps the fan at 3 plus a
+count badge (`×7`), so a pile never grows past a 3-card fan however many it holds; a permanent moves
+between piles automatically as its state changes, because its state is the key.
+
+The practical consequence is that **piles are for lands and tokens**, which is exactly where the
+space is spent. A board of ten Plains collapses; a board of ten differently-developed creatures does
+not, and should not.
 
 None of it exists in the client. `BattlefieldBand` renders a flat `Row` over `seat.battlefield` in
 the order the server lists it, one full-size card per permanent, with no grouping and no ordering by
 type. Playing a Plains, then a Soul Warden, then a second Plains puts them on screen in exactly that
 order, the second Plains sitting alone to the right of the creature.
 
-So both halves are new work here: **the arrangement and the piling.** The piling needs no new design
-— 0065 can be implemented as written.
+So both halves are new work here: **the arrangement and the piling.** 0065's presentation stands as
+designed; its grouping key takes the strict rule above — every aspect of current state, and no
+piling at all for a permanent carrying an attachment.
 
 #### Sizing
 
