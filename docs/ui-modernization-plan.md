@@ -54,6 +54,9 @@ found by playing real games, not by reasoning.
   `seat.battlefield` in the order the server lists it, one full-size card per permanent. Ten lands
   cost ten cards of width, and a Plains played after a creature renders to the right of that creature
   rather than beside the other Plains. Story 0065 designed the fix and it was never implemented.
+- **No way to look in a zone.** Graveyard and exile are counts on a vitals bar. `GameViewMapper`
+  reduces the graveyard to `player.graveyard?.size` and throws the cards away, and does not map
+  `PlayerView.commandList` at all, though the server sends both in full (§7.13).
 - **Portrait phone only**, where the board's target is landscape (§7.4).
 
 One defect outside the board: **the table room asks for a deck that has already been chosen.**
@@ -176,8 +179,16 @@ MTGO's pop-out zones are Graveyard, Exile, **Revealed**, and **Effects** — rep
 emblems awaiting application. That last is rare and useful: continuous and replacement effects are
 invisible in most clients and they decide games.
 
-We already track known information (0053) and looked-at/revealed identity (0066). An **Effects &
-Emblems** zone additionally needs verification that `GameView` exposes it (§12).
+**Emblems and their kin are already sent to us.** `PlayerView.commandList` is a
+`List<CommandObjectView>` built per player from `game.getState().getCommand()`, filtered by
+controller — emblems, dungeons, commanders, planes — alongside `designationNames`. The bridge does
+not map it. That is the Effects zone's main content, available for the cost of a mapping.
+
+Applied continuous and replacement effects as such have no view of their own; the desktop client
+surfaces that kind of thing through card hints rather than a zone. So our Effects zone is emblems,
+dungeons, designations and commanders — not a general effect inspector.
+
+See §7.13 for the browser these live in.
 
 ### 4.4 Layout and hotkeys
 
@@ -225,8 +236,9 @@ numbers prefixed **R§** below refer to that document, not to this one.
 7. **Combat as spatial assignment.** Attackers move to a red zone, blockers connect with arrows,
    and the two assignment problems stay separate (R§7.4).
 8. **The Prompt as the organizing element** (§7.2).
-9. **Stack as an expandable pile floating over the board** (§7.4), with per-object inspection,
-   present only while the stack is non-empty.
+9. **Stack as an expandable pile floating over the board** (§7.4), present only while non-empty,
+   each entry showing its source art, its own rules text, a link to its source, and its targets
+   (§7.14).
 10. **Counters, P/T modifications, tap state and status rendered on the card.**
 11. **Phase bar with per-phase, per-player stops** driving 0063's auto-pass.
 12. **Pass-priority control** (§7.9).
@@ -241,30 +253,33 @@ numbers prefixed **R§** below refer to that document, not to this one.
     target; tablets render it scaled.
 17. **The game log** (§7.12) — game state changes, not interim actions. Animation carries what
     happened while you were watching; the log is the only way to recover it afterwards.
+18. **The zone browser** (§7.13) — any zone, either player, one interaction, floating over the
+    board. Exile grouped by zone name, with playable cards marked wherever they sit.
 
 ### P1 — required for it to be good
 
-18. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
+19. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
     proposed lands.
-19. **Full Control mode** as a pinned toggle.
-20. **Effects & Emblems zone** (§4.3, pending data verification).
-21. **Life-total deltas, resolution spotlight, keyword reminders.**
-22. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
+20. **Full Control mode** as a pinned toggle.
+21. **Effects & Emblems in the zone browser** (§4.3) — `PlayerView.commandList`, which the bridge
+    does not yet map.
+22. **Life-total deltas, resolution spotlight, keyword reminders.**
+23. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
     tokens a deck produces.
-23. **Art prefetch at match start** — we submitted our own deck, so its art can be warmed before
+24. **Art prefetch at match start** — we submitted our own deck, so its art can be warmed before
     turn one. The opponent's deck is hidden and arrives card by card.
-24. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
+25. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
     boxes.
-25. **Home hub, lobby and tables** rebuilt on the new design system.
-26. **Undo.** The server supports the rewind (R§17.1). The cast flow removes most of the misfires it
+26. **Home hub, lobby and tables** rebuilt on the new design system.
+27. **Undo.** The server supports the rewind (R§17.1). The cast flow removes most of the misfires it
     would catch, since intent is editable before submission, so it covers what remains.
 
 ### P2 — polish and reach
 
-27. Damage number floats; attack and block animation beats.
-28. Gameplay warnings, opt-in.
-29. Spectating on the new board (EPIC-15), including both players' hidden information.
-30. Replays.
+28. Damage number floats; attack and block animation beats.
+29. Gameplay warnings, opt-in.
+30. Spectating on the new board (EPIC-15), including both players' hidden information.
+31. Replays.
 
 ### Not in scope
 
@@ -591,28 +606,35 @@ wanted, and they build on each other.
 
 #### 1. Tokens render with art
 
-Magic tokens (a 1/1 Soldier, a Treasure, a Zombie Army) currently render as placeholders because
-we resolve art only from a printing and the server does not hand us one for a token.
+**The server does identify tokens and does give them a printing.** `CardView` carries
+`isToken`, and for a token it sets `expansionSetCode` and `cardNumber` from upstream's own
+`TokenRepository` — the set code is `TokenRepository.XMAGE_TOKENS_SET_CODE`, with a matching
+`imageFileName` and `imageNumber`. The bridge maps none of it, which is why tokens fall to the
+placeholder: `artRequestOf` gets no printing and returns null.
 
-**A token's name is its identity**, exactly as a card's is. Tokens are real, queryable printings on
-Scryfall — `is:token`, in sets whose `set_type` is `token` — so a token resolves through the same
-name-to-printing path as anything else. There is no bespoke mapping to invent and no rendering path
-to add: the work is giving the art resolver a way to address a printing by name when the server has
-not named one, rather than requiring `setCode` + `collectorNumber` as `artRequestOf` does today.
+The one real problem is that **that printing is XMage's, not Scryfall's.** Our art pipeline resolves
+Scryfall URLs from set code plus collector number, and the XMage token set code will not resolve
+there. Two ways out, and the choice is a real one:
 
-**Still to establish:** what the game view calls a token — enough of name, subtype, P/T and colour
-to pick the right printing when several share a name (a 1/1 white Soldier and a 2/2 white Soldier
-are different printings). That is a question for upstream's view layer.
+- **Resolve token art from Scryfall by name.** Tokens are real queryable printings there —
+  `is:token`, in sets whose `set_type` is `token`. Consistent with how every other card gets its art,
+  but needs enough of name, subtype, P/T and colour to disambiguate printings that share a name (a
+  1/1 white Soldier and a 2/2 white Soldier are different printings). `CardView` carries all of those.
+- **Use XMage's own token images**, which is what the desktop client does, and which the server has
+  already resolved for us. No matching needed; a second art source to plumb.
 
 #### 2. Tokens are visibly marked as tokens
 
 A token that copies a card renders as that card, and the player **must** be able to tell it apart
 from the real thing — a token that leaves the battlefield ceases to exist, which changes how you
-trade, bounce and sacrifice. This is game information, not decoration, so it is P0 and it must be
-legible at Board tier (§7.5), not only on inspection.
+trade, bounce and sacrifice. Game information, not decoration, so it is P0 and it must be legible at
+Board tier (§7.5), not only on inspection.
 
-**Needs establishing first:** how upstream reports "this permanent is a token." The answer is in the
-view layer and should be read, not guessed.
+**The signal exists and is unambiguous.** `CardView.isToken` is a plain boolean set when the object
+is a `PermanentToken`, and `CardView.mageObjectType` separates `TOKEN`, `COPY_CARD` and `PERMANENT`
+— so "is this a token" and "is this a copy of a card" are both answered directly. This is the same
+shape as story 0076's `transformed`: a correct upstream field that simply is not mapped. Thread it
+through unchanged.
 
 #### 3. Chosen art carries from the deck builder into the game
 
@@ -693,6 +715,87 @@ whether we filter it or fold snapshot diffs instead, is a question for upstream 
 decision.
 
 ---
+### 7.13 The zone browser, and telling exiles apart
+
+**A menu that opens any zone, for either player, in one interaction** — graveyard, exile, revealed,
+looked-at, command. It floats over the board (§7.4) and never costs the battlefield space.
+
+#### What the server already sends
+
+`PlayerView` carries, per player and already filtered for what that seat may see:
+
+- **`graveyard`** — a full `CardsView`, the actual cards.
+- **`exile`** — a full `CardsView` of every card in any exile zone that player *owns*, flattened.
+- **`commandList`** — emblems, dungeons, commanders, planes (§4.3), plus `designationNames`.
+
+`GameView` separately carries **`exiles: List<ExileView>`**, each an `ExileZone`'s cards with its
+**name** and id. The two exile views are complementary and both are needed: `PlayerView.exile`
+answers "what of mine is exiled," `GameView.exiles` answers "which pile is it in."
+
+**The bridge maps almost none of this.** `GameViewMapper` reduces the graveyard to
+`graveyardCount = player.graveyard?.size ?: 0` and discards the cards; `commandList` is not mapped
+at all. Only `GameView.exiles` survives, as `GameState.exile: List<GameZone>` with `name` and
+`zoneId` — mapped, and never rendered.
+
+#### Telling special exiles apart
+
+Exile is not one pile. `Exile` holds `ExileZone`s keyed by id: a default zone named `Permanent`, and
+effect-created zones named `"<effect> - Exile"`. Two independent signals distinguish them, and
+**both are already available**:
+
+- **The zone name**, for effects that make their own zone. Plot exiles to
+  `"Plots of <player> - Exile"` (`PlotAbility.doExileAndPlotCard`); Rebound uses `"Rebound"`. These
+  arrive as `GameZone.name` today.
+- **`canPlayObjects`**, for anything castable right now — already mapped as `GameStateView.playable`.
+  This is what the reference client uses: `GamePanel` marks `setPlayableStats` on card views in both
+  `PlayerView.exile` and `GameView.exiles`.
+
+**Neither signal alone is sufficient, and together they still do not cover everything.** Airbend
+does not create a named zone — it calls `moveCards(Zone.EXILED)` into the general exile and grants an
+`AsThoughEffectType.CAST_FROM_NOT_OWN_HAND_ZONE` letting the owner cast it for `{2}`. So an airbent
+card is nameless in exile, and is only distinguishable while `canPlayObjects` says it is castable.
+On a turn when it is not castable there is nothing marking it as special. A plotted card has the same
+gap in reverse: named always, playable only on the turn it can be cast.
+
+There is **no single upstream flag for "this exiled card is special,"** and the reference client does
+not have one either — it opens one auto-shown window per named exile zone, titled with the zone name,
+and marks playability on the cards. We do the same thing in a browser instead of windows: **group
+exile by zone name, and mark playable cards wherever they are.**
+
+
+### 7.14 What a stack entry shows
+
+A stack entry answers four questions at once: **what is it, what caused it, what will it do, and
+what does it hit.** Together those are what the player needs in order to decide whether to respond.
+
+1. **The art of the card that produced it.** A triggered ability is not a card, but it came from one,
+   and the art is how it is recognised at a glance.
+2. **The ability's rules text**, as its own text — not the whole source card's text.
+3. **Its source, shown as a relationship.** Soul Warden's trigger should visibly belong to Soul
+   Warden on the battlefield, not merely wear its picture.
+4. **Its targets**, drawn to whatever they are — including **other stack entries**, since Counterspell
+   and Mana Leak target the spell above them.
+
+#### What the server already gives us, and what is missing
+
+Points 1 and 2 are done. `StackAbilityView` is a **sibling of `CardView`, not a subclass**, and sets
+`name = "Ability"` unconditionally while leaving its own `expansionSetCode`/`cardNumber` blank — only
+its nested `getSourceCard()` carries the real name and printing. `GameViewMapper` already reads
+`sourceCard` for `displayName`, `setCode` and `collectorNumber` (Soul Warden's trigger was the live
+example that produced that fix), and `rules` maps through as the ability's own text.
+
+Point 3 needs the source as a **link**, not just borrowed art. `StackAbilityView.getSourceCard()` is
+a full `CardView`, so the source's id is available to point at a permanent already on the board.
+
+Point 4 is the real gap. **`CardView.targets` is a `List<UUID>`, populated for both spells and stack
+abilities**, and upstream computes it for exactly our purpose — `StackAbilityView.updateTargets`
+carries the comment *"need only unique targets for arrow drawing."* It resolves selected modes'
+targets, and falls back to effects' target pointers where a mode declares none. Because it is
+resolved through `game.getObject(uuid)`, a target that is itself a spell on the stack comes through
+the same way as a permanent.
+
+**We do not map `targets` anywhere** — not in `:protocol`, not in `GameState`. That is the one piece
+of new data the stack needs, and it is what §3.1's targeting arrows draw.
 
 ## 8. Platform
 
@@ -876,11 +979,11 @@ that session, against §7.
 ### Phase 4 — The rest of the app
 
 Home, lobby, tables, deck library and builder v2, card search, settings, on the Phase 1 system.
-P1 items 22, 24 and 25.
+P1 items 23, 25 and 26.
 
 ### Phase 5 — Polish
 
-P2 items. Undo (P1 #26) lands here or earlier, once the cast flow shows what it still needs to
+P2 items. Undo (P1 #27) lands here or earlier, once the cast flow shows what it still needs to
 cover.
 
 ### Deferred
