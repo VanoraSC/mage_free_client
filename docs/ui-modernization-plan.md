@@ -50,10 +50,15 @@ found by playing real games, not by reasoning.
   placeholders and a token copy of a creature is indistinguishable from the creature (§7.11).
 - **Portrait phone only**, where the board's target is landscape (§7.4).
 
-One defect outside the board, in the table room: [`TableRoomScreen.kt:175`](../feature/tables/src/main/kotlin/magefree/feature/tables/room/TableRoomScreen.kt)
-passes `selectedId = null` to `DeckPicker`, so every deck renders an unselected radio button that
-can never become selected, while tapping one immediately submits that deck. It is a list of submit
-actions wearing radio-button clothing, and the radio semantics are simply wrong for it.
+One defect outside the board: **the table room asks for a deck that has already been chosen.**
+`DeckPicker` is used correctly at host and join time — [`JoinTableScreen.kt:94`](../feature/tables/src/main/kotlin/magefree/feature/tables/join/JoinTableScreen.kt)
+passes a real `selectedId` and gates the Join button on it, which is a genuine selection. But
+[`TableRoomScreen.kt:175`](../feature/tables/src/main/kotlin/magefree/feature/tables/room/TableRoomScreen.kt)
+renders the same picker again under "Submit your deck" with `selectedId = null`, so every deck shows
+an unselected radio that can never become selected and tapping one submits immediately.
+
+The radio buttons are the visible symptom; the real fault is that the choice was already made before
+the table existed. The room should not re-ask.
 
 ### 1.3 What must survive the rebuild
 
@@ -725,8 +730,16 @@ Two consequences worth being deliberate about:
 
 ### Immediate cleanup, independent of the above
 
-Remove the radio buttons from the table room's deck submission (§1.2). This is a defect in the
-current UI, not a new-UI item, and it is not worth waiting for a rebuild.
+**Remove the deck picker from the table room** (§1.2) — not just its radio buttons. The deck is
+chosen at host or join time, so the room re-asking a settled question is the actual fault.
+
+`TableRoomViewModel` keeps `submitDeck`/`updateDeck`, and the submission itself may still need to
+fire from the room rather than at join. So the change is to drive it from the deck already chosen
+instead of re-prompting for one. **Confirm against the join path before editing** whether the
+server-side `deckSubmit` happens at join or in the room — that determines whether the room submits
+silently on entry or has nothing left to do.
+
+A defect in the current UI, not a new-UI item, and not worth waiting for a rebuild.
 
 ### Phase 1 — Design system and the animation host
 
@@ -801,16 +814,12 @@ Existing epics stand; these are added or amended:
    whether it carries interim actions we would have to filter (§7.12), and the real prompt sequence
    for a cast with additional costs (§7.6, already scheduled as Phase 2a). Run the others now, or as
    their features come up?
-4. **The table room's deck picker (§1.2, §11).** Removing the radio buttons is clear. What is not:
-   should the deck list stay as plain "submit this deck" actions, or should the whole picker
-   disappear once a deck has been submitted and the table is ready? The first is a control fix, the
-   second changes what the screen shows. Which did you mean?
-5. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
+4. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
    against the bridge with no emulator, no APK install and no `adb`, which is the fastest path to
    eyes on the board. Worth it as a development accelerator, or leave it deferred?
-6. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
+5. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
    expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
-7. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
+6. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
    now out of date against §7.4. Want me to correct it, or leave that doc alone?
 
 ---
