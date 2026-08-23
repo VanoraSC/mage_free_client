@@ -29,7 +29,7 @@ The client logic layer is the valuable part: the `GameViewMapper`, `GameEventFol
 also the highest-bug-density code in the project — stories 0066, 0072, 0074, 0076 and 0079 were all
 found by playing real games, not by reasoning.
 
-### 1.2 What the board is like today
+### 1.2 What the client is like today
 
 `:feature:game` is a proof of concept and reads like one:
 
@@ -65,7 +65,7 @@ the table existed. The room should not re-ask.
 - **The server is authoritative and we speak it correctly.** No rules engine on device.
 - **Every game object has a stable id across snapshots** — the precondition for animating between
   snapshots.
-- **Prompts are non-modal when they need the board** (requirements §6.2, §16.2).
+- **Prompts are non-modal when they need the board** (R§6.2, R§16.2).
 
 ---
 
@@ -93,20 +93,20 @@ it, showing only the decision at hand.
 | Cards animate between zones | The only channel carrying causality | P0 |
 | Playable-now highlight on hand and permanents | Removes "can I do this?" entirely | P0 |
 | Targeting arrows from source to target, persistent while on the stack | Makes the stack readable at a glance | P0 |
-| Attack and block arrows | Combat is two assignment problems (req. §7.4); arrows show the assignment | P0 |
+| Attack and block arrows | Combat is two assignment problems (R§7.4); arrows show the assignment | P0 |
 | Counters rendered on the card face | Board state readable without inspecting | P0 |
 | Tapped = rotated 90° | Universal Magic idiom, cheaper to read than a badge | P0 |
-| Stack as a fanned centre pile that expands when large | P0 |
+| Stack as a fanned centre pile that expands when large | A 56 dp strip cannot show a stack you must respond to | P0 |
 | Phase bar with clickable per-phase stops, coloured by whose turn | The right control for 0063's auto-pass | P0 |
-| Additional costs chosen before mana (below) | P0 |
+| Additional costs chosen before mana (below) | Delve and convoke stop being modal interruptions | P0 |
 | Life-total change animates with a ±N delta | You notice what happened to you | P1 |
 | Spotlight on the object currently resolving | Turns "the log scrolled" into "I saw it" | P1 |
 | Keyword reminder text on demand | Large benefit for less-experienced players | P1 |
 | Auto-tap highlights the lands it would use when a card is dragged from hand | Makes the proposed payment checkable before committing | P1 |
 | Alternate art, per card and per deck | An explicit EPIC-11 requirement | P1 |
-| Damage numbers float off creatures | P2 |
+| Damage numbers float off creatures | Combat maths becomes visible | P2 |
 | Gameplay warnings ("you still have untapped mana") | Cheap guard-rail | P2, opt-in |
-| Emotes | P2 |
+| Emotes | Constrained communication without a chat box | P2 |
 
 #### Delve and convoke: additional costs come first
 
@@ -184,17 +184,18 @@ live. Both become relevant only if a desktop build happens (§12).
 
 ## 5. What XMage demands that neither client has
 
-Documented and measured in [`game-board-requirements.md`](game-board-requirements.md):
+Documented and measured in [`game-board-requirements.md`](game-board-requirements.md). Section
+numbers prefixed **R§** below refer to that document, not to this one.
 
 - **Manual mana payment is the baseline**, with the server's own proposed solution offered as the
-  fast path (§6.5). See §7.7 for the interaction.
-- **`SpecialAction` costs** — convoke, delve, companion (§18, §21.4), presented in the order
+  fast path (R§6.5). See §7.7 for the interaction.
+- **`SpecialAction` costs** — convoke, delve, companion (R§18, R§21.4), presented in the order
   described in §3.1.
-- **Cancel/rollback with cascading rewind** (§16.5, §17.1), including that a cancel is *not* pushed
-  to the opponent (§17.4).
+- **Cancel/rollback with cascading rewind** (R§16.5, R§17.1), including that a cancel is *not* pushed
+  to the opponent (R§17.4).
 - **Simultaneous trigger ordering** (0072) — see §7.8.
-- **Casting is one act, not a series of dialogs** (§6.4) — see §7.6.
-- **Graveyard cards need individual identity** (§21.2).
+- **Casting is one act, not a series of dialogs** (R§6.4) — see §7.6.
+- **Graveyard cards need individual identity** (R§21.2).
 - **Resync restores the outstanding prompt** (0074) — reconnect lands on the same decision, not a
   blank board.
 
@@ -213,10 +214,10 @@ Documented and measured in [`game-board-requirements.md`](game-board-requirement
    grouping by role; the fan/pile system (0065) doing real work; no fixed-height scroll bands.
 5. **Playable-now affordance.** Castable and activatable objects are visually distinct, everywhere.
 6. **Spatial targeting.** Legal targets highlight on the board; an arrow is drawn from source to
-   each chosen target; confirm before submit (§16.4). Candidate lists remain only for off-board
+   each chosen target; confirm before submit (R§16.4). Candidate lists remain only for off-board
    targets.
 7. **Combat as spatial assignment.** Attackers move to a red zone, blockers connect with arrows,
-   and the two assignment problems stay separate (§7.4).
+   and the two assignment problems stay separate (R§7.4).
 8. **The Prompt as the organizing element** (§7.2).
 9. **Stack as an expandable centre pile** with per-object inspection.
 10. **Counters, P/T modifications, tap state and status rendered on the card.**
@@ -229,8 +230,8 @@ Documented and measured in [`game-board-requirements.md`](game-board-requirement
     information, not decoration — a token copy must be distinguishable from the real card at Board
     tier.
 16. **Phone-landscape board layout** (§7.4). One layout target; tablets render it scaled.
-17. **The game log** (§7.12) — game state changes, not interim actions. With no animation and no
-    log, a player who looked away has no way to find out what happened.
+17. **The game log** (§7.12) — game state changes, not interim actions. Animation carries what
+    happened while you were watching; the log is the only way to recover it afterwards.
 
 ### P1 — required for it to be good
 
@@ -241,11 +242,12 @@ Documented and measured in [`game-board-requirements.md`](game-board-requirement
 21. **Life-total deltas, resolution spotlight, keyword reminders.**
 22. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
     tokens a deck produces.
-23. **Art prefetch at match start** — both decklists are known; warm the cache before turn one.
+23. **Art prefetch at match start** — we submitted our own deck, so its art can be warmed before
+    turn one. The opponent's deck is hidden and arrives card by card.
 24. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
     boxes.
 25. **Home hub, lobby and tables** rebuilt on the new design system.
-26. **Undo.** The server supports the rewind (§17.1). The cast flow removes most of the misfires it
+26. **Undo.** The server supports the rewind (R§17.1). The cast flow removes most of the misfires it
     would catch, since intent is editable before submission, so it covers what remains.
 
 ### P2 — polish and reach
@@ -296,7 +298,7 @@ One component, one position, three states:
   question in the server's own words (cleaned of markup, as `stripServerMarkup` does).
 - **Board-interactive** — the decision requires touching the board (targets, attackers, blockers).
   The Prompt shrinks to a header, progress ("2 of 3 targets") and Confirm/Cancel, and **never blocks
-  the board** (requirements §6.2, §16.2).
+  the board** (R§6.2, R§16.2).
 
 ### 7.3 Motion and object identity
 
@@ -378,7 +380,7 @@ ordering possible.
 
 **The problem.** The server asks for a cast as an ordered sequence of separate questions — announce
 the spell, then special actions, then modes, then targets, then mana — each a discrete prompt with
-its own round trip. Rendering that faithfully produces a chain of dialogs, which requirements §6.4
+its own round trip. Rendering that faithfully produces a chain of dialogs, which R§6.4
 forbids and the current client does.
 
 **The model.** The client assembles a **complete declared intent** locally — this spell, these
@@ -410,7 +412,7 @@ commits in silence. This will happen for real — an opponent's static cost incr
 became illegal, an unanticipated replacement-effect choice, an optional trigger mid-cast.
 
 **Costs are proposed by the server, not computed by us.** Cost-modifying effects mean local
-arithmetic can be wrong, and requirements §6.5 establishes that the server proposes the solution.
+arithmetic can be wrong, and R§6.5 establishes that the server proposes the solution.
 So:
 
 1. Player picks the spell.
@@ -423,12 +425,12 @@ So:
    fire the cast on its own (§7.7 rule 5), and the mana about to be spent is shown alongside it.
 
 Everything before step 5 is local and freely editable, so **Cancel before Confirm costs nothing and
-touches no server state.** After Confirm, cascading rewind (§16.5, §17.1) applies.
+touches no server state.** After Confirm, cascading rewind (R§16.5, R§17.1) applies.
 
 **Two things must be settled before this is built:**
 
 - **The real prompt sequence in upstream `HumanPlayer`** for a cast carrying additional costs — the
-  full path, not just `activateSpecialAction` which §18.2 covers. The server and reference client
+  full path, not just `activateSpecialAction` which R§18.2 covers. The server and reference client
   are correct and available; read them rather than infer.
 - **Disconnect mid-playback.** The bridge becomes briefly stateful per cast, which interacts with
   0074 (resync restores the outstanding prompt). A drop between "intent submitted" and "cast
@@ -505,7 +507,7 @@ the app looks like before anyone reaches a game.
 
 Art is currently resolved from the printing the server names — `artRequestOf(setCode,
 collectorNumber)` — and falls back to a placeholder when the server names none. There is **no token
-concept in the client at all**: neither `GameState` nor `BoardUi` mentions one. Four things are
+concept in the client at all**: neither `GameState` nor `BoardUi` mentions one. Five things are
 wanted, and they build on each other.
 
 #### 1. Tokens render with art
@@ -557,9 +559,8 @@ is distinct from the two states around it: a card with **no printing to resolve*
 placeholder (nothing is coming), and a card whose art has **arrived** shows the art. The spinner
 only ever means "in flight."
 
-Prefetching both decklists at match start (§10) is what keeps this rare in a game; it is not a
-substitute for it, since the opponent can play cards from outside their opening deck and the cache
-can be cold.
+Prefetching our own deck at match start (§10) removes most of these, but it cannot remove them all:
+the opponent's deck is hidden, so every unfamiliar card they play is a first sight.
 
 #### 5. Token art is choosable too
 
@@ -582,8 +583,8 @@ token art works offline.
 
 ---
 
-Two of these rest on data questions rather than design decisions — what the game view reports about
-a token, and what our catalog holds. Both are answered by reading upstream and the catalog, which is
+Three of these rest on data questions rather than design decisions — what the game view calls a
+token, how it flags one, and what our catalog holds. All are answered by reading upstream and the catalog, which is
 the work that comes first: guessing at what the server reports is how story 0076 took four rounds.
 
 ### 7.12 The game log
@@ -663,10 +664,15 @@ target. §9 is what keeps that deferral safe.
 These cost nothing applied from the start, are expensive to retrofit, and are independently good
 Android practice:
 
-- **No Android APIs in the logic layers.** `:core:model`, `:core:network`, `:core:decks` and the
-  non-UI half of `:core:cards` depend on Kotlin, coroutines, serialization and Ktor — nothing from
-  `android.*`. Device-specific needs (storage paths, notifications, secure storage, haptics) sit
-  behind an interface at the module boundary, which is where an `expect`/`actual` would go.
+- **Keep Android APIs out of the logic layers.** `:core:model`, `:core:network`, `:core:decks` and
+  the non-UI half of `:core:cards` should need only Kotlin, coroutines, serialization and Ktor.
+  Device-specific needs (storage paths, notifications, secure storage, haptics) sit behind an
+  interface at the module boundary, which is where an `expect`/`actual` would go.
+
+  This is a rule to hold to, not a description of today. `:core:network` already depends on
+  `androidx.lifecycle-process` for the `ProcessLifecycleOwner` foreground/background reconnect hook
+  (story 0024) — an Android-only API sitting in a logic module. It is a small, well-isolated
+  exception and it is exactly the shape that should live behind an interface.
 - **Check multiplatform support before adopting a dependency in a `:core:*` module.** One
   Android-only library there turns a mechanical port into a rewrite. Choosing one anyway is fine —
   knowingly, and above the logic layers.
@@ -703,7 +709,8 @@ Two things are worth doing anyway, because they are about the experience rather 
 
 1. **Art pipeline.** Two decoded sizes — Board tier and Full tier (§7.5) — never one, since decoding
    full-resolution card art for a battlefield is wasteful on memory to no visible benefit. Prefetch
-   both decklists at match start; we know them, so the first turn need not wait on the network.
+   our own deck at match start — we submitted it, so we know exactly what is in it and the first turn
+   need not wait on the network. The opponent's deck is hidden and cannot be prefetched.
 2. **Snapshot payload size.** [`architecture.md`](architecture.md) open question #7 — how much of
    `GameView` a phone needs per frame, and whether to delta it — is still open. It matters for
    mobile data, not for rendering. Measure real payloads before deciding anything.
@@ -790,11 +797,11 @@ that session, against §7.
 ### Phase 4 — The rest of the app
 
 Home, lobby, tables, deck library and builder v2, card search, settings, on the Phase 1 system.
-P1 items 20–24.
+P1 items 22, 24 and 25.
 
 ### Phase 5 — Polish
 
-P2 items. Undo (P1 #25) lands here or earlier, once the cast flow shows what it still needs to
+P2 items. Undo (P1 #26) lands here or earlier, once the cast flow shows what it still needs to
 cover.
 
 ### Deferred
