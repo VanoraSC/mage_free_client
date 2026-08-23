@@ -50,6 +50,11 @@ found by playing real games, not by reasoning.
   placeholders and a token copy of a creature is indistinguishable from the creature (§7.11).
 - **Portrait phone only**, where the board's target is landscape (§7.4).
 
+One defect outside the board, in the table room: [`TableRoomScreen.kt:175`](../feature/tables/src/main/kotlin/magefree/feature/tables/room/TableRoomScreen.kt)
+passes `selectedId = null` to `DeckPicker`, so every deck renders an unselected radio button that
+can never become selected, while tapping one immediately submits that deck. It is a list of submit
+actions wearing radio-button clothing, and the radio semantics are simply wrong for it.
+
 ### 1.3 What must survive the rebuild
 
 - **The server is authoritative and we speak it correctly.** No rules engine on device.
@@ -690,6 +695,39 @@ Two things are worth doing anyway, because they are about the experience rather 
 
 Android only. Each phase is independently valuable and the app keeps working throughout.
 
+### The new UI is built alongside the old one, not in place of it
+
+**Nothing described in §7 replaces an existing screen.** The new components ship as additional
+surfaces reached from new entry points, and the current screens keep working untouched.
+
+The reason is diagnostic. When something misbehaves on a new surface, the question is always "is
+this a bug in the new UI, or did something underneath actually break?" — and with both UIs live over
+the **same** `:core:network` state, that question is answerable in one tap: open the old screen and
+see whether the data is right there. Without the old screen, every new-UI defect starts as an
+investigation into the whole stack. Story 0076 took four rounds partly because a rendering symptom
+and a mapping fault were hard to tell apart.
+
+Entry points:
+
+- **Sign-in stays exactly as it is.** No new variant, no changes.
+- **"New Deck Builder"** — offered alongside the existing deck library entry.
+- **"New Battlefield"** — offered when the table is ready to play, alongside the existing path into
+  the board.
+
+Two consequences worth being deliberate about:
+
+- **The old code is not edited to accommodate the new code.** Anything shared moves behind an
+  interface rather than being modified in place, so a regression cannot be introduced into the old
+  path by work on the new one. That is the whole value of keeping it.
+- **This is temporary, and needs an end.** Carrying two UIs indefinitely doubles the surface for
+  every subsequent change. Each old surface is removed once its replacement is at parity and has
+  been played on — a judgement call per surface, made deliberately rather than by drift.
+
+### Immediate cleanup, independent of the above
+
+Remove the radio buttons from the table room's deck submission (§1.2). This is a defect in the
+current UI, not a new-UI item, and it is not worth waiting for a rebuild.
+
 ### Phase 1 — Design system and the animation host
 
 New tokens (colour, type, elevation, **motion**), the three-tier card component family (§7.5), and
@@ -763,12 +801,16 @@ Existing epics stand; these are added or amended:
    whether it carries interim actions we would have to filter (§7.12), and the real prompt sequence
    for a cast with additional costs (§7.6, already scheduled as Phase 2a). Run the others now, or as
    their features come up?
-4. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
+4. **The table room's deck picker (§1.2, §11).** Removing the radio buttons is clear. What is not:
+   should the deck list stay as plain "submit this deck" actions, or should the whole picker
+   disappear once a deck has been submitted and the table is ready? The first is a control fix, the
+   second changes what the screen shows. Which did you mean?
+5. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
    against the bridge with no emulator, no APK install and no `adb`, which is the fastest path to
    eyes on the board. Worth it as a development accelerator, or leave it deferred?
-5. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
+6. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
    expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
-6. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
+7. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
    now out of date against §7.4. Want me to correct it, or leave that doc alone?
 
 ---
