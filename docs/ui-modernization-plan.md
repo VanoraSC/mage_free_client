@@ -569,9 +569,16 @@ The client is **Kotlin and Compose on Android**. The whole stack is one language
 the client logic and its tests, and the UI.
 
 The board's animation requirements (§7.3) are met with `Animatable`, `LookaheadScope`,
-shared-element transitions and `graphicsLayer`. Whether Compose holds frame budget on a populated,
-animated board is the one open platform risk; Phase 1 retires it by building and measuring the
-animation host standalone before anything depends on it.
+shared-element transitions and `graphicsLayer`.
+
+**The animation host is unproven at board scale**, and it is the one open risk in the plan. A full
+board animating many objects at once, retargeting mid-flight as new snapshots arrive, does more
+measure and layout work per frame than the usual Compose workload, and nothing tells us in advance
+whether it fits a 16.7 ms frame. If it does not, the remedy is structural — cards stop being nested
+composables inside a lookahead layout and become positions drawn by one custom layout — which is a
+different component API for everything built on top. Phase 1 therefore builds and measures the host
+standalone, against recorded snapshots at realistic board size, before the card components or the
+board depend on its shape.
 
 **The bridge is a network service, not a library.** It runs on a JVM, embeds `mage-common`, and
 speaks JBoss Remoting to the XMage server on one side and **WebSocket + JSON** on the other
