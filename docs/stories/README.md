@@ -470,6 +470,34 @@ real game's state is reaching the app and we can see what the board actually nee
 | 0078 | MTGGoldfish text import puts the whole deck in the sideboard | 0042 | **Defect found live (Pete, 2026-08-20).** An MTGGoldfish plain-text export (`About` / `Name <deck>` / blank / `Deck` / … / blank / `Sideboard` / …) put all 75 cards in the sideboard. Root cause, traced into both our port and upstream's `TxtDeckImporter`: the blank-line-switches-to-sideboard rule is one-directional (confirmed by reading `readLine` directly — `sideboard` is only ever set, never reset), and upstream's own header pre-scan only disables it for `//sideboard`/`SB:` marks, not a bare `Sideboard` header — so the blank line after the `About`/`Name` preamble latches the whole rest of the file, `Deck` section included. Fixed by giving `TextFormat` the same explicit `Deck`/`Mainboard`/`Sideboard`/`Commander`/`Maybeboard` header recognition [MtgaFormat] already has for its own format, plus skipping `About`/`Name …` as metadata instead of parsing them as bogus 1-count cards. |
 | 0079 | A library search offers the whole library, not the legal fetches | 0057, 0072 | **Defect found live (Pete, 2026-08-20).** Activating Marsh Flats let the ability go on the stack, but the resulting picker offered no way to select a card. Root cause, traced into upstream directly: `TargetCardInLibrary`/`HumanPlayer.chooseTarget` send `cardsView1` as the *entire remaining library* with `targets = null`, while the real, narrow legal set lives only in `options["possibleTargets"]` — a different shape from story 0072's `PICK_ABILITY` (also `targets = null`, but there the candidate set genuinely *is* the answer set). The bridge's existing 0072 fallback treated both shapes the same, offering the whole library as if every card were fetchable. Fixed by preferring `possibleTargets` over the whole-`cardsView1` fallback when present, and narrowing the board's candidate-card panel to what is actually pickable rather than showing the prompt's raw card list. |
 
+---
+
+## EPIC-18 — Multiplatform Foundation
+
+The first epic of the UI rebuild, and it runs **before** the UI work rather than after it: the
+epic's cost scales with how much code exists when it happens, and Phases 1–4 are about to add a
+great deal. See [`../ui-modernization-plan.md`](../ui-modernization-plan.md) §9 and §11 Phase 0.
+
+**The UI does not move.** On Android, Compose Multiplatform *is* Jetpack Compose — this epic is
+`:core:*`, `:protocol` and DI. Nothing in `:feature:*` or `:app` changes except its DI annotations.
+
+**The `:core:*` order is fixed by the module graph, not by cost.**
+`:core:cards` ← `:core:decks` ← `:core:network`, because a KMP module's `commonMain` cannot depend
+on an Android library. That puts the hardest module first. Each of these stories is tracked by a
+GitHub issue (see [Issue tracking](#issue-tracking)).
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0080 | KMP build foundation: `:protocol` and `:core:model` | — | The `magefree.kmp.library` convention plugin, and the two already-clean modules converted to KMP with a `jvm()` target. **No Kotlin source changes** — the story exists to prove a converted module still resolves from `:bridge` (JVM), `:app` and every Android library consumer before anything hard depends on it. |
+| 0081 | Dependency injection: Hilt to Koin | 0080 | The one genuine multiplatform blocker, removed. 34 files across 10 modules: 10 `@Module @InstallIn` classes, 14 `@HiltViewModel`s, 18 `hiltViewModel()` call sites, one `@HiltAndroidApp`, one `@AndroidEntryPoint`, one `EntryPointAccessors` site. **Hilt fails at compile time and Koin fails at runtime**, so a module-graph verification test lands with it or the conversion is unverified. No Hilt test infrastructure exists, which lowers the risk. |
+| 0082 | `:core:cards` to KMP | 0081 | The largest piece, and **first** among the `:core:*` conversions by dependency order. `SqliteCardCatalog` off `SQLiteDatabase`/`Cursor` onto the `androidx.sqlite` driver; the 14 MB bundled asset behind a platform boundary; Coil onto `coil-network-ktor3` without losing story 0056's `User-Agent`. Correctness is checkable by equality — same queries, same rows. |
+| 0083 | `:core:decks` to KMP | 0082 | Room in its KMP configuration on the same driver, and `FormatBundleLoader` off `AssetManager` through 0082's resource boundary. The acceptance bar is an **upgrade over an existing deck library**, not a fresh install — a user's decks exist only on their device. |
+| 0084 | `:core:network` to KMP | 0083 | Three Android-coupled files. Both observers are already behind interfaces and move to `androidMain` unchanged; DataStore construction comes off the `Context` delegate. Corrects §9.2, which recorded debt here that does not exist: `ServerRepository` takes a `DataStore`, not a `Context`. Saved servers must survive the upgrade. |
+| 0085 | Robolectric out of the logic modules | 0082, 0083 | The 7 Robolectric tests in `:core:cards`/`:core:decks` become plain JVM tests running in CI, which is what makes the portability claim check itself per commit. The other 5 are Compose tests and **stay Android** — they are the hermetic gate. |
+
+**EPIC-23 does not wait for this.** Its work is bridge-side (already JVM) plus `:protocol` data
+classes (already clean), and several of its items improve the current UI on their own.
+
 ## Known issues (accepted, not scheduled)
 
 Deliberately logged rather than fixed. Each is bounded, self-healing, and has no user-visible effect;
