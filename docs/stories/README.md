@@ -109,6 +109,26 @@ defect ship: every one of the five defects found in the 2026-08 hardening pass h
 A fake that behaves differently from production is a defect in the fake, not a convenience — fix the
 double, not the test that depends on it.
 
+### Investigations are instrumented, not inferred
+
+Some stories are a question before they are a feature: *what does the server actually send during a
+real game?* Those are answered by **instrumenting the code and playing a real game** — add
+diagnostic logging aimed at the specific question, hand over a build, Pete plays the game that
+provokes the behaviour, and the logs come back to be read. The story is written after that, from
+what the logs say.
+
+Reading `../mage` establishes what the server **can** send; only a live game establishes what it
+**does**. That gap is standard 5's whole subject: `GameView.opponentHands` is declared, typed,
+mapped and written to by nothing, and it looks identical to a working field at every stage that is
+not a running game.
+
+Two working rules:
+
+- **The instrumentation is its own step with its own hand-off**, not something folded into the
+  implementation commit. `diag: log every GameStateCache prompt observation and answer` is the shape.
+- **The logging is removed or demoted once the question is answered.** A diagnostic that outlives
+  its question is noise in the next one.
+
 ## Story document template
 
 Every story uses these sections:

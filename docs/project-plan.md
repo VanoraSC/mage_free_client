@@ -41,8 +41,9 @@ These are settled; details in [`architecture.md`](architecture.md). Epics assume
 - **Self-hosted server.** We run our own version-pinned XMage server, so the bridge/client is
   always version-matched and we upgrade on our own schedule (XMage enforces exact-version
   lockstep). See [`architecture.md`](architecture.md).
-- **Android, Kotlin and Compose.** One **ship** target. A desktop build exists as a development
-  harness (EPIC-22), not as a product; iOS is not being built.
+- **Android, Kotlin and Compose.** One **ship** target, and the one the work is done on. A minimum
+  desktop build exists to demonstrate the client is portable (EPIC-22), not as a product and not as
+  a development surface; iOS is not being built.
 - **The shared logic is multiplatform, and that is verified by compiling it.** `:core:*` and
   `:protocol` carry a JVM target that builds in CI, so portability is a build result rather than a
   claim (EPIC-18). This runs ahead of the UI rebuild, because its cost scales with how much code
@@ -268,22 +269,26 @@ out and how it moves is EPIC-19. Specified by
 - As a player, I want a board that highlights what matters now instead of cramming
   everything on screen, so that I can read the game at a glance.
 - As a player, I want a **zone browser that opens any zone for either player in one
-  interaction** — graveyard, exile, revealed, looked-at, command — floating over the board so it
-  never costs the battlefield space.
+  interaction** — graveyard, exile, revealed, looked-at — floating over the board so it never
+  costs the battlefield space. The command zone is not one of them: its contents belong to a
+  player, so they read in that player's vitals overlay.
 - As a player, I want **exile grouped by the zone that made it**, with castable cards marked, so
   that a plotted card, a rebounded spell and an ordinary exile are told apart.
 - As a player, I want **each stack entry to show its source art, its own rules text, a link to
   the permanent that produced it, and its targets**, so that I know what to respond to, what
   caused it, and what it will hit.
 - As a player, I want **life, library and hand counts, poison and other player counters, monarch
-  and initiative, my mana pool and the match score** always visible, so that I never lose to
-  something the board didn't show me.
+  and initiative, my mana pool and the match score** available on each player without hunting, so
+  that I never lose to something the board didn't show me. It is one expandable overlay: collapsed
+  to counts and colour — life red, poison green from the moment it is non-zero — and expanding to
+  the counters, designations and emblems in full.
 - As a player, I want turn and phase always clear, so that I never lose track of game state.
 - As a player, I want card art to load the way the desktop app's does, with an easy way to
   facilitate the download, and **an indeterminate spinner while art is in flight** so I can tell
   "downloading" from "no art exists."
 - As a player, I want to choose which art the cards in my deck use where a card has alternative
-  art, **and which art its tokens use**.
+  art, **and which art its tokens use** — recorded in the deck, so the choice travels with the
+  decklist and is what renders in play.
 
 ### EPIC-12 — Priority, Stack & Taking Actions
 **What it is:** passing priority, playing lands, activating abilities, and the phase bar.
@@ -369,8 +374,10 @@ resolves" break when something new is added (EPIC-12) — we must set it, not me
 
 - As a player, I want to set connection and gameplay defaults, so that the app fits how I
   play.
-- As a player, I want **auto-tap and auto-assign-combat-damage available but off by default**,
-  because I chose a fully rules-enforced client and shouldn't have decisions taken silently.
+- As a player, I want **nothing automated** — no auto-tap, no auto-assign-combat-damage, and no
+  toggles for them yet — because I chose a fully rules-enforced client and shouldn't have decisions
+  taken silently. These are a later enhancement: automation is additive to a client that already
+  answers every prompt manually, while the reverse has to be unwound.
 - As a player, I want **Full Control as a pinned mode**, since there is no held modifier key on
   a phone.
 - As a player, I want a **reduce-motion setting that shortens animations rather than removing
@@ -384,8 +391,8 @@ resolves" break when something new is added (EPIC-12) — we must set it, not me
 Seven epics carrying the work in [`ui-modernization-plan.md`](ui-modernization-plan.md) that
 does not fit an existing epic. §11 there sequences them.
 
-**EPIC-18 and EPIC-22 come first** despite their position here — the foundation and the harness
-precede the UI work that would otherwise have to be ported afterwards. EPIC-23 does not depend on
+**EPIC-18 and EPIC-22 come first** despite their position here — the foundation, and the build that
+demonstrates it worked, precede the UI work that would otherwise have to be ported afterwards. EPIC-23 does not depend on
 either and can run alongside. **EPIC-25's first half — the pre-sign-in mount — is immediate work
 too**: it is a mounting point plus an entry point on a feature that already runs offline.
 
@@ -465,7 +472,9 @@ is submitting a wrong action to a live game.
   explicit, because which mana paid isn't always cosmetic and I want the last chance to back out.
 - As a player, I want **Cancel before Confirm to cost nothing and touch no server state.**
 - As a developer, I want the **upstream prompt sequence for a cast with additional costs traced
-  and written down before any design work**, read from the local XMage source.
+  and written down before any design work** — read from the local XMage source, then confirmed
+  against a real game with an instrumented build Pete plays and returns the logs from. Source says
+  what the server *can* send; only a live game says what it *does*.
 - As a developer, I want **disconnect mid-playback defined against resync**, so that a drop
   between "intent submitted" and "cast complete" lands the player somewhere truthful.
 
@@ -479,6 +488,9 @@ EPIC-01.
   board currently cannot show it. Also energy and experience (`PlayerView.counters`).
 - As a player, I want to see **monarch, initiative and designations**, which decide games and
   live nowhere on the battlefield.
+- As a player, I want all of that in **one expandable overlay on each player's vitals** — collapsed
+  to counts and colour, expanding to the full list — so that state which is usually zero costs
+  almost no board space and is one tap away when it is not.
 - As a player, I want to see **what a spell or ability on the stack is targeting**, including
   when it targets another spell — `CardView.targets`, which upstream computes for exactly this
   purpose and we map nowhere.
@@ -487,9 +499,12 @@ EPIC-01.
 - As a player, I want to **look through my graveyard and exile**, whose contents the server sends
   in full and the bridge reduces to a count.
 - As a player, I want **emblems, dungeons, commanders and planes** visible
-  (`PlayerView.commandList`).
+  (`PlayerView.commandList`) — in that same vitals overlay, since `commandList` is filtered by
+  controller and so belongs to a player rather than to a zone.
 - As a player, I want **tokens to render with art and be identifiable as tokens** — `isToken`,
-  `mageObjectType` and the token printing the server already resolves.
+  `mageObjectType` and the token printing the server already resolves. Art resolves through
+  Scryfall like every other card's, matched on name, subtype, P/T and colour, so there is one art
+  pipeline rather than a second one only tokens use.
 - As a maintainer, I want each of these threaded through **unchanged from a correct upstream
   field**, since that is the shape of every mapping bug this project has had.
 
@@ -511,8 +526,10 @@ loggable.
 - As a player, I want the log to show **what happened, not how I typed it** — no lines for
   tapping a land, untapping it, or picking and unpicking a delve exile.
 - As a player, I want to check where a permanent's counters came from three turns ago.
-- As a developer, I want to **confirm against a recorded game whether the server's stream carries
-  interim actions**, which decides whether the log is a render or a render plus a filter.
+- As a developer, I want to **confirm against a real game whether the server's stream carries
+  interim actions**, which decides whether the log is a render or a render plus a filter. Run as an
+  instrumented build Pete plays, with the logs returned to be read — its own step and its own
+  hand-off, before the rendering story is written.
 
 ### EPIC-25 — Deckbuilding
 **What it is:** deckbuilding reached without a server, and rebuilt around the loop it actually
@@ -544,13 +561,20 @@ power, toughness, mana cost, colours and per-printing set data.
 - As a player, I want to **search oracle text, power and toughness, and set**, so that I can find
   cards by what they do.
 - As a player, I want a **query syntax with a filter pane kept in sync with it**, so that both the
-  fast path and the discoverable path lead to the same search.
+  fast path and the discoverable path lead to the same search. It is the Scryfall subset our columns
+  can answer, and an operator we cannot answer is **rejected by name** rather than ignored — a
+  silently dropped `f:standard` returns a confident wrong answer.
+- As a player, I want **the syntax documented in the app**, in a help panel that expands from the
+  search field and names both what works and what is deliberately absent, so that "it doesn't work"
+  and "it isn't there" are distinguishable without trial and error.
 - As a player, I want results as a **card grid** rather than one tile per row, so that a screenful
   shows a screenful of choices.
 - As a player, I want **format and legality always visible**, since they decide whether I can join
   a table.
 - As a player, I want to **choose which printing a deck line uses**, so that the art I picked is
-  the art I get.
+  the art I get — in play as well as in the builder, since the deck records the printing and it
+  travels to the server with the decklist. Offered from the catalog's printings only, never free
+  text: a set/number the server cannot resolve fails the whole deck at load, not just the picture.
 - As a player, I want to **draw a sample hand** from the deck I am building, so that I can check a
   curve without starting a game.
 - As a developer, I want the **sideboarding surface (§7.16) to be this builder under a timer**,
@@ -580,26 +604,26 @@ Multiplatform *is* Jetpack Compose.
 - As a maintainer, I want new `:core:*` dependencies **checked for multiplatform support before
   adoption**, so that this epic doesn't quietly rebuild itself.
 
-### EPIC-22 — Desktop Harness
-**What it is:** a Compose Desktop build of the board, used as a **development and test surface**,
-not a shipped product. Falls out of EPIC-18's JVM target.
+### EPIC-22 — Desktop Demonstration
+**What it is:** the **minimum** Compose Desktop build that shows the client runs cross-platform.
+Falls out of EPIC-18's JVM target. Not a shipped product, and not where the client is developed.
 
-The Android loop is slow — emulator or APK install, then `adb`. A desktop build rebuilds in
-seconds and runs against the same bridge. It also proves continuously that the module graph really
-is portable.
+**Android is the primary target and stays where the work happens.** This epic exists to make
+EPIC-18's claim visible — a build that launches, connects to the bridge and plays. Anything past
+that is a second product and a separate decision.
 
-It is a harness and not a design surface, so two rules bound it: it **runs at a fixed
-phone-landscape aspect ratio and density**, never a resizable window, because the board commits to
-one layout target and a resizable window would silently retune it. And **anything about touch —
-gestures, target sizes, thumb reach, legibility at real density — is not verified until it has been
-played on a phone.**
+Two things it deliberately does not become. It is **not a design surface**: the board commits to one
+layout target and a resizable desktop window would silently retune it, making the phone the port.
+And it is **not where tests move**: the `:feature:*` suites stay on Android under Robolectric,
+because that is the platform we ship, and an entire epic once stayed unmounted because device-only
+tests did not run pre-merge.
 
-- As a developer, I want to iterate on the board without an emulator or an APK install, so that a
-  change takes seconds to see.
-- As a developer, I want animation **sequencing** verifiable off-device, since order, trailing and
-  resync snapping are logic rather than feel.
-- As a developer, I want the harness to keep the module graph honest, so that portability
-  regressions fail the build instead of accumulating.
+- As a developer, I want a desktop build that launches and plays a game against the bridge, so that
+  "the client is portable" is something you can watch rather than something the build log asserts.
+- As a developer, I want the `:core:*` JVM tests in CI to be the **everyday** portability check, so
+  that a regression fails a build rather than waiting for someone to run the desktop app.
+- As a developer, I want anything about touch — gestures, target sizes, thumb reach, legibility at
+  real density — to stay unverified until it has been played on a phone.
 
 ---
 
@@ -609,5 +633,5 @@ played on a phone.**
   JVM runs on device. Needs transport security (WSS), APNs, background socket behaviour, a
   multiplatform card-catalog resource story, and has a different App Store risk profile.
   `ui-modernization-plan.md` §9.3 records the rest.
-- **A shipped desktop client.** EPIC-22 is a harness. Turning it into something people install is
-  a separate decision and is not taken.
+- **A shipped desktop client.** EPIC-22 is a demonstration. Turning it into something people install
+  is a separate decision and is not taken.

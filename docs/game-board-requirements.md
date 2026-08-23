@@ -1,8 +1,16 @@
-# Game board — requirements
+# Game board — requirements (the POC board)
 
-**Status:** in progress. Built in a question-and-answer design session with Pete (started 2026-08-12).
-Decisions are recorded with their rationale **and** the data constraint behind them, so a later reader
-can tell what was chosen from what was forced.
+**Scope: this document specifies the board that exists today** — the portrait POC built through
+stories 0055–0079. It does **not** specify the rebuilt client. That is
+[`ui-modernization-plan.md`](ui-modernization-plan.md), and where the two differ the plan is the
+current intent for new work, not a contradiction to reconcile here.
+
+Both boards run side by side for now (plan §11), so this document stays live and correct for the one
+it describes. Read it as the requirements for the POC, and expect the rebuild to answer several of
+the same questions differently — orientation and the control model most visibly.
+
+**§0 is the exception, and it is the most valuable part of this document.** What the server actually
+sends is a property of XMage, not of either client, so it holds for both.
 
 **Ground rule:** every requirement names the server-produced data that satisfies it. Where the data
 cannot satisfy it, that is recorded as a **constraint**, not quietly designed around. (This is
@@ -891,7 +899,13 @@ stays legible.
 
 ## 16.1 Portrait, like every other screen (supersedes §2.1)
 
-**Decision.** The board is **portrait**.
+**Decision.** The POC board is **portrait**, and stays portrait for as long as it runs.
+
+**This does not carry to the rebuilt client**, which is landscape throughout
+([`ui-modernization-plan.md`](ui-modernization-plan.md) §7.19) — and for the same reason given
+below, read the other way: the cost recorded here was that landscape would leave the board as the
+only landscape surface in the product, which a landscape app removes. Two boards, two answers, both
+correct for what they describe.
 
 **Why this is better than the original call.** §2.1 chose landscape to mirror a physical table, and
 recorded the cost honestly: it would have made the board *the only landscape surface in the product*,
