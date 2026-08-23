@@ -472,15 +472,18 @@ wanted, and they build on each other.
 
 #### 1. Tokens render with art
 
-Magic tokens (a 1/1 Soldier, a Treasure, a Zombie Army) currently render as placeholders, because
-the server does not hand us a printing for them. Real token printings exist and are addressable in
-the same way ordinary cards are, so the fix is to resolve a printing for a token rather than to
-invent a new rendering path.
+Magic tokens (a 1/1 Soldier, a Treasure, a Zombie Army) currently render as placeholders because
+we resolve art only from a printing and the server does not hand us one for a token.
 
-**Needs establishing first:** what the server actually tells us about a token — its name, subtype,
-P/T, colour, and whether it carries any printing identity at all. That is a question for upstream's
-view layer, and the answer determines whether we can look a token printing up deterministically or
-need our own mapping.
+**A token's name is its identity**, exactly as a card's is. Tokens are real, queryable printings on
+Scryfall — `is:token`, in sets whose `set_type` is `token` — so a token resolves through the same
+name-to-printing path as anything else. There is no bespoke mapping to invent and no rendering path
+to add: the work is giving the art resolver a way to address a printing by name when the server has
+not named one, rather than requiring `setCode` + `collectorNumber` as `artRequestOf` does today.
+
+**Still to establish:** what the game view calls a token — enough of name, subtype, P/T and colour
+to pick the right printing when several share a name (a 1/1 white Soldier and a 2/2 white Soldier
+are different printings). That is a question for upstream's view layer.
 
 #### 2. Tokens are visibly marked as tokens
 
@@ -510,16 +513,26 @@ There are two mechanisms here and they are not the same thing, so §12 asks whic
 A card that creates a token — where the token is its own thing, not a copy of a card — should let
 the player choose that token's art in the builder, the same way card art is chosen.
 
-**Needs establishing first:** where "which tokens can this deck produce" comes from. Upstream knows
-what tokens exist because it creates them; whether that is queryable, and whether our bundled
-catalog (`:core:cards`) carries token printings at all, both need checking before this is scoped.
+**Which tokens a deck can produce is derivable from the deck itself**, because the card states what
+it creates. Two routes, and the structured one is preferable:
+
+- **Scryfall's `all_parts`.** A card that generates a token carries a Related Card entry for it, so
+  "what tokens does this deck make" is the union of `all_parts` token entries across the decklist —
+  a lookup, not a parse.
+- **Rules text**, as the fallback where structured data is missing. Brittle, and only worth
+  reaching for if `all_parts` proves incomplete.
+
+**Still to establish:** whether the bundled catalog (`:core:cards`) carries token printings and
+related-parts data at all, since it is built from XMage's card data rather than Scryfall's. If it
+does not, this needs either a catalog addition or a network lookup, and that choice affects whether
+token art works offline.
 
 ---
 
-The pattern across all four: **each depends on a data question we have not answered yet**, and every
-one of those answers lives in upstream or in our catalog rather than in a design decision. Those
-investigations come before any of this is scoped, for the same reason story 0076 took four rounds —
-guessing at what the server reports is how that happens.
+Two of these four rest on data questions rather than design decisions — what the game view reports
+about a token, and what our catalog holds. Both are answered by reading upstream and the catalog,
+which is the work that comes first: guessing at what the server reports is how story 0076 took four
+rounds.
 
 ---
 
@@ -729,9 +742,9 @@ Existing epics stand; these are added or amended:
    deck** — travelling to the server and coming back in the game view — or held as a **local display
    override** applied at render time? The first changes what we submit; the second never touches the
    game and is the only one that could also apply to the opponent's cards. Or both.
-3. **Investigations to schedule.** Four things in this plan are blocked on reading upstream or our
-   catalog rather than on a design decision: what the server reports about a token and how it flags
-   one (§7.11), where "which tokens can this deck produce" comes from (§7.11), whether `GameView`
+3. **Investigations to schedule.** Four things are blocked on reading upstream or our catalog rather
+   than on a design decision: what the game view reports about a token and how it flags one (§7.11),
+   whether `:core:cards` holds token printings and related-parts data (§7.11), whether `GameView`
    exposes replacement effects and emblems (§4.3), and the real prompt sequence for a cast with
    additional costs (§7.6, already scheduled as Phase 2a). Run the others now, or as their features
    come up?
@@ -760,6 +773,11 @@ MTG Online:
 - [Gameplay: Duels & Solitaire — mtgo.com](https://www.mtgo.com/getting-started/getting-started-gameplay)
 - [Gameplay: Multiplayer & Commander — mtgo.com](https://www.mtgo.com/getting-started/getting-started-multiplayer)
 - [Magic Online: Hotkeys — Wizards support](http://wizards.custhelp.com/app/answers/detail/a_id/646/~/magic-online-hotkeys)
+
+Card data:
+- [Card Objects — Scryfall API](https://scryfall.com/docs/api/cards) — `all_parts` / Related Card
+  objects, which is how a card names the tokens it generates
+- [Set Objects — Scryfall API](https://scryfall.com/docs/api/sets) — `set_type`, including `token`
 
 Platform:
 - [Compose Multiplatform — kotlinlang.org](https://kotlinlang.org/compose-multiplatform/)
