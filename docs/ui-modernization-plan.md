@@ -219,21 +219,22 @@ Documented and measured in [`game-board-requirements.md`](game-board-requirement
     information, not decoration — a token copy must be distinguishable from the real card at Board
     tier.
 16. **Phone-landscape board layout** (§7.4). One layout target; tablets render it scaled.
+17. **The game log** (§7.12) — game state changes, not interim actions. With no animation and no
+    log, a player who looked away has no way to find out what happened.
 
 ### P1 — required for it to be good
 
-17. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
+18. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
     proposed lands.
-18. **Full Control mode** as a pinned toggle.
-19. **Effects & Emblems zone** (§4.3, pending data verification).
-20. **Life-total deltas, resolution spotlight, keyword reminders.**
-21. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
+19. **Full Control mode** as a pinned toggle.
+20. **Effects & Emblems zone** (§4.3, pending data verification).
+21. **Life-total deltas, resolution spotlight, keyword reminders.**
+22. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
     tokens a deck produces.
-22. **Art prefetch at match start** — both decklists are known; warm the cache before turn one.
-23. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
+23. **Art prefetch at match start** — both decklists are known; warm the cache before turn one.
+24. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
     boxes.
-24. **Home hub, lobby and tables** rebuilt on the new design system.
-25. **Game log / history panel** with the server's own text.
+25. **Home hub, lobby and tables** rebuilt on the new design system.
 26. **Undo.** The server supports the rewind (§17.1). The cast flow removes most of the misfires it
     would catch, since intent is editable before submission, so it covers what remains.
 
@@ -534,6 +535,32 @@ about a token, and what our catalog holds. Both are answered by reading upstream
 which is the work that comes first: guessing at what the server reports is how story 0076 took four
 rounds.
 
+### 7.12 The game log
+
+A scrollable record of what has happened in the game.
+
+**It logs game state changes, not interim actions.** Tapping a land, untapping it again, selecting a
+delve exile and then deselecting it are all steps in assembling a decision — they are not things
+that happened in the game, and putting them in the log buries the things that did. A player scanning
+the log wants "opponent cast Lightning Bolt targeting Grizzly Bears" and "Grizzly Bears died," not
+twelve lines of mana bookkeeping.
+
+§7.6 draws that line precisely and without judgement calls: **everything before Confirm is local and
+uncommitted, so nothing before Confirm is loggable.** The log begins at the point the intent is
+submitted. That is the same boundary that makes Cancel free, and it means the log does not need its
+own notion of what counts as significant.
+
+The log is also the backstop for §7.3. Motion carries causality while you are watching; the log
+carries it when you looked away, when several things resolved quickly, or when you want to check
+what a permanent's counters came from three turns ago.
+
+**Still to establish:** where the entries come from. The server maintains its own game log — it is
+what the desktop client displays — so that stream is the likely source and it is already correctly
+worded, which matters because describing a game state change accurately is exactly the kind of thing
+we should not be re-deriving. Whether it includes the interim actions we do not want, and therefore
+whether we filter it or fold snapshot diffs instead, is a question for upstream rather than a design
+decision.
+
 ---
 
 ## 8. Platform
@@ -712,12 +739,13 @@ Existing epics stand; these are added or amended:
    deck** — travelling to the server and coming back in the game view — or held as a **local display
    override** applied at render time? The first changes what we submit; the second never touches the
    game and is the only one that could also apply to the opponent's cards. Or both.
-3. **Investigations to schedule.** Four things are blocked on reading upstream or our catalog rather
+3. **Investigations to schedule.** Five things are blocked on reading upstream or our catalog rather
    than on a design decision: what the game view reports about a token and how it flags one (§7.11),
    whether `:core:cards` holds token printings and related-parts data (§7.11), whether `GameView`
-   exposes replacement effects and emblems (§4.3), and the real prompt sequence for a cast with
-   additional costs (§7.6, already scheduled as Phase 2a). Run the others now, or as their features
-   come up?
+   exposes replacement effects and emblems (§4.3), what the server's own game log contains and
+   whether it carries interim actions we would have to filter (§7.12), and the real prompt sequence
+   for a cast with additional costs (§7.6, already scheduled as Phase 2a). Run the others now, or as
+   their features come up?
 4. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
    against the bridge with no emulator, no APK install and no `adb`, which is the fastest path to
    eyes on the board. Worth it as a development accelerator, or leave it deferred?
