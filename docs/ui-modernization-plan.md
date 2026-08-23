@@ -1333,12 +1333,18 @@ This section keeps the evidence behind each one; that file is what a story is ch
   `:core:network` and `:core:cards` do not, and the two cases are worth telling apart because one
   is the pattern working and the other is the debt:
 
-  - **Working.** Connectivity is already an interface — `ConnectivityObserver` (26 lines) with
-    `AndroidConnectivityObserver` (57 lines) behind it. `ConnectivityManager` never leaks past that
-    boundary. This is exactly where an `expect`/`actual` or a platform module would slot in.
-  - **Debt.** `ProcessLifecycleOwner` for the foreground/background reconnect hook (story 0024),
-    `Context` reaching into `ServerRepository` and the DI modules, and the card catalog's direct use
-    of `SQLiteDatabase`. Each is small on its own; the catalog is not.
+  - **Working, in both of `:core:network`'s cases.** Connectivity is an interface —
+    `ConnectivityObserver` with `AndroidConnectivityObserver` behind it — and so is the app
+    lifecycle: `AppLifecycleObserver` with `ProcessAppLifecycleObserver` behind it and
+    `AlwaysForegroundAppLifecycleObserver` as the no-platform default. Neither
+    `ConnectivityManager` nor `ProcessLifecycleOwner` leaks past its boundary. What is wrong is the
+    implementations' **location**, not their design: they sit in the common source tree, and the
+    port relocates them rather than rewriting them.
+  - **Debt, and it is concentrated in `:core:cards`.** The card catalog's direct use of
+    `SQLiteDatabase` and `Cursor`, the 14 MB asset it opens through `Context`, and the Coil
+    pipeline's Android/OkHttp generation. `Context` in the DI modules is the other half, and it goes
+    with Hilt. `ServerRepository` is **not** part of this — it takes a `DataStore<Preferences>`, and
+    the `Context` that builds that store lives in `NetworkModule`.
   - **Bundled assets are their own case.** Two modules read files out of the APK through
     `Context.getAssets()` — `:core:cards` for the 14 MB `cards.sqlite`, and `:core:decks` for
     `formats.json` via `FormatBundleLoader`. Same problem at two very different sizes, and one
@@ -1502,27 +1508,32 @@ every commit. It is also the same target the desktop demonstration below uses, s
 free. Without a second target, Phase 0 is unfalsifiable and will rot exactly the way §9.2's rules
 were already drifting.
 
-Order, cheapest and most-enabling first:
+**The `:core:*` order is fixed by the module graph, not by cost.** `:core:cards` ← `:core:decks` ←
+`:core:network`: `:core:decks` has `implementation(project(":core:cards"))`, and `:core:network` has
+`api(project(":core:decks"))` because `TableClient`'s join/submit signatures expose
+`magefree.decks.model.Deck`. A KMP module's `commonMain` cannot depend on an Android library, so each
+must wait for the one beneath it — **which puts the hardest module first**, not last.
 
-1. **`:protocol` and `:core:model` to KMP with a JVM target.** Both import nothing from `android.*`
-   or `androidx.*` today, so this is a pure build-structure change on the two modules a second
-   client consumes first. It proves the build-logic plumbing before anything hard depends on it.
-2. **Hilt → Koin (or a hand-written graph)**, across all 34 call sites in 10 modules. Wide,
-   mechanical, and **the one item whose cost grows fastest** — every ViewModel added by Phases 1–4
-   would otherwise be written twice.
-3. **`:core:network`.** DataStore construction off the `Context` extension, `ProcessLifecycleOwner`
-   behind an interface the way `ConnectivityObserver` already is, `Context` out of
-   `ServerRepository` and the DI module.
-4. **`:core:decks`.** Room is KMP from 2.7, so this is mostly getting `Context` out — including
-   `FormatBundleLoader`, which reads the bundled `formats.json` through `AssetManager`. It is the
-   small version of the asset problem step 5 solves at scale, so solving it here first is cheap
-   rehearsal.
-5. **`:core:cards`.** The largest piece: `SqliteCardCatalog`'s direct use of `SQLiteDatabase` and
-   `Cursor`, and a multiplatform story for the 14 MB asset it opens through `Context`. Coil's move
-   to `coil-network-ktor3` rides along.
-6. **Robolectric out of the logic modules** — 7 test files across `:core:cards` and `:core:decks`
-   become plain JVM tests. The other 5 Robolectric files are Compose tests in `:app` and
-   `:feature:*` and stay Android.
+1. **`:protocol` and `:core:model` to KMP with a JVM target** (story 0080). Both import nothing from
+   `android.*` or `androidx.*` today, so this is a pure build-structure change on the two modules a
+   second client consumes first. It proves the build-logic plumbing before anything hard depends on
+   it, and it adds the `magefree.kmp.library` convention plugin the rest apply.
+2. **Hilt → Koin** (story 0081), across all 34 files in 10 modules. Wide, mechanical, and **the one
+   item whose cost grows fastest** — every ViewModel added by Phases 1–4 would otherwise be written
+   twice. The catch is that Hilt fails at compile time and Koin fails at runtime, so a graph
+   verification test has to land with it.
+3. **`:core:cards`** (story 0082). The largest piece: `SqliteCardCatalog`'s direct use of
+   `SQLiteDatabase` and `Cursor`, a multiplatform story for the 14 MB asset it opens through
+   `Context`, and Coil's move to `coil-network-ktor3`.
+4. **`:core:decks`** (story 0083). Room is KMP from 2.7, so this is mostly getting `Context` out —
+   including `FormatBundleLoader`, which reads the bundled `formats.json` through `AssetManager`. It
+   is the small version of the asset problem step 3 solved at scale, and it reuses that boundary.
+5. **`:core:network`** (story 0084). Smaller than its reputation: three Android-coupled files. The
+   two observers move to an Android source set unchanged, and DataStore construction comes off the
+   `Context` delegate.
+6. **Robolectric out of the logic modules** (story 0085) — 7 test files across `:core:cards` and
+   `:core:decks` become plain JVM tests, and CI runs them. The other 5 Robolectric files are Compose
+   tests in `:app` and `:feature:*` and stay Android, because that is the hermetic gate.
 
 **EPIC-23 does not wait for this.** Its work is bridge-side (already JVM) plus `:protocol` data
 classes (already clean), and several of its items improve the current UI on their own. Running it
