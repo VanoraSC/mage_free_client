@@ -265,6 +265,8 @@ Documented and measured in [`game-board-requirements.md`](game-board-requirement
   the server drive a time control and push remaining time, we would display what it sends — that is
   showing a server fact, not designing a clock feature.
 - **Persistent per-card auto-yields with a revocation ledger** (§4.2).
+- **Decorative battlefield art** — illustrated grounds, themed playmats, avatars, pets, or any other
+  original art beyond the cards themselves (§7.4). The board is grey; the cards carry the visuals.
 
 ---
 
@@ -339,6 +341,18 @@ Constraint-driven, replacing fixed bands:
 render the phone layout scaled up; larger form factors get real attention later. A single layout
 target is what makes the constraint-driven sizing above tractable — deriving card size from row
 population is a much smaller problem against one aspect ratio than against three.
+
+**The board itself is grey.** No illustrated battlefield, no themed playmat, no decorative
+background art. A pleasing neutral grey ground, with **zones and other distinctions carried by
+shades of that grey** — value and elevation, not colour or texture.
+
+The art on screen is the cards, and the motion on screen is the cards moving (§7.3). That is the
+whole visual budget and it is enough.
+
+This is not only a scope decision. A neutral ground means **the only saturated colour on the board
+is information** — playable-now highlight, targeting, combat arrows, pending costs, threat. Against
+an illustrated background those signals compete with decoration for attention, and the signals lose.
+Keeping the ground grey is what makes §3.1's highlight vocabulary legible at card size.
 
 > **Conflicts with [`game-board-requirements.md`](game-board-requirements.md) §16.1**, which
 > supersedes its own §2.1 to specify portrait. That section is now out of date and needs correcting;
@@ -745,6 +759,11 @@ A defect in the current UI, not a new-UI item, and not worth waiting for a rebui
 
 New tokens (colour, type, elevation, **motion**), the three-tier card component family (§7.5), and
 the Prompt component (§7.2).
+
+The palette follows §7.4: a grey scale deep enough to separate zones by value alone, with saturated
+colour reserved for information — highlight, targeting, combat, pending cost, threat. Getting that
+split right in the tokens is what keeps every later surface consistent, so it is worth settling
+before components are built on top of it.
 
 The **object-identity animation host** (§7.3) is built here, before the board depends on it, driven
 by a recorded sequence of real snapshots so the sequencing rules are exercised against real timing
