@@ -46,6 +46,8 @@ found by playing real games, not by reasoning.
   more often than the choice warrants. This is the worst of it — §7.6 and §7.7 are the fix.
 - **Text-forward, not card-forward.** `BoardCardFace`, `CounterLine`, `zoneCountsLabel()` — the
   board communicates in labels; art is incidental.
+- **No token concept.** Neither `GameState` nor `BoardUi` mentions one, so Magic tokens render as
+  placeholders and a token copy of a creature is indistinguishable from the creature (§7.11).
 - **Portrait phone only**, where the board's target is landscape (§7.4).
 
 ### 1.3 What must survive the rebuild
@@ -213,33 +215,37 @@ Documented and measured in [`game-board-requirements.md`](game-board-requirement
 13. **Trigger ordering by drag** (§7.8).
 14. **Card inspection v2** — full-bleed, oracle text, current modifications, activatable abilities,
     DFC flip control (0077).
-15. **Phone-landscape board layout** (§7.4). One layout target; tablets render it scaled.
+15. **Tokens render with art and are visibly marked as tokens** (§7.11). The marking is game
+    information, not decoration — a token copy must be distinguishable from the real card at Board
+    tier.
+16. **Phone-landscape board layout** (§7.4). One layout target; tablets render it scaled.
 
 ### P1 — required for it to be good
 
-16. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
+17. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
     proposed lands.
-17. **Full Control mode** as a pinned toggle.
-18. **Effects & Emblems zone** (§4.3, pending data verification).
-19. **Life-total deltas, resolution spotlight, keyword reminders.**
-20. **Alternate art selection** per card and per deck.
-21. **Art prefetch at match start** — both decklists are known; warm the cache before turn one.
-22. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
+18. **Full Control mode** as a pinned toggle.
+19. **Effects & Emblems zone** (§4.3, pending data verification).
+20. **Life-total deltas, resolution spotlight, keyword reminders.**
+21. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
+    tokens a deck produces.
+22. **Art prefetch at match start** — both decklists are known; warm the cache before turn one.
+23. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
     boxes.
-23. **Home hub, lobby and tables** rebuilt on the new design system.
-24. **Game log / history panel** with the server's own text.
-25. **Undo.** The server supports the rewind (§17.1). The cast flow removes most of the misfires it
+24. **Home hub, lobby and tables** rebuilt on the new design system.
+25. **Game log / history panel** with the server's own text.
+26. **Undo.** The server supports the rewind (§17.1). The cast flow removes most of the misfires it
     would catch, since intent is editable before submission, so it covers what remains.
 
 ### P2 — polish and reach
 
-26. Damage number floats; attack and block animation beats.
-27. Gameplay warnings, opt-in.
-28. Emotes.
-29. Sound design and haptics.
-30. Spectating on the new board (EPIC-15), including both players' hidden information.
-31. Replays.
-32. Accessibility pass — deferred, but the design system should not make it harder; semantic labels
+27. Damage number floats; attack and block animation beats.
+28. Gameplay warnings, opt-in.
+29. Emotes.
+30. Sound design and haptics.
+31. Spectating on the new board (EPIC-15), including both players' hidden information.
+32. Replays.
+33. Accessibility pass — deferred, but the design system should not make it harder; semantic labels
     on components as we build them cost nothing.
 
 ### Not in scope
@@ -319,11 +325,13 @@ population is a much smaller problem against one aspect ratio than against three
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Token** | Battlefield, stack piles | Name, P/T, counters, tap state, status | Downsampled, cropped to the art box |
+| **Board** | Battlefield, stack piles | Name, P/T, counters, tap state, status | Downsampled, cropped to the art box |
 | **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 
 Only **Full** loads full-resolution art, which matters for memory and for the first-turn experience.
+
+These are *rendering sizes* and have nothing to do with Magic tokens — see §7.11 for those.
 
 ### 7.6 The cast flow — a declared intent, played back by the bridge
 
@@ -373,7 +381,8 @@ So:
 3. The **server's proposed solution for the remainder** is shown as the default mana payment; the
    player accepts it or edits it by tapping lands (§7.7).
 4. Targets and modes are chosen on the board.
-5. One **Confirm** submits the intent.
+5. One **Confirm** submits the intent. This is always an explicit act — a fully-paid cost does not
+   fire the cast on its own (§7.7 rule 5), and the mana about to be spent is shown alongside it.
 
 Everything before step 5 is local and freely editable, so **Cancel before Confirm costs nothing and
 touches no server state.** After Confirm, cascading rewind (§16.5, §17.1) applies.
@@ -399,10 +408,18 @@ touches no server state.** After Confirm, cascading rewind (§16.5, §17.1) appl
    casting, so they do not appear. Creeping Tar Pit mid-cast is therefore case 1, not case 2 — it
    produces mana with no prompt. This rule removes most of the remaining prompts.
 4. **Tapping a tapped land untaps it.** Tap to pay, tap again to take it back.
+5. **Meeting the cost never fires the cast.** When the last required mana is supplied the player is
+   *prompted to finish the cast*, with the mana being spent shown. Completion is always an explicit
+   act.
 
-Rule 4 follows from §7.6: while the intent is being assembled nothing has been submitted, so adding
-and removing lands is a local edit. It is also why misfires during payment need no Undo — the
-correction is another tap.
+Rules 4 and 5 follow from §7.6: while the intent is being assembled nothing has been submitted, so
+adding and removing lands is a local edit. That is also why misfires during payment need no Undo —
+the correction is another tap.
+
+Rule 5 is load-bearing rather than a formality. If the cast fired the instant the cost were met, the
+player could never adjust *which* mana paid for it — and which mana was spent is not always
+cosmetic. Deceit is the motivating case. An auto-firing cast also removes the last chance to back
+out of a misfired spell before it becomes server state.
 
 This is a **filtering** problem, not an invention problem. Every option shown comes from what the
 server reports as legal, and rule 3 narrows that to what is legal *here*. Which case a given land
@@ -445,6 +462,64 @@ player already saw and declined to respond to; and any interrupt returns full co
 The same design system applied to the home hub, lobby and tables, deck library and builder, card
 search and settings. Lower risk and mostly a re-skin plus the P1 deck-builder work — but it is what
 the app looks like before anyone reaches a game.
+
+### 7.11 Card art and Magic tokens
+
+Art is currently resolved from the printing the server names — `artRequestOf(setCode,
+collectorNumber)` — and falls back to a placeholder when the server names none. There is **no token
+concept in the client at all**: neither `GameState` nor `BoardUi` mentions one. Four things are
+wanted, and they build on each other.
+
+#### 1. Tokens render with art
+
+Magic tokens (a 1/1 Soldier, a Treasure, a Zombie Army) currently render as placeholders, because
+the server does not hand us a printing for them. Real token printings exist and are addressable in
+the same way ordinary cards are, so the fix is to resolve a printing for a token rather than to
+invent a new rendering path.
+
+**Needs establishing first:** what the server actually tells us about a token — its name, subtype,
+P/T, colour, and whether it carries any printing identity at all. That is a question for upstream's
+view layer, and the answer determines whether we can look a token printing up deterministically or
+need our own mapping.
+
+#### 2. Tokens are visibly marked as tokens
+
+A token that copies a card renders as that card, and the player **must** be able to tell it apart
+from the real thing — a token that leaves the battlefield ceases to exist, which changes how you
+trade, bounce and sacrifice. This is game information, not decoration, so it is P0 and it must be
+legible at Board tier (§7.5), not only on inspection.
+
+**Needs establishing first:** how upstream reports "this permanent is a token." The answer is in the
+view layer and should be read, not guessed.
+
+#### 3. Chosen art carries from the deck builder into the game
+
+Picking an alternate printing while building a deck should be what renders in play.
+
+There are two mechanisms here and they are not the same thing, so §12 asks which is wanted:
+
+- **Pick the printing in the deck.** XMage decklists already carry set and collector number, so the
+  choice travels to the server and comes back in the game view. It affects only which printing is
+  registered, but it is a real change to what we submit.
+- **A local display override.** A per-card art preference stored on the device and applied at render
+  time, overriding whatever printing the server names. It never touches the game, works for cards
+  from any source, and is the only mechanism that could apply to the opponent's cards.
+
+#### 4. Token art is choosable too
+
+A card that creates a token — where the token is its own thing, not a copy of a card — should let
+the player choose that token's art in the builder, the same way card art is chosen.
+
+**Needs establishing first:** where "which tokens can this deck produce" comes from. Upstream knows
+what tokens exist because it creates them; whether that is queryable, and whether our bundled
+catalog (`:core:cards`) carries token printings at all, both need checking before this is scoped.
+
+---
+
+The pattern across all four: **each depends on a data question we have not answered yet**, and every
+one of those answers lives in upstream or in our catalog rather than in a design decision. Those
+investigations come before any of this is scoped, for the same reason story 0076 took four rounds —
+guessing at what the server reports is how that happens.
 
 ---
 
@@ -650,13 +725,23 @@ Existing epics stand; these are added or amended:
 
 1. **Automation defaults.** Auto-tap and auto-assign-damage are proposed **off** by default (§3.2),
    on the grounds that our audience chose an XMage client. Confirm, or say which should default on.
-2. **Effects & Emblems zone** (§4.3). Needs verification that upstream `GameView` exposes it before
-   it can become a story. Investigate now, or defer?
-3. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
+2. **Art choice mechanism** (§7.11). Should a chosen alternate printing be **registered in the
+   deck** — travelling to the server and coming back in the game view — or held as a **local display
+   override** applied at render time? The first changes what we submit; the second never touches the
+   game and is the only one that could also apply to the opponent's cards. Or both.
+3. **Investigations to schedule.** Four things in this plan are blocked on reading upstream or our
+   catalog rather than on a design decision: what the server reports about a token and how it flags
+   one (§7.11), where "which tokens can this deck produce" comes from (§7.11), whether `GameView`
+   exposes replacement effects and emblems (§4.3), and the real prompt sequence for a cast with
+   additional costs (§7.6, already scheduled as Phase 2a). Run the others now, or as their features
+   come up?
+4. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
    against the bridge with no emulator, no APK install and no `adb`, which is the fastest path to
    eyes on the board. Worth it as a development accelerator, or leave it deferred?
-4. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
+5. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
    expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
+6. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
+   now out of date against §7.4. Want me to correct it, or leave that doc alone?
 
 ---
 
