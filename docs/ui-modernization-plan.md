@@ -57,6 +57,13 @@ found by playing real games, not by reasoning.
 - **No way to look in a zone.** Graveyard and exile are counts on a vitals bar. `GameViewMapper`
   reduces the graveyard to `player.graveyard?.size` and throws the cards away, and does not map
   `PlayerView.commandList` at all, though the server sends both in full (§7.13).
+- **No attachment relationships.** The bridge maps `attachedTo` but not `PermanentView.attachments`,
+  so an Aura or Equipment renders as a loose permanent with no visible link to its host (§7.4).
+- **Poison is invisible.** `PlayerView.counters` — poison, energy, experience — is not in
+  `:protocol` at all, nor are `monarch`, `initiative` or `designationNames`. A player can lose to
+  poison without the board ever showing it (§7.15).
+- **The game log arrives and is discarded.** The server sends its log as `MessageType.GAME` chat and
+  the bridge maps it to `ChatKind.GAME`, but no client code consumes `ChatEvent` (§7.12).
 - **Portrait phone only**, where the board's target is landscape (§7.4).
 
 One defect outside the board: **the table room asks for a deck that has already been chosen.**
@@ -188,6 +195,10 @@ Applied continuous and replacement effects as such have no view of their own; th
 surfaces that kind of thing through card hints rather than a zone. So our Effects zone is emblems,
 dungeons, designations and commanders — not a general effect inspector.
 
+`PlayerView` also carries **`monarch`** and **`initiative`** as plain booleans. Neither is an object
+in a zone, so they belong on vitals (§7.15) rather than here — but they are the same class of thing:
+game-deciding state that lives nowhere on the battlefield and that we do not currently map.
+
 See §7.13 for the browser these live in.
 
 ### 4.4 Layout and hotkeys
@@ -255,31 +266,39 @@ numbers prefixed **R§** below refer to that document, not to this one.
     happened while you were watching; the log is the only way to recover it afterwards.
 18. **The zone browser** (§7.13) — any zone, either player, one interaction, floating over the
     board. Exile grouped by zone name, with playable cards marked wherever they sit.
+19. **Attachments rendered as relationships** (§7.4) — Auras and Equipment on their hosts, not in a
+    bucket, and part of the pile key. Needs `PermanentView.attachments` mapped.
+20. **Player vitals** (§7.15) — including **poison, energy and experience counters**, monarch and
+    initiative. Poison is a win condition and is currently unmapped and unrendered.
+21. **Starting and finishing a game** (§7.16) — opening hand, mulligan, sideboarding, concede,
+    results. The board has to be reachable from a table and exitable from a game.
+22. **Notices and session state** (§7.17) — disconnected, reconnecting, resynced, opponent conceded.
+    What distinguishes a resync snap from something the opponent did.
 
 ### P1 — required for it to be good
 
-19. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
+23. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
     proposed lands.
-20. **Full Control mode** as a pinned toggle.
-21. **Effects & Emblems in the zone browser** (§4.3) — `PlayerView.commandList`, which the bridge
+24. **Full Control mode** as a pinned toggle.
+25. **Effects & Emblems in the zone browser** (§4.3) — `PlayerView.commandList`, which the bridge
     does not yet map.
-22. **Life-total deltas, resolution spotlight, keyword reminders.**
-23. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
+26. **Life-total deltas, resolution spotlight, keyword reminders.**
+27. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
     tokens a deck produces.
-24. **Art prefetch at match start** — we submitted our own deck, so its art can be warmed before
+28. **Art prefetch at match start** — we submitted our own deck, so its art can be warmed before
     turn one. The opponent's deck is hidden and arrives card by card.
-25. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
+29. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
     boxes.
-26. **Home hub, lobby and tables** rebuilt on the new design system.
-27. **Undo.** The server supports the rewind (R§17.1). The cast flow removes most of the misfires it
+30. **Home hub, lobby and tables** rebuilt on the new design system.
+31. **Undo.** The server supports the rewind (R§17.1). The cast flow removes most of the misfires it
     would catch, since intent is editable before submission, so it covers what remains.
 
 ### P2 — polish and reach
 
-28. Damage number floats; attack and block animation beats.
-29. Gameplay warnings, opt-in.
-30. Spectating on the new board (EPIC-15), including both players' hidden information.
-31. Replays.
+32. Damage number floats; attack and block animation beats.
+33. Gameplay warnings, opt-in.
+34. Spectating on the new board (EPIC-15), including both players' hidden information.
+35. Replays.
 
 ### Not in scope
 
@@ -296,6 +315,8 @@ numbers prefixed **R§** below refer to that document, not to this one.
 - **Statically allocated regions** (§7.4) — a permanent combat zone, a stack region beside the
   battlefield, or any band that holds height to show an empty state. Transient information floats
   over the board instead.
+- **More than two players** (§7.17) — free-for-all, Commander pods, Two-Headed Giant. The server
+  supports them; the mirrored two-battlefield layout on a phone in landscape does not.
 
 ---
 
@@ -406,6 +427,25 @@ Each player's battlefield reads front-to-back by how much attention the permanen
 - **Lands to the side, at the back, piled tightly.** Lands are the most numerous permanents and the
   least individually interesting; **the goal is to minimise the space they take without hurting
   readability.**
+- **Attached permanents render on what they are attached to**, not in a bucket of their own. An Aura
+  or Equipment sits with its host; a fortified or enchanted land stays with the lands.
+
+#### Attachments
+
+An Aura is a non-creature permanent, but putting it in the non-creature bucket is wrong — Pacifism
+belongs on the creature it is turning off, and an Equipment that has been moved this turn is a change
+the player needs to see on the creature that gained it. Attachment is a **relationship**, and the
+board has to draw it or the three buckets actively mislead.
+
+**The server gives us both directions.** `PermanentView` carries `attachments` (a `List<UUID>` of
+what is attached to this permanent), `attachedTo` (what this permanent is attached to),
+`attachedToPermanent`, and `attachedControllerDiffers` — the last for the case where you control the
+Aura but your opponent controls the creature, which is a real and easily-missed board state. The
+bridge maps **only `attachedTo`**; `attachments` and the two flags are unmapped.
+
+Attachment also constrains piling: two otherwise identical creatures are not interchangeable if one
+is enchanted, so **whether a permanent has attachments, and which, is part of the pile key** (§7.4,
+R§20). Otherwise the fan would hide a Pacifism.
 
 **Piling does that work. It is fully designed and not built.** Story 0065 and R§20 resolve the whole
 thing — permanents whose every rendered field matches (name, tapped state, damage, counters, summoning
@@ -591,6 +631,31 @@ Three properties make this safe without a revocation ledger: it cannot outlive t
 accumulates; new information always stops it, so the only thing skipped is responding to objects the
 player already saw and declined to respond to; and any interrupt returns full control in one tap.
 
+**This is a server feature, not a client one.** `PlayerAction.PASS_PRIORITY_UNTIL_STACK_RESOLVED` is
+exactly the second action, and `PASS_PRIORITY_CANCEL_ALL_ACTIONS` revokes it. The server also owns
+the interrupt: on taking that action it records `dateLastAddedToStack`, and `HumanPlayer` compares
+that against the stack's current value each time priority comes round, clearing the flag when they
+differ. We send an action and render the flag; we do not implement the behaviour.
+
+Two conditions on that interrupt matter, because both make it weaker than "the moment anything new is
+put on the stack":
+
+- **It is gated on a user preference.** `HumanPlayer` only clears the flag when the controlling
+  user's `getUserSkipPrioritySteps().isStopOnStackNewObjects()` is set. That preference must be set
+  for our players, or the pass runs through the opponent's response.
+- **It is gated on being the active player.** The same condition requires
+  `playerId.equals(game.getActivePlayerId())`, so passing until the stack resolves on the opponent's
+  turn does not break on new objects.
+
+Neither is something we can paper over from the client without inventing behaviour the server did not
+perform. So the interaction is: set the preference, and describe the second action in terms of what
+the server will actually do rather than what the label implies.
+
+The server carries a wider vocabulary than we expose — pass until next turn, until end of turn, until
+next main phase, until end step before my next turn, until my next turn. Those are the phase-bar
+stops (P0 #11), not priority passing, and `PlayerView` reports each as its own flag so the board can
+show that an auto-pass is running.
+
 ### 7.10 Outside the board
 
 The same design system applied to the home hub, lobby and tables, deck library and builder, card
@@ -677,16 +742,21 @@ it creates. Two routes, and the structured one is preferable:
 - **Rules text**, as the fallback where structured data is missing. Brittle, and only worth
   reaching for if `all_parts` proves incomplete.
 
-**Still to establish:** whether the bundled catalog (`:core:cards`) carries token printings and
-related-parts data at all, since it is built from XMage's card data rather than Scryfall's. If it
-does not, this needs either a catalog addition or a network lookup, and that choice affects whether
-token art works offline.
+**The bundled catalog holds neither.** `cards.sqlite` has three tables — `meta`, `card`, `printing` —
+and `printing` is `(card_id, set_code, collector_number, rarity)`. There is no token table and no
+related-parts data, which follows from where it comes from: `tools/card-catalog-generator` builds it
+from XMage's card data, and `all_parts` is a Scryfall concept.
+
+So route (a) is a **network lookup**, and token art does not work offline unless the catalog gains a
+table. That makes the generator the natural place to fix it — it already produces the asset, and a
+token/related-parts table there would keep tokens working exactly like every other card, offline
+included. Whether that is worth doing before P1 #27 is a scheduling question, not a design one.
 
 ---
 
-Three of these rest on data questions rather than design decisions — what the game view calls a
-token, how it flags one, and what our catalog holds. All are answered by reading upstream and the catalog, which is
-the work that comes first: guessing at what the server reports is how story 0076 took four rounds.
+The remaining unknown in this section is behavioural, not structural: which of the two token-art
+sources to use (§7.11 #1). Everything else is now read from upstream and from the catalog — guessing
+at what the server reports is how story 0076 took four rounds.
 
 ### 7.12 The game log
 
@@ -707,12 +777,27 @@ The log is also the backstop for §7.3. Motion carries causality while you are w
 carries it when you looked away, when several things resolved quickly, or when you want to check
 what a permanent's counters came from three turns ago.
 
-**Still to establish:** where the entries come from. The server maintains its own game log — it is
-what the desktop client displays — so that stream is the likely source and it is already correctly
-worded, which matters because describing a game state change accurately is exactly the kind of thing
-we should not be re-deriving. Whether it includes the interim actions we do not want, and therefore
-whether we filter it or fold snapshot diffs instead, is a question for upstream rather than a design
-decision.
+#### The entries already reach the app
+
+The server writes its game log as chat. `GameController` broadcasts every game `TableEvent` of type
+`INFO` and `STATUS` to the table's chat id with `ChatMessage.MessageType.GAME`, and the desktop
+client renders exactly that stream in its game panel. Two consequences:
+
+- **The text is the server's own and is already correctly worded.** Describing a game state change
+  accurately is the last thing we should re-derive, and we do not have to.
+- **It is already mapped.** `ChatMessageMapper` maps `MessageType.GAME` to `ChatKind.GAME`, and the
+  bridge relays it as a `ChatEvent`. It arrives at `:protocol` today and **nothing consumes it** —
+  no main-source client code handles `ChatEvent` at all. The log is a rendering job, not a plumbing
+  job.
+
+**This is not player chat and it does not die with it.** Chat is permanently deferred (§6), but the
+game log rides the same transport under a different `MessageType`. `ChatKind.GAME` stays; `TALK`,
+`WHISPER_IN` and `WHISPER_OUT` are the deferred ones.
+
+**Still to establish:** whether the `INFO`/`STATUS` stream carries interim actions we would have to
+filter. It is server-side `GameEvent` text rather than client-side bookkeeping, so it should already
+be at the granularity §7.12 wants — but that is a claim to check against a real game's log before
+building on it, not to assume.
 
 ---
 ### 7.13 The zone browser, and telling exiles apart
@@ -796,6 +881,64 @@ the same way as a permanent.
 
 **We do not map `targets` anywhere** — not in `:protocol`, not in `GameState`. That is the one piece
 of new data the stack needs, and it is what §3.1's targeting arrows draw.
+
+### 7.15 Player vitals
+
+Vitals are a base-layer element (§7.4) and they carry the things that decide games without being on
+the battlefield. Per player:
+
+- **Life**, with the ±N delta animation (P1 #26).
+- **Library and hand counts.** An empty library is a loss; a hand count is public information.
+- **Graveyard and exile counts**, each opening the zone browser (§7.13).
+- **Player counters** — poison, energy, experience. **Poison is a win condition and we do not show
+  it.** `PlayerView.counters` is a `List<CounterView>` and `:protocol`'s `GamePlayerView` does not
+  have it, so no amount of rendering work reaches it today.
+- **Monarch and initiative**, and **designations** (`monarch`, `initiative`, `designationNames`) —
+  also unmapped, also game-deciding.
+- **Mana pool**, which §7.7 fills. Already mapped as `GameManaPoolView`.
+- **Match wins** (`wins` / `winsNeeded`), which is what tells the player this is game 2 of 3.
+
+Life, library, hand, graveyard, exile, mana pool and wins are in `:protocol` today. **Player counters,
+monarch, initiative and designations are the gap**, and they are the ones that change the answer to
+"am I about to lose."
+
+### 7.16 Getting into and out of a game
+
+The new board is reached from "New Battlefield" when a table is ready (§11), so the first thing it
+must render is not a board at all.
+
+- **Opening hand and mulligan.** The London mulligan asks two questions — keep or mulligan, then
+  which cards to put on the bottom. The second is a **selection of N**, and the board is not involved,
+  so it is a Full-tier (§7.5) surface rather than a board interaction.
+- **Sideboarding between games**, which is the same builder surface under a timer.
+- **Concede**, which must be reachable and must be hard to hit by accident.
+- **Game and match results**, and the transition between games of a match.
+
+None of this is new server surface — it is EPIC-14, driven by prompts the client already receives.
+It is listed here because a board that cannot start a game is not a board, and §7 otherwise describes
+only the middle of a game.
+
+### 7.17 Notices, and when the connection goes
+
+"Notices" appear in §7.4's floating layers; this is what they are. A notice is a **statement about
+the game or the session that is not a decision** — the Prompt (§7.2) is for decisions and notices
+must not compete with it.
+
+- **Session state.** Disconnected, reconnecting, resynced. The board keeps rendering the last known
+  state rather than blanking, because a stale board the player knows is stale is more useful than an
+  empty one.
+- **The opponent's situation** — conceded, timed out, left the table.
+- **Game and match outcome.**
+
+**Reconnect lands on the outstanding prompt** (0074) and the board **snaps** rather than replaying
+(§7.3). The notice is how the player learns that a jump in board state was a resync and not something
+the opponent did — without it, snapping is indistinguishable from a turn happening while they were
+away.
+
+**Two players, heads-up.** Every layout in §7 assumes two seats facing each other. XMage supports
+free-for-all, Commander pods and Two-Headed Giant, and none of them fit the mirrored two-battlefield
+arrangement or the phone-landscape target. They are out of scope for this board, and that is a layout
+constraint rather than a protocol one — the server would send them fine.
 
 ## 8. Platform
 
@@ -979,11 +1122,11 @@ that session, against §7.
 ### Phase 4 — The rest of the app
 
 Home, lobby, tables, deck library and builder v2, card search, settings, on the Phase 1 system.
-P1 items 23, 25 and 26.
+P1 items 27, 29 and 30.
 
 ### Phase 5 — Polish
 
-P2 items. Undo (P1 #27) lands here or earlier, once the cast flow shows what it still needs to
+P2 items. Undo (P1 #31) lands here or earlier, once the cast flow shows what it still needs to
 cover.
 
 ### Deferred
@@ -998,10 +1141,23 @@ cover.
 Existing epics stand; these are added or amended:
 
 - **EPIC-19 — Motion & Board Presentation.** Phases 1 and 3. Animation host, card tiers, layout
-  system. Amends EPIC-11 rather than replacing it.
+  system, attachments, vitals. Amends EPIC-11 rather than replacing it.
 - **EPIC-20 — Declared Cast Intent.** Phase 2. `CastIntent` in `:protocol`, the bridge-side intent
   player and its bail-out contract, the one-act cast UI, and §7.7's land tapping. Spans EPIC-01 and
   EPIC-12.
+- **EPIC-23 — Game Information We Do Not Yet Map.** The mapping work §7 depends on, which is bridge
+  and protocol rather than UI: `CardView.targets` (§7.14), `PermanentView.attachments` (§7.4),
+  `PlayerView.counters`/`monarch`/`initiative`/`designationNames` (§7.15), `commandList` (§4.3),
+  graveyard and exile contents (§7.13), and token identity (§7.11). Several are independently useful
+  against the current UI. Amends EPIC-01.
+- **EPIC-24 — The Game Log.** §7.12. Consuming the `ChatKind.GAME` stream that already arrives.
+  Small, and independent of the board rebuild.
+- **EPIC-16 — Chat & Player Presence** is largely superseded: chat is permanently deferred (§6). Its
+  `ChatKind.GAME` half is EPIC-24. **Whether presence and invites survive as a narrowed epic is an
+  open question** — chat was named specifically, not the whole epic.
+- **EPIC-17 — Settings, Preferences & Accessibility** loses its accessibility third (§6). Its
+  gameplay preferences half grows: §7.9's `isStopOnStackNewObjects` is a server-side user setting we
+  must set, not merely expose.
 - **EPIC-18 — Multiplatform Foundation**, **EPIC-21 — iOS Client**, **EPIC-22 — Desktop Client** —
   all deferred, numbered so they are not re-invented.
 
@@ -1015,19 +1171,24 @@ Existing epics stand; these are added or amended:
    deck** — travelling to the server and coming back in the game view — or held as a **local display
    override** applied at render time? The first changes what we submit; the second never touches the
    game and is the only one that could also apply to the opponent's cards. Or both.
-3. **Investigations to schedule.** Five things are blocked on reading upstream or our catalog rather
-   than on a design decision: what the game view reports about a token and how it flags one (§7.11),
-   whether `:core:cards` holds token printings and related-parts data (§7.11), whether `GameView`
-   exposes replacement effects and emblems (§4.3), what the server's own game log contains and
-   whether it carries interim actions we would have to filter (§7.12), and the real prompt sequence
-   for a cast with additional costs (§7.6, already scheduled as Phase 2a). Run the others now, or as
-   their features come up?
-4. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
+3. **Investigations to schedule.** Two remain. The **real prompt sequence for a cast with additional
+   costs** (§7.6) is already scheduled as Phase 2a. The other is **whether the server's game log
+   carries interim actions** we would have to filter (§7.12) — cheap to answer from one recorded
+   game, and it decides whether the log is a render or a render plus a filter. Run it now, or when
+   the log is built?
+4. **Token art source** (§7.11). Resolve token art from Scryfall by name, subtype, P/T and colour —
+   consistent with every other card, but a fuzzy match — or use XMage's own token images, which the
+   server has already resolved and the desktop client uses, at the cost of a second art source. The
+   catalog holds neither today, so offline token art needs a generator change either way.
+5. **Poison and the other player counters** (§7.15) are unmapped, and poison is a win condition. This
+   is small, self-contained, and not really a board-rebuild item — worth doing against the current
+   UI now rather than waiting for the new one?
+6. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
    against the bridge with no emulator, no APK install and no `adb`, which is the fastest path to
    eyes on the board. Worth it as a development accelerator, or leave it deferred?
-5. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
+7. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
    expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
-6. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
+8. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
    now out of date against §7.4. Want me to correct it, or leave that doc alone?
 
 ---
