@@ -538,53 +538,23 @@ rounds.
 
 ## 8. Platform
 
-### 8.1 Why the framework choice is unconstrained
+The client is **Kotlin and Compose on Android**. The whole stack is one language: the wire contract,
+the client logic and its tests, and the UI.
 
-**The bridge is a network service, not a library.** It runs on a JVM, embeds `mage-common`, speaks
-JBoss Remoting to the XMage server on one side and **WebSocket + JSON** on the other
-([`architecture.md`](architecture.md), Option A). None of it runs on the device.
+The board's animation requirements (§7.3) are met with `Animatable`, `LookaheadScope`,
+shared-element transitions and `graphicsLayer`. Whether Compose holds frame budget on a populated,
+animated board is the one open platform risk; Phase 1 retires it by building and measuring the
+animation host standalone before anything depends on it.
 
-So any framework that can do WebSockets and JSON can be our client, and a second platform never
-needs a JVM.
+**The bridge is a network service, not a library.** It runs on a JVM, embeds `mage-common`, and
+speaks JBoss Remoting to the XMage server on one side and **WebSocket + JSON** on the other
+([`architecture.md`](architecture.md), Option A). None of it runs on the device, so the client is
+just a socket and a JSON parser as far as the server is concerned.
 
-### 8.2 The choice: Compose
-
-The UI is being rebuilt regardless, so the question that decides the framework is not how much UI
-code is discarded — it is **whether the rest of the client is rewritten too.**
-
-| | Compose | Flutter | React Native | KMP + native UI |
-|---|---|---|---|---|
-| UI rebuild (happening anyway) | ~17.6k LOC | ~17.6k LOC | ~17.6k LOC | ~17.6k × **2** |
-| Client logic rewrite | **0** | ~9.6k LOC | ~9.6k LOC | 0 |
-| Logic tests rewrite | **0** | ~10.4k LOC | ~10.4k LOC | 0 |
-| Protocol types re-derived | **0** | ~2.4k in Dart | ~2.4k in TS | 0 |
-| Languages | 1 | 2 | 2 | 3 |
-
-**Flutter costs ~22,400 lines of re-derivation for no user-visible gain**, in the layer where
-0066, 0072, 0074, 0076 and 0079 were each found only by playing real games against a live server. A
-Dart rewrite does not carry those fixes across; it re-opens the search for every one of them.
-
-Flutter's genuine advantages — Impeller's predictable frame timing, better hot reload, a larger
-ecosystem for game-like UI — are real but do not pay for that. Our board is not a game engine: it is
-a few dozen card widgets, tweened positions, arrows and highlight, which Compose's `Animatable`,
-`LookaheadScope`, shared-element transitions and `graphicsLayer` handle.
-
-**React Native** carries Flutter's rewrite cost with a weaker animation story, needing
-`react-native-skia` to match. **Native twice** (Compose + SwiftUI) gives the best platform fidelity
-but permanently doubles UI work.
-
-The one remaining unknown is whether Compose holds frame budget on a populated, animated board.
-Phase 1 retires it by building and measuring the animation host standalone before anything depends
-on it.
-
-### 8.3 The multiplatform position
-
-On Android, Compose Multiplatform **is** Jetpack Compose — the same compiler and runtime. With
-Android as the only ship target there is no migration to perform and none is scheduled: converting
-`:core:*` to KMP, swapping Hilt for Koin and replacing the Robolectric tests would deliver zero
-user-visible value.
-
-What makes that deferral safe is §9.
+On Android, Compose Multiplatform **is** Jetpack Compose — the same compiler and runtime — so no
+migration exists to perform and none is scheduled. Converting `:core:*` to KMP, swapping Hilt for
+Koin and replacing the Robolectric tests would deliver no user-visible value against a single ship
+target. §9 is what keeps that deferral safe.
 
 ---
 
@@ -592,7 +562,7 @@ What makes that deferral safe is §9.
 
 ### 9.1 The stack supports it
 
-1. **The bridge is a network service** (§8.1). A second client opens a socket and parses JSON — no
+1. **The bridge is a network service** (§8). A second client opens a socket and parses JSON — no
    JVM, no `mage-common`, no Java-serialization interop.
 2. **Every dependency in use is already multiplatform:**
 
@@ -681,7 +651,7 @@ the Prompt component (§7.2).
 The **object-identity animation host** (§7.3) is built **and measured standalone before any board
 depends on it** — a synthetic board of realistic size driven by a recorded sequence of real
 snapshots, asserting frame budget under interruption. This retires the one open platform risk
-(§8.2), cheaply.
+(§8), cheaply.
 
 Also lands the **performance test gate** (§10.5).
 
@@ -784,4 +754,3 @@ Platform:
 - [Multiplatform image loading: Coil 3.0 — Cash App Code Blog](https://code.cash.app/multiplatform-image-loading)
 - [Using Jetpack Room in Kotlin Multiplatform shared code — John O'Reilly](https://johnoreilly.dev/posts/jetpack_room_kmp/)
 - [Kotlin Multiplatform — Android Developers](https://developer.android.com/kotlin/multiplatform)
-- [Flutter vs. Kotlin Multiplatform: 2026 Architecture Guide — Shorebird](https://shorebird.dev/blog/flutter-vs-kotlin-multiplatform)
