@@ -91,6 +91,9 @@ on branches off `main`.
   before merging.
 - Pushing to a feature branch — including one with an open PR — is normal and updates that
   PR.
+- **A story PR references its issue as `Story: #N`, never `Closes #N`.** A closing keyword
+  closes the issue on merge; a story's issue closes after the lead has confirmed it on a
+  device. See [`docs/stories/README.md`](docs/stories/README.md#issue-tracking).
 
 ---
 

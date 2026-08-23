@@ -17,16 +17,44 @@ piece accepted — reading only that document plus the repo it links to.
 
 Follows the repo's [`AGENTS.md`](../../AGENTS.md) git rules:
 
-1. Branch off `main` (e.g. `feature/story-0001-bridge-scaffold`).
-2. Implement to the story's design and acceptance criteria, **committing incrementally** (see
+1. Write the story document **and open its issue** (see [Issue tracking](#issue-tracking)).
+2. Branch off `main` (e.g. `feature/story-0001-bridge-scaffold`).
+3. Implement to the story's design and acceptance criteria, **committing incrementally** (see
    [Verification standards](#verification-standards)).
-3. `./gradlew check` (and any integration tests the story names) must pass.
-4. For a story with **user-visible behaviour**, an [independent verification pass](#verification-standards)
+4. `./gradlew check` (and any integration tests the story names) must pass.
+5. For a story with **user-visible behaviour**, an [independent verification pass](#verification-standards)
    runs before merge.
-5. Open a PR into `main`; merge when green.
+6. Open a PR into `main`; merge when green.
+7. The issue closes **after Pete has confirmed the story on a device** — not on merge.
 
 The owning agent is responsible for the whole story — creation through test and acceptance —
 against the criteria written in the document.
+
+## Issue tracking
+
+**Applies to the stories written for the UI rebuild** — the epics named in
+[`../ui-modernization-plan.md`](../ui-modernization-plan.md) §11. Earlier stories are tracked by the
+tables in this document and are **not** backfilled as issues; the tracker is for what is still open,
+so filling it with finished work would defeat it.
+
+A story document says *what to build*. The issue says *whether it is still open* — a question the
+document cannot answer about itself, and which otherwise requires reading a table.
+
+- **One issue per story**, opened at the same time as the document. Title
+  `Story NNNN — <the story's title>`, label `story`, body carrying the objective, the epic it
+  serves, and a link to the document. The body does **not** restate the design: that lives in the
+  document, and a second copy would go stale.
+- **The PR references the issue without a closing keyword** — `Story: #N`, never `Closes #N`.
+  GitHub closes a linked issue the instant the PR merges, and merging is precisely not the moment
+  the story is done.
+- **On merge** the issue gets `needs-verification`, plus a comment naming the merged PR and the
+  eyes-on checklist from the story's *Testing & verification* section.
+- **Pete closes it**, after confirming the behaviour on a device, with a comment recording what he
+  confirmed. If verification fails the issue stays open and the follow-up lands against it.
+
+This makes [verification standard 3](#verification-standards) visible rather than remembered: the
+implementer does not get the last word, so the gap between *merged* and *done* is a label on a list
+instead of something somebody has to hold in their head.
 
 ## Verification standards
 
