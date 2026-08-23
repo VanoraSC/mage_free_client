@@ -132,6 +132,13 @@ full-resolution art.
   comfortable in any setting.
 - As a developer, I want one card component family and one Prompt component, so that every
   surface presents cards and decisions identically.
+- As a developer, I want **every surface landscape with no rotation support**
+  ([`ui-modernization-plan.md`](ui-modernization-plan.md) §7.19), so that no screen carries a
+  second layout. During the alongside period the new surfaces request landscape at runtime; it
+  becomes a manifest attribute once the portrait screens are gone.
+- As a developer, I want the design system's **text field to set `flagNoExtractUi`**, so that
+  typing in landscape does not replace the screen with a fullscreen IME panel. It is the one
+  landscape hazard that is cheap to fix centrally and expensive to discover per screen.
 
 ---
 
@@ -530,7 +537,8 @@ power, toughness, mana cost, colours and per-printing set data.
 - As a player, I want **import offered on an empty library**, so that a decklist from the web
   becomes a playable deck without typing sixty card names.
 - As a player, I want **the deck and the search on one screen**, so that I can see the count, the
-  curve and the legality move as I add.
+  curve and the legality move as I add. Landscape (§7.19) is what makes this a side-by-side split
+  rather than a squeeze.
 - As a player, I want a **result to tell me how many copies I already have** and to respect the
   four-copy limit at the moment I add, not afterwards.
 - As a player, I want to **search oracle text, power and toughness, and set**, so that I can find

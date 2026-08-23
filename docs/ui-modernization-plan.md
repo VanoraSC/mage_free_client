@@ -65,7 +65,9 @@ found by playing real games, not by reasoning.
   poison without the board ever showing it (§7.15).
 - **The game log arrives and is discarded.** The server sends its log as `MessageType.GAME` chat and
   the bridge maps it to `ChatKind.GAME`, but no client code consumes `ChatEvent` (§7.12).
-- **Portrait phone only**, where the board's target is landscape (§7.4).
+- **Portrait phone only**, where the board's target is landscape (§7.4) — as is every other surface
+  in the new UI (§7.19). The manifest sets no `screenOrientation` today, so the app follows the
+  device.
 
 One defect outside the board: **the table room asks for a deck that has already been chosen.**
 `DeckPicker` is used correctly at host and join time — [`JoinTableScreen.kt:94`](../feature/tables/src/main/kotlin/magefree/feature/tables/join/JoinTableScreen.kt)
@@ -275,7 +277,8 @@ numbers prefixed **R§** below refer to that document, not to this one.
     tier.
 16. **Phone-landscape board layout** (§7.4) — a stable battlefield with transient information
     floating over it, creatures front and lands piled at the back, no decorative chrome. One layout
-    target; tablets render it scaled.
+    target; tablets render it scaled. **Every other new surface is landscape too and rotation is
+    not supported** (§7.19), so this is the app's orientation rather than the board's.
 17. **The game log** (§7.12) — game state changes, not interim actions. Animation carries what
     happened while you were watching; the log is the only way to recover it afterwards.
 18. **The zone browser** (§7.13) — any zone, either player, one interaction, floating over the
@@ -343,6 +346,10 @@ numbers prefixed **R§** below refer to that document, not to this one.
 ---
 
 ## 7. The UX system
+
+**Every surface described here is phone landscape, and rotation is not supported** — see §7.19. It
+is a property of the whole UI, not of the board, so it is stated once here rather than restated per
+section.
 
 ### 7.1 Interaction model
 
@@ -527,6 +534,9 @@ render the phone layout scaled up; larger form factors get real attention later.
 target is what makes the constraint-driven sizing above tractable — deriving card size from row
 population is a much smaller problem against one aspect ratio than against three.
 
+**So does every other surface** (§7.19). The board's requirement became the app's rule, and rotation
+is not supported anywhere.
+
 **The board itself is grey.** No illustrated battlefield, no themed playmat, no decorative
 background art. A pleasing neutral grey ground, with **zones and other distinctions carried by
 shades of that grey** — value and elevation, not colour or texture.
@@ -542,7 +552,9 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 > **Conflicts with [`game-board-requirements.md`](game-board-requirements.md) §16.1**, which
 > supersedes its own §2.1 to specify portrait. That section is now out of date and needs correcting;
 > §7.4 here is the current intent. Note that [`ux-principles.md`](ux-principles.md) §2 already
-> favours landscape as the primary in-game orientation, so this restores that direction.
+> favours landscape as the primary in-game orientation, so this restores that direction — and §7.19
+> removes §16.1's actual argument, which was that landscape would leave the board as the only
+> landscape surface in the product.
 
 ### 7.5 Card rendering tiers
 
@@ -1095,10 +1107,74 @@ mounted in that context, which is a constraint on its layout rather than a secon
 
 #### Orientation
 
-**Deckbuilding is portrait.** §7.4's "one layout target" is a statement about the *board*, where
-deriving card size from row population is only tractable against a single aspect ratio. Deckbuilding
-is a browsing and reading task — a long list, a search field, one thumb — and portrait is its shape.
-The two surfaces having different orientations is deliberate.
+**Landscape, like everything else** (§7.19). That is not a compromise here: it is the orientation
+in which item 1 is easy. A phone in landscape is about 800 dp wide, which is a natural side-by-side
+split — the deck on one side, the search on the other — where portrait would force the same two
+things into a squeeze. The cost is vertical room for lists, which item 6's grid and the split
+between panes both absorb.
+
+The one thing to get right is the **soft keyboard**, since this is the app's most text-entry-heavy
+surface. §7.19 covers it.
+
+### 7.19 One orientation: landscape
+
+**The whole UI is phone landscape. Rotation is not supported** — the app renders landscape however
+the device is held, and no surface has a second layout.
+
+The board already required this (§7.4): deriving card size from row population is tractable against
+one aspect ratio and not against three. Extending it to every surface is the simplification, not an
+extra constraint. No screen gets a portrait variant, no screen gets a rotation transition to design,
+and the layout test matrix does not double.
+
+**It also dissolves the seam that made the board portrait.**
+[`game-board-requirements.md`](game-board-requirements.md) §16.1 supersedes its own §2.1 and chooses
+portrait, and its stated reason is precisely this: landscape would have made the board *the only
+landscape surface in the product*, turning "enter a game" into an orientation change. With the app
+landscape throughout, that cost does not exist and §2.1's original reasoning stands. §16.1 is now
+out of date for a reason that has itself been removed (§12).
+
+**How it is set.** The app is single-Activity, so the end state is one manifest attribute on
+`MainActivity`: `android:screenOrientation="sensorLandscape"` — **`sensorLandscape`, not
+`landscape`**, so the device can be held either way round without the UI being upside down. That is
+the one degree of freedom worth keeping, and it costs nothing because both are the same layout. The
+manifest sets no `screenOrientation` today.
+
+**It cannot be a manifest attribute yet**, because §11 keeps the old UI alive alongside the new one
+and those screens are portrait. Locking the Activity now would force every existing screen into an
+orientation it was not built for — degrading the working UI in order to serve the one being built,
+which is exactly what the alongside rule exists to prevent. So during that period the **new
+surfaces request landscape at runtime on entry and release it on exit**, and the manifest attribute
+replaces that when the last old surface is removed. The runtime code is temporary and has a defined
+end, like the alongside period itself.
+
+**Locking the orientation does not remove configuration changes.** Multi-window, folds, display-size
+and font-scale changes still recreate the activity, so [`ux-principles.md`](ux-principles.md) §2's
+requirement that the client survive recreation stands exactly as written. What goes away is a
+*layout* to design for, not the state-preservation work.
+
+#### What it costs, and where it pays
+
+**Vertical space is the scarce resource** — roughly 360 dp of height on a phone, minus insets.
+Two consequences, and the second is the one that will actually bite:
+
+- **Lists show fewer rows.** Absorbed by the same things that were already wanted: card grids rather
+  than one tile per row (§7.18 #6), and side-by-side panes, which ~800 dp of width makes natural.
+- **The soft keyboard.** In landscape, Android's IME defaults on many devices to **fullscreen
+  extract mode**, which replaces the entire UI with a text-entry panel. For a search field whose
+  whole point is showing results as you type, that is fatal. Every text field must set
+  `flagNoExtractUi` in its `imeOptions`, and every layout must stay usable with the IME up, which in
+  landscape can take half the available height. This belongs in the design system's text-field
+  component rather than at each call site — it is a one-line fix per field that is easy to forget
+  and expensive to discover late.
+
+Two surfaces are actively better for it:
+
+- **Card inspection.** A card is a portrait rectangle, so a landscape window leaves room *beside* it
+  for oracle text, current modifications and activatable abilities (§7.5 Full tier) instead of
+  pushing them below the fold.
+- **Deckbuilding**, for the reason in §7.18: the deck and the search fit side by side.
+
+**Tablets are unchanged** — they render the phone landscape layout scaled (§7.4).
 
 ## 8. Platform
 
@@ -1247,11 +1323,15 @@ Entry points:
 - **"New Battlefield"** — offered when the table is ready to play, alongside the existing path into
   the board.
 
-Two consequences worth being deliberate about:
+Three consequences worth being deliberate about:
 
 - **The old code is not edited to accommodate the new code.** Anything shared moves behind an
   interface rather than being modified in place, so a regression cannot be introduced into the old
   path by work on the new one. That is the whole value of keeping it.
+- **Orientation is requested at runtime, not locked in the manifest** (§7.19). The new UI is
+  landscape throughout and the old screens are portrait; locking the Activity would degrade the
+  working UI to serve the one being built. New surfaces request landscape on entry and release it
+  on exit until the last old surface is gone, at which point it becomes a manifest attribute.
 - **This is temporary, and needs an end.** Carrying two UIs indefinitely doubles the surface for
   every subsequent change. Each old surface is removed once its replacement is at parity and has
   been played on — a judgement call per surface, made deliberately rather than by drift.
@@ -1465,7 +1545,11 @@ EPIC-23 is worth starting early: several of its items improve the current UI on 
 7. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
    expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
 8. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
-   now out of date against §7.4. Want me to correct it, or leave that doc alone?
+   now out of date against §7.4 and §7.19. This one has got sharper rather than staler: §16.1's
+   whole argument was that landscape would leave the board as *the only landscape surface in the
+   product*, and a landscape app removes that. So the section is wrong for a reason that no longer
+   exists, and §16.2 and §3.2 lean on it. Want me to correct that doc, or leave it and let this plan
+   be the current intent?
 9. **Search-syntax dialect** (§7.18 #4). Scryfall's syntax is the one players already know, but our
    catalog is generated from XMage and does not carry several things Scryfall queries assume —
    colour identity, per-format legality (that lives in the separate `formats.json` bundle), prices,
