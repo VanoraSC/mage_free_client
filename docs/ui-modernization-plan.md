@@ -50,6 +50,10 @@ found by playing real games, not by reasoning.
   board communicates in labels; art is incidental.
 - **No token concept.** Neither `GameState` nor `BoardUi` mentions one, so Magic tokens render as
   placeholders and a token copy of a creature is indistinguishable from the creature (§7.11).
+- **No piling and no ordering on the battlefield.** `BattlefieldBand` is a flat `Row` over
+  `seat.battlefield` in the order the server lists it, one full-size card per permanent. Ten lands
+  cost ten cards of width, and a Plains played after a creature renders to the right of that creature
+  rather than beside the other Plains. Story 0065 designed the fix and it was never implemented.
 - **Portrait phone only**, where the board's target is landscape (§7.4).
 
 One defect outside the board: **the table room asks for a deck that has already been chosen.**
@@ -388,15 +392,20 @@ Each player's battlefield reads front-to-back by how much attention the permanen
   least individually interesting; **the goal is to minimise the space they take without hurting
   readability.**
 
-**Piling does that work, and it already exists.** Story 0065 (R§20) is implemented: permanents whose
-every rendered field matches — name, tapped state, damage, counters, summoning sickness, combat
-assignment, current pick-eligibility — share a pile; 2–3 members render as a fan of real card faces;
-more than 3 caps the fan at 3 plus a count badge (`×7`), so a pile never grows past a 3-card fan
-however many it holds. Tapping moves a permanent into a different pile automatically, because
-`isTapped` is part of the key.
+**Piling does that work. It is fully designed and not built.** Story 0065 and R§20 resolve the whole
+thing — permanents whose every rendered field matches (name, tapped state, damage, counters, summoning
+sickness, combat assignment, current pick-eligibility) share a pile; 2–3 members render as a fan of
+real card faces; more than 3 caps the fan at 3 plus a count badge (`×7`), so a pile never grows past
+a 3-card fan however many it holds; tapping moves a permanent into a different pile automatically
+because `isTapped` is in the key.
 
-Five untapped Plains are therefore one three-card fan with `×5`, not five cards' worth of screen. The
-new work here is the **arrangement**, not the piling.
+None of it exists in the client. `BattlefieldBand` renders a flat `Row` over `seat.battlefield` in
+the order the server lists it, one full-size card per permanent, with no grouping and no ordering by
+type. Playing a Plains, then a Soul Warden, then a second Plains puts them on screen in exactly that
+order, the second Plains sitting alone to the right of the creature.
+
+So both halves are new work here: **the arrangement and the piling.** The piling needs no new design
+— 0065 can be implemented as written.
 
 #### Sizing
 
