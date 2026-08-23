@@ -91,6 +91,9 @@ on branches off `main`.
   before merging.
 - Pushing to a feature branch — including one with an open PR — is normal and updates that
   PR.
+- **A story PR references its issue as `Story: #N`, never `Closes #N`.** A closing keyword
+  closes the issue on merge; a story's issue closes after the lead has confirmed it on a
+  device. See [`docs/stories/README.md`](docs/stories/README.md#issue-tracking).
 
 ---
 
@@ -112,6 +115,29 @@ on branches off `main`.
 - **Accessibility:** content descriptions on interactive elements; min 48dp touch targets;
   respect dynamic type. This is a requirement, not a nice-to-have.
 - **No secrets in the repo.** No hard-coded server credentials or tokens.
+
+---
+
+## Portability rules
+
+The logic modules stay free of Android so a second target is a build change rather than a rewrite.
+These cost nothing applied as work lands and are expensive to retrofit; the evidence behind each is
+in [`docs/ui-modernization-plan.md`](docs/ui-modernization-plan.md) §9.2, and this list is what a
+story is checked against.
+
+- **No `android.*` or `androidx.*` in `:protocol`, `:core:model`, `:core:network`, `:core:decks`,
+  or the non-UI half of `:core:cards`.** They need only Kotlin, coroutines, serialization and Ktor.
+  `:protocol` and `:core:model` hold this today and must keep holding it — they are the two modules
+  a second client consumes first.
+- **Device-specific needs sit behind an interface at the module boundary** — storage paths,
+  notifications, secure storage, bundled assets. `ConnectivityObserver` with
+  `AndroidConnectivityObserver` behind it is the shape to copy: `ConnectivityManager` never leaks
+  past that boundary, and that boundary is where an `expect`/`actual` would go.
+- **Check multiplatform support before adding a dependency to a `:core:*` module.** One
+  Android-only library there turns a mechanical port into a rewrite. Choosing one anyway is fine —
+  knowingly, and above the logic layers.
+- **Insets are handled in exactly one place:** `:core:designsystem/layout/Insets.kt`.
+- **Hardware Back is never the only path.** Every cancel affordance also exists on screen.
 
 ---
 

@@ -3,13 +3,14 @@
 What the client's UI must do, the UX system that delivers it, and the platform it runs on.
 
 **Ship target: Android.** iOS is not being built. The shared logic is ported to Kotlin
-Multiplatform first (§11 Phase 0) and a desktop build exists as a development harness, so
+Multiplatform first (§11 Phase 0) and a minimum desktop build demonstrates the result, so
 portability is compiled rather than asserted — §9 is the shape of that work.
 
-Read alongside [`ux-principles.md`](ux-principles.md) (this extends it),
-[`game-board-requirements.md`](game-board-requirements.md) (the measured, source-verified behaviour
-of the server — nothing here contradicts it), [`architecture.md`](architecture.md) and
-[`project-plan.md`](project-plan.md).
+**This document is what the rebuild is built against.**
+[`game-board-requirements.md`](game-board-requirements.md) specifies the POC board that exists
+today; its §0 — the measured, source-verified account of what the server actually sends — holds for
+both, and nothing here contradicts it. Read alongside [`ux-principles.md`](ux-principles.md) (this
+extends it), [`architecture.md`](architecture.md) and [`project-plan.md`](project-plan.md).
 
 ---
 
@@ -127,8 +128,8 @@ it, showing only the decision at hand.
 | Life-total change animates with a ±N delta | You notice what happened to you | P1 |
 | Spotlight on the object currently resolving | Turns "the log scrolled" into "I saw it" | P1 |
 | Keyword reminder text on demand | Large benefit for less-experienced players | P1 |
-| Auto-tap highlights the lands it would use when a card is dragged from hand | Makes the proposed payment checkable before committing | P1 |
-| Alternate art, per card and per deck | An explicit EPIC-11 requirement | P1 |
+| The server's proposed mana payment is shown as an editable default | Makes the payment checkable before committing, without automating it (§3.2, §7.6) | P1 |
+| Alternate art, per card and per deck, registered in the deck | An explicit EPIC-11 requirement | P1 |
 | Damage numbers float off creatures | Combat maths becomes visible | P2 |
 | Gameplay warnings ("you still have untapped mana") | Cheap guard-rail | P2, opt-in |
 
@@ -153,10 +154,17 @@ cast flow in §7.6.
 Arena's gameplay toggles map onto what our server asks for, but the defaults do not suit our
 audience — people who chose an XMage client should not have decisions taken silently.
 
-- **Auto-tap (with manual override) and auto-assign-combat-damage** are offered, **defaulted off**.
-- **Auto-order-triggers is not offered.** §7.8 makes ordering a single drag, so automating it buys
-  nothing and costs the player a decision.
-- **Full Control is a pinned mode**, not a held key — there is no `Ctrl` on a phone.
+**Nothing is automated, and the toggles are not built.** Auto-tap and auto-assign-combat-damage are
+a later enhancement rather than part of the rebuild: every decision the server asks for is answered
+by the player. The order is deliberate and cheap to revisit — automation is additive to a client
+that already answers everything manually, while a client built around automation has to be unwound
+to get manual control back. §7.7 also removes most of what auto-tap would have been for, by
+prompting only when a land's mana is genuinely ambiguous.
+
+- **Auto-order-triggers is not offered even later.** §7.8 makes ordering a single drag, so
+  automating it buys nothing and costs the player a decision.
+- **Full Control is a pinned mode**, not a held key — there is no `Ctrl` on a phone. It is not
+  automation: it asks for *more* decisions, not fewer.
 
 ### 3.3 Outside the board
 
@@ -164,8 +172,9 @@ audience — people who chose an XMage client should not have decisions taken si
 - Deck manager as art-driven deck boxes, not a list of strings.
 - Deck builder with a **query syntax** *and* a filter pane — power users type, everyone else taps.
   Arena's own query vocabulary does not transfer wholesale: `owned:` describes a collection we do
-  not have, and colour identity is not in our catalog. §7.18 #3 lists what our columns do support
-  and §12 asks how far to follow Scryfall's dialect.
+  not have, and colour identity is not in our catalog. §7.18 #3 lists what our columns do support,
+  and §7.18 #4 defines the dialect: the Scryfall subset our columns can answer, with the syntax
+  itself documented in the app.
 - Mana curve, type counts and legality as live feedback while editing.
 - Text paste import/export (0034, 0078).
 
@@ -210,18 +219,17 @@ surfaces that kind of thing through card hints rather than a zone. So our Effect
 dungeons, designations and commanders — not a general effect inspector.
 
 `PlayerView` also carries **`monarch`** and **`initiative`** as plain booleans. Neither is an object
-in a zone, so they belong on vitals (§7.15) rather than here — but they are the same class of thing:
-game-deciding state that lives nowhere on the battlefield and that we do not currently map.
-
-See §7.13 for the browser these live in.
+in a zone, and neither is the rest of this: `commandList` is filtered by controller, so all of it
+belongs to a *player*. **So the Effects zone is not a zone at all here — it is the expanded state of
+that player's vitals overlay** (§7.15), which is also where the counters that decide games live. The
+zone browser (§7.13) keeps the zones you look *through*: graveyard, exile, revealed.
 
 ### 4.4 Layout and hotkeys
 
 MTGO allows dragging grid splitters to resize panels, exporting and importing a settings file, and
 extensive rebindable hotkeys. On a phone splitters are the wrong idiom, and hotkeys have nowhere to
-live. Neither becomes relevant for the desktop *harness* either, which runs the phone layout at a
-fixed phone-landscape size on purpose (§11). They would only matter for a shipped desktop client,
-which is deferred.
+live. Neither becomes relevant for the desktop *demonstration* either, which exists to show the port
+runs at all (§11). They would only matter for a shipped desktop client, which is deferred.
 
 ---
 
@@ -285,8 +293,10 @@ numbers prefixed **R§** below refer to that document, not to this one.
     board. Exile grouped by zone name, with playable cards marked wherever they sit.
 19. **Attachments rendered as relationships** (§7.4) — Auras and Equipment on their hosts, not in a
     bucket, and a permanent carrying one never piles. Needs `PermanentView.attachments` mapped.
-20. **Player vitals** (§7.15) — including **poison, energy and experience counters**, monarch and
-    initiative. Poison is a win condition and is currently unmapped and unrendered.
+20. **Player vitals** (§7.15) — an expandable overlay per player, collapsed to counts and colour,
+    expanding to the counters, designations and emblems in full. Includes **poison, energy and
+    experience counters**, monarch and initiative. Poison is a win condition and is currently
+    unmapped and unrendered.
 21. **Starting and finishing a game** (§7.16) — opening hand, mulligan, sideboarding, concede,
     results. The board has to be reachable from a table and exitable from a game.
 22. **Notices and session state** (§7.17) — disconnected, reconnecting, resynced, opponent conceded.
@@ -294,11 +304,13 @@ numbers prefixed **R§** below refer to that document, not to this one.
 
 ### P1 — required for it to be good
 
-23. **Auto-tap and auto-assign-damage toggles**, defaulted off, with auto-tap highlighting its
-    proposed lands.
-24. **Full Control mode** as a pinned toggle.
-25. **Effects & Emblems in the zone browser** (§4.3) — `PlayerView.commandList`, which the bridge
-    does not yet map.
+23. **Automation is a later enhancement** (§3.2) — no auto-tap, no auto-assign-damage, no toggles
+    for them. Every decision the server asks for is answered by the player, and §7.7 removes most of
+    what auto-tap would have been for.
+24. **Full Control mode** as a pinned toggle. Not automation — it asks for more decisions, not fewer.
+25. **Emblems and effects in the vitals overlay** (§7.15) — `PlayerView.commandList`, which the
+    bridge does not yet map. They belong to a player rather than to a zone, so they expand from that
+    player's vitals rather than living in the zone browser.
 26. **Life-total deltas, resolution spotlight, keyword reminders.**
 27. **Alternate art chosen in the builder renders in the game** (§7.11), for cards and for the
     tokens a deck produces.
@@ -743,14 +755,22 @@ placeholder: `artRequestOf` gets no printing and returns null.
 
 The one real problem is that **that printing is XMage's, not Scryfall's.** Our art pipeline resolves
 Scryfall URLs from set code plus collector number, and the XMage token set code will not resolve
-there. Two ways out, and the choice is a real one:
+there.
 
-- **Resolve token art from Scryfall by name.** Tokens are real queryable printings there —
-  `is:token`, in sets whose `set_type` is `token`. Consistent with how every other card gets its art,
-  but needs enough of name, subtype, P/T and colour to disambiguate printings that share a name (a
-  1/1 white Soldier and a 2/2 white Soldier are different printings). `CardView` carries all of those.
-- **Use XMage's own token images**, which is what the desktop client does, and which the server has
-  already resolved for us. No matching needed; a second art source to plumb.
+**Token art resolves through Scryfall**, like every other card's. Tokens are real queryable
+printings there — `is:token`, in sets whose `set_type` is `token` — so this keeps one art source,
+one cache and one failure mode across the whole app, rather than adding a second pipeline that only
+tokens use and only tokens exercise.
+
+What it costs is a **match rather than a lookup**: printings share a name, so a 1/1 white Soldier
+and a 2/2 white Soldier are different art. The disambiguating fields are name, subtype, P/T and
+colour, and `CardView` carries all of them — so the match is over data the server already sends,
+not over a guess. Where it fails to resolve, the placeholder is the answer (§7.11 #4), and the token
+is still identifiable because #2 marks it structurally rather than by its picture.
+
+XMage's own token images stay available as the fallback if the match proves unreliable in practice —
+the server has already resolved them, so that would cost a second art source rather than new
+information.
 
 #### 2. Tokens are visibly marked as tokens
 
@@ -769,14 +789,27 @@ through unchanged.
 
 Picking an alternate printing while building a deck should be what renders in play.
 
-There are two mechanisms here and they are not the same thing, so §12 asks which is wanted:
+**The printing is registered in the deck** — not held as a local display override. The choice
+travels to the server with the decklist and comes back in the game view, so a card looks the same
+to both players and the art a player chose is part of what they brought, like a physical deck.
 
-- **Pick the printing in the deck.** XMage decklists already carry set and collector number, so the
-  choice travels to the server and comes back in the game view. It affects only which printing is
-  registered, but it is a real change to what we submit.
-- **A local display override.** A per-card art preference stored on the device and applied at render
-  time, overriding whatever printing the server names. It never touches the game, works for cards
-  from any source, and is the only mechanism that could apply to the opponent's cards.
+**The round trip is real, and it is upstream's own path, not something we add.** `Deck.load` builds
+each card through `createCard`, which calls
+`CardRepository.findCard(deckCardInfo.getSetCode(), deckCardInfo.getCardNumber())` — the exact
+printing named by the decklist entry. `CardView(Card)` then reads `card.getExpansionSetCode()` and
+`card.getCardNumber()` off that resolved card, which is the printing our art pipeline already
+requests. Nothing new crosses the wire; the field is simply no longer always the first printing.
+
+Two consequences follow, and both are constraints on the builder rather than on the board:
+
+- **A printing the server cannot resolve fails the whole deck, not the picture.** An unknown
+  set/number makes `createCard` return nothing and `Deck.load` throw
+  `createCardNotFoundGameException` — a rejected deck at join time. So the builder offers **only
+  printings from the bundled catalog**, never free text, and the catalog is generated from XMage
+  (story 0030), so everything it offers is a printing the server knows by construction.
+- **The opponent's cards render the printing the opponent registered.** There is no display
+  override, so their art is theirs to choose. That is the same rule applied consistently rather than
+  a gap: what each player brought is what each player sees.
 
 #### 4. Art that is downloading says so
 
@@ -818,9 +851,10 @@ included. Whether that is worth doing before P1 #27 is a scheduling question, no
 
 ---
 
-The remaining unknown in this section is behavioural, not structural: which of the two token-art
-sources to use (§7.11 #1). Everything else is now read from upstream and from the catalog — guessing
-at what the server reports is how story 0076 took four rounds.
+Everything in this section is read from upstream and from the catalog rather than assumed — guessing
+at what the server reports is how story 0076 took four rounds. The one thing that cannot be settled
+on paper is whether the Scryfall token match (#1) is reliable enough in practice; that is a
+measurement against a real game, not a design question.
 
 ### 7.12 The game log
 
@@ -867,7 +901,12 @@ building on it, not to assume.
 ### 7.13 The zone browser, and telling exiles apart
 
 **A menu that opens any zone, for either player, in one interaction** — graveyard, exile, revealed,
-looked-at, command. It floats over the board (§7.4) and never costs the battlefield space.
+looked-at. It floats over the board (§7.4) and never costs the battlefield space.
+
+**The command zone is not one of them.** Its contents belong to a player rather than to a pile, so
+they read in that player's vitals overlay (§7.15) alongside the counters and designations. The one
+thing the overlay does not do is let you *cast* from there, which Commander needs — that is story
+0067's problem and Commander is parked, so it is noted here rather than designed.
 
 #### What the server already sends
 
@@ -965,6 +1004,35 @@ the battlefield. Per player:
 Life, library, hand, graveyard, exile, mana pool and wins are in `:protocol` today. **Player counters,
 monarch, initiative and designations are the gap**, and they are the ones that change the answer to
 "am I about to lose."
+
+#### The vitals overlay
+
+All of it lives in **one expandable overlay per player, collapsed by default.** The board is short of
+space (§7.4) and most of this is zero most of the time, so it earns its room by asking for almost
+none until there is something to say.
+
+**Collapsed, it is counts and colour.** Life is red and always present; **poison is green and appears
+the moment it is non-zero**, because a number that can end the game is not something to keep behind a
+tap. Every other counter type gets a colour of our choosing, fixed per type, and appears only when it
+is non-zero. The colour is a way to tell two chips apart at a glance, not a code the player is
+expected to learn — the number sits next to it, and the expanded view names it.
+
+**Expanded, it is the list.** Every counter named with its count, monarch and initiative, the
+designations, and the contents of `PlayerView.commandList` — **emblems**, dungeons, commanders and
+planes. This is where a player answers "what is actually acting on this game right now," and it is
+the reason the section exists: none of it is on the battlefield, and all of it decides games.
+
+Two things follow from putting it here:
+
+- **This is the Effects zone** (§4.3), so it is not also a zone-browser page. Emblems and their kin
+  belong to a player, not to a pile of cards, and the browser (§7.13) is for zones you look
+  *through*. One home, not two.
+- **Expanding is a look, not a decision.** It floats over the board like everything else transient
+  (§7.4), never displaces the battlefield, and closes the way every other floating surface does
+  (§7.1).
+
+Its data is EPIC-23's: `counters`, `monarch`, `initiative`, `designationNames` and `commandList` are
+all correct upstream fields the bridge drops today.
 
 ### 7.16 Getting into and out of a game
 
@@ -1073,8 +1141,24 @@ That is the cheapest large improvement in this section.
 
 **4. A query syntax over those same columns**, with the filter pane as the discoverable path to the
 same query and the two kept in sync — pick a filter, see the query; type a query, see the filters
-move. The syntax players know is Scryfall's, which is an argument for matching it as far as our
-columns go and saying plainly where they stop (§12).
+move.
+
+**The syntax is the Scryfall subset our columns can answer**, since that is the syntax players
+already know and there is no reason to make them learn a second one for the operators we do support.
+The subset is genuine, not a near-miss: colour identity, per-format legality (that lives in the
+separate `formats.json` bundle rather than the catalog), prices and rulings are not in `cards.sqlite`
+at all, so `id:`, `f:` and their kin have no answer to give.
+
+Two rules keep the subset honest rather than merely smaller:
+
+- **An unsupported operator is rejected by name**, not ignored. Silently dropping `f:standard` from a
+  query returns a confident, wrong result set — worse than refusing, because nothing tells the player
+  their filter did not apply.
+- **The syntax is documented in the app**, in a help panel that expands from the search field.
+  A query language whose supported half can only be discovered by trial is one players will not
+  trust, and the filter pane cannot document it on its own — it shows what exists, not how to write
+  it. The panel lists the supported operators with examples, and names what is deliberately absent
+  and why, so "it doesn't work" and "it isn't there" are distinguishable.
 
 **5. Sort and group are the builder's, not the alphabet's.** Results order by mana value then name,
 and the deck groups by type as it does now. Where a result set is truncated, it says so.
@@ -1093,10 +1177,13 @@ already carries.
 permanent view rather than in a `LazyColumn` section between the mana curve and the first card
 group.
 
-**9. The printing is choosable.** `DeckEntry` records `setCode` and `collectorNumber` **per line**,
-so a deck already carries a per-entry printing — but `addCard` takes `card.printings.firstOrNull()`
-and the builder never offers the choice. The data model for deck-registered art is in place and
-unused; §12 asks whether that is the mechanism wanted, or a local display override, or both.
+**9. The printing is choosable, and it is the deck that records it.** `DeckEntry` records `setCode`
+and `collectorNumber` **per line**, so a deck already carries a per-entry printing — but `addCard`
+takes `card.printings.firstOrNull()` and the builder never offers the choice. The data model for
+deck-registered art is in place and unused, and §7.11 #3 makes it the mechanism: the chosen printing
+travels with the decklist and is what renders in play. So the choice is offered from the catalog's
+printings for that card, and never as free text — an unresolvable set/number is rejected at deck
+load, which costs the player the whole deck rather than the picture.
 
 **10. A sample hand.** Draw seven from the current main deck, locally, with a redraw. It is how a
 curve is actually checked, it involves no server, and it is a small amount of work.
@@ -1130,8 +1217,11 @@ and the layout test matrix does not double.
 [`game-board-requirements.md`](game-board-requirements.md) §16.1 supersedes its own §2.1 and chooses
 portrait, and its stated reason is precisely this: landscape would have made the board *the only
 landscape surface in the product*, turning "enter a game" into an orientation change. With the app
-landscape throughout, that cost does not exist and §2.1's original reasoning stands. §16.1 is now
-out of date for a reason that has itself been removed (§12).
+landscape throughout, that cost does not exist and §2.1's original reasoning stands.
+
+That document is **not corrected to match**, because it is not describing this UI. It specifies the
+POC board that exists today, which is portrait and stays portrait for as long as it runs alongside
+the new one (§11). Its scope note says so. This plan is what the rebuild is built against.
 
 **How it is set.** The app is single-Activity, so the end state is one manifest attribute on
 `MainActivity`: `android:screenOrientation="sensorLandscape"` — **`sensorLandscape`, not
@@ -1228,7 +1318,9 @@ against the current shape — and the UI rebuild is about to write a lot.
 ### 9.2 The discipline that keeps it cheap
 
 These cost nothing applied from the start, are expensive to retrofit, and are independently good
-Android practice:
+Android practice. **They are rules rather than advice, and [`AGENTS.md`](../AGENTS.md) is where they
+are canonical** — a plan nobody is held to is how §9.2's rules were drifting before anyone noticed.
+This section keeps the evidence behind each one; that file is what a story is checked against.
 
 - **Keep Android APIs out of the logic layers.** `:core:model`, `:core:network`, `:core:decks` and
   the non-UI half of `:core:cards` should need only Kotlin, coroutines, serialization and Ktor.
@@ -1261,8 +1353,9 @@ Android practice:
 
 ### 9.3 What iOS would additionally need
 
-Beyond Phase 0. Not scheduled; recorded so it is not rediscovered. The desktop harness needs none of
-it — it runs on the same LAN as the bridge, on a JVM, with no store review and no push:
+Beyond Phase 0. Not scheduled; recorded so it is not rediscovered. The desktop demonstration needs
+none of it — it runs on the same LAN as the bridge, on a JVM, with no store review and no push,
+which is part of why it is the cheap way to show the port worked:
 
 - **Transport security.** iOS App Transport Security requires WSS; the bridge serves plain WebSocket
   to a LAN address. Story 0068's TLS/nginx work would be a prerequisite.
@@ -1364,6 +1457,33 @@ silently on entry or has nothing left to do.
 
 A defect in the current UI, not a new-UI item, and not worth waiting for a rebuild.
 
+### How an investigation is run
+
+Several items here are **investigations before they are features** — the real prompt sequence for a
+cast with additional costs (§7.6, Phase 2a), and whether the server's game log carries interim
+actions we would have to filter (§7.12). Both ask the same kind of question: *what does the server
+actually send during a real game?*
+
+**They are answered by instrumenting the code and playing a real game, not by reading source alone.**
+The loop is: add diagnostic logging targeted at the specific question, hand over a build, Pete plays
+the game that provokes the behaviour, and the logs come back to be read. Only then is the story
+written. The commit `diag: log every GameStateCache prompt observation and answer` is the pattern
+already working.
+
+Two reasons this is the method rather than a fallback:
+
+- **Reading `../mage` establishes what the server *can* send; only a live game establishes what it
+  *does*.** Verification standard 5 exists because `GameView.opponentHands` is declared, typed,
+  mapped and never written to by anything. A field that is present in source and absent at runtime
+  looks identical to a working one until a real game says otherwise.
+- **Playing the game is Pete's half regardless** (verification standard 3), and the app's UI is not
+  driven programmatically to reach a game state. Instrumenting a build he is going to play anyway
+  costs the investigation almost nothing.
+
+What this asks of a story: the instrumentation is **its own step with its own hand-off**, not
+something bundled into the implementation commit, and the logging is removed or demoted once the
+question is answered. A diagnostic that outlives its question becomes noise in the next one.
+
 ### Phase 0 — Multiplatform foundation
 
 **EPIC-18, and it comes first.** Not because a second platform is being built, but because the
@@ -1378,9 +1498,9 @@ difference between a mechanical port and a rewrite.
 **A JVM target is what makes it verifiable.** "Portable" is not a property that can be asserted —
 it is a property that compiles or does not. Adding a **JVM target to the logic modules and running
 their existing tests on it in CI** turns portability from a claim into a build result, checked on
-every commit. It is also the same target a desktop build would use, so the dev accelerator in §12
-comes nearly free. Without a second target, Phase 0 is unfalsifiable and will rot exactly the way
-§9.2's rules were already drifting.
+every commit. It is also the same target the desktop demonstration below uses, so that comes nearly
+free. Without a second target, Phase 0 is unfalsifiable and will rot exactly the way §9.2's rules
+were already drifting.
 
 Order, cheapest and most-enabling first:
 
@@ -1408,36 +1528,31 @@ Order, cheapest and most-enabling first:
 classes (already clean), and several of its items improve the current UI on their own. Running it
 alongside Phase 0 keeps visible progress going while the foundation is laid.
 
-#### The desktop target is a development harness, not a design surface
+#### The desktop target is a demonstration, not a development surface
 
-Phase 0's JVM target makes a **Compose Desktop build** of the board cheap, and developing against it
-is much faster than the Android loop — no emulator, no APK install, no `adb`, and a rebuild measured
-in seconds. That is a real accelerator and worth taking.
+**Android is the primary target and stays where the work happens.** The desktop build is the
+**minimum port that demonstrates the client runs cross-platform** — the visible proof that Phase 0
+achieved what it claims. It is not a second product, and it is not where the board is developed.
 
-It is also a trap if it becomes where the board is *designed*. §7.4 commits to **one layout target,
-phone landscape**, precisely because deriving card size from row population is tractable against one
-aspect ratio and not against three. A board developed in a resizable desktop window gets tuned to
-that window, and the phone silently becomes the port — which is the opposite of the intent.
+That is a narrower job than it first looks like, and deliberately so. Phase 0's JVM target makes a
+Compose Desktop build cheap, and a faster edit-run loop than the Android one is genuinely tempting.
+But it is a trap in two directions:
 
-So the split is by **what each surface can actually prove**:
+- **Design.** §7.4 commits to **one layout target, phone landscape**, precisely because deriving
+  card size from row population is tractable against one aspect ratio and not against three. A board
+  developed in a resizable desktop window gets tuned to that window, and the phone silently becomes
+  the port — the opposite of the intent.
+- **Verification.** Tests stay on Android, run under Robolectric in `src/testDebug`, because that is
+  the platform we ship. Moving the `:feature:*` suites to desktop would take Robolectric off the
+  critical path at the cost of exercising the Compose tests less often on the only target that
+  matters — and an entire epic once stayed unmounted because device-only tests did not run
+  pre-merge.
 
-| Desktop can verify | Only the phone can verify |
-|---|---|
-| `:core:*` logic and the bridge protocol loop | Card legibility at real size and density |
-| Animation **sequencing** — order, trailing, sync points, resync snapping | Touch target sizes and thumb reach |
-| Component rendering and state | The gesture vocabulary (§7.1) — long-press has no desktop equivalent, hover has no phone equivalent |
-| Trigger-ordering translation, cast-intent playback | Insets and safe areas |
-| That the module graph is genuinely portable | How it feels to play |
+So what the desktop build has to do is **launch, connect to the bridge, and play**. Anything past
+that is a second product, and adopting it is a separate decision rather than a drift.
 
-Two rules keep it honest:
-
-- **Run the desktop harness at a fixed phone-landscape aspect ratio and density**, not a resizable
-  window. Most of the "tuned to the wrong shape" risk disappears with that one constraint.
-- **Anything about touch is not verified until it has been played on a phone.** Desktop makes the
-  iteration cheap; it does not make the device check optional.
-
-This is what EPIC-22 becomes: a harness that falls out of Phase 0, not a second product. If it ever
-grows into a shipped desktop client that is a separate decision.
+The `:core:*` JVM tests in CI are the everyday portability check — they run on every commit and fail
+loudly. The desktop build is what makes the claim legible to a person rather than to a build log.
 
 ### Phase 1 — Design system and the animation host
 
@@ -1485,8 +1600,8 @@ cover.
 ### Deferred
 
 - **iOS** — §9.3. Architecturally supported, not scheduled.
-- **A shipped desktop client.** The desktop *harness* is a Phase 0 deliverable; turning it into a
-  product people install is a separate decision and is not taken.
+- **A shipped desktop client.** The desktop *demonstration* is a Phase 0 deliverable; turning it
+  into a product people install is a separate decision and is not taken.
 
 ### Epics
 
@@ -1506,7 +1621,7 @@ Written up in [`project-plan.md`](project-plan.md), which is where they live. In
 | **EPIC-14** | §7.16 mulligan and match flow | 3 |
 | **EPIC-05** | §7.17 notices and session state | 3 |
 | **EPIC-18 — Multiplatform Foundation** | §9, `:core:*` and `:protocol` to KMP with a JVM target | **0, first** |
-| **EPIC-22 — Desktop Harness** | the phone-shaped development surface Phase 0 enables | 0 |
+| **EPIC-22 — Desktop Demonstration** | the minimum port that shows Phase 0's claim is real | 0 |
 | **EPIC-21 — iOS Client** | §9.3 | deferred |
 
 The board work concentrates in EPIC-19 and the mapping it depends on in EPIC-23, which is why
@@ -1514,53 +1629,7 @@ EPIC-23 is worth starting early: several of its items improve the current UI on 
 
 ---
 
-## 12. Open questions
-
-1. **Automation defaults.** Auto-tap and auto-assign-damage are proposed **off** by default (§3.2),
-   on the grounds that our audience chose an XMage client. Confirm, or say which should default on.
-2. **Art choice mechanism** (§7.11, §7.18 #9). Should a chosen alternate printing be **registered in
-   the deck** — travelling to the server and coming back in the game view — or held as a **local
-   display override** applied at render time? The first changes what we submit; the second never
-   touches the game and is the only one that could also apply to the opponent's cards. Or both.
-   Worth knowing before answering: **the deck-registered half is already modelled and unused.**
-   `DeckEntry` carries `setCode` and `collectorNumber` per line, so a deck already records a
-   printing per card — the builder simply always takes `printings.firstOrNull()`. There is no
-   display-override store anywhere.
-3. **Investigations to schedule.** Two remain. The **real prompt sequence for a cast with additional
-   costs** (§7.6) is already scheduled as Phase 2a. The other is **whether the server's game log
-   carries interim actions** we would have to filter (§7.12) — cheap to answer from one recorded
-   game, and it decides whether the log is a render or a render plus a filter. Run it now, or when
-   the log is built?
-4. **Token art source** (§7.11). Resolve token art from Scryfall by name, subtype, P/T and colour —
-   consistent with every other card, but a fuzzy match — or use XMage's own token images, which the
-   server has already resolved and the desktop client uses, at the cost of a second art source. The
-   catalog holds neither today, so offline token art needs a generator change either way.
-5. **Poison and the other player counters** (§7.15) are unmapped, and poison is a win condition. This
-   is small, self-contained, and not really a board-rebuild item — worth doing against the current
-   UI now rather than waiting for the new one?
-6. **How far the desktop harness goes.** Phase 0 makes it cheap and §11 constrains it to a fixed
-   phone-landscape window. The open part is whether it also becomes the **default place tests run**
-   for `:feature:*` — which would take Robolectric off the critical path but means the Android
-   Compose tests get exercised less often, on the platform we actually ship.
-7. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
-   expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
-8. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
-   now out of date against §7.4 and §7.19. This one has got sharper rather than staler: §16.1's
-   whole argument was that landscape would leave the board as *the only landscape surface in the
-   product*, and a landscape app removes that. So the section is wrong for a reason that no longer
-   exists, and §16.2 and §3.2 lean on it. Want me to correct that doc, or leave it and let this plan
-   be the current intent?
-9. **Search-syntax dialect** (§7.18 #4). Scryfall's syntax is the one players already know, but our
-   catalog is generated from XMage and does not carry several things Scryfall queries assume —
-   colour identity, per-format legality (that lives in the separate `formats.json` bundle), prices,
-   rulings. A field that accepts Scryfall syntax and silently ignores `id:`, `f:` or `is:` would be
-   worse than one that never claimed to. So: implement the supported subset and **reject unknown
-   operators with a message naming them**, or design a smaller syntax of our own that promises only
-   what the catalog holds?
-
----
-
-## 13. Sources
+## 12. Sources
 
 MTG Arena:
 - [All 15 Settings in MTG Arena Explained — Draftsim](https://draftsim.com/mtg-arena-settings/)
