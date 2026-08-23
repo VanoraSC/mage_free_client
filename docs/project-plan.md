@@ -107,6 +107,10 @@ visible; the in-game experience is a separate immersive full-screen mode.
 - As a player, I want clear top-level sections for playing and for decks, so that I
   always know where things live.
 - As a player, I want to always see whether I'm connected, so that I trust the app's state.
+- As a player, I want **decks and card browse reachable before I sign in**, so that the offline
+  half of the app is not behind a connection it never uses. They mount in the **root** graph
+  alongside the connect flow, so the shell still requires a live session
+  ([`ui-modernization-plan.md`](ui-modernization-plan.md) §7.18; carried by EPIC-25).
 
 ### EPIC-03 — Design System & Theming
 **What it is:** the original Material 3-based visual system — theme, typography, colour,
@@ -218,14 +222,28 @@ sharing.
 - As a player, I want to import and export decks in XMage's format, so that my decks move
   between clients.
 
+**How it is reached and what it becomes are EPIC-25.** This epic is the deck library, the
+current builder and the import/export pipeline; the pre-sign-in mount and the builder rebuild
+are [`ui-modernization-plan.md`](ui-modernization-plan.md) §7.18.
+
 ### EPIC-10 — Card Database, Search & Inspection
-**What it is:** a searchable, filterable card catalog (art, oracle text, rulings) used by the
-builder and gameplay; a first-class full-bleed card inspection view (including current
-in-game modifications and activatable abilities); and efficient on-device caching of card
-images and static set data.
+**What it is:** a searchable, filterable card catalog used by the builder and gameplay; a
+first-class full-bleed card inspection view (including current in-game modifications and
+activatable abilities); and efficient on-device caching of card images and static set data.
+
+The catalog is a bundled 14 MB `cards.sqlite` generated from XMage's own card data by
+`tools/card-catalog-generator`. It holds three tables — `meta`, `card`, `printing` — carrying
+name, mana cost and value, colours, supertypes/types/subtypes, oracle text, power, toughness,
+loyalty, the split/flip/double-faced/meld flags, and per-printing set code, collector number
+and rarity. **It holds no rulings, no related-parts data and no per-format legality** — legality
+is a separate bundled `formats.json`, and related parts are a Scryfall concept the generator has
+no source for (§7.11 #5).
 
 - As a player, I want to search and filter all cards, so that I can find what I need for a
   deck or a decision.
+- As a player, I want to **search oracle text, power and toughness, and set**, so that I can
+  find cards by what they do rather than only by what they are called. Every one of those
+  columns is already in the catalog and none of them is queried today (§7.18 #3).
 - As a player, I want to tap any card for a large, readable, full-detail view, so that I can
   actually read it on a small screen.
 - As a player, I want card art and data to load fast and work offline once cached, so that
@@ -356,12 +374,13 @@ resolves" break when something new is added (EPIC-12) — we must set it, not me
 
 ## The Rebuild
 
-Six epics carrying the work in [`ui-modernization-plan.md`](ui-modernization-plan.md) that
+Seven epics carrying the work in [`ui-modernization-plan.md`](ui-modernization-plan.md) that
 does not fit an existing epic. §11 there sequences them.
 
 **EPIC-18 and EPIC-22 come first** despite their position here — the foundation and the harness
 precede the UI work that would otherwise have to be ported afterwards. EPIC-23 does not depend on
-either and can run alongside.
+either and can run alongside. **EPIC-25's first half — the pre-sign-in mount — is immediate work
+too**: it is a mounting point plus an entry point on a feature that already runs offline.
 
 ### EPIC-19 — Motion & Board Presentation
 **What it is:** how the board is laid out and how it moves. The largest piece of UI work in the
@@ -487,6 +506,47 @@ loggable.
 - As a player, I want to check where a permanent's counters came from three turns ago.
 - As a developer, I want to **confirm against a recorded game whether the server's stream carries
   interim actions**, which decides whether the log is a render or a render plus a filter.
+
+### EPIC-25 — Deckbuilding
+**What it is:** deckbuilding reached without a server, and rebuilt around the loop it actually
+is. Specified by [`ui-modernization-plan.md`](ui-modernization-plan.md) §7.18. Amends EPIC-09 and
+EPIC-10; the deck library, import/export and the catalog itself stay theirs.
+
+**It is already offline — only its mounting point is not.** `:core:decks` is local Room storage,
+legality is a bundled `formats.json`, and card data is a bundled `cards.sqlite`; `DecksRoute`
+records that only art fetch touches the network. The tabbed shell that owns the Decks tab is
+entered only on a successful sign-in, so a feature that needs no server sits behind one. The fix
+is a **second mount point in the root graph**, not a change to that entry policy — the shell still
+requires a live session, and the lobby, tables and connection strip stay behind it where they can
+work.
+
+The builder rebuild is separately motivated: the deck and the search are two full screens, so
+every add leaves the deck; the results show no count-in-deck, so the fifth copy is caught later by
+the legality panel; and search reads three columns of a catalog that already carries oracle text,
+power, toughness, mana cost, colours and per-printing set data.
+
+- As a player, I want to **build decks before I sign in, and with no network at all**, so that
+  the offline half of the app does not depend on a server.
+- As a player, I want **import offered on an empty library**, so that a decklist from the web
+  becomes a playable deck without typing sixty card names.
+- As a player, I want **the deck and the search on one screen**, so that I can see the count, the
+  curve and the legality move as I add.
+- As a player, I want a **result to tell me how many copies I already have** and to respect the
+  four-copy limit at the moment I add, not afterwards.
+- As a player, I want to **search oracle text, power and toughness, and set**, so that I can find
+  cards by what they do.
+- As a player, I want a **query syntax with a filter pane kept in sync with it**, so that both the
+  fast path and the discoverable path lead to the same search.
+- As a player, I want results as a **card grid** rather than one tile per row, so that a screenful
+  shows a screenful of choices.
+- As a player, I want **format and legality always visible**, since they decide whether I can join
+  a table.
+- As a player, I want to **choose which printing a deck line uses**, so that the art I picked is
+  the art I get.
+- As a player, I want to **draw a sample hand** from the deck I am building, so that I can check a
+  curve without starting a game.
+- As a developer, I want the **sideboarding surface (§7.16) to be this builder under a timer**,
+  so that there is one deck-editing surface rather than two.
 
 ---
 

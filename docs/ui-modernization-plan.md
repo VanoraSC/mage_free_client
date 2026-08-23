@@ -77,6 +77,12 @@ an unselected radio that can never become selected and tapping one submits immed
 The radio buttons are the visible symptom; the real fault is that the choice was already made before
 the table existed. The room should not re-ask.
 
+A second thing outside the board: **deckbuilding is offline in every respect except where it is
+mounted.** `:core:decks`, the legality bundle and the card catalog are all on-device, and
+`DecksRoute` states that only art fetch touches the network — but the builder lives in the tabbed
+shell, which is entered only on a successful sign-in. So a feature that needs no server is behind
+one (§7.18).
+
 ### 1.3 What must survive the rebuild
 
 - **The server is authoritative and we speak it correctly.** No rules engine on device.
@@ -154,10 +160,15 @@ audience — people who chose an XMage client should not have decisions taken si
 
 - Home hub with one dominant path to play (EPIC-02 models this).
 - Deck manager as art-driven deck boxes, not a list of strings.
-- Deck builder with a **query syntax** (`mana>=3 mana<=5`, `owned:false`, colour identity) *and* a
-  filter pane — power users type, everyone else taps.
+- Deck builder with a **query syntax** *and* a filter pane — power users type, everyone else taps.
+  Arena's own query vocabulary does not transfer wholesale: `owned:` describes a collection we do
+  not have, and colour identity is not in our catalog. §7.18 #3 lists what our columns do support
+  and §12 asks how far to follow Scryfall's dialect.
 - Mana curve, type counts and legality as live feedback while editing.
 - Text paste import/export (0034, 0078).
+
+The rest of what deckbuilding should become — and the fact that it works with no server at all —
+is §7.18.
 
 ---
 
@@ -206,7 +217,9 @@ See §7.13 for the browser these live in.
 
 MTGO allows dragging grid splitters to resize panels, exporting and importing a settings file, and
 extensive rebindable hotkeys. On a phone splitters are the wrong idiom, and hotkeys have nowhere to
-live. Both become relevant only if a desktop build happens (§12).
+live. Neither becomes relevant for the desktop *harness* either, which runs the phone layout at a
+fixed phone-landscape size on purpose (§11). They would only matter for a shipped desktop client,
+which is deferred.
 
 ---
 
@@ -288,18 +301,23 @@ numbers prefixed **R§** below refer to that document, not to this one.
     tokens a deck produces.
 28. **Art prefetch at match start** — we submitted our own deck, so its art can be warmed before
     turn one. The opponent's deck is hidden and arrives card by card.
-29. **Deck builder v2** — query syntax and filter pane, live curve and legality, art-driven deck
-    boxes.
-30. **Home hub, lobby and tables** rebuilt on the new design system.
-31. **Undo.** The server supports the rewind (R§17.1). The cast flow removes most of the misfires it
+29. **Deckbuilding before sign-in** (§7.18) — decks and card browse mounted in the root graph with
+    an entry on the server-list screen. The feature is already fully offline; only its mounting
+    point requires a session. Small, self-contained, and listed in §11 as immediate work.
+30. **Deck builder v2** (§7.18) — the deck and the search on one screen; counts and copy limits in
+    the results; oracle-text, power/toughness and set search over columns the catalog already has;
+    a query syntax with a filter pane kept in sync; a card grid instead of one tile per row;
+    persistent format and legality; a choosable printing; a sample hand.
+31. **Home hub, lobby and tables** rebuilt on the new design system.
+32. **Undo.** The server supports the rewind (R§17.1). The cast flow removes most of the misfires it
     would catch, since intent is editable before submission, so it covers what remains.
 
 ### P2 — polish and reach
 
-32. Damage number floats; attack and block animation beats.
-33. Gameplay warnings, opt-in.
-34. Spectating on the new board (EPIC-15), including both players' hidden information.
-35. Replays.
+33. Damage number floats; attack and block animation beats.
+34. Gameplay warnings, opt-in.
+35. Spectating on the new board (EPIC-15), including both players' hidden information.
+36. Replays.
 
 ### Not in scope
 
@@ -689,9 +707,12 @@ show that an auto-pass is running.
 
 ### 7.10 Outside the board
 
-The same design system applied to the home hub, lobby and tables, deck library and builder, card
-search and settings. Lower risk and mostly a re-skin plus the P1 deck-builder work — but it is what
-the app looks like before anyone reaches a game.
+The same design system applied to the home hub, lobby and tables, card search and settings. Lower
+risk and mostly a re-skin — but it is what the app looks like before anyone reaches a game.
+
+**Deckbuilding is the exception and has its own section** (§7.18). It is not a re-skin: it is the
+one surface that works with no server at all, it is where the time between games goes, and its
+current shape fights the task.
 
 ### 7.11 Card art and Magic tokens
 
@@ -971,6 +992,114 @@ free-for-all, Commander pods and Two-Headed Giant, and none of them fit the mirr
 arrangement or the phone-landscape target. They are out of scope for this board, and that is a layout
 constraint rather than a protocol one — the server would send them fine.
 
+### 7.18 Deckbuilding
+
+The board is the hard part of this plan, but deckbuilding is where a player spends the time between
+games, and it is the one surface that works with no server at all.
+
+#### It is already offline. It is only mounted as though it weren't.
+
+**Every deck operation is served from the device.** `:core:decks` is Room-backed local storage;
+format legality is parsed from a bundled `assets/formats.json`; card data comes from
+`assets/cards.sqlite`, a 14 MB asset read by `SqliteCardCatalog`. `DecksRoute`'s own documentation
+states it: *only art fetch/prefetch touches the network*. Nothing in `:feature:decks` reads a
+session, and `:feature:cards` does not either.
+
+What makes deckbuilding feel server-dependent is **where it is mounted**, not what it needs.
+[`AppNavHost`](../app/src/main/kotlin/magefree/app/navigation/AppNavHost.kt) starts on
+`ConnectRoute`, and the tabbed shell that owns the Decks tab is entered only on a successful
+sign-in. So a fully offline feature sits behind a connection it never uses.
+
+**The fix is a second mount point, not a change to the entry policy.** Decks and the card browser
+are mounted in the **root** graph, chrome-free like the game route, and the server-list screen — the
+first screen a launch shows — gets an entry into them. Back returns to the server list.
+
+- **Story 0047's invariant is preserved exactly**: the shell is still entered only with a live
+  session. The alternative — allowing the shell in without one — would make the lobby, tables and
+  the connection strip reachable in a state where none of them can work, and would bring back the
+  dead Retry control that 0047 removed.
+- **The Decks tab stays.** Same feature, same route content, two mount points. Nothing is
+  duplicated.
+- **Card browse comes along**, because the builder hands off to it and it reads the same bundled
+  catalog.
+
+**What degrades without a network is art, and it already degrades correctly.** §7.11 #4 defines the
+three states, and offline is the "no art coming" one: cards render at their tier with the
+placeholder, and every other builder function is unaffected.
+
+**A first launch has no decks**, and that matters more once the builder is reachable before sign-in:
+the first thing a new player sees is an empty library. Import is the answer and it already exists —
+`DeckIO` reads XMage `.dck`, `.dec`, MTGA and plain text — so **import is a first-class action on
+the empty library**, not an overflow item. Typing sixty card names is not the intended path from a
+decklist on the web to a playable deck.
+
+#### What the builder should become
+
+The current builder works and is honest about failure — it keeps the deck editable when the catalog
+cannot be read — but its shape fights the task. Each item below is a measured gap, not a preference.
+
+**1. The deck and the search are one screen.** Today
+[`BuilderScreen`](../feature/decks/src/main/kotlin/magefree/feature/decks/builder/BuilderScreen.kt)
+and [`AddCardsScreen`](../feature/decks/src/main/kotlin/magefree/feature/decks/builder/AddCardsScreen.kt)
+are separate full screens: you leave the deck to search, and while searching you cannot see the
+count, the curve or the legality move. Deckbuilding is a loop — add, look, adjust — and a modal
+search breaks it once per card. The deck stays visible beside or beneath the search, and every add
+is immediately visible in it.
+
+**2. A search result knows what the deck already holds.** A result gives no indication that four
+copies are already in the deck, so the fifth is added and the problem surfaces later in the legality
+panel. The result carries its count-in-deck, and the add control reflects the limit — including the
+basic-land exception — at the moment of the decision.
+
+**3. Search is much weaker than the data behind it.** `SqliteCardCatalog.search` matches on `name
+LIKE`, `card_types` and `subtypes`, orders by name, and caps at 100 with no paging and no statement
+that it truncated. The `card` table already carries `rules` (the oracle text), `power`, `toughness`,
+`loyalty`, `mana_cost`, `mana_value`, `supertypes` and the five colour flags; `printing` carries set
+code, collector number and rarity. **Oracle-text search, power/toughness filters, set filters and a
+meaningful sort are SQL over columns that already exist** — no catalog regeneration, no network.
+That is the cheapest large improvement in this section.
+
+**4. A query syntax over those same columns**, with the filter pane as the discoverable path to the
+same query and the two kept in sync — pick a filter, see the query; type a query, see the filters
+move. The syntax players know is Scryfall's, which is an argument for matching it as far as our
+columns go and saying plainly where they stop (§12).
+
+**5. Sort and group are the builder's, not the alphabet's.** Results order by mana value then name,
+and the deck groups by type as it does now. Where a result set is truncated, it says so.
+
+**6. Results are a card grid.** `AddResults` renders one 160 dp `CardTile` per `LazyColumn` item
+with two full-width buttons under it — roughly one card per screenful. Cards are the medium (§7.5),
+so results are a grid at **Tile** tier with long-press to inspect (§7.1), showing a screenful of
+choices at a time.
+
+**7. A deck line reads like a card, not like a form row.** Each line is text plus three text buttons
+— `−`, `+`, `Remove` — competing with the row's own tap-to-inspect. Quantity is one control, and the
+line shows the mana cost, which is the attribute a builder scans for and which `CardDisplay.manaCost`
+already carries.
+
+**8. Format and legality are persistent status.** They gate joining a table, so they belong in
+permanent view rather than in a `LazyColumn` section between the mana curve and the first card
+group.
+
+**9. The printing is choosable.** `DeckEntry` records `setCode` and `collectorNumber` **per line**,
+so a deck already carries a per-entry printing — but `addCard` takes `card.printings.firstOrNull()`
+and the builder never offers the choice. The data model for deck-registered art is in place and
+unused; §12 asks whether that is the mechanism wanted, or a local display override, or both.
+
+**10. A sample hand.** Draw seven from the current main deck, locally, with a redraw. It is how a
+curve is actually checked, it involves no server, and it is a small amount of work.
+
+**11. Sideboarding between games is this surface under a timer** (§7.16): a deck already chosen, a
+fixed pool of main plus sideboard, and a clock. Whatever the builder becomes has to survive being
+mounted in that context, which is a constraint on its layout rather than a second screen.
+
+#### Orientation
+
+**Deckbuilding is portrait.** §7.4's "one layout target" is a statement about the *board*, where
+deriving card size from row population is only tractable against a single aspect ratio. Deckbuilding
+is a browsing and reading task — a long list, a search field, one thumb — and portrait is its shape.
+The two surfaces having different orientations is deliberate.
+
 ## 8. Platform
 
 The client is **Kotlin and Compose on Android**. The whole stack is one language: the wire contract,
@@ -1042,6 +1171,10 @@ Android practice:
   - **Debt.** `ProcessLifecycleOwner` for the foreground/background reconnect hook (story 0024),
     `Context` reaching into `ServerRepository` and the DI modules, and the card catalog's direct use
     of `SQLiteDatabase`. Each is small on its own; the catalog is not.
+  - **Bundled assets are their own case.** Two modules read files out of the APK through
+    `Context.getAssets()` — `:core:cards` for the 14 MB `cards.sqlite`, and `:core:decks` for
+    `formats.json` via `FormatBundleLoader`. Same problem at two very different sizes, and one
+    multiplatform resource story answers both.
 - **Check multiplatform support before adopting a dependency in a `:core:*` module.** One
   Android-only library there turns a mechanical port into a rewrite. Choosing one anyway is fine —
   knowingly, and above the logic layers.
@@ -1105,8 +1238,12 @@ and a mapping fault were hard to tell apart.
 
 Entry points:
 
-- **Sign-in stays exactly as it is.** No new variant, no changes.
-- **"New Deck Builder"** — offered alongside the existing deck library entry.
+- **Sign-in is not rebuilt.** No new variant of the connect flow. The one change it takes is an
+  added **entry into decks** on the server-list screen (§7.18) — a new destination reached from it,
+  not a redesign of it.
+- **"New Deck Builder"** — offered alongside the existing deck library entry, from **both** places
+  decks are mounted. The pre-sign-in mount carries whichever builder exists; it is a mounting point,
+  not a version.
 - **"New Battlefield"** — offered when the table is ready to play, alongside the existing path into
   the board.
 
@@ -1119,7 +1256,22 @@ Two consequences worth being deliberate about:
   every subsequent change. Each old surface is removed once its replacement is at parity and has
   been played on — a judgement call per surface, made deliberately rather than by drift.
 
-### Immediate cleanup, independent of the above
+### Immediate work, independent of the above
+
+Two items that are useful now, are small, and do not depend on any phase below.
+
+#### Deckbuilding before sign-in
+
+**Mount decks and card browse in the root graph, and put an entry on the server-list screen**
+(§7.18). Both features are already fully offline; the change is where they are mounted plus one
+entry point. The shell's entry policy is untouched — it still requires a live session — so this adds
+a path rather than relaxing an invariant.
+
+It is worth doing now rather than in Phase 4 for the same reason the deck-picker fix is: it is a
+small change to a working feature, and every day it waits is a day the app cannot do the one thing
+it can do with no server.
+
+#### The table room's deck picker
 
 **Remove the deck picker from the table room** (§1.2) — not just its radio buttons. The deck is
 chosen at host or join time, so the room re-asking a settled question is the actual fault.
@@ -1161,7 +1313,10 @@ Order, cheapest and most-enabling first:
 3. **`:core:network`.** DataStore construction off the `Context` extension, `ProcessLifecycleOwner`
    behind an interface the way `ConnectivityObserver` already is, `Context` out of
    `ServerRepository` and the DI module.
-4. **`:core:decks`.** Room is KMP from 2.7, so this is mostly getting `Context` out.
+4. **`:core:decks`.** Room is KMP from 2.7, so this is mostly getting `Context` out — including
+   `FormatBundleLoader`, which reads the bundled `formats.json` through `AssetManager`. It is the
+   small version of the asset problem step 5 solves at scale, so solving it here first is cheap
+   rehearsal.
 5. **`:core:cards`.** The largest piece: `SqliteCardCatalog`'s direct use of `SQLiteDatabase` and
    `Cursor`, and a multiplatform story for the 14 MB asset it opens through `Context`. Coil's move
    to `coil-network-ktor3` rides along.
@@ -1238,12 +1393,13 @@ that session, against §7.
 
 ### Phase 4 — The rest of the app
 
-Home, lobby, tables, deck library and builder v2, card search, settings, on the Phase 1 system.
-P1 items 27, 29 and 30.
+Home, lobby, tables, deck library and builder v2 (§7.18), card search, settings, on the Phase 1
+system. P1 items 27, 30 and 31. Item 29 — the pre-sign-in mount — does not wait for this phase; it
+is listed under immediate work above.
 
 ### Phase 5 — Polish
 
-P2 items. Undo (P1 #31) lands here or earlier, once the cast flow shows what it still needs to
+P2 items. Undo (P1 #32) lands here or earlier, once the cast flow shows what it still needs to
 cover.
 
 ### Deferred
@@ -1262,6 +1418,7 @@ Written up in [`project-plan.md`](project-plan.md), which is where they live. In
 | **EPIC-20 — Declared Cast Intent** | §7.6 cast flow, §7.7 land tapping | 2 |
 | **EPIC-23 — Game Information We Do Not Yet Map** | targets, attachments, player counters, `commandList`, zone contents, token identity | before what needs it |
 | **EPIC-24 — The Game Log** | §7.12 | any time |
+| **EPIC-25 — Deckbuilding** | §7.18 — the pre-sign-in mount, and the builder rebuild | immediate, then 4 |
 | **EPIC-03** | §7.2 Prompt, §7.5 card tiers, the grey/information palette | 1 |
 | **EPIC-11** | §7.13 zone browser, §7.14 stack entries, §7.15 vitals | 3 |
 | **EPIC-12** | §7.9 priority passing, the phase bar | 3 |
@@ -1281,10 +1438,14 @@ EPIC-23 is worth starting early: several of its items improve the current UI on 
 
 1. **Automation defaults.** Auto-tap and auto-assign-damage are proposed **off** by default (§3.2),
    on the grounds that our audience chose an XMage client. Confirm, or say which should default on.
-2. **Art choice mechanism** (§7.11). Should a chosen alternate printing be **registered in the
-   deck** — travelling to the server and coming back in the game view — or held as a **local display
-   override** applied at render time? The first changes what we submit; the second never touches the
-   game and is the only one that could also apply to the opponent's cards. Or both.
+2. **Art choice mechanism** (§7.11, §7.18 #9). Should a chosen alternate printing be **registered in
+   the deck** — travelling to the server and coming back in the game view — or held as a **local
+   display override** applied at render time? The first changes what we submit; the second never
+   touches the game and is the only one that could also apply to the opponent's cards. Or both.
+   Worth knowing before answering: **the deck-registered half is already modelled and unused.**
+   `DeckEntry` carries `setCode` and `collectorNumber` per line, so a deck already records a
+   printing per card — the builder simply always takes `printings.firstOrNull()`. There is no
+   display-override store anywhere.
 3. **Investigations to schedule.** Two remain. The **real prompt sequence for a cast with additional
    costs** (§7.6) is already scheduled as Phase 2a. The other is **whether the server's game log
    carries interim actions** we would have to filter (§7.12) — cheap to answer from one recorded
@@ -1305,6 +1466,13 @@ EPIC-23 is worth starting early: several of its items improve the current UI on 
    expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
 8. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is
    now out of date against §7.4. Want me to correct it, or leave that doc alone?
+9. **Search-syntax dialect** (§7.18 #4). Scryfall's syntax is the one players already know, but our
+   catalog is generated from XMage and does not carry several things Scryfall queries assume —
+   colour identity, per-format legality (that lives in the separate `formats.json` bundle), prices,
+   rulings. A field that accepts Scryfall syntax and silently ignores `id:`, `f:` or `is:` would be
+   worse than one that never claimed to. So: implement the supported subset and **reject unknown
+   operators with a message naming them**, or design a smaller syntax of our own that promises only
+   what the catalog holds?
 
 ---
 
