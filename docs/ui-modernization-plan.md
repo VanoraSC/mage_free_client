@@ -1005,6 +1005,7 @@ target. §9 is what keeps that deferral safe.
 | kotlinx-coroutines 1.10 | everywhere | Multiplatform |
 | Coil 3.1.0 | `:core:cards` | Multiplatform since 3.0 — one `AsyncImage` in `commonMain` |
 | Room 2.7.1 | `:core:decks` | Multiplatform since 2.7 |
+| **Raw `android.database.sqlite`** | `:core:cards` catalog | **Android-only, and not covered by Room's KMP support** — `SqliteCardCatalog` (377 lines) uses `SQLiteDatabase`/`Cursor` directly, and the 14 MB asset is opened through `Context`. The largest single port in the module list |
 | DataStore 1.1.7 | prefs | Multiplatform |
 | Lifecycle / ViewModel 2.9 | `:feature:*` | Multiplatform |
 | Material 3 / Compose Foundation | `:core:designsystem` | Compose Multiplatform |
@@ -1024,10 +1025,18 @@ Android practice:
   Device-specific needs (storage paths, notifications, secure storage, haptics) sit behind an
   interface at the module boundary, which is where an `expect`/`actual` would go.
 
-  This is a rule to hold to, not a description of today. `:core:network` already depends on
-  `androidx.lifecycle-process` for the `ProcessLifecycleOwner` foreground/background reconnect hook
-  (story 0024) — an Android-only API sitting in a logic module. It is a small, well-isolated
-  exception and it is exactly the shape that should live behind an interface.
+  **`:protocol` and `:core:model` hold this today** — neither imports anything from `android.*` or
+  `androidx.*`. They are the two modules a second client consumes first, and they are portable now.
+
+  `:core:network` and `:core:cards` do not, and the two cases are worth telling apart because one
+  is the pattern working and the other is the debt:
+
+  - **Working.** Connectivity is already an interface — `ConnectivityObserver` (26 lines) with
+    `AndroidConnectivityObserver` (57 lines) behind it. `ConnectivityManager` never leaks past that
+    boundary. This is exactly where an `expect`/`actual` or a platform module would slot in.
+  - **Debt.** `ProcessLifecycleOwner` for the foreground/background reconnect hook (story 0024),
+    `Context` reaching into `ServerRepository` and the DI modules, and the card catalog's direct use
+    of `SQLiteDatabase`. Each is small on its own; the catalog is not.
 - **Check multiplatform support before adopting a dependency in a `:core:*` module.** One
   Android-only library there turns a mechanical port into a rewrite. Choosing one anyway is fine —
   knowingly, and above the logic layers.
