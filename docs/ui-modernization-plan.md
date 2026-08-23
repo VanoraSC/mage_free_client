@@ -106,7 +106,6 @@ it, showing only the decision at hand.
 | Alternate art, per card and per deck | An explicit EPIC-11 requirement | P1 |
 | Damage numbers float off creatures | Combat maths becomes visible | P2 |
 | Gameplay warnings ("you still have untapped mana") | Cheap guard-rail | P2, opt-in |
-| Emotes | Constrained communication without a chat box | P2 |
 
 #### Delve and convoke: additional costs come first
 
@@ -254,21 +253,21 @@ numbers prefixed **R§** below refer to that document, not to this one.
 
 27. Damage number floats; attack and block animation beats.
 28. Gameplay warnings, opt-in.
-29. Emotes.
-30. Sound design and haptics.
-31. Spectating on the new board (EPIC-15), including both players' hidden information.
-32. Replays.
-33. Accessibility pass — deferred, but the design system should not make it harder; semantic labels
-    on components as we build them cost nothing.
+29. Spectating on the new board (EPIC-15), including both players' hidden information.
+30. Replays.
 
 ### Not in scope
 
+- **Emotes, and player chat of any kind** — lobby, in-game, or whisper. Permanently deferred.
+- **Sound design and haptics.** Permanently deferred.
+- **Accessibility.** Permanently deferred, including screen-reader support.
 - **Clocks and rope burn-down.** If the XMage server does not implement it, neither do we. Should
   the server drive a time control and push remaining time, we would display what it sends — that is
   showing a server fact, not designing a clock feature.
 - **Persistent per-card auto-yields with a revocation ledger** (§4.2).
 - **Decorative battlefield art** — illustrated grounds, themed playmats, avatars, pets, or any other
   original art beyond the cards themselves (§7.4). The board is grey; the cards carry the visuals.
+- **A collapsing hand** (§7.4). The hand stays visible.
 
 ---
 
@@ -284,8 +283,7 @@ consistent touch vocabulary:
 | **Tap** | Select or act on this object | Yes |
 | **Long-press** | Inspect, and offer whatever actions this object currently affords | Yes |
 | **Drag** | Accelerator only: play a card, assign an attacker to a defender | Always has a tap path |
-| **Swipe up from hand edge** | Expand hand | Hand only |
-| **Back** | Cancel the innermost thing (collapse hand → cancel targeting → cancel cast) | Yes |
+| **Back** | Cancel the innermost thing (cancel targeting → cancel cast) | Yes |
 
 The rule that matters: **long-press is inspection, on every card-like object, in every screen.**
 
@@ -336,8 +334,15 @@ Constraint-driven, replacing fixed bands:
   space with minimums, not fixed dp.
 - **Card size is derived** from the widest populated row, floored at a legibility minimum; below the
   floor the fan/pile system (0065) collapses duplicates and the row scrolls.
-- **Phase-aware emphasis:** during combat battlefields expand and the hand contracts; during your
-  main phase the hand expands.
+- **Phase-aware emphasis:** during combat the battlefields take the space that is free to give.
+- **The hand never collapses.** It holds its own region for the whole game. The player reads their
+  hand constantly to make decisions, so hiding it behind a peek edge and an expand gesture takes the
+  most-consulted information on screen and puts it a gesture away.
+
+  This is a real constraint on the layout rather than a free win: the hand's region is permanently
+  spent, so everything else divides what is left. It is also what removes a whole class of
+  interaction — no peek edge, no expand gesture, no collapse-on-back, and no question about what
+  state the hand was in when a prompt arrived.
 
 **One layout: phone landscape.** The board targets a phone held sideways and nothing else. Tablets
 render the phone layout scaled up; larger form factors get real attention later. A single layout
