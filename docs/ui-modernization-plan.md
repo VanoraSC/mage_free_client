@@ -2,8 +2,9 @@
 
 What the client's UI must do, the UX system that delivers it, and the platform it runs on.
 
-**Ship target: Android.** iOS and desktop are not being built, but the stack supports them and §9
-records the discipline that keeps that true.
+**Ship target: Android.** iOS is not being built. The shared logic is ported to Kotlin
+Multiplatform first (§11 Phase 0) and a desktop build exists as a development harness, so
+portability is compiled rather than asserted — §9 is the shape of that work.
 
 Read alongside [`ux-principles.md`](ux-principles.md) (this extends it),
 [`game-board-requirements.md`](game-board-requirements.md) (the measured, source-verified behaviour
@@ -983,10 +984,14 @@ speaks JBoss Remoting to the XMage server on one side and **WebSocket + JSON** o
 ([`architecture.md`](architecture.md), Option A). None of it runs on the device, so the client is
 just a socket and a JSON parser as far as the server is concerned.
 
-On Android, Compose Multiplatform **is** Jetpack Compose — the same compiler and runtime — so no
-migration exists to perform and none is scheduled. Converting `:core:*` to KMP, swapping Hilt for
-Koin and replacing the Robolectric tests would deliver no user-visible value against a single ship
-target. §9 is what keeps that deferral safe.
+On Android, Compose Multiplatform **is** Jetpack Compose — the same compiler and runtime — so **the
+UI does not move**. What moves is everything below it: `:core:*` and `:protocol` to KMP source sets,
+Hilt to a multiplatform DI, the card catalog off platform SQLite, and the logic modules' Robolectric
+tests to plain JVM. That is §11's Phase 0 and §9 is its detail.
+
+The reason it runs before the UI work rather than after is cost, not ambition. None of it is
+user-visible on an Android-only target, but its size scales with how much code has been written
+against the current shape — and the UI rebuild is about to write a lot.
 
 ---
 
@@ -1045,9 +1050,10 @@ Android practice:
   required by §7.1.
 - **`:protocol` stays free of platform types.** It is the module a second client consumes first.
 
-### 9.3 What a second platform would additionally need
+### 9.3 What iOS would additionally need
 
-Not scheduled; recorded so it is not rediscovered:
+Beyond Phase 0. Not scheduled; recorded so it is not rediscovered. The desktop harness needs none of
+it — it runs on the same LAN as the bridge, on a JVM, with no store review and no push:
 
 - **Transport security.** iOS App Transport Security requires WSS; the bridge serves plain WebSocket
   to a LAN address. Story 0068's TLS/nginx work would be a prerequisite.
@@ -1126,6 +1132,78 @@ silently on entry or has nothing left to do.
 
 A defect in the current UI, not a new-UI item, and not worth waiting for a rebuild.
 
+### Phase 0 — Multiplatform foundation
+
+**EPIC-18, and it comes first.** Not because a second platform is being built, but because the
+epic's cost scales with how much code exists when it happens, and Phases 1–4 are about to add a
+great deal of it. Every module written against Hilt before the DI swap is another migration site;
+every `:core:*` dependency chosen without checking is another exception. Doing it first is the
+difference between a mechanical port and a rewrite.
+
+**The UI does not move.** On Android, Compose Multiplatform is Jetpack Compose (§8). Phase 0 is
+`:core:*`, `:protocol` and DI.
+
+**A JVM target is what makes it verifiable.** "Portable" is not a property that can be asserted —
+it is a property that compiles or does not. Adding a **JVM target to the logic modules and running
+their existing tests on it in CI** turns portability from a claim into a build result, checked on
+every commit. It is also the same target a desktop build would use, so the dev accelerator in §12
+comes nearly free. Without a second target, Phase 0 is unfalsifiable and will rot exactly the way
+§9.2's rules were already drifting.
+
+Order, cheapest and most-enabling first:
+
+1. **`:protocol` and `:core:model` to KMP with a JVM target.** Both import nothing from `android.*`
+   or `androidx.*` today, so this is a pure build-structure change on the two modules a second
+   client consumes first. It proves the build-logic plumbing before anything hard depends on it.
+2. **Hilt → Koin (or a hand-written graph)**, across all 34 call sites in 10 modules. Wide,
+   mechanical, and **the one item whose cost grows fastest** — every ViewModel added by Phases 1–4
+   would otherwise be written twice.
+3. **`:core:network`.** DataStore construction off the `Context` extension, `ProcessLifecycleOwner`
+   behind an interface the way `ConnectivityObserver` already is, `Context` out of
+   `ServerRepository` and the DI module.
+4. **`:core:decks`.** Room is KMP from 2.7, so this is mostly getting `Context` out.
+5. **`:core:cards`.** The largest piece: `SqliteCardCatalog`'s direct use of `SQLiteDatabase` and
+   `Cursor`, and a multiplatform story for the 14 MB asset it opens through `Context`. Coil's move
+   to `coil-network-ktor3` rides along.
+6. **Robolectric out of the logic modules** — 7 test files across `:core:cards` and `:core:decks`
+   become plain JVM tests. The other 5 Robolectric files are Compose tests in `:app` and
+   `:feature:*` and stay Android.
+
+**EPIC-23 does not wait for this.** Its work is bridge-side (already JVM) plus `:protocol` data
+classes (already clean), and several of its items improve the current UI on their own. Running it
+alongside Phase 0 keeps visible progress going while the foundation is laid.
+
+#### The desktop target is a development harness, not a design surface
+
+Phase 0's JVM target makes a **Compose Desktop build** of the board cheap, and developing against it
+is much faster than the Android loop — no emulator, no APK install, no `adb`, and a rebuild measured
+in seconds. That is a real accelerator and worth taking.
+
+It is also a trap if it becomes where the board is *designed*. §7.4 commits to **one layout target,
+phone landscape**, precisely because deriving card size from row population is tractable against one
+aspect ratio and not against three. A board developed in a resizable desktop window gets tuned to
+that window, and the phone silently becomes the port — which is the opposite of the intent.
+
+So the split is by **what each surface can actually prove**:
+
+| Desktop can verify | Only the phone can verify |
+|---|---|
+| `:core:*` logic and the bridge protocol loop | Card legibility at real size and density |
+| Animation **sequencing** — order, trailing, sync points, resync snapping | Touch target sizes and thumb reach |
+| Component rendering and state | The gesture vocabulary (§7.1) — long-press has no desktop equivalent, hover has no phone equivalent |
+| Trigger-ordering translation, cast-intent playback | Insets and safe areas |
+| That the module graph is genuinely portable | How it feels to play |
+
+Two rules keep it honest:
+
+- **Run the desktop harness at a fixed phone-landscape aspect ratio and density**, not a resizable
+  window. Most of the "tuned to the wrong shape" risk disappears with that one constraint.
+- **Anything about touch is not verified until it has been played on a phone.** Desktop makes the
+  iteration cheap; it does not make the device check optional.
+
+This is what EPIC-22 becomes: a harness that falls out of Phase 0, not a second product. If it ever
+grows into a shipped desktop client that is a separate decision.
+
 ### Phase 1 — Design system and the animation host
 
 New tokens (colour, type, elevation, **motion**), the three-tier card component family (§7.5), and
@@ -1170,10 +1248,9 @@ cover.
 
 ### Deferred
 
-- **Multiplatform foundation** — `:core:*` to KMP, Hilt → Koin, Coil → `coil-network-ktor3`,
-  Room → KMP, Robolectric tests → common. Prerequisite for any second target; §9.2 keeps it cheap.
-- **iOS** — §9.3.
-- **Desktop** — the same prerequisite (§12).
+- **iOS** — §9.3. Architecturally supported, not scheduled.
+- **A shipped desktop client.** The desktop *harness* is a Phase 0 deliverable; turning it into a
+  product people install is a separate decision and is not taken.
 
 ### Epics
 
@@ -1191,7 +1268,9 @@ Written up in [`project-plan.md`](project-plan.md), which is where they live. In
 | **EPIC-13** | §7.2 Prompt states, §7.8 trigger ordering, spatial targeting and combat | 3 |
 | **EPIC-14** | §7.16 mulligan and match flow | 3 |
 | **EPIC-05** | §7.17 notices and session state | 3 |
-| **EPIC-18 / 21 / 22** | multiplatform foundation, iOS, desktop | deferred |
+| **EPIC-18 — Multiplatform Foundation** | §9, `:core:*` and `:protocol` to KMP with a JVM target | **0, first** |
+| **EPIC-22 — Desktop Harness** | the phone-shaped development surface Phase 0 enables | 0 |
+| **EPIC-21 — iOS Client** | §9.3 | deferred |
 
 The board work concentrates in EPIC-19 and the mapping it depends on in EPIC-23, which is why
 EPIC-23 is worth starting early: several of its items improve the current UI on their own.
@@ -1218,9 +1297,10 @@ EPIC-23 is worth starting early: several of its items improve the current UI on 
 5. **Poison and the other player counters** (§7.15) are unmapped, and poison is a win condition. This
    is small, self-contained, and not really a board-rebuild item — worth doing against the current
    UI now rather than waiting for the new one?
-6. **Desktop.** The only near-term reason to do the deferred KMP port: a desktop board would run
-   against the bridge with no emulator, no APK install and no `adb`, which is the fastest path to
-   eyes on the board. Worth it as a development accelerator, or leave it deferred?
+6. **How far the desktop harness goes.** Phase 0 makes it cheap and §11 constrains it to a fixed
+   phone-landscape window. The open part is whether it also becomes the **default place tests run**
+   for `:feature:*` — which would take Robolectric off the critical path but means the Android
+   Compose tests get exercised less often, on the platform we actually ship.
 7. **Lift §9.2's portability rules into [`AGENTS.md`](../AGENTS.md)?** They are cheap now and
    expensive to retrofit. `AGENTS.md` is canonical, so this is a question rather than an edit.
 8. **[`game-board-requirements.md`](game-board-requirements.md) §16.1 specifies portrait** and is

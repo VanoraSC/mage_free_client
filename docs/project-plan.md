@@ -41,9 +41,12 @@ These are settled; details in [`architecture.md`](architecture.md). Epics assume
 - **Self-hosted server.** We run our own version-pinned XMage server, so the bridge/client is
   always version-matched and we upgrade on our own schedule (XMage enforces exact-version
   lockstep). See [`architecture.md`](architecture.md).
-- **Android, Kotlin and Compose.** One ship target. iOS and desktop are not being built; the
-  stack supports them and `ui-modernization-plan.md` §9 records the discipline that keeps that
-  true.
+- **Android, Kotlin and Compose.** One **ship** target. A desktop build exists as a development
+  harness (EPIC-22), not as a product; iOS is not being built.
+- **The shared logic is multiplatform, and that is verified by compiling it.** `:core:*` and
+  `:protocol` carry a JVM target that builds in CI, so portability is a build result rather than a
+  claim (EPIC-18). This runs ahead of the UI rebuild, because its cost scales with how much code
+  exists when it happens.
 - **The new UI is built alongside the old one.** New surfaces ship from new entry points
   ("New Deck Builder", "New Battlefield") over the same `:core:network` state, and the current
   screens keep working untouched. This is diagnostic: with both live, "is this a new-UI bug or a
@@ -351,10 +354,14 @@ resolves" break when something new is added (EPIC-12) — we must set it, not me
 
 ---
 
-## The UI Rebuild
+## The Rebuild
 
-Four epics carrying the work in [`ui-modernization-plan.md`](ui-modernization-plan.md) that
-does not fit an existing epic. They are named there in §11.
+Six epics carrying the work in [`ui-modernization-plan.md`](ui-modernization-plan.md) that
+does not fit an existing epic. §11 there sequences them.
+
+**EPIC-18 and EPIC-22 come first** despite their position here — the foundation and the harness
+precede the UI work that would otherwise have to be ported afterwards. EPIC-23 does not depend on
+either and can run alongside.
 
 ### EPIC-19 — Motion & Board Presentation
 **What it is:** how the board is laid out and how it moves. The largest piece of UI work in the
@@ -483,18 +490,56 @@ loggable.
 
 ---
 
+### EPIC-18 — Multiplatform Foundation
+**What it is:** converting the shared logic modules to Kotlin Multiplatform — `:core:*` and
+`:protocol` to KMP source sets with a JVM target, Hilt → Koin, the card catalog off raw
+`android.database.sqlite`, Coil → `coil-network-ktor3`, and Robolectric out of the logic modules.
+Specified by [`ui-modernization-plan.md`](ui-modernization-plan.md) §9 and §11 Phase 0.
+
+**This runs first**, ahead of the UI rebuild. Not because a second platform is being built, but
+because the cost scales with how much code exists when it happens — every module written against
+Hilt beforehand is another migration site. **The UI does not move:** on Android, Compose
+Multiplatform *is* Jetpack Compose.
+
+- As a developer, I want the logic modules to **compile for a non-Android target in CI**, so that
+  "portable" is a build result rather than a claim nobody checks.
+- As a developer, I want **one DI framework that works everywhere**, so that features aren't
+  written twice.
+- As a developer, I want the **card catalog off platform SQLite** and its bundled asset reachable
+  without `Context`, since that is the one genuinely large port in the module list.
+- As a developer, I want the **logic modules' tests running on plain JVM**, so that Robolectric
+  isn't on the critical path for code that has nothing to do with Android.
+- As a maintainer, I want new `:core:*` dependencies **checked for multiplatform support before
+  adoption**, so that this epic doesn't quietly rebuild itself.
+
+### EPIC-22 — Desktop Harness
+**What it is:** a Compose Desktop build of the board, used as a **development and test surface**,
+not a shipped product. Falls out of EPIC-18's JVM target.
+
+The Android loop is slow — emulator or APK install, then `adb`. A desktop build rebuilds in
+seconds and runs against the same bridge. It also proves continuously that the module graph really
+is portable.
+
+It is a harness and not a design surface, so two rules bound it: it **runs at a fixed
+phone-landscape aspect ratio and density**, never a resizable window, because the board commits to
+one layout target and a resizable window would silently retune it. And **anything about touch —
+gestures, target sizes, thumb reach, legibility at real density — is not verified until it has been
+played on a phone.**
+
+- As a developer, I want to iterate on the board without an emulator or an APK install, so that a
+  change takes seconds to see.
+- As a developer, I want animation **sequencing** verifiable off-device, since order, trailing and
+  resync snapping are logic rather than feel.
+- As a developer, I want the harness to keep the module graph honest, so that portability
+  regressions fail the build instead of accumulating.
+
+---
+
 ## Deferred
 
-Numbered so they are not re-invented, and not scheduled. `ui-modernization-plan.md` §9 records
-the discipline that keeps them cheap and §9.3 what they would additionally need.
-
-- **EPIC-18 — Multiplatform Foundation.** `:core:*` to KMP, Hilt → Koin, Coil →
-  `coil-network-ktor3`, Room → KMP, Robolectric tests → common. A prerequisite for any second
-  target and worth nothing on its own against a single one. On Android, Compose Multiplatform
-  *is* Jetpack Compose, so there is no migration to perform for the UI.
 - **EPIC-21 — iOS Client.** Architecturally supported — the bridge is a network service, so no
   JVM runs on device. Needs transport security (WSS), APNs, background socket behaviour, a
   multiplatform card-catalog resource story, and has a different App Store risk profile.
-- **EPIC-22 — Desktop Client.** Same prerequisite. Its one near-term argument is as a development
-  accelerator: a desktop board runs against the bridge with no emulator, no APK install and no
-  `adb`.
+  `ui-modernization-plan.md` §9.3 records the rest.
+- **A shipped desktop client.** EPIC-22 is a harness. Turning it into something people install is
+  a separate decision and is not taken.
