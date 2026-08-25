@@ -2,16 +2,19 @@ package magefree.cards.art
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import coil3.memory.MemoryCache
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Path.Companion.toOkioPath
 import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -44,21 +47,20 @@ class CardImageLoaderTest {
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
         )
 
-    private val fakeHttp: OkHttpClient =
-        OkHttpClient
-            .Builder()
-            .addInterceptor { chain ->
-                Response
-                    .Builder()
-                    .request(chain.request())
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .header("Content-Type", "image/png")
-                    .header("Cache-Control", "max-age=3600")
-                    .body(onePixelPng.toResponseBody("image/png".toMediaType()))
-                    .build()
-            }.build()
+    private val fakeHttp: HttpClient =
+        HttpClient(
+            MockEngine {
+                respond(
+                    content = onePixelPng,
+                    status = HttpStatusCode.OK,
+                    headers =
+                        headersOf(
+                            HttpHeaders.ContentType to listOf("image/png"),
+                            HttpHeaders.CacheControl to listOf("max-age=3600"),
+                        ),
+                )
+            },
+        )
 
     @Before
     fun setUp() {
@@ -91,8 +93,13 @@ class CardImageLoaderTest {
             policyRepository = CardArtCachePolicyRepository(dataStore),
             appScope = scope,
             ioDispatcher = Dispatchers.Unconfined,
-            diskCacheDirectory = diskDir,
-            callFactory = fakeHttp,
+            // Story 0082: no test here asserts on the failure log, but the parameter is required so a
+            // loader can never be built that silently drops it.
+            logWarning = { },
+            diskCacheDirectory = diskDir.toOkioPath(),
+            // Sized as the platform edge does, so the loader under test behaves as it ships.
+            memoryCache = { MemoryCache.Builder().maxSizePercent(context, CardImageLoader.MEMORY_CACHE_PERCENT).build() },
+            httpClient = fakeHttp,
         )
     }
 

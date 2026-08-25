@@ -1,6 +1,6 @@
 package magefree.cards
 
-import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.SQLiteConnection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -27,7 +27,7 @@ import org.robolectric.RobolectricTestRunner
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class CardCatalogFixtureTest {
-    private lateinit var db: SQLiteDatabase
+    private lateinit var db: SQLiteConnection
     private lateinit var catalog: CardCatalog
     private val dispatcher = UnconfinedTestDispatcher()
 

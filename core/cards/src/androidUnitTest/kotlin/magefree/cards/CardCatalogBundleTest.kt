@@ -1,9 +1,11 @@
 package magefree.cards
 
-import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.driver.AndroidSQLiteDriver
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import magefree.cards.bundle.AndroidBundledFiles
 import magefree.cards.internal.CardCatalogDatabase
 import magefree.cards.model.Card
 import magefree.cards.model.CardColor
@@ -26,12 +28,12 @@ import org.robolectric.RuntimeEnvironment
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class CardCatalogBundleTest {
-    private lateinit var db: SQLiteDatabase
+    private lateinit var db: SQLiteConnection
     private lateinit var catalog: CardCatalog
 
     @Before
     fun setUp() {
-        db = CardCatalogDatabase.open(RuntimeEnvironment.getApplication())
+        db = CardCatalogDatabase.open(AndroidBundledFiles(RuntimeEnvironment.getApplication()), AndroidSQLiteDriver())
         catalog = CatalogTestSupport.catalog(db, UnconfinedTestDispatcher())
     }
 
@@ -87,13 +89,12 @@ class CardCatalogBundleTest {
         // check asserted only that Island had printings and was a Land, which cannot detect an orphan.
         val (printings, orphans) =
             db
-                .rawQuery(
+                .prepare(
                     "SELECT COUNT(*), COUNT(CASE WHEN c.id IS NULL THEN 1 END) " +
                         "FROM printing p LEFT JOIN card c ON p.card_id = c.id",
-                    null,
-                ).use { cursor ->
-                    assertTrue(cursor.moveToFirst())
-                    cursor.getLong(0) to cursor.getLong(1)
+                ).use { statement ->
+                    assertTrue(statement.step())
+                    statement.getLong(0) to statement.getLong(1)
                 }
 
         // Counted in the same pass, so a "0 orphans" that only means "0 rows" cannot pass unnoticed.

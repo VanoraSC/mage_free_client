@@ -1,15 +1,15 @@
 package magefree.cards.art
 
-import android.content.Context
-import android.util.Log
 import coil3.ImageLoader
+import coil3.PlatformContext
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.NetworkFetcher
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,9 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okhttp3.Call
-import okio.Path.Companion.toOkioPath
-import java.io.File
+import okio.Path
 
 /**
  * Warms/queries the art cache for a single [CardArtRequest]. This is the narrow surface the bulk
@@ -60,22 +58,49 @@ interface ArtWarmer {
  * placeholder, and the card's text stays available from the bundled catalog (0030).
  */
 class CardImageLoader(
-    private val context: Context,
+    /**
+     * Coil's own context type. On Android it is a `typealias` for `android.content.Context`, so this
+     * is the same object as before and nothing about the shipping behaviour changes — but the type
+     * is multiplatform, which is what lets this class leave `androidMain` (story 0082).
+     */
+    private val context: PlatformContext,
     private val source: XMageImageSource,
     private val policyRepository: CardArtCachePolicyRepository,
     private val appScope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
-    private val diskCacheDirectory: File = File(context.cacheDir, DISK_CACHE_DIR),
-    callFactory: Call.Factory? = null,
+    private val diskCacheDirectory: Path,
+    /**
+     * How big the in-memory cache is, decided at the platform edge.
+     *
+     * Coil's `maxSizePercent` takes an `android.content.Context` and is Android-only, so sizing the
+     * cache as a share of the device's memory class cannot live here. Rather than replace it with a
+     * fixed byte count — a behaviour change on the platform that ships — the whole decision is
+     * supplied, and Android keeps passing `maxSizePercent`.
+     */
+    private val memoryCache: () -> MemoryCache,
+    httpClient: HttpClient? = null,
+    /**
+     * The `User-Agent` the default client sends. **Load-bearing, not courtesy** — Scryfall answers
+     * HTTP 400 to a generic agent and every art surface in the app degrades to its placeholder
+     * (story 0056). Supplied rather than defaulted so there is no way to construct a loader that
+     * quietly sends nothing; story 0082 moved it off `PackageManager`.
+     */
+    userAgent: String = CardArtUserAgent.value(null),
+    /**
+     * Where a failed fetch is reported. Injected rather than calling `android.util.Log` directly, so
+     * the failure path is not what pins this class to Android — and so a JVM host can route it
+     * somewhere real instead of dropping it.
+     */
+    private val logWarning: (String) -> Unit,
 ) : ArtWarmer {
     private val networkFetcherFactory: NetworkFetcher.Factory =
-        if (callFactory != null) {
-            OkHttpNetworkFetcherFactory(callFactory = { callFactory })
+        if (httpClient != null) {
+            KtorNetworkFetcherFactory(httpClient = { httpClient })
         } else {
-            // Not a bare OkHttpNetworkFetcherFactory(): its client sends OkHttp's generic
-            // `okhttp/<version>` agent, which Scryfall refuses with HTTP 400 (story 0056). The lambda
-            // is evaluated lazily by Coil, so the client is still built on first use.
-            OkHttpNetworkFetcherFactory(callFactory = { defaultArtCallFactory(context) })
+            // Not a bare KtorNetworkFetcherFactory(): its client would send the engine's own generic agent,
+            // which Scryfall refuses with HTTP 400 (story 0056). The lambda is evaluated lazily by
+            // Coil, so the client is still built on first use.
+            KtorNetworkFetcherFactory(httpClient = { defaultArtHttpClient(userAgent) })
         }
 
     private val rebuildMutex = Mutex()
@@ -133,8 +158,7 @@ class CardImageLoader(
                 // indistinguishable from ordinary per-card misses (a bad printing, an offline
                 // device) in anything short of attaching a debugger. Logcat is the only place this
                 // is currently visible; there is no in-app diagnostic surface for it yet.
-                Log.w(
-                    LOG_TAG,
+                logWarning(
                     "Art fetch failed for ${request.setCode} #${request.collectorNumber} " +
                         "(${source.primaryUrl(request)}): ${result.throwable}",
                 )
@@ -169,14 +193,12 @@ class CardImageLoader(
                     add(CardArtKeyer(source))
                     add(CardArtFetcher.Factory(source, networkFetcherFactory))
                     add(networkFetcherFactory)
-                }.memoryCache {
-                    MemoryCache.Builder().maxSizePercent(context, MEMORY_CACHE_PERCENT).build()
-                }
+                }.memoryCache(memoryCache)
         if (policy.usesDiskCache) {
             builder.diskCache {
                 DiskCache
                     .Builder()
-                    .directory(diskCacheDirectory.toOkioPath())
+                    .directory(diskCacheDirectory)
                     .maxSizeBytes(DISK_CACHE_MAX_BYTES)
                     .build()
             }
@@ -188,10 +210,13 @@ class CardImageLoader(
         return builder.build()
     }
 
-    private companion object {
+    internal companion object {
+        /** Logcat tag for [logWarning]'s Android wiring (see `cardArtModule`). */
         const val LOG_TAG = "CardImageLoader"
+
+        /** Cache subdirectory + memory share, applied by the platform edge (see `cardArtModule`). */
         const val DISK_CACHE_DIR = "card_art"
-        const val DISK_CACHE_MAX_BYTES = 512L * 1024 * 1024 // 512 MB ceiling for warmed art
+        private const val DISK_CACHE_MAX_BYTES = 512L * 1024 * 1024 // 512 MB ceiling for warmed art
         const val MEMORY_CACHE_PERCENT = 0.20
     }
 }
