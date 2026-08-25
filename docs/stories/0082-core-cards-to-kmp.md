@@ -61,6 +61,13 @@ test that catches it already exists (`CardArtUserAgentTest`).
   with the Android implementation in `androidMain` and a JVM one for tests and the desktop build.
 - Coil `coil-network-okhttp` → `coil-network-ktor3`; `CardImageLoader` off `Context` and
   `android.util.Log`.
+
+  **The engine is CIO, not Ktor's OkHttp engine, and that was forced rather than chosen.**
+  `ktor-client-okhttp:3.5.1` requires OkHttp 5.3.2, which silently upgrades MockWebServer 4.12.0's
+  transitive OkHttp and breaks it (`okhttp3.internal.Util` was removed in OkHttp 5) — and
+  MockWebServer is not published at 5.3.2 at all, so matching the versions was not available. CIO
+  is the better answer regardless: it is pure Kotlin and multiplatform, so this module ends up
+  carrying no production HTTP engine that a second target would have to swap.
 - `CardArtHttpClient`'s `User-Agent` supplied to the module rather than derived from
   `PackageManager` inside it.
 - Both Koin modules moved to common, with the platform pieces provided at the Android edge.
@@ -77,8 +84,24 @@ test that catches it already exists (`CardArtUserAgentTest`).
 **One SQLite story for the whole repo.** Room 2.7 is multiplatform and rides on
 `androidx.sqlite`'s `SQLiteDriver`/`SQLiteConnection`/`SQLiteStatement`. `:core:decks` (story 0083)
 already uses Room, so choosing the same driver family here means the two modules share one SQLite
-dependency and one set of behaviours rather than each inventing its own. Pick the bundled driver so
-the desktop/JVM target has a SQLite implementation without relying on the host having one.
+dependency and one set of behaviours rather than each inventing its own.
+
+**The driver is a parameter, not a choice made in the module.** Android passes
+`AndroidSQLiteDriver` — the platform's own SQLite, the same engine `SQLiteDatabase` used, so the APK
+gains no native library and query behaviour is unchanged on the platform that ships. A JVM/desktop
+target passes `BundledSQLiteDriver`, which carries its own SQLite so the host does not have to
+provide one. Everything else about opening the file, and every query, is identical either way.
+
+**`EXPLAIN QUERY PLAN` is not available through the driver**, and two tests depend on it.
+`AndroidSQLiteStatement` splits into a SELECT variant and an "other" variant; an EXPLAIN lands in
+the latter, `step()` returns false immediately, and no rows come back. Those two tests are the only
+thing proving the NOCASE index is *used* rather than merely present (story 0042 defect D), so they
+read the plan through `SQLiteDatabase` against the same prepared file. A query plan is a property of
+SQLite and of the file, not of the API wrapper — and `AndroidSQLiteDriver` is that same SQLite.
+
+**`OPEN_READONLY` cannot be expressed.** `SQLiteDriver.open(fileName)` takes no flags. Nothing
+writes to the catalog and only `SELECT`s are issued, so behaviour is unchanged; what is lost is
+SQLite refusing a write if one were ever added by mistake. Recorded rather than discovered later.
 
 **Identical results are the acceptance bar, and they are testable exactly.** The catalog is
 immutable and bundled, so the same query against the same asset must return the same rows before and
