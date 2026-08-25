@@ -28,10 +28,22 @@ That is the whole list. There is no raw SQLite here and no platform storage logi
 files — the deck model, the import/export ports (stories 0034, 0078) and the legality checker are
 already pure Kotlin.
 
-**Room's KMP configuration is not just a dependency swap.** It needs the Room Gradle plugin, a
-`RoomDatabase.Builder` given an explicit database file path instead of a `Context`, and an
-`androidx.sqlite` driver — the same driver family story 0082 adopts for the card catalog, which is
-why the two stories should land close together and use the same choice.
+**Room's KMP configuration is not just a dependency swap.** It needs:
+
+- **`@ConstructedBy` and an `expect object`.** The Android-only build reached the generated
+  `DeckDatabase_Impl` by reflection from `DeckDatabase::class.java`. Common code has no `Class`, so
+  Room 2.7 replaces that lookup with an `expect object : RoomDatabaseConstructor<T>` whose `actual`
+  KSP generates per target.
+- **KSP configured per target** — `kspAndroid` and `kspJvm`, not a single `ksp(...)`. Each target
+  gets its own generated implementation; a plain `ksp(...)` configures neither.
+- **A `RoomDatabase.Builder` given an explicit database file path.** On Android that builder still
+  takes a `Context` alongside the path, so the construction itself stays at the Android edge; what
+  moves to common is everything downstream of it.
+- **An `androidx.sqlite` driver** — the same driver family story 0082 adopts for the card catalog,
+  which is why the two stories should land close together and use the same choice.
+
+The Room **Gradle plugin** is not among them: its job is to hand the processor a `schemaDirectory`,
+and `DeckDatabase` sets `exportSchema = false`.
 
 **`formats.json` is bundled and read through `AssetManager`.** Legality is offline by product
 decision (EPIC-09, story 0033: *every* deck operation works with no network), so this file must keep
@@ -45,9 +57,10 @@ lands.
 ## 3. Scope
 
 **In scope**
-- `:core:decks` applies `magefree.kmp.library` with `jvm()` + `androidTarget()`.
-- Room configured for KMP: the Room Gradle plugin, the `androidx.sqlite` driver chosen in 0082, and
-  `DeckDatabase` constructed from a file path rather than a `Context`.
+- `:core:decks` applies `magefree.kmp.android.library` — the convention plugin story 0082 added for a
+  multiplatform module that still ships on Android, carrying `jvm()` + `androidTarget()`.
+- Room configured for KMP: `@ConstructedBy`, per-target KSP, the `androidx.sqlite` driver chosen in
+  0082, and `DeckDatabase` opened from an explicit file path.
 - `FormatBundleLoader` reading through the bundled-resource interface introduced in 0082 rather than
   `AssetManager` directly.
 - `DeckModule` (Koin) in common, with the database path and resource source supplied at the Android
@@ -68,6 +81,14 @@ not what is in it, so the test that matters is: a database file written by the p
 reads and writes correctly under the ported code. Assert that against a fixture file committed for
 the purpose, not against a database the test itself just created — a fresh database proves only that
 the new path is self-consistent.
+
+**The database file path is where a port turns into data loss, and it is one line.** The pre-port
+builder took the bare name `decks.db` and let Room resolve it under `/data/data/<pkg>/databases/`.
+The multiplatform builder takes an absolute path instead — so the Android edge must resolve that same
+name through `Context.getDatabasePath(...)`. Anything else (`filesDir`, a cache dir, a name relative
+to the process working directory) opens a file that does not exist yet and silently hands the user an
+empty deck library. This is the failure the fixture test is pointed at first, before it is made to
+pass.
 
 **Reuse 0082's resource boundary rather than inventing a second one.** Two bundled-file mechanisms in
 two `:core:*` modules is precisely the drift §9.2 exists to prevent, and `formats.json` and

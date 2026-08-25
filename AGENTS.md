@@ -127,6 +127,9 @@ story is checked against.
 
 - **No `android.*` or `androidx.*` in `:protocol`, `:core:model`, `:core:network`, `:core:decks`,
   or the non-UI half of `:core:cards`.** They need only Kotlin, coroutines, serialization and Ktor.
+  The rule is about platform APIs, not the `androidx` prefix: `androidx.room`, `androidx.sqlite` and
+  `androidx.datastore` are multiplatform artifacts and belong in `commonMain` — an `android.content`
+  or `android.database` import is what it is aimed at.
   `:protocol` and `:core:model` hold this today and must keep holding it — they are the two modules
   a second client consumes first.
 - **Device-specific needs sit behind an interface at the module boundary** — storage paths,

@@ -136,10 +136,12 @@ coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.r
 # the client under test are the same generation.
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
 
-# Story 0033: Room-backed offline deck library. room-ktx adds coroutines/Flow query support; the
-# compiler runs through KSP, which :core:decks applies explicitly since story 0081 removed Hilt.
+# Story 0033: Room-backed offline deck library. Story 0083: `room-runtime` is Room's multiplatform
+# artifact — it resolves to `room-runtime-android` for the Android target and `room-runtime-jvm` for
+# the JVM one, and carries the coroutines/Flow query support `room-ktx` used to add. The compiler
+# runs through KSP, which :core:decks applies explicitly since story 0081 removed Hilt, and per
+# target (`kspAndroid`/`kspJvm`) since 0083.
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 
 [plugins]

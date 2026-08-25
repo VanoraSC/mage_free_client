@@ -11,19 +11,28 @@ import magefree.decks.model.Deck
 import magefree.decks.model.DeckFormat
 import magefree.decks.model.DeckId
 import magefree.decks.model.DeckSummary
-import java.util.UUID
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * [DeckRepository] over the local Room database. All work runs on the injected [ioDispatcher]; the
  * library [Flow] is produced by Room and mapped off that dispatcher. Nothing here touches the network.
  *
  * [now] and [newId] are injected so persistence tests get deterministic timestamps and ids.
+ *
+ * The defaults are the multiplatform stdlib's [Clock] and [Uuid] rather than `System
+ * .currentTimeMillis()` and `java.util.UUID` (story 0083) — same wall-clock milliseconds, same v4
+ * UUID string shape, so the values already stored on devices stay comparable to the ones written
+ * next. Both are still experimental APIs; nothing else about them is new.
  */
+@OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
 internal class RoomDeckRepository(
     private val dao: DeckDao,
     private val ioDispatcher: CoroutineDispatcher,
-    private val now: () -> Long = { System.currentTimeMillis() },
-    private val newId: () -> String = { UUID.randomUUID().toString() },
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val newId: () -> String = { Uuid.random().toString() },
 ) : DeckRepository {
     override fun observeLibrary(): Flow<List<DeckSummary>> =
         dao
