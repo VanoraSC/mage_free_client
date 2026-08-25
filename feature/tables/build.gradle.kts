@@ -1,7 +1,7 @@
 plugins {
     id("magefree.android.library")
     id("magefree.android.compose")
-    id("magefree.hilt")
+    id("magefree.koin")
 }
 
 android {
@@ -20,7 +20,7 @@ dependencies {
 
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.koin.compose)
 
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)

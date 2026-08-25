@@ -6,20 +6,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardImageLoader
 import magefree.designsystem.card.CardArtPlaceholder
 import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.card.CardDisplay
+import org.koin.compose.koinInject
 
 /*
  * The bridge between story 0031's Coil-backed [CardImageLoader] and the design system's abstract
@@ -96,26 +92,19 @@ class CoilCardArtRenderer(
     }
 }
 
-/** Hilt entry point exposing the app-wide [CardImageLoader] singleton (story 0031) to a Composable. */
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-internal interface CardArtLoaderEntryPoint {
-    fun cardImageLoader(): CardImageLoader
-}
-
 /**
  * Remembers a [CoilCardArtRenderer] bound to the current policy-correct Coil loader. Re-derives when
  * the [CardImageLoader]'s exposed loader changes (e.g. a cache-policy downgrade swaps the instance).
+ *
+ * Story 0081: a Composable is not an injection site, so Hilt needed a declared `@EntryPoint`
+ * interface plus `EntryPointAccessors.fromApplication(...)` to reach the app-wide [CardImageLoader]
+ * singleton (story 0031). Koin resolves from a Composable directly, so the interface is gone and
+ * this is a one-line read of the same singleton — the only conversion in this story whose *shape*
+ * changed rather than just its annotations.
  */
 @Composable
 fun rememberCardArtRenderer(contentScale: ContentScale = ContentScale.Crop): CardArtRenderer {
-    val context = LocalContext.current
-    val loader =
-        remember(context) {
-            EntryPointAccessors
-                .fromApplication(context.applicationContext, CardArtLoaderEntryPoint::class.java)
-                .cardImageLoader()
-        }
+    val loader: CardImageLoader = koinInject()
     val imageLoader by loader.imageLoader.collectAsStateWithLifecycle()
     return remember(imageLoader, contentScale) {
         CoilCardArtRenderer(imageLoader = imageLoader, requestBuilder = loader::buildRequest, contentScale = contentScale)

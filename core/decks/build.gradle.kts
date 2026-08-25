@@ -1,7 +1,10 @@
 plugins {
     id("magefree.android.library")
-    // Provides the KSP + Hilt recipe; :core:decks also runs Room's annotation processor through KSP.
-    id("magefree.hilt")
+    id("magefree.koin")
+    // Story 0081: KSP used to arrive with the Hilt convention plugin. Hilt is gone, but Room's
+    // compiler still needs it — so this module, now the only one running an annotation processor at
+    // all, applies KSP explicitly rather than inheriting it from a DI recipe that no longer has one.
+    alias(libs.plugins.ksp)
     // Story 0033: kotlinx.serialization parses the bundled formats.json legality asset.
     alias(libs.plugins.kotlin.serialization)
 }
@@ -21,6 +24,9 @@ android {
 }
 
 dependencies {
+    // Story 0081: `androidContext()` in this module's Koin module. Removed by stories 0082/0083.
+    implementation(libs.koin.android)
+
     // Legality checks set/rarity legality by card name across ALL its printings — read-only over the
     // bundled offline catalog. Consumed as a dependency; :core:decks never touches the catalog data.
     implementation(project(":core:cards"))

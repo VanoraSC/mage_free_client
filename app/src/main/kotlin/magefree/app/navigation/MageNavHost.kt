@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -19,6 +18,7 @@ import magefree.feature.tables.RoomArgs
 import magefree.feature.tables.TableRole
 import magefree.feature.tables.join.JoinTarget
 import magefree.feature.tables.room.TableRoomViewModel
+import org.koin.androidx.compose.koinViewModel
 import magefree.feature.cards.CardsRoute as CardsFeatureRoute
 import magefree.feature.game.GameBoardRoute as GameBoardFeatureRoute
 import magefree.feature.lobby.LobbyRoute as LobbyFeatureRoute
@@ -204,10 +204,10 @@ fun MageNavHost(
         composable<TableRoomNavRoute> { entry ->
             val route = entry.toRoute<TableRoomNavRoute>()
             // The room's own ViewModel, resolved here and handed to the feature route so both read the
-            // *same* instance (`hiltViewModel()` is scoped to this back-stack entry either way). That is
+            // *same* instance (`koinViewModel()` is scoped to this back-stack entry either way). That is
             // what lets the graph watch for the match-start hand-off without a second subscription to
             // `observeTable`, and without `:feature:tables` having to grow a navigation callback.
-            val roomViewModel: TableRoomViewModel = hiltViewModel()
+            val roomViewModel: TableRoomViewModel = koinViewModel()
             val roomState by roomViewModel.uiState.collectAsStateWithLifecycle()
 
             // Story 0055: the Epic-7 hand-off, finally connected. `MatchStarting` is the server's own

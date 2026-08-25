@@ -35,10 +35,15 @@ import kotlin.reflect.KClass
  * A destination silently deleted from either graph fails these tests, which is the story-0047 shape:
  * everything builds, everything is on the classpath, and the screen is simply unreachable.
  *
- * Deliberately kept to graph *structure*, not rendering: the feature routes resolve their view models
- * through Hilt, and standing up a Hilt component here would make a cheap gate expensive and couple it
- * to DI. What renders inside each destination is covered by the constant-pool reference guard (which
- * reads the compiled call) plus the on-device smoke (`scripts/smoke-on-device.sh`).
+ * Deliberately kept to graph *structure*, not rendering — but the reason has changed. It used to be
+ * that the feature routes resolved their view models through Hilt, and standing up a Hilt component
+ * here would have made a cheap gate expensive. Since story 0081 that cost is gone: Koin's container
+ * is a `startKoin` call, and
+ * [magefree.app.di.ScreenViewModelResolutionTest] does render each destination for real. This test
+ * stays structural because the two answer different questions — this one asks whether a destination
+ * *exists* (the story-0047 shape: everything builds and the screen is simply unreachable), that one
+ * asks whether it can *resolve what it needs*. A destination deleted from the graph would make the
+ * other test pass by never visiting it.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, qualifiers = "w411dp-h891dp")

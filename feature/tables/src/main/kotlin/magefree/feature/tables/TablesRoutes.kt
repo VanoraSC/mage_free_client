@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magefree.feature.tables.host.HostTableScreen
 import magefree.feature.tables.host.HostTableViewModel
@@ -16,6 +15,7 @@ import magefree.feature.tables.room.TableRoomViewModel
 import magefree.network.table.TablePhase
 import magefree.network.table.TableRef
 import magefree.network.table.TableState
+import org.koin.androidx.compose.koinViewModel
 
 /*
  * The `:feature:tables` entry points, each binding a Hilt ViewModel to its stateless screen and turning
@@ -47,7 +47,7 @@ fun HostTableRoute(
     onOpenRoom: (RoomArgs) -> Unit,
     onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: HostTableViewModel = hiltViewModel(),
+    viewModel: HostTableViewModel = koinViewModel(),
 ) {
     LaunchedEffect(Unit) { viewModel.start() }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -89,7 +89,7 @@ fun JoinTableRoute(
     onOpenRoom: (RoomArgs) -> Unit,
     onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: JoinTableViewModel = hiltViewModel(),
+    viewModel: JoinTableViewModel = koinViewModel(),
 ) {
     LaunchedEffect(target.tableId) { viewModel.start(target) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -122,7 +122,7 @@ fun TableRoomRoute(
     onExit: () -> Unit,
     onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: TableRoomViewModel = hiltViewModel(),
+    viewModel: TableRoomViewModel = koinViewModel(),
 ) {
     LaunchedEffect(args.tableId) {
         viewModel.observe(

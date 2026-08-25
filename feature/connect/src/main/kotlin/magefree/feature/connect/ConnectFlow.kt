@@ -8,9 +8,9 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magefree.model.ServerTarget
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * The `:feature:connect` entry point: a self-contained connect + sign-in flow the app shell mounts
@@ -52,7 +52,7 @@ fun ConnectFlow(
 fun ServerListRoute(
     onSelectServer: (ServerTarget) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ServerListViewModel = hiltViewModel(),
+    viewModel: ServerListViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     ServerListScreen(
@@ -78,7 +78,7 @@ fun SignInRoute(
     onConnected: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: SignInViewModel = hiltViewModel(),
+    viewModel: SignInViewModel = koinViewModel(),
 ) {
     LaunchedEffect(server) { viewModel.bind(server) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

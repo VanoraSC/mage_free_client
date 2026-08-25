@@ -1,0 +1,53 @@
+import org.gradle.api.Plugin
+import org.gradle.api.Project
+import org.gradle.api.artifacts.dsl.DependencyHandler
+import org.gradle.kotlin.dsl.dependencies
+
+/**
+ * `magefree.koin` — the fixed Koin recipe for any module that declares or consumes DI bindings
+ * (story 0081, EPIC-18). Replaces `magefree.hilt`.
+ *
+ * **No annotation processor, and that is the point.** Hilt needed KSP, the Hilt Gradle plugin, and
+ * `enableAggregatingTask = false` in every consuming module (its legacy javac aggregating task
+ * bundles a `kotlin-metadata-jvm` that cannot read Kotlin 2.4 metadata). All of that goes with it.
+ * KSP itself stays where it is still earned — Room in `:core:decks`.
+ *
+ * **`koin-core` only, by default.** It is multiplatform, so a `:core:*` module applying this plugin
+ * gains nothing that pins it to Android — which is what lets stories 0082-0084 move those modules
+ * without unpicking their DI first. Modules that genuinely need the Android or Compose bindings add
+ * them explicitly, so that need stays visible in the module's own build file rather than being
+ * granted silently to everything.
+ *
+ * **What is bought back in exchange for compile-time safety.** Hilt failed the build when a binding
+ * was missing; Koin fails at runtime, on whichever screen first asks for it. `koin-test` is added to
+ * the test classpath here, unconditionally, so the graph-verification test is always available to
+ * the module that declares bindings — the check is not optional infrastructure, it is the
+ * replacement for what Hilt was doing.
+ */
+class KoinConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        with(target) {
+            dependencies {
+                add("implementation", platform(libs.findLibrary("koin-bom").get()))
+                add("implementation", libs.findLibrary("koin-core").get())
+                addTestDependency(this, "testImplementation", platform(libs.findLibrary("koin-bom").get()))
+                addTestDependency(this, "testImplementation", libs.findLibrary("koin-test").get())
+            }
+        }
+    }
+
+    /**
+     * Android library/application modules split unit tests across `test` and `testDebug`; a plain
+     * Kotlin module has only `test`. Adding to a configuration that does not exist fails
+     * configuration, so the add is guarded rather than assumed.
+     */
+    private fun Project.addTestDependency(
+        handler: DependencyHandler,
+        configuration: String,
+        dependency: Any,
+    ) {
+        if (configurations.findByName(configuration) != null) {
+            handler.add(configuration, dependency)
+        }
+    }
+}

@@ -2,7 +2,6 @@ package magefree.feature.game.board
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +13,6 @@ import magefree.cards.art.CardArtFace
 import magefree.network.game.GameClient
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
-import javax.inject.Inject
 
 /**
  * The persistent context of a cast in flight — requirements §6.4's organizing principle: *"a player
@@ -164,9 +162,8 @@ data class CardDetailFaceUi(
  * the "have I picked a target yet" flag — are records of what **this app sent**, never of what the game
  * contains.
  */
-@HiltViewModel
+
 class GameBoardViewModel
-    @Inject
     constructor(
         private val gameClient: GameClient,
         private val passPolicy: PassPolicy,

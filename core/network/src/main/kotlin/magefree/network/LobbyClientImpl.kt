@@ -12,7 +12,6 @@ import magefree.protocol.RoomUserList
 import magefree.protocol.ServerMessage
 import magefree.protocol.TableList
 import java.util.UUID
-import javax.inject.Inject
 
 /**
  * The production [LobbyClient]: each call mints a `requestId`, sends the matching 0027 `GetX` over the
@@ -28,7 +27,6 @@ import javax.inject.Inject
  *   test can assert the exact id sent).
  */
 class LobbyClientImpl
-    @Inject
     constructor(
         private val bridgeClient: BridgeClient,
     ) : LobbyClient {

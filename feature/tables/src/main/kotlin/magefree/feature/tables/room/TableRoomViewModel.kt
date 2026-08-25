@@ -2,7 +2,6 @@ package magefree.feature.tables.room
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +22,6 @@ import magefree.network.table.TableClient
 import magefree.network.table.TablePhase
 import magefree.network.table.TableServerState
 import magefree.network.table.TableState
-import javax.inject.Inject
 
 /**
  * Immutable UI state for the table room. It wraps the [TableClient.observeTable] fold ([table]) with the
@@ -100,9 +98,8 @@ data class TableRoomUiState(
  * It renders a terminal "match starting" state on [MatchStarting] (the Epic-11 hand-off) and never wires
  * gameplay. Deck loads for submit/update are offline; only the table verbs touch the network.
  */
-@HiltViewModel
+
 class TableRoomViewModel
-    @Inject
     constructor(
         private val tableClient: TableClient,
         private val deckRepository: DeckRepository,

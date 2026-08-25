@@ -2,7 +2,6 @@ package magefree.feature.cards
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +14,6 @@ import magefree.cards.art.CardArtCachePolicyRepository
 import magefree.cards.art.PrefetchProgress
 import magefree.cards.art.PrefetchScope
 import magefree.cards.art.PrefetchStatus
-import javax.inject.Inject
 
 /**
  * The narrow art-cache surface the settings ViewModel drives, wrapping story 0031's
@@ -42,7 +40,6 @@ interface ArtCacheController {
 
 /** Production [ArtCacheController] delegating to 0031's policy repository + download manager. */
 class DefaultArtCacheController
-    @Inject
     constructor(
         private val policyRepository: CardArtCachePolicyRepository,
         private val downloadManager: ArtDownloadManager,
@@ -77,9 +74,8 @@ data class CardArtSettingsUiState(
  * the cache toggle and an opt-in "download all art" with progress/cancel — the full settings screen
  * is EPIC-17.
  */
-@HiltViewModel
+
 class CardArtSettingsViewModel
-    @Inject
     constructor(
         private val controller: ArtCacheController,
     ) : ViewModel() {

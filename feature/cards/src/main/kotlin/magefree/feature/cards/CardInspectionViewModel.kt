@@ -2,7 +2,6 @@ package magefree.feature.cards
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +14,6 @@ import magefree.cards.art.CardArtSize
 import magefree.cards.model.Card
 import magefree.cards.model.CardId
 import magefree.designsystem.card.CardDisplay
-import javax.inject.Inject
 
 /** The distinct surface the inspection screen renders. */
 enum class CardInspectionPhase {
@@ -67,9 +65,8 @@ data class CardInspectionUiState(
  *
  * Read-only — no in-game modifications/abilities (EPIC-11+) and no deck-add (Epic 9).
  */
-@HiltViewModel
+
 class CardInspectionViewModel
-    @Inject
     constructor(
         private val catalog: CardCatalog,
     ) : ViewModel() {

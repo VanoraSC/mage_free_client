@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magefree.app.connection.ConnectionSeverity
 import magefree.app.connection.ConnectionState
@@ -34,6 +33,7 @@ import magefree.app.connection.ConnectionStatusUiState
 import magefree.app.connection.ConnectionStatusViewModel
 import magefree.app.connection.toUiState
 import magefree.designsystem.theme.MageTheme
+import org.koin.androidx.compose.koinViewModel
 
 /** Visible label on the (stubbed) retry affordance; shared with tests. */
 const val CONNECTION_RETRY_LABEL: String = "Retry"
@@ -46,7 +46,7 @@ const val CONNECTION_RETRY_LABEL: String = "Retry"
 @Composable
 fun ConnectionStatusBar(
     modifier: Modifier = Modifier,
-    viewModel: ConnectionStatusViewModel = hiltViewModel(),
+    viewModel: ConnectionStatusViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     ConnectionStatusBar(

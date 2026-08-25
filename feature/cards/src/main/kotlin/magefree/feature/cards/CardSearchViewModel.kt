@@ -2,7 +2,6 @@ package magefree.feature.cards
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +21,6 @@ import magefree.cards.CardCatalog
 import magefree.cards.model.Card
 import magefree.cards.model.CardColor
 import magefree.cards.model.Rarity
-import javax.inject.Inject
 
 /** The distinct surface the search screen renders, derived from the query/filters and results. */
 enum class CardSearchPhase {
@@ -89,9 +87,7 @@ data class CardSearchUiState(
  * (null when a card has no printing -> placeholder). Read-only: no deck-add here (Epic 9).
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
-@HiltViewModel
 class CardSearchViewModel
-    @Inject
     constructor(
         private val catalog: CardCatalog,
     ) : ViewModel() {

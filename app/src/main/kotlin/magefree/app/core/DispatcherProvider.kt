@@ -2,8 +2,6 @@ package magefree.app.core
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Indirection over the standard [Dispatchers] so business logic never hard-codes `Dispatchers.*`
@@ -17,9 +15,8 @@ interface DispatcherProvider {
 }
 
 /** Production [DispatcherProvider] delegating to the real [Dispatchers]. Bound via Hilt. */
-@Singleton
+
 class DefaultDispatcherProvider
-    @Inject
     constructor() : DispatcherProvider {
         override val main: CoroutineDispatcher = Dispatchers.Main
         override val default: CoroutineDispatcher = Dispatchers.Default

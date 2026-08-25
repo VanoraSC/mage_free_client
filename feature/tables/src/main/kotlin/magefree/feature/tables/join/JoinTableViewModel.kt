@@ -2,7 +2,6 @@ package magefree.feature.tables.join
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +21,6 @@ import magefree.decks.model.DeckId
 import magefree.decks.model.DeckSummary
 import magefree.feature.tables.deckFormatFromLabel
 import magefree.network.table.TableClient
-import javax.inject.Inject
 
 /** The immutable target a [JoinTableViewModel] is bound to — the lobby table the user tapped Join on. */
 data class JoinTarget(
@@ -82,9 +80,8 @@ data class JoinTableUiState(
  * route can open the table room; a decline surfaces as [JoinTableUiState.errorMessage]. Deck pick + legality
  * are entirely offline; only the join call touches the network.
  */
-@HiltViewModel
+
 class JoinTableViewModel
-    @Inject
     constructor(
         private val tableClient: TableClient,
         private val deckRepository: DeckRepository,

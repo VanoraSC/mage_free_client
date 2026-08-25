@@ -2,7 +2,6 @@ package magefree.feature.connect
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +10,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import magefree.model.ServerTarget
 import magefree.network.ServerRepository
-import javax.inject.Inject
 
 /** Immutable UI state for the server list / add-server screen. */
 data class ServerListUiState(
@@ -72,9 +70,8 @@ data class ServerEditorState(
  * Picking a server is *not* VM state — selection is a navigation event the host handles, so the
  * screen raises it via a callback and this VM stays the owner of only the persisted list + form.
  */
-@HiltViewModel
+
 class ServerListViewModel
-    @Inject
     constructor(
         private val serverRepository: ServerRepository,
     ) : ViewModel() {

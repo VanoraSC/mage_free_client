@@ -2,14 +2,12 @@ package magefree.app.connection
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import magefree.app.core.DispatcherProvider
-import javax.inject.Inject
 
 /**
  * Semantic role for a connection state, decoupled from concrete colors. The ViewModel emits a role;
@@ -121,9 +119,8 @@ fun ConnectionState.toUiState(): ConnectionStatusUiState =
  * The source is injected behind the [ConnectionStatusSource] seam, so EPIC-04 swaps the real session
  * in without touching this ViewModel or the UI.
  */
-@HiltViewModel
+
 class ConnectionStatusViewModel
-    @Inject
     constructor(
         private val source: ConnectionStatusSource,
         dispatchers: DispatcherProvider,

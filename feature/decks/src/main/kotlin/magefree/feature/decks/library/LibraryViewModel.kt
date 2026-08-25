@@ -2,7 +2,6 @@ package magefree.feature.decks.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +22,6 @@ import magefree.decks.io.DeckImportResult
 import magefree.decks.model.DeckFormat
 import magefree.decks.model.DeckId
 import magefree.decks.model.DeckSummary
-import javax.inject.Inject
 
 /** The distinct surface the library screen renders. */
 enum class LibraryPhase {
@@ -62,9 +60,7 @@ data class LibraryUiState(
  * so the route can open the builder on them.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@HiltViewModel
 class LibraryViewModel
-    @Inject
     constructor(
         private val repository: DeckRepository,
         private val deckIO: DeckIO,

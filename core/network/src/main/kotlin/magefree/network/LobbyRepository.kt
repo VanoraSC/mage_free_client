@@ -15,11 +15,7 @@ import kotlinx.coroutines.launch
 import magefree.model.ConnectionState
 import magefree.model.LobbyLoadState
 import magefree.model.LobbySnapshot
-import magefree.network.di.ApplicationScope
-import magefree.network.di.IoDispatcher
 import java.util.concurrent.atomic.AtomicReference
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The observable, refreshable lobby data layer (story 0028). Holds a single [StateFlow] of
@@ -37,18 +33,13 @@ import javax.inject.Singleton
  * Sorting/filtering is deliberately **not** here — the raw snapshot is exposed and 0029 does
  * presentation.
  */
-@Singleton
+
 class LobbyRepository
-    @Inject
     constructor(
         private val lobbyClient: LobbyClient,
-        // @JvmSuppressWildcards: StateFlow is declared covariant (`out T`), so Kotlin would compile this
-        // injected key to `StateFlow<? extends ConnectionState>` while the provider supplies the
-        // invariant `StateFlow<ConnectionState>` — a Dagger missing-binding. Suppressing wildcards on
-        // both ends keys them identically. (Surfaced when 0029 first assembled this into the app graph.)
-        private val connectionState: StateFlow<@JvmSuppressWildcards ConnectionState>,
-        @IoDispatcher private val dispatcher: CoroutineDispatcher,
-        @ApplicationScope private val scope: CoroutineScope,
+        private val connectionState: StateFlow<ConnectionState>,
+        private val dispatcher: CoroutineDispatcher,
+        private val scope: CoroutineScope,
     ) {
         private val _snapshot = MutableStateFlow(LobbySnapshot())
 
