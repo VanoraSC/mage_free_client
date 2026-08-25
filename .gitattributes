@@ -6,3 +6,6 @@ Dockerfile text eol=lf
 *.Dockerfile text eol=lf
 docker/**/Dockerfile text eol=lf
 *.yml text eol=lf
+
+# Story 0083: the committed pre-port deck database fixture is binary; never line-ending-converted.
+*.db binary

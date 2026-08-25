@@ -13,7 +13,7 @@ runs on the JVM is a portability regression detector that fires on every commit.
 
 ## 2. Context & background
 
-**Twelve Robolectric files exist; seven are in scope and five are not.** Enumerated:
+**Fourteen Robolectric files exist; seven are in scope and seven are not.** Enumerated:
 
 | In scope — logic modules | |
 |---|---|
@@ -33,7 +33,12 @@ runs on the JVM is a portability regression detector that fires on every commit.
 | `feature/decks/src/testDebug/.../AddCardsTypingTest.kt` | |
 | `feature/game/src/testDebug/.../GameBoardScreenTest.kt` | |
 
-**Those five are not collateral — they are the hermetic gate.** `docs/stories/README.md` records
+| Out of scope — they test the Android edge itself (story 0083) | |
+|---|---|
+| `core/decks/.../ExistingDeckDatabaseTest.kt` | a pre-port deck library opens through the shipping Android construction — `getDatabasePath` and `AndroidSQLiteDriver` are the subject |
+| `core/decks/.../legality/FormatBundleLoaderTest.kt` | `formats.json` really ships in the APK and reads back through `AndroidBundledFiles` |
+
+**The five Compose tests are not collateral — they are the hermetic gate.** `docs/stories/README.md` records
 that Compose tests running under Robolectric in `src/testDebug` are what catches a control that
 "rendered, reported a click, and did nothing", and that device-only tests not running pre-merge is
 how an entire epic once stayed unmounted. **They stay on Android under Robolectric.** This story does

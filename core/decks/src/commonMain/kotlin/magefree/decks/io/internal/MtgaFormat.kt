@@ -5,7 +5,6 @@ import magefree.decks.io.DeckImportIssueKind
 import magefree.decks.model.DeckList
 import magefree.decks.model.DeckListCard
 import magefree.decks.model.DeckZone
-import java.util.Locale
 
 /**
  * MTG Arena export grammar, ported from `mage.cards.decks.importer.MtgaImporter` and
@@ -41,7 +40,7 @@ internal object MtgaFormat {
         text.lineSequence().forEachIndexed { index, rawLine ->
             val lineNumber = index + 1
             val line = rawLine.replace(" *F*", "").trim()
-            val lower = line.lowercase(Locale.ENGLISH)
+            val lower = line.lowercase()
 
             if (lower.startsWith("deck") || lower.startsWith("mainboard")) {
                 sideboard = false
@@ -106,7 +105,7 @@ internal object MtgaFormat {
         }
 
     private fun line(c: DeckListCard): String {
-        val set = c.setCode.uppercase(Locale.ENGLISH).let { if (it == "DOM") "DAR" else it }
+        val set = c.setCode.uppercase().let { if (it == "DOM") "DAR" else it }
         return "${c.amount} ${c.cardName} ($set) ${c.collectorNumber}"
     }
 
@@ -124,7 +123,7 @@ internal object MtgaFormat {
     /** Heuristic port of `MtgaImporter.isMTGA`: header marks, or a first card line carrying a `(SET)`. */
     fun looksLikeMtga(text: String): Boolean {
         val firstLine = text.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: return false
-        val lower = firstLine.lowercase(Locale.ENGLISH)
+        val lower = firstLine.lowercase()
         if (lower.startsWith("deck") ||
             lower.startsWith("mainboard") ||
             lower.startsWith("sideboard") ||
