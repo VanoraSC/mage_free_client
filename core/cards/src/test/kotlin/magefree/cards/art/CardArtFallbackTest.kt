@@ -2,6 +2,7 @@ package magefree.cards.art
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import coil3.memory.MemoryCache
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -13,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import okio.Path.Companion.toOkioPath
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -116,7 +118,9 @@ class CardArtFallbackTest {
             // Story 0082: no test here asserts on the failure log, but the parameter is required so a
             // loader can never be built that silently drops it.
             logWarning = { },
-            diskCacheDirectory = diskDir,
+            diskCacheDirectory = diskDir.toOkioPath(),
+            // Sized as the platform edge does, so the loader under test behaves as it ships.
+            memoryCache = { MemoryCache.Builder().maxSizePercent(context, CardImageLoader.MEMORY_CACHE_PERCENT).build() },
             httpClient = fakeHttp,
         )
     }

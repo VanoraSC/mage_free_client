@@ -1,7 +1,7 @@
 package magefree.cards.art
 
-import android.content.Context
 import coil3.ImageLoader
+import coil3.PlatformContext
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.NetworkFetcher
@@ -19,8 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okio.Path.Companion.toOkioPath
-import java.io.File
+import okio.Path
 
 /**
  * Warms/queries the art cache for a single [CardArtRequest]. This is the narrow surface the bulk
@@ -59,12 +58,26 @@ interface ArtWarmer {
  * placeholder, and the card's text stays available from the bundled catalog (0030).
  */
 class CardImageLoader(
-    private val context: Context,
+    /**
+     * Coil's own context type. On Android it is a `typealias` for `android.content.Context`, so this
+     * is the same object as before and nothing about the shipping behaviour changes — but the type
+     * is multiplatform, which is what lets this class leave `androidMain` (story 0082).
+     */
+    private val context: PlatformContext,
     private val source: XMageImageSource,
     private val policyRepository: CardArtCachePolicyRepository,
     private val appScope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
-    private val diskCacheDirectory: File = File(context.cacheDir, DISK_CACHE_DIR),
+    private val diskCacheDirectory: Path,
+    /**
+     * How big the in-memory cache is, decided at the platform edge.
+     *
+     * Coil's `maxSizePercent` takes an `android.content.Context` and is Android-only, so sizing the
+     * cache as a share of the device's memory class cannot live here. Rather than replace it with a
+     * fixed byte count — a behaviour change on the platform that ships — the whole decision is
+     * supplied, and Android keeps passing `maxSizePercent`.
+     */
+    private val memoryCache: () -> MemoryCache,
     httpClient: HttpClient? = null,
     /**
      * The `User-Agent` the default client sends. **Load-bearing, not courtesy** — Scryfall answers
@@ -180,14 +193,12 @@ class CardImageLoader(
                     add(CardArtKeyer(source))
                     add(CardArtFetcher.Factory(source, networkFetcherFactory))
                     add(networkFetcherFactory)
-                }.memoryCache {
-                    MemoryCache.Builder().maxSizePercent(context, MEMORY_CACHE_PERCENT).build()
-                }
+                }.memoryCache(memoryCache)
         if (policy.usesDiskCache) {
             builder.diskCache {
                 DiskCache
                     .Builder()
-                    .directory(diskCacheDirectory.toOkioPath())
+                    .directory(diskCacheDirectory)
                     .maxSizeBytes(DISK_CACHE_MAX_BYTES)
                     .build()
             }
@@ -203,8 +214,9 @@ class CardImageLoader(
         /** Logcat tag for [logWarning]'s Android wiring (see `cardArtModule`). */
         const val LOG_TAG = "CardImageLoader"
 
-        private const val DISK_CACHE_DIR = "card_art"
+        /** Cache subdirectory + memory share, applied by the platform edge (see `cardArtModule`). */
+        const val DISK_CACHE_DIR = "card_art"
         private const val DISK_CACHE_MAX_BYTES = 512L * 1024 * 1024 // 512 MB ceiling for warmed art
-        private const val MEMORY_CACHE_PERCENT = 0.20
+        const val MEMORY_CACHE_PERCENT = 0.20
     }
 }

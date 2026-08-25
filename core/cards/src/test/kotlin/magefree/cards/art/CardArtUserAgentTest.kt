@@ -2,6 +2,7 @@ package magefree.cards.art
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import coil3.memory.MemoryCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -11,6 +12,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
+import okio.Path.Companion.toOkioPath
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,11 +35,11 @@ import java.util.concurrent.TimeUnit
  * every card image request in the app failed silently and the UI degraded to placeholders.
  *
  * ### Why this test is built the way it is
- * [CardImageLoader] has a `callFactory` constructor seam that the cache-policy tests use to inject a
- * fake engine. **This test deliberately does not use it.** An injected `Call.Factory` carries whatever
+ * [CardImageLoader] has a `httpClient` constructor seam that the cache-policy tests use to inject a
+ * fake engine. **This test deliberately does not use it.** An injected `HttpClient` carries whatever
  * headers the test gave it, so asserting on one would pass whether or not the shipping code sets a
  * `User-Agent` — it bypasses the exact default path that was broken. So the loader here is built with
- * `callFactory` **omitted**, and the only thing substituted is the *URL source*: a fake
+ * `httpClient` **omitted**, and the only thing substituted is the *URL source*: a fake
  * [XMageImageSource] pointing at a local [MockWebServer]. That leaves the production HTTP client
  * intact and lets the server record the bytes that actually went out on the wire.
  *
@@ -84,7 +86,7 @@ class CardArtUserAgentTest {
     }
 
     /**
-     * A loader in its **shipping** configuration: no `callFactory` argument, so it builds and uses
+     * A loader in its **shipping** configuration: no `httpClient` argument, so it builds and uses
      * whatever HTTP client production uses.
      */
     private fun defaultLoader(): CardImageLoader {
@@ -101,8 +103,10 @@ class CardArtUserAgentTest {
             // Story 0082: no test here asserts on the failure log, but the parameter is required so a
             // loader can never be built that silently drops it.
             logWarning = { },
-            diskCacheDirectory = diskDir,
-            // callFactory deliberately omitted — this test exists to exercise the default.
+            diskCacheDirectory = diskDir.toOkioPath(),
+            // Sized as the platform edge does, so the loader under test behaves as it ships.
+            memoryCache = { MemoryCache.Builder().maxSizePercent(context, CardImageLoader.MEMORY_CACHE_PERCENT).build() },
+            // httpClient deliberately omitted — this test exists to exercise the default.
         )
     }
 

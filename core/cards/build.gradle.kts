@@ -44,6 +44,8 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.okio)
     // Story 0031: cache-policy setting persisted the AGENTS.md way (DataStore for prefs).
+    // Story 0082: the multiplatform half of DataStore. The Android `preferencesDataStore` delegate
+    // that builds the file lives in this module's Koin wiring, which is the platform edge.
     implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit4)

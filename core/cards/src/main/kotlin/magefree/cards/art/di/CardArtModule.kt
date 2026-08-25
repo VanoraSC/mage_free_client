@@ -3,6 +3,7 @@ package magefree.cards.art.di
 import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.preferencesDataStore
+import coil3.memory.MemoryCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,8 +16,10 @@ import magefree.cards.art.CatalogPrefetchTargetSource
 import magefree.cards.art.ScryfallImageSource
 import magefree.cards.art.XMageImageSource
 import magefree.cards.art.androidAppVersion
+import okio.Path.Companion.toOkioPath
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
+import java.io.File
 
 /** The card-art preferences (cache policy) live in their own Preferences DataStore file. */
 private val Context.cardArtDataStore by preferencesDataStore(name = "card_art_prefs")
@@ -49,9 +52,21 @@ val cardArtModule =
                 policyRepository = get(),
                 appScope = appScope,
                 ioDispatcher = Dispatchers.IO,
-                // Story 0082: the `User-Agent` is built here, from the version the platform reports,
-                // rather than inside the loader — that one string was the whole reason the art
-                // pipeline needed a `PackageManager`. Scryfall answers HTTP 400 without it (0056).
+                // Story 0082: the art cache's two platform decisions are made here rather than
+                // inside the loader. The disk cache still lives in `cacheDir` (evictable by the
+                // system), and the memory cache is still sized as a share of the device's memory
+                // class — `maxSizePercent` is Android-only, so keeping the call here preserves the
+                // shipping behaviour instead of substituting a fixed byte count for it.
+                diskCacheDirectory = File(context.cacheDir, CardImageLoader.DISK_CACHE_DIR).toOkioPath(),
+                memoryCache = {
+                    MemoryCache
+                        .Builder()
+                        .maxSizePercent(context, CardImageLoader.MEMORY_CACHE_PERCENT)
+                        .build()
+                },
+                // The `User-Agent` is built here, from the version the platform reports, rather than
+                // inside the loader — that one string was the whole reason the art pipeline needed a
+                // `PackageManager`. Scryfall answers HTTP 400 without it (0056).
                 userAgent = CardArtUserAgent.value(androidAppVersion(context)),
                 // Logcat is still the only place a systemic art failure is visible; there is no
                 // in-app diagnostic surface for it yet.
