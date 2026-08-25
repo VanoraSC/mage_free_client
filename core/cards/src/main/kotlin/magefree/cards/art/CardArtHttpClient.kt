@@ -41,30 +41,40 @@ internal object CardArtUserAgent {
      */
     const val UNKNOWN_VERSION = "unknown"
 
-    /** e.g. `mage-free-client/0.1.0 (+https://github.com/VanoraSC/mage_free_client)`. */
-    fun value(context: Context): String = "$PRODUCT/${appVersion(context)} (+$PROJECT_URL)"
-
     /**
-     * The installed package's `versionName` — i.e. the version declared by the app's build
-     * (`app/build.gradle.kts`, `versionName = "0.1.0"`), read back at runtime.
+     * e.g. `mage-free-client/0.1.0 (+https://github.com/VanoraSC/mage_free_client)`.
      *
-     * This module has no `BuildConfig` version of its own and cannot see the app module's, so the
-     * package manager is the one source that tracks the real build rather than duplicating a literal
-     * that would drift the first time the app version changes. In a JVM/Robolectric unit test the
-     * manifest under test declares no `versionName`, so this yields [UNKNOWN_VERSION] there — which
-     * is why the tests assert on the descriptive tokens, not on a version string.
+     * Story 0082 made this take the version rather than read it: deriving it from `PackageManager`
+     * pinned the whole art pipeline to Android for one string. A blank or missing version degrades
+     * to [UNKNOWN_VERSION] rather than producing `mage-free-client/ (+…)`, because the descriptive
+     * token is the part Scryfall checks and an empty version must not be able to break it.
      */
-    private fun appVersion(context: Context): String =
-        try {
-            context.packageManager
-                .getPackageInfo(context.packageName, 0)
-                ?.versionName
-                ?.takeIf { it.isNotBlank() }
-                ?: UNKNOWN_VERSION
-        } catch (_: PackageManager.NameNotFoundException) {
-            UNKNOWN_VERSION
-        }
+    fun value(appVersion: String?): String = "$PRODUCT/${appVersion?.takeIf { it.isNotBlank() } ?: UNKNOWN_VERSION} (+$PROJECT_URL)"
 }
+
+/**
+ * The installed package's `versionName` — i.e. the version declared by the app's build
+ * (`app/build.gradle.kts`, `versionName = "0.1.0"`), read back at runtime.
+ *
+ * This module has no `BuildConfig` version of its own and cannot see the app module's, so the
+ * package manager is the one source that tracks the real build rather than duplicating a literal
+ * that would drift the first time the app version changes. In a JVM/Robolectric unit test the
+ * manifest under test declares no `versionName`, so this yields `null` there — which is why the
+ * tests assert on the descriptive tokens, not on a version string.
+ *
+ * Android-only, and the only thing left in this file that is: story 0082 moved the string-building
+ * into [CardArtUserAgent.value], so the KMP conversion relocates this one function rather than
+ * unpicking the pipeline.
+ */
+internal fun androidAppVersion(context: Context): String? =
+    try {
+        context.packageManager
+            .getPackageInfo(context.packageName, 0)
+            ?.versionName
+            ?.takeIf { it.isNotBlank() }
+    } catch (_: PackageManager.NameNotFoundException) {
+        null
+    }
 
 /**
  * Sets the two headers Scryfall's API requires (`User-Agent` and `Accept`), replacing rather than
@@ -96,8 +106,8 @@ internal class ScryfallHeadersInterceptor(
  * The `Call.Factory` [CardImageLoader] uses when no test double is injected — i.e. the one that ships.
  * It is a stock [OkHttpClient] plus [ScryfallHeadersInterceptor]; no other behaviour is altered.
  */
-internal fun defaultArtCallFactory(context: Context): Call.Factory =
+internal fun defaultArtCallFactory(userAgent: String): Call.Factory =
     OkHttpClient
         .Builder()
-        .addNetworkInterceptor(ScryfallHeadersInterceptor(CardArtUserAgent.value(context)))
+        .addNetworkInterceptor(ScryfallHeadersInterceptor(userAgent))
         .build()

@@ -98,6 +98,9 @@ class CardArtUserAgentTest {
             policyRepository = CardArtCachePolicyRepository(dataStore),
             appScope = scope,
             ioDispatcher = Dispatchers.Unconfined,
+            // Story 0082: no test here asserts on the failure log, but the parameter is required so a
+            // loader can never be built that silently drops it.
+            logWarning = { },
             diskCacheDirectory = diskDir,
             // callFactory deliberately omitted — this test exists to exercise the default.
         )

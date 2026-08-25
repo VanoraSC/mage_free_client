@@ -1,7 +1,6 @@
 package magefree.cards.art
 
 import android.content.Context
-import android.util.Log
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
@@ -67,6 +66,19 @@ class CardImageLoader(
     private val ioDispatcher: CoroutineDispatcher,
     private val diskCacheDirectory: File = File(context.cacheDir, DISK_CACHE_DIR),
     callFactory: Call.Factory? = null,
+    /**
+     * The `User-Agent` the default client sends. **Load-bearing, not courtesy** — Scryfall answers
+     * HTTP 400 to a generic agent and every art surface in the app degrades to its placeholder
+     * (story 0056). Supplied rather than defaulted so there is no way to construct a loader that
+     * quietly sends nothing; story 0082 moved it off `PackageManager`.
+     */
+    userAgent: String = CardArtUserAgent.value(null),
+    /**
+     * Where a failed fetch is reported. Injected rather than calling `android.util.Log` directly, so
+     * the failure path is not what pins this class to Android — and so a JVM host can route it
+     * somewhere real instead of dropping it.
+     */
+    private val logWarning: (String) -> Unit,
 ) : ArtWarmer {
     private val networkFetcherFactory: NetworkFetcher.Factory =
         if (callFactory != null) {
@@ -75,7 +87,7 @@ class CardImageLoader(
             // Not a bare OkHttpNetworkFetcherFactory(): its client sends OkHttp's generic
             // `okhttp/<version>` agent, which Scryfall refuses with HTTP 400 (story 0056). The lambda
             // is evaluated lazily by Coil, so the client is still built on first use.
-            OkHttpNetworkFetcherFactory(callFactory = { defaultArtCallFactory(context) })
+            OkHttpNetworkFetcherFactory(callFactory = { defaultArtCallFactory(userAgent) })
         }
 
     private val rebuildMutex = Mutex()
@@ -133,8 +145,7 @@ class CardImageLoader(
                 // indistinguishable from ordinary per-card misses (a bad printing, an offline
                 // device) in anything short of attaching a debugger. Logcat is the only place this
                 // is currently visible; there is no in-app diagnostic surface for it yet.
-                Log.w(
-                    LOG_TAG,
+                logWarning(
                     "Art fetch failed for ${request.setCode} #${request.collectorNumber} " +
                         "(${source.primaryUrl(request)}): ${result.throwable}",
                 )
@@ -188,10 +199,12 @@ class CardImageLoader(
         return builder.build()
     }
 
-    private companion object {
+    internal companion object {
+        /** Logcat tag for [logWarning]'s Android wiring (see `cardArtModule`). */
         const val LOG_TAG = "CardImageLoader"
-        const val DISK_CACHE_DIR = "card_art"
-        const val DISK_CACHE_MAX_BYTES = 512L * 1024 * 1024 // 512 MB ceiling for warmed art
-        const val MEMORY_CACHE_PERCENT = 0.20
+
+        private const val DISK_CACHE_DIR = "card_art"
+        private const val DISK_CACHE_MAX_BYTES = 512L * 1024 * 1024 // 512 MB ceiling for warmed art
+        private const val MEMORY_CACHE_PERCENT = 0.20
     }
 }

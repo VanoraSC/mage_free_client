@@ -1,6 +1,7 @@
 package magefree.cards.art.di
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -8,10 +9,12 @@ import kotlinx.coroutines.SupervisorJob
 import magefree.cards.CardCatalog
 import magefree.cards.art.ArtDownloadManager
 import magefree.cards.art.CardArtCachePolicyRepository
+import magefree.cards.art.CardArtUserAgent
 import magefree.cards.art.CardImageLoader
 import magefree.cards.art.CatalogPrefetchTargetSource
 import magefree.cards.art.ScryfallImageSource
 import magefree.cards.art.XMageImageSource
+import magefree.cards.art.androidAppVersion
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
@@ -39,12 +42,20 @@ val cardArtModule =
         single { CardArtCachePolicyRepository(androidContext().cardArtDataStore) }
 
         single {
+            val context = androidContext()
             CardImageLoader(
-                context = androidContext(),
+                context = context,
                 source = get(),
                 policyRepository = get(),
                 appScope = appScope,
                 ioDispatcher = Dispatchers.IO,
+                // Story 0082: the `User-Agent` is built here, from the version the platform reports,
+                // rather than inside the loader — that one string was the whole reason the art
+                // pipeline needed a `PackageManager`. Scryfall answers HTTP 400 without it (0056).
+                userAgent = CardArtUserAgent.value(androidAppVersion(context)),
+                // Logcat is still the only place a systemic art failure is visible; there is no
+                // in-app diagnostic surface for it yet.
+                logWarning = { message -> Log.w(CardImageLoader.LOG_TAG, message) },
             )
         }
 
