@@ -130,6 +130,11 @@ story is checked against.
   The rule is about platform APIs, not the `androidx` prefix: `androidx.room`, `androidx.sqlite` and
   `androidx.datastore` are multiplatform artifacts and belong in `commonMain` — an `android.content`
   or `android.database` import is what it is aimed at.
+  **`java.*` in `commonMain` is not caught by the build.** While every target is JVM-family
+  (`androidTarget()` + `jvm()`), Kotlin disables the shared-source-set metadata compilation, so
+  `commonMain` is only ever compiled with the JDK on the classpath. Ten files currently rely on that
+  — enumerated in `docs/stories/0084-core-network-to-kmp.md` §4. Do not add more; a reviewer, not the
+  compiler, is the guard until a non-JVM target exists.
   `:protocol` and `:core:model` hold this today and must keep holding it — they are the two modules
   a second client consumes first.
 - **Device-specific needs sit behind an interface at the module boundary** — storage paths,

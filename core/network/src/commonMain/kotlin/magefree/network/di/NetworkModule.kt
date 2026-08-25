@@ -1,12 +1,9 @@
 package magefree.network.di
 
-import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import magefree.model.ConnectionState
@@ -19,21 +16,17 @@ import magefree.network.ServerRepository
 import magefree.network.game.GameClient
 import magefree.network.game.GameClients
 import magefree.network.ktor.KtorBridgeClient
-import magefree.network.reconnect.AndroidConnectivityObserver
 import magefree.network.reconnect.AppLifecycleObserver
 import magefree.network.reconnect.ConnectivityObserver
-import magefree.network.reconnect.ProcessAppLifecycleObserver
 import magefree.network.table.TableClient
 import magefree.network.table.TableClients
-import org.koin.android.ext.koin.androidContext
+import org.koin.core.module.Module
+import org.koin.core.scope.Scope
 import org.koin.dsl.module
 
-/** The user's saved server list lives in this Preferences DataStore file. */
-private val Context.serverDataStore by preferencesDataStore(name = "server_targets")
-
 /**
- * Koin provisioning for `:core:network`'s session/persistence layer (story 0081; was Hilt's
- * `NetworkModule`).
+ * Koin provisioning for `:core:network`'s session/persistence layer, in common (story 0084; was
+ * Hilt's `NetworkModule`, then story 0081's Koin module).
  *
  * - Binds the production [BridgeClient] to the real Ktor WebSocket implementation; tests construct a
  *   [magefree.network.fake.FakeBridgeClient] directly and never touch Koin.
@@ -44,25 +37,34 @@ private val Context.serverDataStore by preferencesDataStore(name = "server_targe
  * Every binding here is a `single` — the Hilt graph made all of these `@Singleton`, and one live
  * session shared by the lobby, table and game clients is load-bearing rather than incidental.
  *
- * The `androidContext()` reads are the module's remaining tie to Android; story 0084 removes them
- * when `:core:network` becomes multiplatform. They are deliberately confined to this file.
+ * **Four things are platform-shaped and arrive as parameters.** The two reconnect observers have
+ * Android implementations backed by `ConnectivityManager` and `ProcessLifecycleOwner`; the
+ * Preferences [DataStore] is built from a `Context` on Android; and `Dispatchers.IO` does not exist
+ * in a common source set. Everything else — every client, every repository, and the wiring between
+ * them — is identical on every target and lives here. Each is a `Scope.() ->` because on Android
+ * they need `androidContext()`, which is only reachable while Koin is resolving a definition.
  */
-val networkModule =
+fun networkDefinitions(
+    connectivityObserver: Scope.() -> ConnectivityObserver,
+    lifecycleObserver: Scope.() -> AppLifecycleObserver,
+    serverDataStore: Scope.() -> DataStore<Preferences>,
+    ioDispatcher: CoroutineDispatcher,
+): Module =
     module {
         /**
          * The device-connectivity observer (story 0024) that lets the reconnect loop wake a waiting
          * back-off the instant the network returns. Android-backed; a JVM/unit context uses the
          * always-on default inside [KtorBridgeClient].
          */
-        single<ConnectivityObserver> { AndroidConnectivityObserver(androidContext()) }
+        single<ConnectivityObserver> { connectivityObserver() }
 
         /**
-         * The whole-app foreground/background observer (story 0024). Backed by
-         * `ProcessLifecycleOwner`, it nudges a reconnect on foreground and relaxes retries while
-         * backgrounded (the bridge holds the session per story 0023). Lives here (not `:app`) so
+         * The whole-app foreground/background observer (story 0024). On Android it is backed by
+         * `ProcessLifecycleOwner`: it nudges a reconnect on foreground and relaxes retries while
+         * backgrounded (the bridge holds the session per story 0023). Bound here (not in `:app`) so
          * `:app` needs no lifecycle wiring.
          */
-        single<AppLifecycleObserver> { ProcessAppLifecycleObserver() }
+        single<AppLifecycleObserver> { lifecycleObserver() }
 
         single<BridgeClient> { KtorBridgeClient(connectivity = get(), lifecycle = get()) }
 
@@ -106,11 +108,11 @@ val networkModule =
             )
         }
 
-        single<CoroutineDispatcher>(IoDispatcher) { Dispatchers.IO }
+        single<CoroutineDispatcher>(IoDispatcher) { ioDispatcher }
 
         single(ApplicationScope) { CoroutineScope(SupervisorJob() + get<CoroutineDispatcher>(IoDispatcher)) }
 
-        single<DataStore<Preferences>> { androidContext().serverDataStore }
+        single<DataStore<Preferences>> { serverDataStore() }
 
         single { ServerRepository(dataStore = get()) }
     }

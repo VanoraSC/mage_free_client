@@ -1,9 +1,7 @@
 package magefree.network.ktor
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
-import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
@@ -311,10 +309,11 @@ class KtorBridgeClient(
          */
         private const val LOGOUT_SEND_TIMEOUT_MILLIS = 2_000L
 
-        /** The default Android-friendly engine (OkHttp) with the WebSockets plugin installed. */
-        fun defaultHttpClient(): HttpClient =
-            HttpClient(OkHttp) {
-                install(WebSockets)
-            }
+        /**
+         * The platform's engine with the WebSockets plugin installed — OkHttp on both current
+         * targets. Story 0084 moved the engine itself behind [bridgeHttpClient] because an engine
+         * cannot be named from a common source set; nothing about the client this returns changed.
+         */
+        fun defaultHttpClient(): HttpClient = bridgeHttpClient()
     }
 }
