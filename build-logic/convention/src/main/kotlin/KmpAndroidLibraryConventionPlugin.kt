@@ -31,6 +31,14 @@ class KmpAndroidLibraryConventionPlugin : Plugin<Project> {
                 apply("org.jlleitschuh.gradle.ktlint")
             }
             extensions.configure<KotlinMultiplatformExtension> {
+                // Story 0084: every module here now declares `expect` classes — Room's database
+                // constructor in `:core:decks`, and the `java.util.concurrent` aliases that let
+                // `:core:cards`/`:core:network` keep their real concurrency primitives while naming
+                // no `java.*` type in `commonMain`. Expect/actual *classes* are still flagged Beta by
+                // the compiler; this is their documented shape, so the warning is turned off once
+                // here rather than carried on every build of every target.
+                compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }
+
                 jvmToolchain(17)
                 androidTarget {
                     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }

@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.concurrent.CancellationException
-import java.util.concurrent.atomic.AtomicInteger
+import magefree.cards.concurrent.AtomicCounter
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * User-initiated **bulk pre-download** that warms the disk cache for full offline art (story 0031).
@@ -93,15 +93,15 @@ class ArtDownloadManager(
             return
         }
 
-        val warmed = AtomicInteger()
-        val skipped = AtomicInteger()
-        val failed = AtomicInteger()
+        val warmed = AtomicCounter()
+        val skipped = AtomicCounter()
+        val failed = AtomicCounter()
 
         // A fixed worker pool pulling from a shared cursor, rather than one coroutine per target
         // gated by a semaphore: PrefetchScope.All would otherwise launch ~32k coroutines (x the
         // displayed sizes) that all park before acquiring a permit. Same bounded concurrency, a
         // handful of coroutines.
-        val cursor = AtomicInteger()
+        val cursor = AtomicCounter()
         try {
             coroutineScope {
                 repeat(maxConcurrency.coerceAtLeast(1).coerceAtMost(targets.size)) {
@@ -146,9 +146,9 @@ class ArtDownloadManager(
      */
     private suspend fun warmOne(
         request: CardArtRequest,
-        warmed: AtomicInteger,
-        skipped: AtomicInteger,
-        failed: AtomicInteger,
+        warmed: AtomicCounter,
+        skipped: AtomicCounter,
+        failed: AtomicCounter,
     ) {
         try {
             if (warmer.isCached(request)) {
@@ -168,17 +168,17 @@ class ArtDownloadManager(
 
     private fun publish(
         request: CardArtRequest?,
-        warmed: AtomicInteger,
-        skipped: AtomicInteger,
-        failed: AtomicInteger,
+        warmed: AtomicCounter,
+        skipped: AtomicCounter,
+        failed: AtomicCounter,
         status: PrefetchStatus,
     ) = publish(request?.let { "${it.setCode} #${it.collectorNumber}" }, warmed, skipped, failed, status)
 
     private fun publish(
         current: String?,
-        warmed: AtomicInteger,
-        skipped: AtomicInteger,
-        failed: AtomicInteger,
+        warmed: AtomicCounter,
+        skipped: AtomicCounter,
+        failed: AtomicCounter,
         status: PrefetchStatus,
     ) {
         _progress.update {
@@ -194,9 +194,9 @@ class ArtDownloadManager(
 
     /** Emit the terminal CANCELLED snapshot even though the coroutine is being cancelled. */
     private suspend fun publishCancelled(
-        warmed: AtomicInteger = AtomicInteger(),
-        skipped: AtomicInteger = AtomicInteger(),
-        failed: AtomicInteger = AtomicInteger(),
+        warmed: AtomicCounter = AtomicCounter(),
+        skipped: AtomicCounter = AtomicCounter(),
+        failed: AtomicCounter = AtomicCounter(),
     ) {
         withContext(NonCancellable) {
             publish(current = null, warmed, skipped, failed, PrefetchStatus.CANCELLED)
