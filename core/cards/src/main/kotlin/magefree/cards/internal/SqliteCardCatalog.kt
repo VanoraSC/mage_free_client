@@ -1,7 +1,7 @@
 package magefree.cards.internal
 
-import android.database.Cursor
-import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.SQLiteStatement
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -24,26 +24,33 @@ import magefree.cards.model.TypeLine
  * the injected IO dispatcher. The database is opened lazily (and once) on first use via
  * [databaseProvider], so constructing the catalog never touches disk on the main thread.
  *
- * The impl is deliberately framework-thin (raw SQL + [Cursor]) so the same code runs both on device
- * and under a JVM/Robolectric unit test against a fixture database.
+ * The impl is deliberately framework-thin (raw SQL over [SQLiteConnection]) so the same code runs on
+ * device, on the JVM, and under a Robolectric unit test against a fixture database.
+ *
+ * **Story 0082 ported this off `android.database.sqlite`** onto `androidx.sqlite`'s driver API,
+ * which is multiplatform. Every SQL string here is byte-identical to the pre-port version on
+ * purpose: the catalog is an immutable bundled asset, so the same queries must return the same rows,
+ * and that is checkable by equality rather than by argument. The differences are mechanical —
+ * `rawQuery` + `Cursor.moveToNext()` becomes `prepare` + `SQLiteStatement.step()`, and column
+ * indices come from [columnIndices] because the driver API has no `getColumnIndexOrThrow`.
  */
 internal class SqliteCardCatalog(
-    private val databaseProvider: suspend () -> SQLiteDatabase,
+    private val databaseProvider: suspend () -> SQLiteConnection,
     private val ioDispatcher: CoroutineDispatcher,
 ) : CardCatalog {
     private val openMutex = Mutex()
 
     @Volatile
-    private var database: SQLiteDatabase? = null
+    private var database: SQLiteConnection? = null
 
-    private suspend fun db(): SQLiteDatabase {
+    private suspend fun db(): SQLiteConnection {
         database?.let { return it }
         return openMutex.withLock {
             database ?: databaseProvider().also { database = it }
         }
     }
 
-    private suspend fun <T> onDb(block: (SQLiteDatabase) -> T): T = withContext(ioDispatcher) { block(db()) }
+    private suspend fun <T> onDb(block: (SQLiteConnection) -> T): T = withContext(ioDispatcher) { block(db()) }
 
     override suspend fun card(id: CardId): Card? =
         onDb { db ->
@@ -60,16 +67,15 @@ internal class SqliteCardCatalog(
 
             val ids = ArrayList<Long>()
             val names = ArrayList<String>()
-            db
-                .rawQuery(
-                    "SELECT id, name FROM card WHERE name LIKE ? ESCAPE '\\'",
-                    arrayOf("%" + escapeLike(q) + "%"),
-                ).use { c ->
-                    while (c.moveToNext()) {
-                        ids.add(c.getLong(0))
-                        names.add(c.getString(1))
-                    }
+            db.query(
+                "SELECT id, name FROM card WHERE name LIKE ? ESCAPE '\\'",
+                listOf("%" + escapeLike(q) + "%"),
+            ) { c ->
+                while (c.step()) {
+                    ids.add(c.getLong(0))
+                    names.add(c.getText(1))
                 }
+            }
             if (ids.isEmpty()) return@onDb emptyList()
 
             val order =
@@ -100,13 +106,12 @@ internal class SqliteCardCatalog(
             val ids = ArrayList<Long>(wanted.size)
             for (chunk in wanted.chunked(NAME_BATCH)) {
                 val placeholders = chunk.joinToString(",") { "?" }
-                db
-                    .rawQuery(
-                        "SELECT id FROM card WHERE name COLLATE NOCASE IN ($placeholders)",
-                        chunk.toTypedArray(),
-                    ).use { c ->
-                        while (c.moveToNext()) ids.add(c.getLong(0))
-                    }
+                db.query(
+                    "SELECT id FROM card WHERE name COLLATE NOCASE IN ($placeholders)",
+                    chunk,
+                ) { c ->
+                    while (c.step()) ids.add(c.getLong(0))
+                }
             }
             if (ids.isEmpty()) return@onDb emptyMap()
 
@@ -173,74 +178,105 @@ internal class SqliteCardCatalog(
                 }
 
             val cards = ArrayList<CardRow>()
-            db.rawQuery(sql, args.toTypedArray()).use { c ->
-                while (c.moveToNext()) cards += c.toCardRow()
+            db.query(sql, args) { c ->
+                val cols = c.columnIndices()
+                while (c.step()) cards += c.toCardRow(cols)
             }
             attachPrintings(db, cards)
         }
 
     override suspend fun counts(): CatalogCounts =
         onDb { db ->
-            db.rawQuery("SELECT (SELECT COUNT(*) FROM card), (SELECT COUNT(*) FROM printing)", null).use { c ->
-                c.moveToFirst()
+            db.query("SELECT (SELECT COUNT(*) FROM card), (SELECT COUNT(*) FROM printing)") { c ->
+                c.step()
                 CatalogCounts(cardCount = c.getInt(0), printingCount = c.getInt(1))
             }
         }
 
     /** Load the given card ids (preserving order) with their printings attached. */
     private fun loadCards(
-        db: SQLiteDatabase,
+        db: SQLiteConnection,
         ids: List<Long>,
     ): List<Card> {
         if (ids.isEmpty()) return emptyList()
         val placeholders = ids.joinToString(",") { "?" }
         val byId = LinkedHashMap<Long, CardRow>()
-        db
-            .rawQuery(
-                "SELECT * FROM card WHERE id IN ($placeholders)",
-                ids.map { it.toString() }.toTypedArray(),
-            ).use { c ->
-                while (c.moveToNext()) {
-                    val row = c.toCardRow()
-                    byId[row.id] = row
-                }
+        db.query(
+            "SELECT * FROM card WHERE id IN ($placeholders)",
+            ids.map { it.toString() },
+        ) { c ->
+            val cols = c.columnIndices()
+            while (c.step()) {
+                val row = c.toCardRow(cols)
+                byId[row.id] = row
             }
+        }
         val ordered = ids.mapNotNull { byId[it] }
         return attachPrintings(db, ordered)
     }
 
     private fun attachPrintings(
-        db: SQLiteDatabase,
+        db: SQLiteConnection,
         rows: List<CardRow>,
     ): List<Card> {
         if (rows.isEmpty()) return emptyList()
         val ids = rows.map { it.id }
         val placeholders = ids.joinToString(",") { "?" }
         val printings = HashMap<Long, MutableList<CardPrinting>>()
-        db
-            .rawQuery(
-                "SELECT card_id, set_code, collector_number, rarity FROM printing " +
-                    "WHERE card_id IN ($placeholders) " +
-                    "ORDER BY set_code, collector_number_int, collector_number",
-                ids.map { it.toString() }.toTypedArray(),
-            ).use { c ->
-                while (c.moveToNext()) {
-                    val cardId = c.getLong(0)
-                    printings.getOrPut(cardId) { ArrayList() }.add(
-                        CardPrinting(
-                            setCode = c.getString(1),
-                            collectorNumber = c.getString(2),
-                            rarity = Rarity.fromRaw(c.getString(3)),
-                        ),
-                    )
-                }
+        db.query(
+            "SELECT card_id, set_code, collector_number, rarity FROM printing " +
+                "WHERE card_id IN ($placeholders) " +
+                "ORDER BY set_code, collector_number_int, collector_number",
+            ids.map { it.toString() },
+        ) { c ->
+            while (c.step()) {
+                val cardId = c.getLong(0)
+                printings.getOrPut(cardId) { ArrayList() }.add(
+                    CardPrinting(
+                        setCode = c.getText(1),
+                        collectorNumber = c.getText(2),
+                        rarity = Rarity.fromRaw(c.getText(3)),
+                    ),
+                )
             }
+        }
         return rows.map { it.toCard(printings[it.id].orEmpty()) }
     }
 
     private companion object {
         /** Names per `IN (…)` statement — well under SQLite's 999 bound-variable ceiling. */
         const val NAME_BATCH = 400
+
+        /**
+         * Prepare [sql], bind [args] as text in order, and run [block] over the statement.
+         *
+         * Everything is bound with `bindText`, including the numeric predicates
+         * (`mana_value BETWEEN ? AND ?`), because that is exactly what the pre-port
+         * `SQLiteDatabase.rawQuery(sql, Array<String>)` did — SQLite applies the same affinity
+         * coercion either way. Binding numbers as longs here would be tidier and would be a
+         * behaviour change, which this port does not make.
+         */
+        inline fun <T> SQLiteConnection.query(
+            sql: String,
+            args: List<String> = emptyList(),
+            block: (SQLiteStatement) -> T,
+        ): T =
+            prepare(sql).use { statement ->
+                args.forEachIndexed { index, arg -> statement.bindText(index + 1, arg) }
+                block(statement)
+            }
+
+        /**
+         * Column name → index for the statement's current result shape.
+         *
+         * The driver API exposes `getColumnName(i)` but no `getColumnIndexOrThrow(name)`, and the
+         * `SELECT *` queries here read ~25 columns by name. Building the map once per statement
+         * keeps that an O(1) lookup per field instead of a linear scan per field per row.
+         */
+        fun SQLiteStatement.columnIndices(): Map<String, Int> =
+            buildMap {
+                for (index in 0 until getColumnCount()) put(getColumnName(index), index)
+            }
 
         /** exact=0, prefix=1, word-prefix=2, substring=3 — lower sorts first. */
         fun rank(
@@ -287,10 +323,16 @@ internal class SqliteCardCatalog(
 
         fun splitTokens(value: String?): List<String> = value?.split(' ')?.filter { it.isNotEmpty() }.orEmpty()
 
-        fun Cursor.toCardRow(): CardRow {
-            fun s(name: String): String? = getString(getColumnIndexOrThrow(name))
+        fun SQLiteStatement.toCardRow(columns: Map<String, Int>): CardRow {
+            fun index(name: String): Int =
+                columns[name] ?: throw IllegalStateException("card row has no column '$name' (have: ${columns.keys})")
 
-            fun i(name: String): Int = getInt(getColumnIndexOrThrow(name))
+            // `getText` on a NULL column is not defined to return null, so nullability is decided by
+            // `isNull` first. The pre-port `Cursor.getString` returned null for a NULL column, and
+            // several of these fields are genuinely null (power, loyalty, flip_card_name, …).
+            fun s(name: String): String? = index(name).let { if (isNull(it)) null else getText(it) }
+
+            fun i(name: String): Int = getInt(index(name))
 
             fun b(name: String): Boolean = i(name) != 0
             val colors =
@@ -302,7 +344,7 @@ internal class SqliteCardCatalog(
                     if (b("color_green")) add(CardColor.GREEN)
                 }
             return CardRow(
-                id = getLong(getColumnIndexOrThrow("id")),
+                id = getLong(index("id")),
                 name = s("name").orEmpty(),
                 manaCost = ManaCost(s("mana_cost").orEmpty()),
                 manaValue = i("mana_value"),

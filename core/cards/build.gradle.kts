@@ -23,6 +23,12 @@ android {
 }
 
 dependencies {
+    // Story 0082: the multiplatform SQLite driver API. `sqlite` is the interface (KMP);
+    // `sqlite-framework` supplies AndroidSQLiteDriver, the platform SQLite the pre-port
+    // `SQLiteDatabase` used — so the APK gains no native SQLite. Same 2.5.0 Room 2.7.1 already pulls.
+    implementation(libs.androidx.sqlite)
+    implementation(libs.androidx.sqlite.framework)
+
     // Story 0081: `androidContext()` in this module's Koin module. Removed by stories 0082/0083.
     implementation(libs.koin.android)
 

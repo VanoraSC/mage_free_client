@@ -1,6 +1,7 @@
 package magefree.cards
 
 import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.SQLiteConnection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -29,7 +30,7 @@ import org.robolectric.RuntimeEnvironment
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class CardCatalogExactNameTest {
-    private lateinit var db: SQLiteDatabase
+    private lateinit var db: SQLiteConnection
     private lateinit var catalog: CardCatalog
 
     @Before
@@ -46,8 +47,8 @@ class CardCatalogExactNameTest {
     @Test
     fun `prepared copy has the nocase name index`() {
         val indexes = mutableListOf<String>()
-        db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'card'", null).use { c ->
-            while (c.moveToNext()) indexes += c.getString(0)
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'card'").use { c ->
+            while (c.step()) indexes += c.getText(0)
         }
         assertTrue(indexes.toString(), indexes.contains(CardCatalogDatabase.NAME_NOCASE_INDEX))
         // The bundle's own indexes are untouched.
@@ -136,15 +137,32 @@ class CardCatalogExactNameTest {
             assertEquals(names.size, resolved.size)
         }
 
-    /** The `EXPLAIN QUERY PLAN` rows for [sql], flattened to one string. */
+    /**
+     * The `EXPLAIN QUERY PLAN` rows for [sql], flattened to one string.
+     *
+     * **Read through `SQLiteDatabase`, not the driver, and deliberately so (story 0082).**
+     * `androidx.sqlite`'s `AndroidSQLiteStatement` splits into a SELECT variant and an "other"
+     * variant, and an `EXPLAIN QUERY PLAN` statement lands in the latter: `step()` returns false
+     * immediately and no rows are produced, so the plan is simply unavailable through the driver.
+     *
+     * Dropping these two tests was the alternative and it is not acceptable — they are the only
+     * thing that proves the NOCASE index is actually *used* rather than merely present, which is
+     * story 0042 defect D. A query plan is a property of SQLite and of the database file, not of the
+     * API wrapper in front of them, and `AndroidSQLiteDriver` is that same platform SQLite — so
+     * reading the plan this way asks exactly the same question of exactly the same engine, against
+     * the same prepared file the catalog itself opens.
+     */
     private fun queryPlan(
         sql: String,
         vararg args: String,
     ): String =
         buildString {
-            db.rawQuery("EXPLAIN QUERY PLAN $sql", arrayOf(*args)).use { c ->
-                while (c.moveToNext()) {
-                    append(c.getString(c.getColumnIndexOrThrow("detail"))).append('\n')
+            val file = CardCatalogDatabase.preparedFile(RuntimeEnvironment.getApplication())
+            SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { raw ->
+                raw.rawQuery("EXPLAIN QUERY PLAN $sql", arrayOf(*args)).use { c ->
+                    while (c.moveToNext()) {
+                        append(c.getString(c.getColumnIndexOrThrow("detail"))).append('\n')
+                    }
                 }
             }
         }

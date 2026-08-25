@@ -1,7 +1,9 @@
 package magefree.cards.internal
 
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.driver.AndroidSQLiteDriver
+import androidx.sqlite.execSQL
 import java.io.File
 
 /**
@@ -30,16 +32,36 @@ internal object CardCatalogDatabase {
     /** Bump whenever `assets/cards.sqlite` is regenerated (schema id + pinned XMage ref). */
     const val ASSET_VERSION = "1-e0fe4b6f6a"
 
-    /** Bump whenever [prepare] changes, so existing copies are re-laid rather than left stale. */
-    const val LOCAL_REVISION = 2
+    /**
+     * Bump whenever [prepare] changes, so existing copies are re-laid rather than left stale.
+     *
+     * Bumped to 3 by story 0082: [prepare] now creates the index through `androidx.sqlite` rather
+     * than `SQLiteDatabase`. An already-installed device holds a copy laid down by the old path, and
+     * leaving it would be invisible until an exact-name lookup got slow — so the copy is re-laid
+     * once on first launch after the upgrade.
+     */
+    const val LOCAL_REVISION = 3
 
     /** Case-insensitive name index added locally to serve [magefree.cards.CardCatalog.cardsByName]. */
     const val NAME_NOCASE_INDEX = "idx_card_name_nocase"
 
-    fun open(context: Context): SQLiteDatabase {
-        val file = copyIfNeeded(context)
-        return SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
-    }
+    /**
+     * The driver. `AndroidSQLiteDriver` is the platform's own SQLite — the same engine the pre-port
+     * `SQLiteDatabase` used — so this changes the API in front of SQLite, not SQLite itself, and the
+     * APK gains no native library. A JVM/desktop target supplies `BundledSQLiteDriver` instead; the
+     * query code in [SqliteCardCatalog] is identical either way.
+     */
+    private val driver = AndroidSQLiteDriver()
+
+    fun open(context: Context): SQLiteConnection = driver.open(preparedFile(context).path)
+
+    /**
+     * The prepared private copy, laid down on first call. Exposed (rather than kept inside [open])
+     * so a test can reach the same file through a different SQLite API — see
+     * `CardCatalogExactNameTest.queryPlan`, which needs `EXPLAIN QUERY PLAN` and cannot get it from
+     * the driver.
+     */
+    fun preparedFile(context: Context): File = copyIfNeeded(context)
 
     private fun copyIfNeeded(context: Context): File {
         val dir = File(context.filesDir, "card-catalog").apply { mkdirs() }
@@ -65,12 +87,18 @@ internal object CardCatalogDatabase {
     }
 
     /**
-     * One-time local preparation of the private copy: add the NOCASE name index. Read-write is used
-     * only here, on a not-yet-published temp file; every subsequent open is read-only.
+     * One-time local preparation of the private copy: add the NOCASE name index. Done here, on a
+     * not-yet-published temp file, so no reader ever sees an unprepared copy.
+     *
+     * **Story 0082 lost a guardrail here and it is worth stating rather than discovering.**
+     * `SQLiteDriver.open(fileName)` takes no flags, so `OPEN_READONLY` — which every post-preparation
+     * open used to pass — cannot be expressed. Nothing writes to the catalog (it is an immutable
+     * bundled asset and [SqliteCardCatalog] only ever issues `SELECT`s), so behaviour is unchanged;
+     * what is gone is SQLite refusing a write if one were ever added by mistake.
      */
     private fun prepare(file: File) {
-        SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
-            db.execSQL("CREATE INDEX IF NOT EXISTS $NAME_NOCASE_INDEX ON card(name COLLATE NOCASE)")
+        driver.open(file.path).use { connection ->
+            connection.execSQL("CREATE INDEX IF NOT EXISTS $NAME_NOCASE_INDEX ON card(name COLLATE NOCASE)")
         }
     }
 }
