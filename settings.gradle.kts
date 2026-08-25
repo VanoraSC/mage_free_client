@@ -7,6 +7,14 @@ pluginManagement {
     }
 }
 
+plugins {
+    // Lets Gradle provision a JDK matching gradle/gradle-daemon-jvm.properties when no installed one
+    // satisfies it. The build container already ships JDK 17, so this only ever fires on a fresh
+    // machine — it is the "works on a new checkout" half of the daemon toolchain, not a build-time
+    // download in normal use.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {

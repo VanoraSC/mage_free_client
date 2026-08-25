@@ -174,7 +174,7 @@ is pinned in `gradle/libs.versions.toml`; no versions are hard-coded in build fi
 | Area | Pin | Notes |
 |------|-----|-------|
 | Gradle | wrapper **9.3.1** | always `./gradlew`; requires `junit-platform-launcher` on the test runtime classpath |
-| JDK | **17** | `:bridge` uses `jvmToolchain(17)`; ensure `JAVA_HOME` points at a JDK 17 (none may be on `PATH`) |
+| JDK | **17** | `:bridge` uses `jvmToolchain(17)`; the **daemon** JVM is pinned by `gradle/gradle-daemon-jvm.properties`, so the CLI and the IDE share one daemon. `JAVA_HOME` must still point at a JDK 17 — the `gradlew` launcher needs a JVM *before* Gradle reads that criteria, and no `java` is on `PATH` here |
 | Kotlin | **2.4.10** | one version for all modules |
 | KSP | **2.3.10** | KSP is **version-independent of Kotlin since 2.3.0** and supports Kotlin 2.2+ (incl. 2.4.10) — this pairing is correct |
 | AGP | **8.13.2** | newest AGP that runs on Gradle 9.3.1 with the standard plugin set; AGP 9.x needs Gradle ≥ 9.5 |
