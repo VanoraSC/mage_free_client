@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import magefree.model.ServerTarget
-import java.io.IOException
+import okio.IOException
 
 /**
  * Persists the user's saved bridge servers (story 0017) so the list survives restarts.

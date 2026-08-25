@@ -35,7 +35,7 @@ import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerMessage
 import magefree.protocol.StopWatching
 import magefree.protocol.WatchGame
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * The production [GameClient] (story 0052), over the same [BridgeClient] singleton the lobby and table
@@ -69,7 +69,7 @@ internal class DefaultGameClient(
     private val bridgeClient: BridgeClient,
     private val pushSource: ServerPushSource,
     private val connectionState: StateFlow<@JvmSuppressWildcards ConnectionState>,
-    private val newRequestId: () -> String = { UUID.randomUUID().toString() },
+    private val newRequestId: () -> String = { Uuid.random().toString() },
 ) : GameClient {
     // --- joining and leaving -------------------------------------------------------------------------
 

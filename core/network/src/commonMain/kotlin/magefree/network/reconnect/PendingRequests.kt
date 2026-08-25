@@ -1,6 +1,7 @@
 package magefree.network.reconnect
 
 import kotlinx.coroutines.CompletableDeferred
+import magefree.network.concurrent.ConcurrentMap
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameStateSnapshot
 import magefree.protocol.GameStateUnavailable
@@ -12,7 +13,6 @@ import magefree.protocol.TableCreated
 import magefree.protocol.TableDetail
 import magefree.protocol.TableList
 import magefree.protocol.TableNotFound
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The thread-safe correlation registry that multiplexes **request/response** over the single live
@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap
  * so the existing session-event behaviour (stories 0016/0024) is unchanged.
  */
 internal class PendingRequests {
-    private val waiters = ConcurrentHashMap<String, CompletableDeferred<ServerMessage>>()
+    private val waiters = ConcurrentMap<String, CompletableDeferred<ServerMessage>>()
 
     /**
      * Register a waiter for [requestId] and return its [CompletableDeferred]. The caller sends the
@@ -41,7 +41,7 @@ internal class PendingRequests {
      */
     fun register(requestId: String): CompletableDeferred<ServerMessage> {
         val deferred = CompletableDeferred<ServerMessage>()
-        waiters[requestId] = deferred
+        waiters.put(requestId, deferred)
         return deferred
     }
 

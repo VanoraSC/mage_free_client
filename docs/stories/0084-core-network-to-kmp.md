@@ -62,6 +62,11 @@ returning the same OkHttp client. Same engine on Android, same client, one indir
 - The Ktor engine moves behind an `expect`/`actual`; `ktor-client-okhttp` is declared per target.
 - `NetworkModule` (Koin) in common; the two Android observers, the DataStore and the IO dispatcher
   bound at the Android edge.
+- **`java.*` out of `commonMain` — in this module and in `:core:cards`, which 0082 left carrying it.**
+  Not in the story as first written; added once §4's finding showed the build does not enforce it and
+  that every replacement is Stable with no behaviour change. `:core:cards` is in scope for this one
+  item because the two modules share the problem and fixing one and not the other would leave the
+  rule half-true.
 
 **No DataStore artifact swap is needed, and the delegate stays.** `androidx.datastore:datastore-preferences`
 1.1.7 is *already* a multiplatform artifact — it resolves to `-android`, `-jvm`, `-ios*`, `-linux*`
@@ -98,30 +103,46 @@ observers feed a back-off loop whose failure mode is "reconnects more slowly tha
 no unit test notices and no fresh smoke test reaches. The existing `:core:network` suite plus a
 deliberate connectivity interruption on-device is what covers it.
 
-**Recorded finding — `commonMain` is not yet enforced free of `java.*`, and that is a measured fact
-rather than an opinion.** `compileCommonMainKotlinMetadata` is **SKIPPED** in every module here
-(`Task is enabled` is false): Kotlin only enables the shared-source-set metadata compilation when a
-source set is shared across more than one *platform type*, and `androidTarget()` and `jvm()` are both
-`platform.type = jvm`. So `commonMain` is never compiled on its own — it is compiled as part of each
-JVM compilation, with the JDK on the classpath — and `java.*` resolves there today.
+**`commonMain` was never enforced free of `java.*`, and this story closes the gap it found.**
+`compileCommonMainKotlinMetadata` is **SKIPPED** in every module here (`Task is enabled` is false):
+Kotlin only enables the shared-source-set metadata compilation when a source set is shared across
+more than one *platform type*, and `androidTarget()` and `jvm()` are both `platform.type = jvm`. So
+`commonMain` is never compiled on its own — it is compiled as part of each JVM compilation, with the
+JDK on the classpath — and `java.*` resolved there unnoticed. Ten files across `:core:cards` and
+`:core:network` had come to rely on that. There are now none.
 
-Ten files rely on that, and none of them is new:
+**Every replacement is Stable on the pinned Kotlin 2.4.10; none needed an opt-in.**
 
-| Module | Files | What they use |
+| Was | Now | Behaviour change |
 |---|---|---|
-| `:core:cards` (story 0082) | `ArtDownloadManager`, `CardArtCachePolicy`, `XMageImageSource` | `java.io.IOException`, `java.util.*` |
-| `:core:network` (this story) | `PendingRequests`, `LobbyRepository`, `FakeBridgeClient` | `ConcurrentHashMap`, `AtomicReference`, `CopyOnWriteArrayList` |
-| `:core:network` | `LobbyClientImpl`, `DefaultGameClient`, `DefaultTableClient` | `java.util.UUID` |
-| `:core:network` | `ServerRepository` | `java.io.IOException` |
-| `:core:network` | `KtorBridgeClient` | `@Volatile` resolving to `kotlin.jvm.Volatile` |
+| `@Volatile` (resolving to `kotlin.jvm.Volatile`) | `kotlin.concurrent.Volatile` — common, Stable since 1.9 | none |
+| `java.util.UUID` | `kotlin.uuid.Uuid` — **Stable since Kotlin 2.4** | none |
+| `java.io.IOException` | `okio.IOException` — an `actual typealias` **to** `java.io.IOException` on the JVM, so it still catches exactly what DataStore throws | none |
+| `java.util.concurrent.CancellationException` | `kotlin.coroutines.cancellation.CancellationException` | none |
+| `Locale.ENGLISH` case conversion | the no-arg `lowercase()` (`Locale.ROOT` on the JVM) | none for ASCII set codes |
+| `ConcurrentHashMap`, `CopyOnWriteArrayList`, `AtomicReference`, `AtomicInteger` | `expect class` in `commonMain`, `actual typealias` to the same JDK class per target | **none — it is the same class** |
 
-**This story deliberately does not fix it.** The `java.util.UUID` and `IOException` cases are the
-mechanical swaps story 0083 already made (`kotlin.uuid.Uuid`, `okio.IOException`), but the three
-concurrency primitives are inside the correlation registry and the reconnect path, which §3 puts out
-of scope precisely so a port cannot be confused with a behaviour change. Replacing them means CAS
-loops over immutable collections on `kotlin.concurrent.atomics` (stdlib, `@ExperimentalAtomicApi`) —
-provably equivalent, but its own change with its own tests. It becomes real work the day a non-JVM
-target is added, and it should be its own story rather than a rider on this one.
+**The concurrency primitives keep their exact implementations, which is what made this safe inside a
+port.** A typealias `actual` compiles to the aliased class: `PendingRequests`' correlation registry
+is still a `ConcurrentHashMap`, same memory model, same lock-free reads on the socket's inbound path.
+Nothing was rewritten; only the name `commonMain` sees changed. §3 puts the reconnect loop out of
+scope, and a change with no behaviour delta does not breach that.
+
+The alternatives were checked and rejected, each for a reason rather than a preference:
+
+- **`kotlin.concurrent.atomics`** is still `@ExperimentalAtomicApi` in 2.4, and using it would mean
+  re-expressing the registry as a CAS loop over an immutable map — provably equivalent, but a rewrite.
+- **`kotlinx.atomicfu`** is described by the Kotlin documentation as *"used only for internal purposes
+  and is not supported for general usage"*.
+- **Touchlab's `stately-concurrent-collections`** has no `jvmMain` source set at all: its
+  `ConcurrentMutableMap` is a plain `mutableMapOf()` behind one global lock, so every read would
+  block. It is not `ConcurrentHashMap` semantics despite the name.
+
+Two mechanical constraints, recorded because they cost time to rediscover: a typealias `actual` must
+match the aliased class down to its **type-parameter names** (hence `E` and `V` rather than `T` in
+`magefree.network.concurrent`), and it cannot satisfy an `expect class … : MutableMap<K, V>`, because
+`ConcurrentHashMap.keys` returns its own `KeySetView`. The map's `expect` therefore declares only the
+operations the registry performs, with no supertype.
 
 ## 5. Verification
 
@@ -148,6 +169,8 @@ target is added, and it should be its own story rather than a rider on this one.
 - [ ] `:core:network` is a KMP module; no `android.*`/`androidx.*` import remains outside
       `androidMain` except multiplatform DataStore.
 - [ ] `androidx.lifecycle.process` is declared only for the Android target.
+- [ ] No `java.*` import remains in any `commonMain` across the converted `:core:*` modules, and every
+      replacement is a Stable API or a typealias to the class it replaced.
 - [ ] Saved servers written by the pre-port build are still present after upgrading, proven by test.
 - [ ] The existing suite passes unchanged, including the live integration tests.
 - [ ] `./gradlew check` and `:app:assembleDebug` pass.

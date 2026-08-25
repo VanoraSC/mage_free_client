@@ -15,13 +15,13 @@ import magefree.model.ServerTarget
 import magefree.model.SessionEvent
 import magefree.network.BridgeClient
 import magefree.network.ServerPushSource
+import magefree.network.concurrent.ConcurrentList
 import magefree.network.mapper.SessionMapper
 import magefree.network.mapper.SessionMapper.handshakeResult
 import magefree.protocol.ClientMessage
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerMessage
-import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * A [BridgeClient] test double that replays a scripted sequence of **real `:protocol`
@@ -124,7 +124,7 @@ class FakeBridgeClient(
     }
 
     /** Every teardown this client was asked for, in order — the fake's record of caller intent. */
-    val teardowns: MutableList<Teardown> = CopyOnWriteArrayList()
+    val teardowns: MutableList<Teardown> = ConcurrentList()
 
     private fun SessionEvent.isTerminal(): Boolean =
         this is SessionEvent.AuthFailed ||

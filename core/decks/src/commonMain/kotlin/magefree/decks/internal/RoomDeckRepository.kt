@@ -12,8 +12,6 @@ import magefree.decks.model.DeckFormat
 import magefree.decks.model.DeckId
 import magefree.decks.model.DeckSummary
 import kotlin.time.Clock
-import kotlin.time.ExperimentalTime
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
@@ -25,9 +23,8 @@ import kotlin.uuid.Uuid
  * The defaults are the multiplatform stdlib's [Clock] and [Uuid] rather than `System
  * .currentTimeMillis()` and `java.util.UUID` (story 0083) — same wall-clock milliseconds, same v4
  * UUID string shape, so the values already stored on devices stay comparable to the ones written
- * next. Both are still experimental APIs; nothing else about them is new.
+ * next. Both are Stable on the pinned Kotlin: `Clock` since 2.3, `Uuid` since 2.4. No opt-in.
  */
-@OptIn(ExperimentalTime::class, ExperimentalUuidApi::class)
 internal class RoomDeckRepository(
     private val dao: DeckDao,
     private val ioDispatcher: CoroutineDispatcher,

@@ -130,11 +130,18 @@ story is checked against.
   The rule is about platform APIs, not the `androidx` prefix: `androidx.room`, `androidx.sqlite` and
   `androidx.datastore` are multiplatform artifacts and belong in `commonMain` — an `android.content`
   or `android.database` import is what it is aimed at.
-  **`java.*` in `commonMain` is not caught by the build.** While every target is JVM-family
-  (`androidTarget()` + `jvm()`), Kotlin disables the shared-source-set metadata compilation, so
-  `commonMain` is only ever compiled with the JDK on the classpath. Ten files currently rely on that
-  — enumerated in `docs/stories/0084-core-network-to-kmp.md` §4. Do not add more; a reviewer, not the
-  compiler, is the guard until a non-JVM target exists.
+  **`java.*` in `commonMain` is not caught by the build, so a reviewer is the guard.** While every
+  target is JVM-family (`androidTarget()` + `jvm()`), Kotlin disables the shared-source-set metadata
+  compilation, so `commonMain` is only ever compiled with the JDK on the classpath and a `java.*`
+  import resolves silently. There are none today (story 0084 removed the last of them); keep it that
+  way. The Stable replacements, none of which need an opt-in on the pinned Kotlin: `kotlin.uuid.Uuid`,
+  `kotlin.time.Clock`, `kotlin.concurrent.Volatile`, `kotlin.coroutines.cancellation.CancellationException`,
+  `okio.IOException` (a typealias **to** `java.io.IOException` on the JVM), the no-arg
+  `lowercase()`/`uppercase()`, and — for the `java.util.concurrent` types — an `expect class` with an
+  `actual typealias` per target, which keeps the identical JDK class rather than trading it for a lock.
+  `docs/stories/0084-core-network-to-kmp.md` §4 has the full table and the rejected alternatives.
+  **Check an API's stability in the docs for the pinned version before assuming it needs an opt-in** —
+  `Uuid` and `Clock` are Stable as of 2.4 and 2.3.
   `:protocol` and `:core:model` hold this today and must keep holding it — they are the two modules
   a second client consumes first.
 - **Device-specific needs sit behind an interface at the module boundary** — storage paths,

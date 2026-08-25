@@ -36,7 +36,7 @@ import magefree.protocol.TableNotFound
 import magefree.protocol.TableSummary
 import magefree.protocol.UpdateDeck
 import magefree.protocol.WatchTable
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * The production [TableClient] (story 0037), over the same [BridgeClient] singleton `LobbyClient` rides.
@@ -66,7 +66,7 @@ internal class DefaultTableClient(
     private val bridgeClient: BridgeClient,
     private val pushSource: ServerPushSource,
     private val connectionState: StateFlow<@JvmSuppressWildcards ConnectionState>,
-    private val newRequestId: () -> String = { UUID.randomUUID().toString() },
+    private val newRequestId: () -> String = { Uuid.random().toString() },
 ) : TableClient {
     override suspend fun createTable(options: CreateTableOptions): Result<TableRef> =
         action { id ->

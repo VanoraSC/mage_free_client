@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import magefree.model.ConnectionState
 import magefree.model.LobbyLoadState
 import magefree.model.LobbySnapshot
-import java.util.concurrent.atomic.AtomicReference
+import magefree.network.concurrent.AtomicRef
 
 /**
  * The observable, refreshable lobby data layer (story 0028). Holds a single [StateFlow] of
@@ -52,7 +52,7 @@ class LobbyRepository
          * `getAndSet` makes "take the current handle and install mine" one indivisible step, and no
          * thread can read a stale/absent handle for a refresh that is already running (story 0044).
          */
-        private val refreshJob = AtomicReference<Job?>(null)
+        private val refreshJob = AtomicRef<Job?>(null)
 
         init {
             // The lobby only makes sense while connected: reset to idle/empty on any non-connected state

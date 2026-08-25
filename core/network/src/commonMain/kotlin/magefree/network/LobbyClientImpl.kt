@@ -11,7 +11,7 @@ import magefree.protocol.GetTables
 import magefree.protocol.RoomUserList
 import magefree.protocol.ServerMessage
 import magefree.protocol.TableList
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * The production [LobbyClient]: each call mints a `requestId`, sends the matching 0027 `GetX` over the
@@ -30,7 +30,7 @@ class LobbyClientImpl
     constructor(
         private val bridgeClient: BridgeClient,
     ) : LobbyClient {
-        private val newRequestId: () -> String = { UUID.randomUUID().toString() }
+        private val newRequestId: () -> String = { Uuid.random().toString() }
 
         override suspend fun tables(): List<LobbyTable> {
             val id = newRequestId()

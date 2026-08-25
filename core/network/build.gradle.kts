@@ -35,6 +35,10 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.websockets)
+                // Story 0084: `okio.IOException` is an `actual typealias` to `java.io.IOException`
+                // on the JVM, so `ServerRepository` catches exactly what DataStore throws while
+                // `commonMain` names no `java.*` type.
+                implementation(libs.okio)
 
                 // Story 0017: server-list persistence (per AGENTS.md — DataStore for prefs). `api`
                 // because the module publishes a `DataStore<Preferences>` binding that the consuming

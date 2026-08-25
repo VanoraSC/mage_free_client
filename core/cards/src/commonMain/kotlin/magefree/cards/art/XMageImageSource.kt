@@ -1,7 +1,5 @@
 package magefree.cards.art
 
-import java.util.Locale
-
 /**
  * Resolves a card's identity ([CardArtRequest]) to the image URL(s) to try, in order.
  *
@@ -35,7 +33,8 @@ interface XMageImageSource {
  *   workaround for promos/variations that 404 on the localized path — see the upstream comments
  *   citing issues #6829 and the `4ed/134†` case). We reproduce both, in that order.
  * - **Set code** — `formatSetName` → `ScryfallImageSupportCards.findScryfallSetCode(set)`, which is
- *   `set.toLowerCase(Locale.ENGLISH)`. Ported verbatim in [scryfallSetCode].
+ *   `set.toLowerCase(Locale.ENGLISH)`. Ported in [scryfallSetCode] as the locale-invariant no-arg
+ *   `lowercase()`, which is `Locale.ROOT` on the JVM — same result for ASCII set codes.
  * - **Collector-number transform** — `ScryfallApiCard.transformCardNumberFromXmageToScryfall`:
  *   trailing `*`→`★`, `+`→`†`, `Ph`→`Φ` (XMage's ASCII spellings of Scryfall's unicode variant
  *   suffixes). Ported verbatim in [transformCollectorNumber].
@@ -96,7 +95,7 @@ class ScryfallImageSource(
         const val DEFAULT_LANGUAGE = "en"
 
         /** `ScryfallImageSupportCards.findScryfallSetCode` — the xmage set code, lower-cased. */
-        fun scryfallSetCode(xmageCode: String): String = xmageCode.lowercase(Locale.ENGLISH)
+        fun scryfallSetCode(xmageCode: String): String = xmageCode.lowercase()
 
         /** `ScryfallApiCard.transformCardNumberFromXmageToScryfall` — ASCII variant suffix → unicode. */
         fun transformCollectorNumber(cardNumber: String): String =

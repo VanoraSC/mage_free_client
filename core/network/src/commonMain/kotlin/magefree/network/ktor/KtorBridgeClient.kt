@@ -52,6 +52,7 @@ import magefree.protocol.ProtocolJson
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.ServerHello
 import magefree.protocol.ServerMessage
+import kotlin.concurrent.Volatile
 
 /**
  * A reconnection-aware [BridgeClient] over a Ktor WebSocket speaking the `:protocol` contract.

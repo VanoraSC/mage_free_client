@@ -23,12 +23,6 @@ configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
 }
 
 kotlin {
-    // Story 0083: `DeckDatabaseConstructor` is an `expect object`, and expect/actual *classes* are
-    // still flagged Beta by the compiler. This is Room's documented multiplatform shape rather than
-    // something this module invented, so the warning is turned off rather than carried on every
-    // build of every target.
-    compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }
-
     sourceSets {
         commonMain {
             dependencies {
