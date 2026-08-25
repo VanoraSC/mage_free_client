@@ -5,10 +5,11 @@ import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.NetworkFetcher
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +19,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okhttp3.Call
 import okio.Path.Companion.toOkioPath
 import java.io.File
 
@@ -65,7 +65,7 @@ class CardImageLoader(
     private val appScope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val diskCacheDirectory: File = File(context.cacheDir, DISK_CACHE_DIR),
-    callFactory: Call.Factory? = null,
+    httpClient: HttpClient? = null,
     /**
      * The `User-Agent` the default client sends. **Load-bearing, not courtesy** — Scryfall answers
      * HTTP 400 to a generic agent and every art surface in the app degrades to its placeholder
@@ -81,13 +81,13 @@ class CardImageLoader(
     private val logWarning: (String) -> Unit,
 ) : ArtWarmer {
     private val networkFetcherFactory: NetworkFetcher.Factory =
-        if (callFactory != null) {
-            OkHttpNetworkFetcherFactory(callFactory = { callFactory })
+        if (httpClient != null) {
+            KtorNetworkFetcherFactory(httpClient = { httpClient })
         } else {
-            // Not a bare OkHttpNetworkFetcherFactory(): its client sends OkHttp's generic
-            // `okhttp/<version>` agent, which Scryfall refuses with HTTP 400 (story 0056). The lambda
-            // is evaluated lazily by Coil, so the client is still built on first use.
-            OkHttpNetworkFetcherFactory(callFactory = { defaultArtCallFactory(userAgent) })
+            // Not a bare KtorNetworkFetcherFactory(): its client would send the engine's own generic agent,
+            // which Scryfall refuses with HTTP 400 (story 0056). The lambda is evaluated lazily by
+            // Coil, so the client is still built on first use.
+            KtorNetworkFetcherFactory(httpClient = { defaultArtHttpClient(userAgent) })
         }
 
     private val rebuildMutex = Mutex()

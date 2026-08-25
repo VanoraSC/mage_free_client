@@ -2,10 +2,12 @@ package magefree.cards.art
 
 import android.content.Context
 import android.content.pm.PackageManager
-import okhttp3.Call
-import okhttp3.Interceptor
-import okhttp3.OkHttpClient
-import okhttp3.Response
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.UserAgent
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.header
+import io.ktor.http.HttpHeaders
 
 /**
  * The `User-Agent` every card-art request carries (story 0056).
@@ -26,7 +28,7 @@ import okhttp3.Response
  * Wire-level capture (`HttpLoggingInterceptor`, `Level.BODY`) showed every request carrying the
  * correct `User-Agent` and still failing HTTP 400, with a response body reading: *"HTTP requests to
  * api.scryfall.com must contain a User-Agent **and Accept** header."* — Scryfall's API now also
- * requires an `Accept` header, which this client never sent. [ScryfallHeadersInterceptor] sets both.
+ * requires an `Accept` header, which this client never sent. [defaultArtHttpClient] sets both.
  */
 internal object CardArtUserAgent {
     /** The application token — the "descriptive" part Scryfall looks for. */
@@ -77,37 +79,29 @@ internal fun androidAppVersion(context: Context): String? =
     }
 
 /**
- * Sets the two headers Scryfall's API requires (`User-Agent` and `Accept`), replacing rather than
- * appending so exactly one value of each goes out — an added header would leave OkHttp's generic
- * defaults on the wire alongside ours.
+ * The [HttpClient] [CardImageLoader] uses when no test double is injected — i.e. the one that ships.
  *
- * Registered as a **network** interceptor ([defaultArtCallFactory]'s `addNetworkInterceptor`) per
- * Coil's own docs (coil-kt.github.io/coil/network/), which call this out specifically as what
- * "ensures headers apply to every image request handled by your ImageLoader".
+ * **Story 0082 replaced an OkHttp `Call.Factory` + network interceptor with this.** The engine is
+ * still OkHttp on Android; what changed is that the *fetcher* is no longer OkHttp-shaped, so the
+ * engine becomes a per-platform choice rather than a dependency baked into the art pipeline.
+ *
+ * Both headers Scryfall requires are set here, and they remain load-bearing rather than courtesy:
+ * a generic agent is answered with HTTP 400 and every art surface in the app silently falls back to
+ * its placeholder (story 0056).
+ *
+ * `UserAgent` is installed as a plugin rather than appended via [defaultRequest] deliberately —
+ * `defaultRequest` appends only headers that are not already present, so an engine-supplied
+ * `okhttp/<version>` would win and restore exactly the defect 0056 fixed. The plugin sets the header
+ * outright. `CardArtUserAgentTest` reads the real wire request, so this claim is checked rather
+ * than assumed.
  */
-internal class ScryfallHeadersInterceptor(
-    private val userAgent: String,
-) : Interceptor {
-    override fun intercept(chain: Interceptor.Chain): Response =
-        chain.proceed(
-            chain
-                .request()
-                .newBuilder()
-                .header("User-Agent", userAgent)
-                // Scryfall's own error text: "HTTP requests to api.scryfall.com must contain a
-                // User-Agent and Accept header." `*/*` is the same permissive value curl sends by
-                // default, which Scryfall's docs confirm is accepted.
-                .header("Accept", "*/*")
-                .build(),
-        )
-}
-
-/**
- * The `Call.Factory` [CardImageLoader] uses when no test double is injected — i.e. the one that ships.
- * It is a stock [OkHttpClient] plus [ScryfallHeadersInterceptor]; no other behaviour is altered.
- */
-internal fun defaultArtCallFactory(userAgent: String): Call.Factory =
-    OkHttpClient
-        .Builder()
-        .addNetworkInterceptor(ScryfallHeadersInterceptor(userAgent))
-        .build()
+internal fun defaultArtHttpClient(userAgent: String): HttpClient =
+    HttpClient(CIO) {
+        install(UserAgent) { agent = userAgent }
+        defaultRequest {
+            // Scryfall's own error text: "HTTP requests to api.scryfall.com must contain a
+            // User-Agent and Accept header." `*/*` is the same permissive value curl sends by
+            // default, which Scryfall's docs confirm is accepted.
+            header(HttpHeaders.Accept, "*/*")
+        }
+    }

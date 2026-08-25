@@ -39,7 +39,9 @@ dependencies {
     // and streams it into the disk cache. `api` because the module's Hilt surface hands out a
     // `coil3.ImageLoader` that 0032's UI (with coil-compose) binds `AsyncImage` to.
     api(libs.coil.core)
-    implementation(libs.coil.network.okhttp)
+    implementation(libs.coil.network.ktor3)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
     // Story 0031: cache-policy setting persisted the AGENTS.md way (DataStore for prefs).
     implementation(libs.androidx.datastore.preferences)
 
@@ -51,4 +53,6 @@ dependencies {
     // wire, on the loader's *default* client — a test that injected its own Call.Factory would carry
     // whatever headers the test gave it and would prove nothing about the path that ships.
     testImplementation(libs.okhttp.mockwebserver)
+    // Story 0082: MockEngine drives the candidate-URL fallback test without a real socket.
+    testImplementation(libs.ktor.client.mock)
 }

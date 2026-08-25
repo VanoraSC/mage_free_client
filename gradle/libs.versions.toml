@@ -55,6 +55,10 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+# Story 0082: Ktor's own engine, used by the card-art client. Pure Kotlin and multiplatform, so
+# :core:cards carries no engine that would have to be swapped for a second target.
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
@@ -118,6 +122,9 @@ robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectr
 coil-core = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+# Story 0082: the multiplatform network fetcher. Same pinned Coil 3.1.0 — the engine becomes a
+# platform choice (OkHttp on Android) instead of the fetcher itself being OkHttp-shaped.
+coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 
 # Story 0056: test-only HTTP server used to inspect the *actual* outgoing art request (its headers),
 # rather than trusting that the loader was configured correctly. Pinned to the same OkHttp version

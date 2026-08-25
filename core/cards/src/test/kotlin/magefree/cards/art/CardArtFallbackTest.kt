@@ -2,16 +2,17 @@ package magefree.cards.art
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -62,35 +63,32 @@ class CardArtFallbackTest {
      * Answers 404 for the localized path of [notFoundOnPrimary] sets and a 1x1 PNG for everything
      * else — i.e. exactly the promo/variation shape the fallback exists for.
      */
-    private val fakeHttp: OkHttpClient =
-        OkHttpClient
-            .Builder()
-            .addInterceptor { chain ->
-                val url = chain.request().url.toString()
+    private val fakeHttp: HttpClient =
+        HttpClient(
+            MockEngine { request ->
+                val url = request.url.toString()
                 requestedUrls += url
                 val isPrimaryPath = !url.contains("include_variations")
                 val isKnownMissing = notFoundOnPrimary.any { url.contains("/cards/$it/") }
-                val builder =
-                    Response
-                        .Builder()
-                        .request(chain.request())
-                        .protocol(Protocol.HTTP_1_1)
                 if (isPrimaryPath && isKnownMissing) {
-                    builder
-                        .code(404)
-                        .message("Not Found")
-                        .body("".toResponseBody("text/plain".toMediaType()))
-                        .build()
+                    respond(
+                        content = "",
+                        status = HttpStatusCode.NotFound,
+                        headers = headersOf(HttpHeaders.ContentType, "text/plain"),
+                    )
                 } else {
-                    builder
-                        .code(200)
-                        .message("OK")
-                        .header("Content-Type", "image/png")
-                        .header("Cache-Control", "max-age=3600")
-                        .body(onePixelPng.toResponseBody("image/png".toMediaType()))
-                        .build()
+                    respond(
+                        content = onePixelPng,
+                        status = HttpStatusCode.OK,
+                        headers =
+                            headersOf(
+                                HttpHeaders.ContentType to listOf("image/png"),
+                                HttpHeaders.CacheControl to listOf("max-age=3600"),
+                            ),
+                    )
                 }
-            }.build()
+            },
+        )
 
     @Before
     fun setUp() {
@@ -119,7 +117,7 @@ class CardArtFallbackTest {
             // loader can never be built that silently drops it.
             logWarning = { },
             diskCacheDirectory = diskDir,
-            callFactory = fakeHttp,
+            httpClient = fakeHttp,
         )
     }
 

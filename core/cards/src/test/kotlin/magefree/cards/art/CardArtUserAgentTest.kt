@@ -154,11 +154,21 @@ class CardArtUserAgentTest {
     fun `the User-Agent is not a generic client default`() {
         val userAgent = warmAndRecord().getHeader("User-Agent")!!
 
-        // This is the exact value Scryfall rejects with `generic_user_agent`.
-        assertFalse(
-            "User-Agent '$userAgent' is OkHttp's generic default, which Scryfall rejects with HTTP 400",
-            userAgent.startsWith("okhttp/"),
+        // Asserted positively, and story 0082 is why. This test used to check only
+        // `!startsWith("okhttp/")` — the one generic default that existed when the fetcher was
+        // OkHttp-based. Moving to Ktor's CIO engine changed what "generic" looks like, and a
+        // `ktor-client/...` default sailed straight through the old check while being exactly as
+        // rejectable by Scryfall. Naming engines is a losing game: the requirement is that the agent
+        // *is ours*, which no future engine default can satisfy by accident.
+        assertTrue(
+            "User-Agent '$userAgent' is not this application's — Scryfall rejects generic client " +
+                "defaults with HTTP 400 (generic_user_agent), whichever engine produced them",
+            userAgent.startsWith("mage-free-client/"),
         )
+
+        // Kept as documentation of the two defaults actually seen in this project.
+        assertFalse("User-Agent '$userAgent' is OkHttp's generic default", userAgent.startsWith("okhttp/"))
+        assertFalse("User-Agent '$userAgent' is Ktor's generic default", userAgent.startsWith("ktor-client"))
     }
 
     @Test
