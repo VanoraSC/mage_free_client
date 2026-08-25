@@ -39,6 +39,9 @@ coil = "3.1.0"
 # Story 0056: the OkHttp generation `coil-network-okhttp` brings in transitively — pinned explicitly
 # so the test-only MockWebServer matches the client under test exactly.
 okhttp = "4.12.0"
+# Story 0082: okio backs the multiplatform bundled-asset boundary. Already on the classpath via
+# Coil and DataStore at this version; declared explicitly because :core:cards now uses it directly.
+okio = "3.10.2"
 # Story 0033: on-device deck library persistence (queryable relational store, Robolectric-testable).
 room = "2.7.1"
 # Story 0082: the multiplatform SQLite driver API behind the bundled card catalog. 2.5.0 is the
@@ -124,6 +127,7 @@ coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" 
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 # Story 0082: the multiplatform network fetcher. Same pinned Coil 3.1.0 — the engine becomes a
 # platform choice (OkHttp on Android) instead of the fetcher itself being OkHttp-shaped.
+okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 
 # Story 0056: test-only HTTP server used to inspect the *actual* outgoing art request (its headers),

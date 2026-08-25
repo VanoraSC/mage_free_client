@@ -42,6 +42,7 @@ dependencies {
     implementation(libs.coil.network.ktor3)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
+    implementation(libs.okio)
     // Story 0031: cache-policy setting persisted the AGENTS.md way (DataStore for prefs).
     implementation(libs.androidx.datastore.preferences)
 

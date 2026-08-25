@@ -5,6 +5,7 @@ import androidx.sqlite.SQLiteConnection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import magefree.cards.bundle.AndroidBundledFiles
 import magefree.cards.internal.CardCatalogDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -35,7 +36,7 @@ class CardCatalogExactNameTest {
 
     @Before
     fun setUp() {
-        db = CardCatalogDatabase.open(RuntimeEnvironment.getApplication())
+        db = CardCatalogDatabase.open(AndroidBundledFiles(RuntimeEnvironment.getApplication()))
         catalog = CatalogTestSupport.catalog(db, UnconfinedTestDispatcher())
     }
 
@@ -157,8 +158,8 @@ class CardCatalogExactNameTest {
         vararg args: String,
     ): String =
         buildString {
-            val file = CardCatalogDatabase.preparedFile(RuntimeEnvironment.getApplication())
-            SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { raw ->
+            val file = CardCatalogDatabase.preparedFile(AndroidBundledFiles(RuntimeEnvironment.getApplication()))
+            SQLiteDatabase.openDatabase(file.toString(), null, SQLiteDatabase.OPEN_READONLY).use { raw ->
                 raw.rawQuery("EXPLAIN QUERY PLAN $sql", arrayOf(*args)).use { c ->
                     while (c.moveToNext()) {
                         append(c.getString(c.getColumnIndexOrThrow("detail"))).append('\n')

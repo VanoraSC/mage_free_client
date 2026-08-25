@@ -1,30 +1,34 @@
 package magefree.cards.internal
 
-import android.content.Context
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.sqlite.execSQL
-import java.io.File
+import magefree.cards.bundle.BundledFiles
+import okio.FileSystem
+import okio.IOException
+import okio.Path
+import okio.buffer
+import okio.use
 
 /**
  * Opens the bundled card catalog SQLite as a read-only database.
  *
- * The catalog ships as an APK **asset** (`assets/cards.sqlite`). An asset lives inside the APK zip
- * and cannot be opened directly by SQLite, so on first use it is copied once into the app's private
- * files dir and opened from there read-only. The copied file name embeds [ASSET_VERSION] so a bundle
- * refresh (new XMage version / schema) lands under a new name and stale copies are removed — no
- * migration logic, since the catalog is immutable per version.
+ * The catalog ships as a bundled file (`cards.sqlite`). A bundled file cannot be opened directly by
+ * SQLite — on Android it lives inside the APK zip — so on first use it is copied once into
+ * [BundledFiles.writableDirectory] and opened from there. The copied file name embeds
+ * [ASSET_VERSION] so a bundle refresh (new XMage version / schema) lands under a new name and stale
+ * copies are removed — no migration logic, since the catalog is immutable per version.
  *
- * The asset is read via [android.content.res.AssetManager.open] (streaming), which transparently
- * inflates it, so the APK is free to keep it compressed (~5.5 MB vs ~14 MB). The >1 MB compressed
- * asset caveat only applies to `openFd`/mmap access, which this copy path never uses.
- *
- * **Local preparation.** The freshly copied file is opened read-write **once**, before it is published
- * under its final name, to add the case-insensitive name index the deck path's exact-name lookup needs
+ * **Local preparation.** The freshly copied file is prepared **once**, before it is published under
+ * its final name, to add the case-insensitive name index the deck path's exact-name lookup needs
  * (`card(name COLLATE NOCASE)` — the generator only ships a BINARY `idx_card_name`, which a NOCASE
  * comparison cannot use). The shipped asset itself is never modified; only this private copy is. The
  * copy's name embeds [LOCAL_REVISION] as well as [ASSET_VERSION], so changing what preparation does
  * re-copies once rather than leaving an already-installed copy unprepared.
+ *
+ * **Story 0082 took `Context` out of this object.** Where the bytes come from and where they may be
+ * written are now [BundledFiles]' business; the copy-once, prepare-once, version-stamped logic here
+ * is platform-independent and is expressed in okio so it can move to a common source set unchanged.
  */
 internal object CardCatalogDatabase {
     const val ASSET_NAME = "cards.sqlite"
@@ -45,6 +49,9 @@ internal object CardCatalogDatabase {
     /** Case-insensitive name index added locally to serve [magefree.cards.CardCatalog.cardsByName]. */
     const val NAME_NOCASE_INDEX = "idx_card_name_nocase"
 
+    /** Subdirectory of [BundledFiles.writableDirectory] holding the private copy. */
+    private const val COPY_DIR = "card-catalog"
+
     /**
      * The driver. `AndroidSQLiteDriver` is the platform's own SQLite — the same engine the pre-port
      * `SQLiteDatabase` used — so this changes the API in front of SQLite, not SQLite itself, and the
@@ -53,7 +60,9 @@ internal object CardCatalogDatabase {
      */
     private val driver = AndroidSQLiteDriver()
 
-    fun open(context: Context): SQLiteConnection = driver.open(preparedFile(context).path)
+    private val fileSystem: FileSystem get() = FileSystem.SYSTEM
+
+    fun open(files: BundledFiles): SQLiteConnection = driver.open(preparedFile(files).toString())
 
     /**
      * The prepared private copy, laid down on first call. Exposed (rather than kept inside [open])
@@ -61,29 +70,47 @@ internal object CardCatalogDatabase {
      * `CardCatalogExactNameTest.queryPlan`, which needs `EXPLAIN QUERY PLAN` and cannot get it from
      * the driver.
      */
-    fun preparedFile(context: Context): File = copyIfNeeded(context)
+    fun preparedFile(files: BundledFiles): Path {
+        val dir = files.writableDirectory / COPY_DIR
+        fileSystem.createDirectories(dir)
+        val target = dir / "cards-$ASSET_VERSION-r$LOCAL_REVISION.sqlite"
+        if (fileSystem.exists(target) && (fileSystem.metadataOrNull(target)?.size ?: 0L) > 0L) return target
 
-    private fun copyIfNeeded(context: Context): File {
-        val dir = File(context.filesDir, "card-catalog").apply { mkdirs() }
-        val target = File(dir, "cards-$ASSET_VERSION-r$LOCAL_REVISION.sqlite")
-        if (target.exists() && target.length() > 0L) return target
+        // Drop any older bundle versions (and any leftover temp/journal files) before laying down
+        // the new one.
+        fileSystem
+            .list(dir)
+            .filter { it.name.startsWith("cards-") && it.name != target.name }
+            .forEach { fileSystem.delete(it) }
 
-        // Drop any older bundle versions (and any leftover temp/journal files) before laying down the
-        // new one.
-        dir
-            .listFiles { f -> f.name.startsWith("cards-") && f.name != target.name }
-            ?.forEach { it.delete() }
-
-        val tmp = File(dir, "${target.name}.tmp")
-        context.assets.open(ASSET_NAME).use { input ->
-            tmp.outputStream().use { output -> input.copyTo(output) }
+        val tmp = dir / "${target.name}.tmp"
+        files.openBundled(ASSET_NAME).use { source ->
+            fileSystem.sink(tmp).buffer().use { sink -> sink.writeAll(source) }
         }
         prepare(tmp)
-        if (!tmp.renameTo(target)) {
-            tmp.copyTo(target, overwrite = true)
-            tmp.delete()
-        }
+        publish(tmp, target)
         return target
+    }
+
+    /**
+     * Publish the prepared temp file under its final name.
+     *
+     * The copy-then-delete fallback is carried over from the pre-okio version, which checked
+     * `File.renameTo`'s boolean and copied when it failed. `atomicMove` throws instead of returning
+     * false, and this runs on **every user's first launch** — so a rename that fails for an
+     * environmental reason must still end with a usable catalog rather than an exception on the way
+     * to the card browser.
+     */
+    private fun publish(
+        tmp: Path,
+        target: Path,
+    ) {
+        try {
+            fileSystem.atomicMove(tmp, target)
+        } catch (_: IOException) {
+            fileSystem.copy(tmp, target)
+            fileSystem.delete(tmp)
+        }
     }
 
     /**
@@ -96,8 +123,8 @@ internal object CardCatalogDatabase {
      * bundled asset and [SqliteCardCatalog] only ever issues `SELECT`s), so behaviour is unchanged;
      * what is gone is SQLite refusing a write if one were ever added by mistake.
      */
-    private fun prepare(file: File) {
-        driver.open(file.path).use { connection ->
+    private fun prepare(file: Path) {
+        driver.open(file.toString()).use { connection ->
             connection.execSQL("CREATE INDEX IF NOT EXISTS $NAME_NOCASE_INDEX ON card(name COLLATE NOCASE)")
         }
     }
