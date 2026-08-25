@@ -1,7 +1,7 @@
 package magefree.decks
 
 import androidx.room.Room
-import androidx.test.core.app.ApplicationProvider
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -19,19 +19,15 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The deck library persists and reads back through the real Android SQLite (via Room), driven on the
- * JVM by Robolectric — no device. Covers create / save+load / rename / favorite / duplicate / delete,
+ * The deck library persists and reads back through real SQLite (via Room), on the `jvm()` target with
+ * no Android runtime at all (story 0085). Covers create / save+load / rename / favorite / duplicate / delete,
  * the reactive library flow, and that data survives being re-read through a fresh repository instance
  * over the same store (persistence). Everything is local; no network is involved.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
 class DeckRepositoryTest {
     private lateinit var db: DeckDatabase
     private val dispatcher = UnconfinedTestDispatcher()
@@ -49,15 +45,16 @@ class DeckRepositoryTest {
 
     @Before
     fun setUp() {
-        val direct = Executor { it.run() }
+        // Story 0085: Room's multiplatform in-memory builder over `BundledSQLiteDriver`, which
+        // carries its own SQLite so no Android runtime is involved. The pre-move Android builder
+        // took a `Context` and needed `setQueryExecutor`/`allowMainThreadQueries` to run everything
+        // on the calling thread; `setQueryCoroutineContext` with the test dispatcher is the same
+        // arrangement expressed the multiplatform way. Not one assertion below changed.
         db =
             Room
-                .inMemoryDatabaseBuilder(
-                    ApplicationProvider.getApplicationContext(),
-                    DeckDatabase::class.java,
-                ).setQueryExecutor(direct)
-                .setTransactionExecutor(direct)
-                .allowMainThreadQueries()
+                .inMemoryDatabaseBuilder<DeckDatabase>()
+                .setDriver(BundledSQLiteDriver())
+                .setQueryCoroutineContext(dispatcher)
                 .build()
     }
 

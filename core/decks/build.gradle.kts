@@ -52,10 +52,23 @@ kotlin {
             }
         }
 
-        // Robolectric drives the real Android SQLite (via Room) on the JVM, so the deck library's
-        // persistence + query logic is exercised without a device. The legality checker and the
-        // import/export ports are pure Kotlin and need no framework, but share this source set until
-        // story 0085 moves them onto the jvm() target.
+        /**
+         * Story 0085: the deck-persistence suite runs here, on the `jvm()` target, over Room's
+         * multiplatform runtime and `BundledSQLiteDriver` — no Android runtime, no Robolectric. That
+         * is what makes it a portability check that fires on every commit.
+         */
+        jvmTest {
+            dependencies {
+                implementation(libs.junit4)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.turbine)
+                implementation(libs.androidx.sqlite.bundled)
+            }
+        }
+
+        // What is left needs Robolectric for a real reason: `ExistingDeckDatabaseTest` and
+        // `FormatBundleLoaderTest` test the Android edge itself — `getDatabasePath`,
+        // `AndroidSQLiteDriver`, APK assets — so they stay on Android by design (story 0085 §2).
         androidUnitTest {
             dependencies {
                 implementation(libs.junit4)

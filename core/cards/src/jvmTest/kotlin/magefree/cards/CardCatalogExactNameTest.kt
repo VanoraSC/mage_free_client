@@ -1,12 +1,11 @@
 package magefree.cards
 
-import android.database.sqlite.SQLiteDatabase
 import androidx.sqlite.SQLiteConnection
-import androidx.sqlite.driver.AndroidSQLiteDriver
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import magefree.cards.bundle.AndroidBundledFiles
+import magefree.cards.bundle.JvmBundledFiles
 import magefree.cards.internal.CardCatalogDatabase
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -16,9 +15,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 
 /**
  * The exact-name catalog lookup (story 0042, defect D) over the **real bundled** database, opened the
@@ -30,14 +26,13 @@ import org.robolectric.RuntimeEnvironment
  * use, so [CardCatalogDatabase] adds the NOCASE index to its private copy at copy time.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
 class CardCatalogExactNameTest {
     private lateinit var db: SQLiteConnection
     private lateinit var catalog: CardCatalog
 
     @Before
     fun setUp() {
-        db = CardCatalogDatabase.open(AndroidBundledFiles(RuntimeEnvironment.getApplication()), AndroidSQLiteDriver())
+        db = CardCatalogDatabase.open(JvmBundledFiles(), BundledSQLiteDriver())
         catalog = CatalogTestSupport.catalog(db, UnconfinedTestDispatcher())
     }
 
@@ -142,28 +137,30 @@ class CardCatalogExactNameTest {
     /**
      * The `EXPLAIN QUERY PLAN` rows for [sql], flattened to one string.
      *
-     * **Read through `SQLiteDatabase`, not the driver, and deliberately so (story 0082).**
-     * `androidx.sqlite`'s `AndroidSQLiteStatement` splits into a SELECT variant and an "other"
-     * variant, and an `EXPLAIN QUERY PLAN` statement lands in the latter: `step()` returns false
-     * immediately and no rows are produced, so the plan is simply unavailable through the driver.
+     * **Read straight through the driver (story 0085).** Story 0082 had to go around it: on Android,
+     * `AndroidSQLiteStatement` splits into a SELECT variant and an "other" variant, an
+     * `EXPLAIN QUERY PLAN` lands in the latter, and `step()` returns false without producing rows —
+     * so the plan was read through `android.database.sqlite.SQLiteDatabase` against the same prepared
+     * file instead. `BundledSQLiteDriver` has no such split; it carries its own SQLite and returns
+     * the plan rows like any other query. Moving these tests to the JVM target therefore *removed* an
+     * indirection rather than adding one.
      *
-     * Dropping these two tests was the alternative and it is not acceptable — they are the only
-     * thing that proves the NOCASE index is actually *used* rather than merely present, which is
-     * story 0042 defect D. A query plan is a property of SQLite and of the database file, not of the
-     * API wrapper in front of them, and `AndroidSQLiteDriver` is that same platform SQLite — so
-     * reading the plan this way asks exactly the same question of exactly the same engine, against
-     * the same prepared file the catalog itself opens.
+     * These two tests are the only thing proving the NOCASE index is actually *used* rather than
+     * merely present (story 0042 defect D), so dropping them was never an option. A query plan is a
+     * property of SQLite and of the database file, not of the API wrapper in front of them.
      */
     private fun queryPlan(
         sql: String,
         vararg args: String,
     ): String =
         buildString {
-            val file = CardCatalogDatabase.preparedFile(AndroidBundledFiles(RuntimeEnvironment.getApplication()), AndroidSQLiteDriver())
-            SQLiteDatabase.openDatabase(file.toString(), null, SQLiteDatabase.OPEN_READONLY).use { raw ->
-                raw.rawQuery("EXPLAIN QUERY PLAN $sql", arrayOf(*args)).use { c ->
-                    while (c.moveToNext()) {
-                        append(c.getString(c.getColumnIndexOrThrow("detail"))).append('\n')
+            val file = CardCatalogDatabase.preparedFile(JvmBundledFiles(), BundledSQLiteDriver())
+            BundledSQLiteDriver().open(file.toString()).use { connection ->
+                connection.prepare("EXPLAIN QUERY PLAN $sql").use { statement ->
+                    args.forEachIndexed { index, arg -> statement.bindText(index + 1, arg) }
+                    val detail = statement.getColumnNames().indexOf("detail")
+                    while (statement.step()) {
+                        append(statement.getText(detail)).append('\n')
                     }
                 }
             }

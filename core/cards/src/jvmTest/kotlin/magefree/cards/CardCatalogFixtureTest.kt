@@ -15,8 +15,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
 
 /**
  * Deterministic search/filter/lookup behaviour, tested against a small committed fixture SQLite
@@ -25,7 +23,6 @@ import org.robolectric.RobolectricTestRunner
  * lookups — the exact query logic that runs on device.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
 class CardCatalogFixtureTest {
     private lateinit var db: SQLiteConnection
     private lateinit var catalog: CardCatalog

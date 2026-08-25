@@ -1,11 +1,11 @@
 package magefree.cards
 
 import androidx.sqlite.SQLiteConnection
-import androidx.sqlite.driver.AndroidSQLiteDriver
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import magefree.cards.bundle.AndroidBundledFiles
+import magefree.cards.bundle.JvmBundledFiles
 import magefree.cards.internal.CardCatalogDatabase
 import magefree.cards.model.Card
 import magefree.cards.model.CardColor
@@ -14,9 +14,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 
 /**
  * Coverage / sanity check over the **real bundled** `assets/cards.sqlite`. Exercises the actual
@@ -26,14 +23,13 @@ import org.robolectric.RuntimeEnvironment
  * printing bundle (not testable row-by-row) is real and correctly shaped.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
 class CardCatalogBundleTest {
     private lateinit var db: SQLiteConnection
     private lateinit var catalog: CardCatalog
 
     @Before
     fun setUp() {
-        db = CardCatalogDatabase.open(AndroidBundledFiles(RuntimeEnvironment.getApplication()), AndroidSQLiteDriver())
+        db = CardCatalogDatabase.open(JvmBundledFiles(), BundledSQLiteDriver())
         catalog = CatalogTestSupport.catalog(db, UnconfinedTestDispatcher())
     }
 

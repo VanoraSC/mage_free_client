@@ -1,7 +1,7 @@
 package magefree.cards.art
 
-import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import coil3.PlatformContext
 import coil3.memory.MemoryCache
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -21,9 +21,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import java.io.File
 import java.util.Base64
 import java.util.Collections
@@ -44,9 +41,11 @@ import java.util.Collections
  * an `ErrorResult` after the bytes are already cached. That is the same reason `CardImageLoaderTest`
  * asserts on disk entries rather than on the [ArtWarmer.warm] return value.
  */
-@RunWith(RobolectricTestRunner::class)
 class CardArtFallbackTest {
-    private lateinit var context: Context
+    private val context: PlatformContext = PlatformContext.INSTANCE
+
+    /** Story 0085: the JVM stand-in for the Android `Context.cacheDir` these tests used to write to. */
+    private val tempRoot: File = File(System.getProperty("java.io.tmpdir"), "magefree-art-test").apply { mkdirs() }
     private lateinit var scope: CoroutineScope
     private lateinit var diskDir: File
     private val source = ScryfallImageSource()
@@ -94,9 +93,8 @@ class CardArtFallbackTest {
 
     @Before
     fun setUp() {
-        context = RuntimeEnvironment.getApplication()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        diskDir = File(context.cacheDir, "art-fallback-test-" + System.nanoTime())
+        diskDir = File(tempRoot, "art-fallback-test-" + System.nanoTime())
     }
 
     @After
@@ -107,7 +105,7 @@ class CardArtFallbackTest {
     private fun newLoader(): CardImageLoader {
         val dataStore =
             PreferenceDataStoreFactory.create(scope = scope) {
-                File(context.cacheDir, "art-fallback-prefs-" + System.nanoTime() + ".preferences_pb")
+                File(tempRoot, "art-fallback-prefs-" + System.nanoTime() + ".preferences_pb")
             }
         return CardImageLoader(
             context = context,

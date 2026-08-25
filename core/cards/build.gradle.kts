@@ -54,15 +54,48 @@ kotlin {
             }
         }
 
-        // Robolectric, JUnit 4, and the real bundled asset — so `check` exercises the actual catalog
-        // query logic (search ranking, filters, DFC/split lookup) without a device. Story 0085 moves
-        // the parts of this that no longer need Android onto the jvm() target.
+        jvmMain {
+            dependencies {
+                // Story 0085: the JVM platform edge — `JvmBundledFiles` reads classpath resources,
+                // and `BundledSQLiteDriver` carries its own SQLite so the host does not have to
+                // provide one (`sqlite-framework` wraps the *platform's*, which a JVM host lacks).
+                implementation(libs.androidx.sqlite.bundled)
+            }
+        }
+
+        /**
+         * Story 0085: the catalog and art suites run here, on the `jvm()` target, with no Android
+         * runtime involved. That is what makes them a portability check that fires on every commit
+         * rather than a second copy of the Android tests.
+         *
+         * `src/androidMain/assets` is wired in as a resource directory rather than the 14 MB
+         * `cards.sqlite` being copied: on the JVM a classpath resource *is* the APK asset, so the
+         * same file answers `BundledFiles.openBundled("cards.sqlite")` on both targets and there is
+         * only ever one copy of it in the repository.
+         */
+        jvmTest {
+            resources.srcDir("src/androidMain/assets")
+            dependencies {
+                implementation(libs.junit4)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.turbine)
+                implementation(libs.androidx.sqlite.bundled)
+                implementation(libs.okhttp.mockwebserver)
+                implementation(libs.ktor.client.mock)
+            }
+        }
+
+        // JUnit 4 and the pure-Kotlin art tests. Story 0085 moved everything that needed Robolectric
+        // (the catalog and the image loader) onto the jvm() target; what is left here needs no
+        // Android runtime either, and stays only because `androidUnitTest` is where an Android
+        // library's unit tests live.
         androidUnitTest {
             dependencies {
                 implementation(libs.junit4)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.turbine)
                 implementation(libs.robolectric)
+                implementation(libs.androidx.test.ext.junit)
                 // Story 0056: records the real outgoing art request so the User-Agent can be asserted
                 // on the wire, on the loader's *default* client — a test that injected its own client
                 // would carry whatever headers the test gave it and would prove nothing about the

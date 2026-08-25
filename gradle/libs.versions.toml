@@ -110,6 +110,10 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 androidx-concurrent-futures = { module = "androidx.concurrent:concurrent-futures", version.ref = "androidx-concurrent-futures" }
 androidx-sqlite = { module = "androidx.sqlite:sqlite", version.ref = "androidx-sqlite" }
 androidx-sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "androidx-sqlite" }
+# Story 0085: SQLite for the jvm() target. `sqlite-framework` wraps the *platform's* SQLite, which a
+# JVM host does not have — `sqlite-bundled` carries its own native library, so the JVM tests open the
+# same databases the Android target does without the host providing anything.
+androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "androidx-sqlite" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "androidx-datastore" }
 
 # Gradle plugin artifacts — consumed by the build-logic convention plugins (compileOnly)
