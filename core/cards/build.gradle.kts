@@ -80,22 +80,6 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.turbine)
                 implementation(libs.androidx.sqlite.bundled)
-                implementation(libs.okhttp.mockwebserver)
-                implementation(libs.ktor.client.mock)
-            }
-        }
-
-        // JUnit 4 and the pure-Kotlin art tests. Story 0085 moved everything that needed Robolectric
-        // (the catalog and the image loader) onto the jvm() target; what is left here needs no
-        // Android runtime either, and stays only because `androidUnitTest` is where an Android
-        // library's unit tests live.
-        androidUnitTest {
-            dependencies {
-                implementation(libs.junit4)
-                implementation(libs.kotlinx.coroutines.test)
-                implementation(libs.turbine)
-                implementation(libs.robolectric)
-                implementation(libs.androidx.test.ext.junit)
                 // Story 0056: records the real outgoing art request so the User-Agent can be asserted
                 // on the wire, on the loader's *default* client — a test that injected its own client
                 // would carry whatever headers the test gave it and would prove nothing about the
@@ -103,6 +87,17 @@ kotlin {
                 implementation(libs.okhttp.mockwebserver)
                 // Story 0082: MockEngine drives the candidate-URL fallback test without a real socket.
                 implementation(libs.ktor.client.mock)
+            }
+        }
+
+        // Story 0085: **no Robolectric here any more** — everything that needed an Android runtime
+        // moved to `jvmTest`, and this module has no Android-edge test left to justify keeping it.
+        // What remains (`ArtDownloadManager*`, `XMageImageSourceTest`) is pure Kotlin over fakes.
+        androidUnitTest {
+            dependencies {
+                implementation(libs.junit4)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.turbine)
             }
         }
     }
