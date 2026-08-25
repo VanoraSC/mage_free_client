@@ -1,5 +1,6 @@
 package magefree.cards.di
 
+import androidx.sqlite.driver.AndroidSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 import magefree.cards.CardCatalog
 import magefree.cards.bundle.AndroidBundledFiles
@@ -27,7 +28,7 @@ val cardCatalogModule =
         single<CardCatalog> {
             val files = get<BundledFiles>()
             SqliteCardCatalog(
-                databaseProvider = { CardCatalogDatabase.open(files) },
+                databaseProvider = { CardCatalogDatabase.open(files, AndroidSQLiteDriver()) },
                 ioDispatcher = Dispatchers.IO,
             )
         }

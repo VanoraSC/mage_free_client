@@ -1,6 +1,7 @@
 package magefree.cards
 
 import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.driver.AndroidSQLiteDriver
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -32,7 +33,7 @@ class CardCatalogBundleTest {
 
     @Before
     fun setUp() {
-        db = CardCatalogDatabase.open(AndroidBundledFiles(RuntimeEnvironment.getApplication()))
+        db = CardCatalogDatabase.open(AndroidBundledFiles(RuntimeEnvironment.getApplication()), AndroidSQLiteDriver())
         catalog = CatalogTestSupport.catalog(db, UnconfinedTestDispatcher())
     }
 

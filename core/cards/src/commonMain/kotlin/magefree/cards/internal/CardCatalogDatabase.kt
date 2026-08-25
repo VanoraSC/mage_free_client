@@ -1,7 +1,7 @@
 package magefree.cards.internal
 
 import androidx.sqlite.SQLiteConnection
-import androidx.sqlite.driver.AndroidSQLiteDriver
+import androidx.sqlite.SQLiteDriver
 import androidx.sqlite.execSQL
 import magefree.cards.bundle.BundledFiles
 import okio.FileSystem
@@ -52,17 +52,21 @@ internal object CardCatalogDatabase {
     /** Subdirectory of [BundledFiles.writableDirectory] holding the private copy. */
     private const val COPY_DIR = "card-catalog"
 
-    /**
-     * The driver. `AndroidSQLiteDriver` is the platform's own SQLite — the same engine the pre-port
-     * `SQLiteDatabase` used — so this changes the API in front of SQLite, not SQLite itself, and the
-     * APK gains no native library. A JVM/desktop target supplies `BundledSQLiteDriver` instead; the
-     * query code in [SqliteCardCatalog] is identical either way.
-     */
-    private val driver = AndroidSQLiteDriver()
-
     private val fileSystem: FileSystem get() = FileSystem.SYSTEM
 
-    fun open(files: BundledFiles): SQLiteConnection = driver.open(preparedFile(files).toString())
+    /**
+     * Open the catalog, using [driver] to reach SQLite.
+     *
+     * The driver is supplied rather than chosen here because the choice is a platform one: Android
+     * passes `AndroidSQLiteDriver`, which is the platform's own SQLite — the same engine the pre-port
+     * `SQLiteDatabase` used, so the APK gains no native library — while a JVM/desktop target passes
+     * `BundledSQLiteDriver`. Everything else about opening and preparing the file, and every query in
+     * [SqliteCardCatalog], is identical either way.
+     */
+    fun open(
+        files: BundledFiles,
+        driver: SQLiteDriver,
+    ): SQLiteConnection = driver.open(preparedFile(files, driver).toString())
 
     /**
      * The prepared private copy, laid down on first call. Exposed (rather than kept inside [open])
@@ -70,7 +74,10 @@ internal object CardCatalogDatabase {
      * `CardCatalogExactNameTest.queryPlan`, which needs `EXPLAIN QUERY PLAN` and cannot get it from
      * the driver.
      */
-    fun preparedFile(files: BundledFiles): Path {
+    fun preparedFile(
+        files: BundledFiles,
+        driver: SQLiteDriver,
+    ): Path {
         val dir = files.writableDirectory / COPY_DIR
         fileSystem.createDirectories(dir)
         val target = dir / "cards-$ASSET_VERSION-r$LOCAL_REVISION.sqlite"
@@ -87,7 +94,7 @@ internal object CardCatalogDatabase {
         files.openBundled(ASSET_NAME).use { source ->
             fileSystem.sink(tmp).buffer().use { sink -> sink.writeAll(source) }
         }
-        prepare(tmp)
+        prepare(tmp, driver)
         publish(tmp, target)
         return target
     }
@@ -123,7 +130,10 @@ internal object CardCatalogDatabase {
      * bundled asset and [SqliteCardCatalog] only ever issues `SELECT`s), so behaviour is unchanged;
      * what is gone is SQLite refusing a write if one were ever added by mistake.
      */
-    private fun prepare(file: Path) {
+    private fun prepare(
+        file: Path,
+        driver: SQLiteDriver,
+    ) {
         driver.open(file.toString()).use { connection ->
             connection.execSQL("CREATE INDEX IF NOT EXISTS $NAME_NOCASE_INDEX ON card(name COLLATE NOCASE)")
         }

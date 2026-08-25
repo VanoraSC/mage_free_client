@@ -43,5 +43,11 @@ gradlePlugin {
             id = "magefree.kmp.library"
             implementationClass = "KmpLibraryConventionPlugin"
         }
+        // Story 0082: a multiplatform `:core:*` module that still ships on Android, so it carries an
+        // `androidTarget()` alongside `jvm()` and an `androidMain` source set for the platform edge.
+        register("kmpAndroidLibrary") {
+            id = "magefree.kmp.android.library"
+            implementationClass = "KmpAndroidLibraryConventionPlugin"
+        }
     }
 }

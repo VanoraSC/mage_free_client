@@ -1,7 +1,5 @@
 package magefree.cards.art
 
-import android.content.Context
-import android.content.pm.PackageManager
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.UserAgent
@@ -53,30 +51,6 @@ internal object CardArtUserAgent {
      */
     fun value(appVersion: String?): String = "$PRODUCT/${appVersion?.takeIf { it.isNotBlank() } ?: UNKNOWN_VERSION} (+$PROJECT_URL)"
 }
-
-/**
- * The installed package's `versionName` — i.e. the version declared by the app's build
- * (`app/build.gradle.kts`, `versionName = "0.1.0"`), read back at runtime.
- *
- * This module has no `BuildConfig` version of its own and cannot see the app module's, so the
- * package manager is the one source that tracks the real build rather than duplicating a literal
- * that would drift the first time the app version changes. In a JVM/Robolectric unit test the
- * manifest under test declares no `versionName`, so this yields `null` there — which is why the
- * tests assert on the descriptive tokens, not on a version string.
- *
- * Android-only, and the only thing left in this file that is: story 0082 moved the string-building
- * into [CardArtUserAgent.value], so the KMP conversion relocates this one function rather than
- * unpicking the pipeline.
- */
-internal fun androidAppVersion(context: Context): String? =
-    try {
-        context.packageManager
-            .getPackageInfo(context.packageName, 0)
-            ?.versionName
-            ?.takeIf { it.isNotBlank() }
-    } catch (_: PackageManager.NameNotFoundException) {
-        null
-    }
 
 /**
  * The [HttpClient] [CardImageLoader] uses when no test double is injected — i.e. the one that ships.
