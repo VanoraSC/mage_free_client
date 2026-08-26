@@ -1,7 +1,7 @@
 package magefree.cards.art
 
-import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import coil3.PlatformContext
 import coil3.memory.MemoryCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,9 +20,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import java.io.File
 import java.util.Base64
 import java.util.concurrent.TimeUnit
@@ -47,9 +44,11 @@ import java.util.concurrent.TimeUnit
  * "an interceptor is installed" is a claim about wiring; "the request that left the client carried
  * this header" is the thing Scryfall actually judges.
  */
-@RunWith(RobolectricTestRunner::class)
 class CardArtUserAgentTest {
-    private lateinit var context: Context
+    private val context: PlatformContext = PlatformContext.INSTANCE
+
+    /** Story 0085: the JVM stand-in for the Android `Context.cacheDir` these tests used to write to. */
+    private val tempRoot: File = File(System.getProperty("java.io.tmpdir"), "magefree-art-test").apply { mkdirs() }
     private lateinit var scope: CoroutineScope
     private lateinit var diskDir: File
     private lateinit var server: MockWebServer
@@ -72,9 +71,8 @@ class CardArtUserAgentTest {
 
     @Before
     fun setUp() {
-        context = RuntimeEnvironment.getApplication()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        diskDir = File(context.cacheDir, "ua-test-" + System.nanoTime())
+        diskDir = File(tempRoot, "ua-test-" + System.nanoTime())
         server = MockWebServer()
         server.start()
     }
@@ -92,7 +90,7 @@ class CardArtUserAgentTest {
     private fun defaultLoader(): CardImageLoader {
         val dataStore =
             PreferenceDataStoreFactory.create(scope = scope) {
-                File(context.cacheDir, "ua-prefs-" + System.nanoTime() + ".preferences_pb")
+                File(tempRoot, "ua-prefs-" + System.nanoTime() + ".preferences_pb")
             }
         return CardImageLoader(
             context = context,

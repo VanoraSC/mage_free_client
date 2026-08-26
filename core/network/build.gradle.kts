@@ -74,7 +74,17 @@ kotlin {
             }
         }
 
-        androidUnitTest {
+        /**
+         * Story 0085: the whole session layer's suite — the bridge client, the reconnect loop, the
+         * correlation registry, every mapper and every fake — runs here, on the `jvm()` target, with
+         * no Android runtime. 216 of this module's 217 tests.
+         *
+         * That includes the env-gated live integration tests (stories 0045/0050) and
+         * `KtorBridgeClientSignOutTest`, which drives the real client against a throwaway in-process
+         * WebSocket server: both were always plain JVM work that happened to be sitting in an
+         * Android source set.
+         */
+        jvmTest {
             dependencies {
                 implementation(libs.junit4)
                 implementation(libs.kotlinx.coroutines.test)
@@ -87,9 +97,16 @@ kotlin {
                 implementation(libs.ktor.server.core)
                 implementation(libs.ktor.server.netty)
                 implementation(libs.ktor.server.websockets)
+            }
+        }
 
-                // Story 0084: SavedServersSurviveUpgradeTest reads a pre-port DataStore file through
-                // the real `networkModule`, which needs a Context for `filesDir`.
+        // One test stays on Android, and Robolectric with it: story 0084's
+        // `SavedServersSurviveUpgradeTest` reads a pre-port DataStore file through the real
+        // `networkModule`, so `Context` and `filesDir` are its subject rather than its scaffolding.
+        androidUnitTest {
+            dependencies {
+                implementation(libs.junit4)
+                implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.robolectric)
                 implementation(libs.androidx.test.ext.junit)
             }

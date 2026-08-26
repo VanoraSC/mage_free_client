@@ -1,14 +1,14 @@
 package magefree.cards
 
 import androidx.sqlite.SQLiteConnection
-import androidx.sqlite.driver.AndroidSQLiteDriver
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.CoroutineDispatcher
 import magefree.cards.internal.SqliteCardCatalog
 import java.io.File
 
 /** Shared helpers for the Robolectric-backed catalog tests. */
 internal object CatalogTestSupport {
-    private val driver = AndroidSQLiteDriver()
+    private val driver = BundledSQLiteDriver()
 
     /** Copy a bundled test-classpath resource (e.g. the fixture DB) to a temp file and open it. */
     fun openResourceDatabase(resource: String): SQLiteConnection {
