@@ -444,6 +444,88 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun anAuraAndItsHostBothSurviveFoldingWithTheRelationshipIntact() {
+        // Story 0087: the relationship is only renderable if BOTH directions arrive -- the host's
+        // `attachments` and the aura's `attachedTo`. This aura is ours and the creature is theirs,
+        // which is the case `attachedControllerDiffers` exists for, and it means the round trip
+        // crosses players' battlefields rather than staying inside one.
+        val aura =
+            GamePermanentView(
+                card = GameCardView(id = "aura-1", name = "Rancor"),
+                attachedTo = "bear-1",
+                attachedToPermanent = true,
+                attachedControllerDiffers = true,
+                controlledByViewer = true,
+            )
+        val bear =
+            GamePermanentView(
+                card = GameCardView(id = "bear-1", name = "Grizzly Bears", creature = true),
+                attachments = listOf("aura-1"),
+                controlledByViewer = false,
+            )
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 4,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(playerId = "p-1", name = "pete", viewer = true, battlefield = listOf(aura)),
+                                    GamePlayerView(playerId = "p-2", name = "Computer", human = false, battlefield = listOf(bear)),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val foldedAura = folded.viewer!!.battlefield.single()
+        val foldedBear =
+            folded.players
+                .single { !it.isViewer }
+                .battlefield
+                .single()
+
+        assertEquals("bear-1", foldedAura.attachedTo)
+        assertTrue(foldedAura.isAttachedToPermanent)
+        assertTrue("your aura on their creature must stay flagged", foldedAura.attachedControllerDiffers)
+        assertEquals(listOf("aura-1"), foldedBear.attachments)
+    }
+
+    @Test
+    fun anUnattachedPermanentFoldsWithNoAttachmentState() {
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 1,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(
+                                        playerId = "p-1",
+                                        name = "pete",
+                                        viewer = true,
+                                        battlefield = listOf(GamePermanentView(card = GameCardView(id = "perm-1", name = "Forest"))),
+                                    ),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val forest = folded.viewer!!.battlefield.single()
+        assertNull(forest.attachedTo)
+        assertTrue(forest.attachments.isEmpty())
+        assertFalse(forest.isAttachedToPermanent)
+        assertFalse(forest.attachedControllerDiffers)
+    }
+
+    @Test
     fun aCardThatTargetsNothingCarriesAnEmptyTargetList() {
         // Most cards are not targeting stack objects: upstream leaves `targets` null for a hand card
         // or an ordinary permanent, the bridge maps that to empty, and nothing downstream invents one.

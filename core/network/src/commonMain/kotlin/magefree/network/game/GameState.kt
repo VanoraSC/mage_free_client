@@ -265,7 +265,18 @@ enum class CardType {
  * A permanent on the battlefield — the app-schema projection of `mage.view.PermanentView`: a [card] plus
  * the battlefield-only state a board must show.
  *
- * @property attachedTo the permanent/player this is attached to (an aura/equipment), or `null`.
+ * **Attachments travel in both directions (story 0087).** [attachedTo] is what this permanent is
+ * attached to; [attachments] is what is attached *to it*. The reverse direction is carried rather than
+ * derived because deriving it means every host scanning every battlefield, on every frame, for anything
+ * pointing at it — and upstream already computed it once for the snapshot.
+ *
+ * @property attachedTo the permanent **or player** this is attached to (an aura/equipment/curse), or
+ *   `null`. [isAttachedToPermanent] is what says which of the two it is.
+ * @property attachments the ids of everything attached to this permanent, in upstream's order.
+ * @property isAttachedToPermanent true when the host resolved to a permanent rather than a player.
+ * @property attachedControllerDiffers your Aura on their creature. Narrower than it sounds: upstream
+ *   computes it only when the host is a permanent, so it is always `false` when
+ *   [isAttachedToPermanent] is `false` — a Curse on an opposing player included.
  * @property isControlledByViewer whether the viewer controls it (which can differ from whose battlefield
  *   it sits on).
  */
@@ -277,6 +288,9 @@ data class GamePermanent(
     val hasSummoningSickness: Boolean = false,
     val damage: Int = 0,
     val attachedTo: String? = null,
+    val attachments: List<String> = emptyList(),
+    val isAttachedToPermanent: Boolean = false,
+    val attachedControllerDiffers: Boolean = false,
     val isControlledByViewer: Boolean = false,
 )
 

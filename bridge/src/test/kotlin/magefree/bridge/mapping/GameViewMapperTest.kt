@@ -287,6 +287,91 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `a host permanent lists what is attached to it, in upstream's order (story 0087)`() {
+        // The reverse direction is the whole point: without it, rendering an Aura on its host means
+        // every permanent scanning every battlefield, every frame, for anything pointing at it.
+        val rancor = UUID.randomUUID()
+        val pacifism = UUID.randomUUID()
+        val bear =
+            GameViews.permanent(
+                card = GameViews.card(name = "Grizzly Bears", cardTypes = listOf(CardType.CREATURE), superTypes = emptyList()),
+                attachments = listOf(rancor, pacifism),
+            )
+        val view = GameViews.game(myPlayerId = alice, players = listOf(GameViews.player(playerId = alice, battlefield = listOf(bear))))
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .battlefield
+                .single()
+
+        assertEquals(listOf(rancor.toString(), pacifism.toString()), mapped.attachments)
+    }
+
+    @Test
+    fun `your aura on their creature is flagged as such, and on your own creature is not (story 0087)`() {
+        // `attachedControllerDiffers` is the easily-missed board state §7.4 names: you control the Aura,
+        // they control the creature. Read from upstream's `isAttachedToDifferentlyControlledPermanent()`
+        // -- note the accessor name, which is nothing like the field's.
+        val theirCreature = UUID.randomUUID()
+        val myAura =
+            GameViews.permanent(
+                card = GameViews.card(name = "Rancor", cardTypes = listOf(CardType.ENCHANTMENT), superTypes = emptyList()),
+                attachedTo = theirCreature,
+                attachedToPermanent = true,
+                attachedControllerDiffers = true,
+            )
+        val myOtherAura =
+            GameViews.permanent(
+                card = GameViews.card(name = "Rancor", cardTypes = listOf(CardType.ENCHANTMENT), superTypes = emptyList()),
+                attachedTo = UUID.randomUUID(),
+                attachedToPermanent = true,
+                attachedControllerDiffers = false,
+            )
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players = listOf(GameViews.player(playerId = alice, battlefield = listOf(myAura, myOtherAura))),
+            )
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .battlefield
+
+        assertTrue(mapped[0].attachedToPermanent)
+        assertTrue(mapped[0].attachedControllerDiffers, "an Aura on an opponent's creature must say so")
+        assertTrue(mapped[1].attachedToPermanent)
+        assertFalse(mapped[1].attachedControllerDiffers, "an Aura on your own creature must not")
+    }
+
+    @Test
+    fun `an unattached permanent carries no attachment state at all (story 0087)`() {
+        // Both flags default to false and the list to empty. Upstream computes `attachedToPermanent`
+        // by actually resolving the host, so "not attached" and "attached to a player" both land here.
+        val forest = GameViews.permanent(card = GameViews.card(name = "Forest"))
+        val view =
+            GameViews.game(myPlayerId = alice, players = listOf(GameViews.player(playerId = alice, battlefield = listOf(forest))))
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .battlefield
+                .single()
+
+        assertNull(mapped.attachedTo)
+        assertTrue(mapped.attachments.isEmpty(), "a sparse upstream view leaves `attachments` null; empty is the answer")
+        assertFalse(mapped.attachedToPermanent)
+        assertFalse(mapped.attachedControllerDiffers)
+    }
+
+    @Test
     fun `a player carries its counts, mana pool and match score`() {
         val view =
             GameViews.game(

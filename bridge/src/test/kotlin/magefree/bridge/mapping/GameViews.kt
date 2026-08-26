@@ -187,6 +187,9 @@ internal object GameViews {
         summoningSickness: Boolean = false,
         damage: Int = 0,
         attachedTo: UUID? = null,
+        attachments: List<UUID>? = null,
+        attachedToPermanent: Boolean = false,
+        attachedControllerDiffers: Boolean = false,
         controlled: Boolean = true,
         transformed: Boolean = false,
     ): PermanentView =
@@ -198,6 +201,13 @@ internal object GameViews {
             set("summoningSickness", summoningSickness)
             set("damage", damage)
             set("attachedTo", attachedTo)
+            // Story 0087: upstream's constructor always allocates `attachments`
+            // (`new ArrayList<>(permanent.getAttachments())`), so a real view never has it null — but
+            // the serialization constructor does, which is the sparse-view case the mapper must
+            // survive. Left unset unless a test asks for it, so both paths are reachable here.
+            if (attachments != null) set("attachments", attachments)
+            set("attachedToPermanent", attachedToPermanent)
+            set("attachedControllerDiffers", attachedControllerDiffers)
             set("controlled", controlled)
             set("transformed", transformed)
         }

@@ -21,6 +21,7 @@ import magefree.protocol.DeckListCard
 import magefree.protocol.GameCardView
 import magefree.protocol.GameInformed
 import magefree.protocol.GameOver
+import magefree.protocol.GamePermanentView
 import magefree.protocol.GamePrompt
 import magefree.protocol.GamePrompted
 import magefree.protocol.GameStarted
@@ -43,6 +44,7 @@ import magefree.protocol.TableCreated
 import magefree.protocol.TargetPrompt
 import magefree.protocol.TurnPhaseCode
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -69,11 +71,17 @@ import java.util.UUID
  * keeps the prompt stream small — no spells, so no modes, no costs and no combat — which is what lets
  * the auto-responder below be a few lines rather than a rules engine.
  *
- * **A second scenario lives here too** (story 0086): the same table recipe with [BURN_DECK] instead,
- * which actually *casts* something — the one way to get a targeted spell onto a real stack and read
- * `CardView.getTargets()` back off the snapshot the server pushes. It shares this class's harness
- * (connect, seat, start, pump, teardown) rather than copying it; only the deck and the play loop
- * differ.
+ * **Two more scenarios live here**, sharing this class's harness (connect, seat, start, pump,
+ * teardown) rather than copying it — only the deck and the play loop differ:
+ * - story 0086, with [BURN_DECK]: actually *casts* something, the one way to get a targeted spell onto
+ *   a real stack and read `CardView.getTargets()` back off the snapshot the server pushes;
+ * - story 0087, with [AURA_DECK]: puts an Aura on a creature each player controls, which is the only
+ *   way to see `attachedControllerDiffers` be true.
+ *
+ * **A failed run can leave a table behind on a long-lived server**, and `LobbyRelayIT` — which
+ * asserts the reference room has no open tables — is where that shows up, not here. [teardown] is
+ * best effort by design (a teardown failure must not mask the assertion that caused it), so after a
+ * run that failed mid-game, restart `xmage-server` before reading a `LobbyRelayIT` failure as real.
  *
  * **Ordering note.** `GAME_INIT` is fired by `GameController.startGame()` *before* the game worker
  * deals cards, so the very first snapshot legitimately has an empty hand. The opening hand arrives on a
@@ -147,6 +155,32 @@ class GameRelayIT {
 
         /** A cap for the 0086 loop: several turns' worth of priority prompts, not a single turn's. */
         const val MAX_ANSWERS_TO_CAST = 400
+
+        /**
+         * Story 0087's deck: mono-green, so every cost is payable from one basic. `Rancor` (`EMA`
+         * #180, `{G}`) enchants **any** creature — upstream's `TargetCreaturePermanent`, not "a
+         * creature you control" — which is what makes the differing-controller case reachable at all.
+         * `Grizzly Bears` (`8ED` #256, `{1}{G}`) is the creature to enchant.
+         */
+        val AURA_DECK =
+            DeckList(
+                name = "it_rancor",
+                author = "game-relay-it",
+                cards =
+                    listOf(
+                        DeckListCard(cardName = "Forest", setCode = "M21", collectorNumber = "272", amount = 24),
+                        DeckListCard(cardName = "Grizzly Bears", setCode = "8ED", collectorNumber = "256", amount = 20),
+                        DeckListCard(cardName = "Rancor", setCode = "EMA", collectorNumber = "180", amount = 16),
+                    ),
+                sideboard = emptyList(),
+            )
+
+        const val RANCOR = "Rancor"
+        const val BEARS = "Grizzly Bears"
+        const val FOREST = "Forest"
+
+        /** Story 0087 needs several turns of real play, not one; the 0051 loop's 180s is too tight. */
+        const val AURA_PLAY_TIMEOUT_MS = 240_000L
     }
 
     @Test
@@ -441,6 +475,244 @@ class GameRelayIT {
             }
         }
         return observed
+    }
+
+    /**
+     * **Story 0087's live check.** A crafted `PermanentView` can be given any combination of
+     * attachment fields, so a fixture proves only that the mapper reads them. This proves the *server*
+     * fills them, in a real game, on the path the bridge reads — and it covers the case §7.4 calls the
+     * easily-missed one: **your Aura on their creature**, which no single-player fixture can produce.
+     *
+     * **Both directions are asserted against each other.** For every attachment found, the host named
+     * by `attachedTo` must list it back in `attachments`. That invariant is the cheapest possible check
+     * that the two fields were read off the same snapshot rather than drifting apart, and in the
+     * differing-controller case it holds *across* two players' battlefields — the Aura sits on ours,
+     * the creature on theirs.
+     */
+    @Test
+    fun `a live aura is carried in both directions, on our creature and on theirs (story 0087)`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(session, roomId, options(name = "it_aura_$username"))
+                    }
+                assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, AURA_DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, AURA_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+
+                events.awaitOfType<GameStarted>(GAME_INIT_TIMEOUT_MS, "a GAME_INIT push")
+
+                val observed = playUntilBothAuraCasesSeen(session, gameId, events)
+
+                val ours =
+                    requireNotNull(observed.ownCreature) {
+                        "never saw a Rancor on our own creature; answered=${observed.answered} " +
+                            "callbacks=${callbackSummary()} last=${observed.last}"
+                    }
+                assertTrue(ours.aura.attachedToPermanent, "the host is a creature, so upstream must say the host is a permanent")
+                assertFalse(ours.aura.attachedControllerDiffers, "we control both the Aura and the creature")
+                assertEquals(ours.host.card.id, ours.aura.attachedTo)
+                assertTrue(
+                    ours.aura.card.id in ours.host.attachments,
+                    "the host must list the Aura back: attachedTo=${ours.aura.attachedTo} attachments=${ours.host.attachments}",
+                )
+                assertTrue(ours.hostControlledByViewer, "our own creature should sit on our own battlefield")
+
+                val theirs =
+                    requireNotNull(observed.opponentCreature) {
+                        "never saw a Rancor on the opponent's creature — the case this story exists for; " +
+                            "answered=${observed.answered} callbacks=${callbackSummary()} last=${observed.last}"
+                    }
+                assertTrue(theirs.aura.attachedToPermanent)
+                assertTrue(theirs.aura.attachedControllerDiffers, "our Aura on their creature is exactly what this flag is for")
+                assertEquals(theirs.host.card.id, theirs.aura.attachedTo)
+                assertTrue(
+                    theirs.aura.card.id in theirs.host.attachments,
+                    "the round trip must hold across two battlefields too: attachments=${theirs.host.attachments}",
+                )
+                assertFalse(theirs.hostControlledByViewer, "the host is the opponent's creature, on the opponent's battlefield")
+
+                println(
+                    "GameRelayIT[0087]: ourAura=${ours.aura.card.id}->${ours.aura.attachedTo} differs=false; " +
+                        "theirAura=${theirs.aura.card.id}->${theirs.aura.attachedTo} differs=true; " +
+                        "answered=${observed.answered} callbacks=${callbackSummary()}",
+                )
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /** One observed attachment: the Aura, the permanent it named, and whose battlefield that host is on. */
+    private class Attachment(
+        val aura: GamePermanentView,
+        val host: GamePermanentView,
+        val hostControlledByViewer: Boolean,
+    )
+
+    /** What the 0087 loop saw. */
+    private class AuraObserved {
+        var ownCreature: Attachment? = null
+        var opponentCreature: Attachment? = null
+        var last: GameStateView? = null
+        var answered: Int = 0
+    }
+
+    /**
+     * Plays green until a `Rancor` sits on **our** creature and another sits on **theirs**.
+     *
+     * Like the 0086 loop, every decision comes from the server's own `canPlayObjects` — cast what it
+     * says is castable, play the land it says is playable, otherwise pass — so a slow draw costs a turn
+     * rather than the run, and a refused reply cannot become an unbounded prompt loop. The one addition
+     * is that action is confined to **our own precombat main phase**: outside it a `GAME_SELECT` is a
+     * combat declaration, and answering one with an object id would declare an attacker or a blocker
+     * rather than cast anything.
+     *
+     * The opponent's creature is the one thing here that is not ours to arrange. It is also not a coin
+     * flip: the AI holds the same 20-creature deck and plays a Bear on essentially every turn it can,
+     * and the loop simply keeps passing until one is there.
+     */
+    private suspend fun playUntilBothAuraCasesSeen(
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+    ): AuraObserved {
+        val observed = AuraObserved()
+        val deadline = System.currentTimeMillis() + AURA_PLAY_TIMEOUT_MS
+        var pendingTarget: String? = null
+        val tappedForThisPayment = mutableSetOf<String>()
+
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                observed.last = state
+                attachmentOf(state, differingController = false)?.let { observed.ownCreature = it }
+                attachmentOf(state, differingController = true)?.let { observed.opponentCreature = it }
+            }
+            if (observed.ownCreature != null && observed.opponentCreature != null) break
+            if (event is GameOver) break
+            if (event !is GamePrompted) continue
+
+            val state = event.state
+            val prompt = event.prompt
+            val playable = state.playable.map { it.objectId }.toSet()
+            val ourBoard =
+                state.players
+                    .singleOrNull { it.viewer }
+                    ?.battlefield
+                    .orEmpty()
+            val theirBoard = state.players.filterNot { it.viewer }.flatMap { it.battlefield }
+            val ourMainPhase =
+                state.viewerHasPriority &&
+                    state.viewerPlayerId != null &&
+                    state.viewerPlayerId == state.activePlayerId &&
+                    state.phase == TurnPhaseCode.PRECOMBAT_MAIN &&
+                    state.step == PhaseStepCode.PRECOMBAT_MAIN
+
+            when {
+                prompt is SelectPrompt && ourMainPhase -> {
+                    tappedForThisPayment.clear()
+                    val forest = state.hand.firstOrNull { it.name == FOREST && it.id in playable }
+                    val bears = state.hand.firstOrNull { it.name == BEARS && it.id in playable }
+                    val rancor = state.hand.firstOrNull { it.name == RANCOR && it.id in playable }
+                    val ourBareCreature = ourBoard.firstOrNull { it.card.creature && it.attachments.isEmpty() }
+                    val theirCreature = theirBoard.firstOrNull { it.card.creature }
+                    when {
+                        forest != null -> sendUuid(session, gameId, forest.id)
+                        ourBoard.none { it.card.creature } && bears != null -> sendUuid(session, gameId, bears.id)
+                        rancor != null && observed.ownCreature == null && ourBareCreature != null -> {
+                            pendingTarget = ourBareCreature.card.id
+                            sendUuid(session, gameId, rancor.id)
+                        }
+                        rancor != null && observed.opponentCreature == null && theirCreature != null -> {
+                            pendingTarget = theirCreature.card.id
+                            sendUuid(session, gameId, rancor.id)
+                        }
+                        else -> withContext(Dispatchers.IO) { GameRelay.sendPlayerBoolean(session, gameId, false) }
+                    }
+                }
+                prompt is TargetPrompt && pendingTarget != null && pendingTarget in prompt.targetIds -> {
+                    sendUuid(session, gameId, pendingTarget)
+                    pendingTarget = null
+                }
+                prompt is PlayManaPrompt -> {
+                    // Track what we have already tapped for this payment rather than trusting the
+                    // snapshot to have caught up: sending the same land twice is a refused reply, and
+                    // a refused reply is re-asked immediately.
+                    val land =
+                        ourBoard.firstOrNull { it.card.name == FOREST && !it.tapped && it.card.id !in tappedForThisPayment }
+                    if (land != null) {
+                        tappedForThisPayment += land.card.id
+                        sendUuid(session, gameId, land.card.id)
+                    } else {
+                        withContext(Dispatchers.IO) { GameRelay.sendPlayerBoolean(session, gameId, false) }
+                    }
+                }
+                else -> answer(session, gameId, prompt)
+            }
+            observed.answered++
+            if (observed.answered > MAX_ANSWERS_TO_CAST) {
+                throw AssertionError(
+                    "answered $MAX_ANSWERS_TO_CAST prompts without seeing both aura cases. " +
+                        "own=${observed.ownCreature != null} opponent=${observed.opponentCreature != null} " +
+                        "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
+                )
+            }
+        }
+        return observed
+    }
+
+    /**
+     * The first attachment **we control** in [state] whose `attachedControllerDiffers` matches
+     * [differingController], paired with the permanent its `attachedTo` names — or `null` when there is
+     * none, or when the host is not in the snapshot (which would itself be a bug worth failing on
+     * later, with the whole state in the message, rather than here with none of it).
+     *
+     * **`controlledByViewer` is load-bearing, and the first run proved it.** Both seats hold
+     * [AURA_DECK], so the AI casts Rancor too — the first version of this matched *its* Aura on *its*
+     * own creature within eight seconds and then failed asserting the host was on our battlefield.
+     * Filtering to Auras we control is what makes the test about the casts this test made, rather than
+     * about whatever the AI happened to do.
+     */
+    private fun attachmentOf(
+        state: GameStateView,
+        differingController: Boolean,
+    ): Attachment? {
+        val everything = state.players.flatMap { player -> player.battlefield.map { player to it } }
+        val (_, aura) =
+            everything.firstOrNull { (_, permanent) ->
+                permanent.controlledByViewer &&
+                    permanent.attachedToPermanent &&
+                    permanent.attachedControllerDiffers == differingController
+            } ?: return null
+        val (hostOwner, host) = everything.firstOrNull { (_, permanent) -> permanent.card.id == aura.attachedTo } ?: return null
+        return Attachment(aura = aura, host = host, hostControlledByViewer = hostOwner.viewer)
     }
 
     /** Sends [id] as the reply to the outstanding prompt, on [Dispatchers.IO] like every other reply. */

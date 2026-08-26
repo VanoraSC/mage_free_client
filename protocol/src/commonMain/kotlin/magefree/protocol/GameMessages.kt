@@ -895,6 +895,27 @@ public enum class CardTypeCode {
 /**
  * A permanent on the battlefield, projected from `mage.view.PermanentView` — a [card] plus the
  * battlefield-only state the UI must show.
+ *
+ * **Attachments travel in both directions (story 0087), because upstream computes both.**
+ * [attachedTo] says what this permanent is attached to; [attachments] says what is attached *to it*.
+ * Neither is derivable from the other cheaply: without [attachments], a host would have to scan every
+ * battlefield on every frame for anything pointing at it, on both players' boards — work the server
+ * already did once per snapshot.
+ *
+ * @property attachedTo the object this permanent is attached to (upstream `getAttachedTo()`), or
+ *   `null`. It may name a **player** as well as a permanent — a Curse attaches to a player — so
+ *   [attachedToPermanent] is what says which.
+ * @property attachments the ids of everything attached to this permanent (upstream `getAttachments()`),
+ *   in upstream's order. Empty for the ordinary permanent that carries nothing.
+ * @property attachedToPermanent upstream `isAttachedToPermanent()` — true when [attachedTo] resolved to
+ *   a permanent in the game rather than to a player. Upstream computes it by actually looking the host
+ *   up (`game.getPermanent(attachedTo)`), so it is `false` both for an unattached permanent and for one
+ *   attached to a player.
+ * @property attachedControllerDiffers upstream `isAttachedToDifferentlyControlledPermanent()` — your
+ *   Aura on their creature. Note the exact semantics, which are narrower than the name suggests:
+ *   upstream only computes it **inside** the "did the host resolve to a permanent" branch, so it is
+ *   always `false` when [attachedToPermanent] is `false`, including for a Curse on an opposing player.
+ *   It answers "is the host a permanent someone else controls", never "is the host someone else's".
  */
 @Serializable
 public data class GamePermanentView(
@@ -905,6 +926,9 @@ public data class GamePermanentView(
     val summoningSickness: Boolean = false,
     val damage: Int = 0,
     val attachedTo: String? = null,
+    val attachments: List<String> = emptyList(),
+    val attachedToPermanent: Boolean = false,
+    val attachedControllerDiffers: Boolean = false,
     val controlledByViewer: Boolean = false,
 )
 
