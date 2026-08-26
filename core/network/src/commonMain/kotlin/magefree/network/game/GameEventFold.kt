@@ -11,7 +11,7 @@ import magefree.protocol.WatchingGame
 
 /**
  * The **pure** reducer that folds the server-pushed game events into a [GameState]
- * — the game-side twin of 0037's `TableEventFold`, and for the same reason: a plain function with no
+ * — the game-side twin of the `TableEventFold`, and for the same reason: a plain function with no
  * client, socket or coroutine dependency is exhaustively unit-testable over scripted sequences (game
  * start → phases → a prompt appears and clears → game over), independent of [GameClient].
  *
@@ -63,7 +63,7 @@ internal object GameEventFold {
                 if (message.gameId != state.gameId) {
                     null
                 } else {
-                    // The snapshot is optional here (0051 models it as nullable); the narration is not.
+                    // The snapshot is optional here (the protocol models it as nullable); the narration is not.
                     val next = message.state?.let { GameViewMapper.apply(state, it) } ?: state
                     next.copy(lastMessage = GameMessage(text = message.message, isPersonal = message.personal))
                 }

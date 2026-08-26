@@ -13,7 +13,7 @@ import org.junit.Test
 import magefree.protocol.MatchStarting as MatchStartingMessage
 
 /**
- * Hermetic coverage of the pure [TableEventFold]: it folds each 0036 table event into the app-schema
+ * Hermetic coverage of the pure [TableEventFold]: it folds each table table event into the app-schema
  * [TableState], filters events for a different table (returning `null`, no emission), and ignores
  * frames that are not table events. No client, socket, or coroutine — just the reducer.
  */

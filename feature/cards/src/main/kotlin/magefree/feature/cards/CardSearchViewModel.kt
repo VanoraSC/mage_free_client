@@ -46,7 +46,7 @@ enum class CardSearchPhase {
 
 /**
  * Immutable UI state for the card search/browse screen. The [CardSearchViewModel] runs the *debounced*
- * query + active [filters] through 0030's [CardCatalog] into this shape: the mapped [results], the
+ * query + active [filters] through the [CardCatalog] into this shape: the mapped [results], the
  * derived [phase], and the "showing N" [countSummary].
  *
  * [query] is the exception, and deliberately so: it is the text the player has typed **right now**,
@@ -76,7 +76,7 @@ data class CardSearchUiState(
 /**
  * MVVM ViewModel for the read-only card search/browse screen. It owns a [query] and a
  * [CardBrowseFilters] flow, **debounces the catalog query** — not the text the field shows
- * — so typing does not fire a catalog query per keystroke, and runs the search on 0030's
+ * — so typing does not fire a catalog query per keystroke, and runs the search on the
  * fully-offline [CardCatalog]:
  * - blank query + no filters -> [CardSearchPhase.Idle] (no query issued);
  * - a name query with no filters -> the catalog's ranked [CardCatalog.search];

@@ -14,7 +14,7 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 
 /*
- * In-game play: the app-schema projection of XMage's game protocol. Where 0036
+ * In-game play: the app-schema projection of XMage's game protocol. Where the table messages
  * carried a **table** to the moment a match begins ([MatchStarting]), this carries the **game** itself.
  *
  * **The shape of the upstream protocol.** It is "the server asks a typed question, the client answers
@@ -45,7 +45,7 @@ import kotlinx.serialization.json.JsonDecoder
  * **Why a closed, typed prompt set.** A generic "the server asked something" blob would leave the app
  * unable to know what a valid answer looks like. [GamePrompt] is therefore a closed discriminated set —
  * one subtype per upstream prompt callback — and each subtype's KDoc names the exact reply message that
- * answers it. That is what lets 0052's client and the eventual UI be honest rather than guessing.
+ * answers it. That is what lets the client and the eventual UI be honest rather than guessing.
  *
  * As with every message file these extend the sealed [ClientMessage]/[ServerMessage] hierarchies rather
  * than forking them, so [ProtocolVersion]'s additive forward-compatibility rules keep holding, and
@@ -201,7 +201,7 @@ public data class SendPlayerAction(
 
 /**
  * App→bridge: **read** the current state of the game [gameId] — the targeted read that
- * `observeGame` has had no way to issue, and the game-side sibling of 0040's [GetTable].
+ * `observeGame` has had no way to issue, and the game-side sibling of the [GetTable].
  *
  * There is no upstream verb behind this, and there never will be: XMage's `GameController.join` on an
  * already-running game only logs "rejoined", so a reconnecting client is blind until the *next* push —
@@ -289,7 +289,7 @@ public enum class GameStateUnavailableCode {
 
     /**
      * There is no usable session behind this socket, so there is not even a cache to look in. Nothing
-     * was read, and re-authenticating — not retrying — is what fixes it (the 0050 convention).
+     * was read, and re-authenticating — not retrying — is what fixes it (the convention).
      */
     SESSION_GONE,
 }

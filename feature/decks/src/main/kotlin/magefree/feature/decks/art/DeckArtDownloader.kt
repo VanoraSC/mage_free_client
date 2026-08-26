@@ -24,7 +24,7 @@ import magefree.decks.model.DeckEntry
  * against a fake; the production impl reuses the [ArtDownloadManager]/[ArtWarmer] unchanged.
  */
 interface DeckArtDownloader {
-    /** Live progress of the deck-scoped pre-download (shared shape with 0031's global one). */
+    /** Live progress of the deck-scoped pre-download (shared shape with the global one). */
     val progress: StateFlow<PrefetchProgress>
 
     /** Start warming art for [deck]'s printings (no-op if a run is already active). */
@@ -55,7 +55,7 @@ class DefaultDeckArtDownloader(
         // deck's printings via the source at run time; the PrefetchScope argument is unused here.
         // No size argument either: the manager's default warms every size the UI displays — the
         // builder's rows (LARGE) *and* the add-cards results grid (SMALL). Pinning LARGE here left the
-        // add grid blank offline, which is exactly what "viewable offline" promises (0043, defect A).
+        // add grid blank offline, which is exactly what "viewable offline" promises (defect A).
         targetSource.deck = deck
         manager.start(PrefetchScope.All)
     }

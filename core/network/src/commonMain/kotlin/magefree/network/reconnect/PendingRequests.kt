@@ -22,13 +22,13 @@ import magefree.protocol.TableNotFound
  * `SessionEvent`; and an ended/dropped session fails every outstanding waiter ([failAll]) so a blocked
  * requester surfaces the failure as state rather than hanging.
  *
- * The correlated replies are the 0027 lobby list replies ([TableList]/[RoomUserList]/[GameTypeList]),
- * the 0036 table-action replies ([TableCreated]/[TableActionResult]), the targeted
- * table-read replies ([TableDetail]/[TableNotFound]), 0051's game-action replies
+ * The correlated replies are the lobby list replies ([TableList]/[RoomUserList]/[GameTypeList]),
+ * the table-action replies ([TableCreated]/[TableActionResult]), the targeted
+ * table-read replies ([TableDetail]/[TableNotFound]), the game-action replies
  * ([GameActionResult] - every join/watch/quit and every prompt answer) and the targeted
  * game-state read replies ([GameStateSnapshot]/[GameStateUnavailable]) — each keyed by its
- * echoed `requestId`. Resume flow-control frames, session-status pushes, and the spontaneous 0036 table
- * and 0051 game *events* (no `requestId` — routed to the push side-channel instead) are left untouched,
+ * echoed `requestId`. Resume flow-control frames, session-status pushes, and the spontaneous table table
+ * and game game *events* (no `requestId` — routed to the push side-channel instead) are left untouched,
  * so the existing session-event behaviour is unchanged.
  */
 internal class PendingRequests {

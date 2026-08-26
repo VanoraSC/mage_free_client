@@ -84,7 +84,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * (`roomLeaveTableOrTournament` returns false unless the table is WAITING/READY_TO_START), whereas the
  * owner's `removeTable` tears it down in any state.
  *
- * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring 0003's `ConnectAuthenticateIT`);
+ * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring the `ConnectAuthenticateIT`);
  * otherwise JUnit reports it *skipped*, keeping `./scripts/dev gradle check` hermetic.
  *
  * ```

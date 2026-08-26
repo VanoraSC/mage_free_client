@@ -53,7 +53,7 @@ val HOST_SEAT_TYPES: List<SeatPlayerType> =
     listOf(SeatPlayerType.Human, SeatPlayerType.ComputerMonteCarlo, SeatPlayerType.ComputerMad)
 
 /**
- * The editable create-table form, one-to-one with the subset of 0037's [CreateTableOptions] a host tunes.
+ * The editable create-table form, one-to-one with the subset of the [CreateTableOptions] a host tunes.
  * Defaults are sensible for a casual two-player duel; [toOptions] projects it onto the client options.
  *
  * @property name the table's display name.
@@ -96,7 +96,7 @@ data class HostTableForm(
     /** The full seat list the table is created with: the host's human seat, then the [opponents]. */
     val seatTypes: List<SeatPlayerType> get() = listOf(SeatPlayerType.Human) + opponents
 
-    /** Project the form onto 0037's app-schema [CreateTableOptions] (host seat + the configured [opponents]). */
+    /** Project the form onto the app-schema [CreateTableOptions] (host seat + the configured [opponents]). */
     fun toOptions(): CreateTableOptions =
         CreateTableOptions(
             name = name.trim(),
@@ -163,7 +163,7 @@ data class HostTableUiState(
  *
  * **The defect it fixes.** Hosting used to stop at `createTable`: the host held no seat, submitted no
  * deck, and the AI players it configured were never occupied — so the table could never reach the
- * server's ready state and the match could never start (0039's live coverage proves a freshly created
+ * server's ready state and the match could never start (the live coverage proves a freshly created
  * table has `seatsFilled = 0`; the server does not seat its creator).
  *
  * **The sequence**, mirroring `NewTableDialog.btnOKActionPerformed` upstream:
@@ -181,7 +181,7 @@ data class HostTableUiState(
  *
  * **The AI's deck.** An AI seat must submit a deck at join like any other, and this client has no deck
  * *generator*. Rather than invent an unplayable stub the server would reject, an AI seat is seated with
- * **the host's own chosen deck** — already picked, already legality-checked, and guaranteed valid for the
+ * **The host's own chosen deck** — already picked, already legality-checked, and guaranteed valid for the
  * table's format. It is the least surprising option (you get a mirror match against the AI) and it is
  * honest about the capability: choosing a *different* deck per AI seat needs a per-seat deck picker, which
  * is deliberately not here's scope.

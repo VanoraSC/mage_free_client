@@ -121,7 +121,7 @@ class ConnectionStatusReductionTest {
     @Test
     fun bareConnectionStateStaysConsistentWithStatus() =
         runTest {
-            // Proves the derived connectionState (0010's dependency) mirrors connectionStatus.state.
+            // Proves the derived connectionState (the dependency) mirrors connectionStatus.state.
             val repository =
                 repository(
                     ScriptedBridgeClient(

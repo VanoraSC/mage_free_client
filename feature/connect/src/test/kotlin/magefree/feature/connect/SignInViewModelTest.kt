@@ -246,7 +246,7 @@ class SignInViewModelTest {
     @Test
     fun restoringIsReflectedAndPreservesContext() =
         runTest {
-            // 0024's resume-in-progress: Reconnecting (reaching the bridge) → Restoring (re-attaching
+            // the resume-in-progress: Reconnecting (reaching the bridge) → Restoring (re-attaching
             // the held session) → Connected. The transient states must NOT throw the player back to the
             // form: the bound server is preserved throughout and the phase never becomes Idle.
             val vm =
@@ -281,7 +281,7 @@ class SignInViewModelTest {
     fun exhaustedRecoverySurfacesSessionLostWithoutReturningToForm() =
         runTest {
             // Recovery truly fails: after an established session drops and reconnects are exhausted,
-            // 0024 emits a Disconnected carrying a reason. That must surface as the terminal SessionLost
+            // A Disconnected carrying a reason must surface as the terminal SessionLost
             // recovery surface (re-authenticate CTA), NOT a silent return to the Idle form.
             val vm =
                 viewModel(

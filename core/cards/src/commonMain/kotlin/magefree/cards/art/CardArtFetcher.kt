@@ -52,7 +52,7 @@ internal class CardArtFetcher(
         }
 
         // Every candidate missed: surface the last miss so Coil produces its ErrorResult and the UI
-        // degrades to the design-system placeholder (0031/0032), exactly as before.
+        // degrades to the design-system placeholder, exactly as before.
         lastMiss?.let { throw it }
         return null
     }

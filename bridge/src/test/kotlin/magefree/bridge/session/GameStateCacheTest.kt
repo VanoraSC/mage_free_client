@@ -143,7 +143,7 @@ class GameStateCacheTest {
     fun `a message that carries no snapshot leaves the cache alone`() {
         val cache = GameStateCache()
 
-        // A GameInformed *can* carry a snapshot (0051 models it as nullable) — one without must not be
+        // A GameInformed *can* carry a snapshot (the protocol models it as nullable) — one without must not be
         // treated as "the board is now empty".
         cache.observe(GameStateUpdated(gameId = "g-1", state = view(turn = 5)))
         cache.observe(GameInformed(gameId = "g-1", message = "You lost the roll", personal = true))

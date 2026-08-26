@@ -14,7 +14,7 @@ import magefree.network.table.TableServerState
 import magefree.network.table.TableState
 
 /**
- * A scriptable [TableClient] test double for hermetic tests of downstream (0038) code — no
+ * A scriptable [TableClient] test double for hermetic tests of downstream code — no
  * bridge, no `:protocol`. Each verb records its call and returns its configured [Result]; [observeTable]
  * emits its `seed` (exactly as production does), then replays [tableStates], then forwards anything
  * pushed through [emitTableState], so a test can drive a table through its lifecycle without a socket.

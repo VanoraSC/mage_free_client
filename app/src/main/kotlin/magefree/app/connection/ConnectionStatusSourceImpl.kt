@@ -15,7 +15,7 @@ import magefree.model.ConnectionState as DomainConnectionState
  *
  * It delegates to [ConnectionRepository]'s single source-of-truth state and maps `:core:model`'s
  * [DomainConnectionState] onto the app-local [ConnectionState] the ViewModel/UI already consume. The
- * two enums are intentionally identical (0016 aligned names + order), so this is a total, lossless
+ * two enums are intentionally identical in names and order, so this is a total, lossless
  * 1:1 mapping — the swap is transparent to [ConnectionStatusViewModel] and `ConnectionStatusBar`,
  * which now reflect the *real* connection instead of the stub.
  *

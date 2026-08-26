@@ -45,7 +45,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * **the live verification**: combat declared end to end, through the real
+ * **The live verification**: combat declared end to end, through the real
  * [GameBoardViewModel], from the board's **own** controls.
  *
  * ## What makes this a verification and not a probe

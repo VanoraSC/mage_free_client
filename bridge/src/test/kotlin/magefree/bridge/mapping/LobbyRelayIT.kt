@@ -28,7 +28,7 @@ import java.util.UUID
  * legitimately empty here — the full `RoomUsersView`→`RoomUserSummary` path is covered hermetically by
  * `RoomUserMapperTest` with real in-memory fixtures).
  *
- * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring 0003's `ConnectAuthenticateIT`);
+ * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring the `ConnectAuthenticateIT`);
  * otherwise JUnit reports it *skipped*, keeping `./scripts/dev gradle check` hermetic.
  *
  * ```

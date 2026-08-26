@@ -158,7 +158,7 @@ fun NetworkSurface(
 }
 
 /**
- * Terminal **session-lost** recovery surface: shown only after 0024's reconnect/resume budget is
+ * Terminal **session-lost** recovery surface: shown only after the reconnect/resume budget is
  * exhausted (or the parked session is gone and a fresh login is required). Distinct copy + a
  * re-authenticate CTA that routes back to sign-in with the last server pre-selected — visibly
  * different from [AuthFailedSurface]/[VersionUnsupportedSurface]/[NetworkSurface]. [detail] carries an

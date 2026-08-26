@@ -24,7 +24,7 @@ import java.util.UUID
  * different things: the server considered the request and declined it, or `SessionImpl` was not
  * connected and never asked. This layer maps a `false` to a [GameFailureCode.REFUSED] result; the
  * caller, which knows whether the session is live, is what turns a dead session into
- * [GameFailureCode.SESSION_GONE] (the 0050 convention). Either way a failure is a **typed result**,
+ * [GameFailureCode.SESSION_GONE] (the convention). Either way a failure is a **typed result**,
  * never a silent drop — a swallowed reply in a game means the player waits forever for a prompt that
  * was already answered.
  */

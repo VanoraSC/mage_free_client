@@ -340,7 +340,7 @@ class GameSerializationTest {
 
     @Test
     fun `a snapshot from a bridge that does not stamp a capture time still decodes`() {
-        // Additive tolerance in the older-peer direction: `capturedAtEpochMs` is new in 0054, so a reply
+        // Additive tolerance in the older-peer direction: `capturedAtEpochMs` is newer than the first
         // without it must decode rather than throw — and must report the absence rather than a fake zero.
         val frame = """{"type":"game_state_snapshot","gameId":"g-1","state":{"turn":4},"requestId":"r-1"}"""
 

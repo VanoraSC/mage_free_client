@@ -54,7 +54,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * `NetworkModule` assembles it. A `FakeBridgeClient`-level test could only have asserted that a method
  * was called; only a socket can answer "did a `Logout` actually reach the bridge, and in what order".
  *
- * This is the test that fails against the pre-0046 client, whose only teardown closed the socket.
+ * This is the test that fails against the earlier client, whose only teardown closed the socket.
  */
 class KtorBridgeClientSignOutTest {
     @Test
@@ -183,7 +183,7 @@ class KtorBridgeClientSignOutTest {
         }
 
     /**
-     * A minimal stand-in for `:bridge`'s session endpoint: it completes the 0004 handshake, answers a
+     * A minimal stand-in for `:bridge`'s session endpoint: it completes the handshake, answers a
      * `Login` with `CONNECTED` + a resume id (so the client reaches `Connected` exactly as it does
      * against the real bridge), and records the *sequence* of client frames and the socket close.
      */

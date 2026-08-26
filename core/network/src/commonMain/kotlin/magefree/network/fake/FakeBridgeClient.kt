@@ -48,7 +48,7 @@ class FakeBridgeClient(
 
     /**
      * The server-push side-channel (the seam (b)) mirrored for tests: a test drives an
-     * uncorrelated 0036 table event by [emitPush]-ing a real `:protocol` [ServerMessage] here, exactly as
+     * uncorrelated table table event by [emitPush]-ing a real `:protocol` [ServerMessage] here, exactly as
      * the production relay's `featurePush` would. Replay-less like production — a test subscribes its
      * `observeTable` collector before emitting.
      */

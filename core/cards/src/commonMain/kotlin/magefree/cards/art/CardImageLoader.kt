@@ -47,15 +47,15 @@ interface ArtWarmer {
  *
  * It observes [CardArtCachePolicyRepository]; on a **downgrade** (PERSISTENT → SESSION_ONLY) it clears
  * the existing disk cache before swapping in the memory-only loader. The current loader is exposed as
- * a [StateFlow] so 0032's `AsyncImage` always binds to the policy-correct instance.
+ * a [StateFlow] so the `AsyncImage` always binds to the policy-correct instance.
  *
  * ### Identifying the client
  * The default HTTP client sends a descriptive `User-Agent` ([CardArtUserAgent]). Scryfall rejects
  * generic client defaults with HTTP 400, so this is load-bearing, not courtesy.
  *
  * ### Offline / placeholder
- * A cache miss with no network yields an [ErrorResult] (never a crash); 0032 renders the design-system
- * placeholder, and the card's text stays available from the bundled catalog (0030).
+ * A cache miss with no network yields an [ErrorResult] (never a crash); card-browse renders the design-system
+ * placeholder, and the card's text stays available from the bundled catalog.
  */
 class CardImageLoader(
     /**
@@ -167,7 +167,7 @@ class CardImageLoader(
         }
     }
 
-    /** An [ImageRequest] for [request] with stable memory/disk cache keys — for 0032's `AsyncImage`. */
+    /** An [ImageRequest] for [request] with stable memory/disk cache keys — for the `AsyncImage`. */
     fun buildRequest(request: CardArtRequest): ImageRequest {
         val key = cacheKey(request)
         return ImageRequest

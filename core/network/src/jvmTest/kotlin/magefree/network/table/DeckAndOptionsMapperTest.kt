@@ -16,8 +16,8 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Hermetic coverage of the table client's mapper boundary: a 0033 domain [Deck] projects onto the wire
- * `DeckList` (reusing 0033's own `toDeckList`) and the app-schema [CreateTableOptions] projects onto the
+ * Hermetic coverage of the table client's mapper boundary: a domain [Deck] projects onto the wire
+ * `DeckList` (reusing the own `toDeckList`) and the app-schema [CreateTableOptions] projects onto the
  * wire `CreateTableOptions`, both losslessly and with the enums mapped one-to-one.
  */
 class DeckAndOptionsMapperTest {

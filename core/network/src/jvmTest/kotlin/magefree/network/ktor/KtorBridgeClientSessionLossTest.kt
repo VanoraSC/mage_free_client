@@ -46,7 +46,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * **Both directions on real frames** - the pin that stops the fix for a zombie session from
- * destroying reconnect (0046's pattern, one layer up).
+ * destroying reconnect (the pattern, one layer up).
  *
  * The two failures look identical from inside the app: in each case the session it thought it had is no
  * longer usable. They must be answered in opposite ways, and only the *wire* can tell them apart:
@@ -173,7 +173,7 @@ class KtorBridgeClientSessionLossTest {
     }
 
     /**
-     * A minimal stand-in for `:bridge`'s session endpoint. It completes the 0004 handshake, answers a
+     * A minimal stand-in for `:bridge`'s session endpoint. It completes the handshake, answers a
      * `Login` with `CONNECTED` + a resume id, acks a `Resume`, and then plays [script]. Every client
      * frame and every socket close is appended to [log], across sockets, so a test can assert what the
      * app did after the failure rather than what it says it did.

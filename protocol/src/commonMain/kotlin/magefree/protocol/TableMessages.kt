@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /*
  * Table **action** request/response + server-pushed table-lifecycle event messages layered onto the
- * 0004 envelope. Where 0027 gave the lobby **read** side (browse tables/users/
+ * envelope. Where the lobby messages give the **read** side (browse tables/users/
  * game types), this gives the **act** side: create a table, join it (submitting a deck),
  * submit/update a deck during construction, leave/remove a table, start the match, and watch
  * (spectate); plus the inbound table/deck/game-start callbacks the server pushes so the app can follow
@@ -300,7 +300,7 @@ public data class TableUpdated(
  * Bridge→app: a seat's occupancy changed at a table. Reserved for a per-seat server push; the current
  * XMage build refreshes seats via the polled room table list and has no seat-level
  * callback before match-start, so this carries the seat's [tableId], [playerId], and [isOwner] for
- * forward use by 0037/0038. [requestId] is unused for spontaneous pushes and left null.
+ * forward use by the table layer. [requestId] is unused for spontaneous pushes and left null.
  *
  * **This message has no producer**: nothing in the bridge dispatches it, because upstream
  * emits no such callback. The room's real seat state comes from [GetTable] → [TableDetail]; this stays
@@ -469,7 +469,7 @@ public enum class RangeCode {
 /**
  * The `DeckCardLists`-equivalent carried by [JoinTable]/[SubmitDeck]/[UpdateDeck]: a plain, app-schema
  * mirror of XMage's `mage.cards.decks.DeckCardLists` (`name`, `author`, `cards`, `sideboard`). It is
- * intentionally field-aligned with the device-side `magefree.decks.model.DeckList` so 0037 can
+ * intentionally field-aligned with the device-side `magefree.decks.model.DeckList` so table can
  * map a device deck straight onto a join/submit without any `mage.*` on the device; the bridge maps
  * this onto a real `DeckCardLists` at the mapper boundary (`DeckListMapper`).
  *

@@ -28,7 +28,7 @@ import magefree.protocol.ServerMessage
  * - **A correlated reply** (a lobby list reply matching an outstanding [pending] request) is
  *   routed to the waiting requester and consumed here — it is *not* a lifecycle frame, so the
  *   session-event stream is untouched.
- * - **An uncorrelated, non-lifecycle push** (a 0036 table *event* the [SessionMapper] does not map —
+ * - **An uncorrelated, non-lifecycle push** (a table *event* the [SessionMapper] does not map —
  *   the seam (b)) is forwarded to [featurePush] so a feature layer (the table client) can fold
  *   it, instead of being silently dropped. It is *not* a `SessionEvent`, so the session-event stream is
  *   again untouched; a caller that supplies no [featurePush] (the default no-op) is unaffected.
@@ -96,7 +96,7 @@ internal object SessionRelay {
             val event =
                 SessionMapper.toSessionEvent(message, server, credentials.username, bridgeVersion)
             if (event == null) {
-                // Not a lifecycle frame and not a correlated reply: a spontaneous server push (a 0036
+                // Not a lifecycle frame and not a correlated reply: a spontaneous server push (a table
                 // table event, or a chat/ping/server-info the app ignores). Offer it to the feature
                 // side-channel — the table client folds the ones for its table; the rest
                 // are harmlessly ignored downstream. The session keeps relaying either way.

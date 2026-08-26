@@ -21,7 +21,7 @@ enum class TableRole {
 
 /**
  * Best-effort resolution of a table's advertised format/deck-type label (e.g. `"Constructed - Standard"`
- * or a game-type name) to one of the bundled [DeckFormat]s, so the offline deck-legality gate (0033) can
+ * or a game-type name) to one of the bundled [DeckFormat]s, so the offline deck-legality gate can
  * run before a join. Returns `null` when no bundled format is recognised — the join then proceeds without
  * a legality gate (the XMage server stays the authority at submit-time).
  */

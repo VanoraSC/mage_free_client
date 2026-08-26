@@ -21,8 +21,8 @@ android {
 }
 
 dependencies {
-    // The design system the board renders with (theme tokens + 0014's card components), the app-schema
-    // GameClient/GameState this board draws (0052/0054), and 0031's card-art identity type. All three
+    // The design system the board renders with (theme tokens + the card components), the app-schema
+    // GameClient/GameState this board draws, and the card-art identity type. All three
     // are consumed read-only: nothing here changes them.
     implementation(project(":core:designsystem"))
     implementation(project(":core:network"))

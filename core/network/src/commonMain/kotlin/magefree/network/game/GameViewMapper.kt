@@ -84,7 +84,7 @@ internal object GameViewMapper {
             prompt = resyncPrompt?.let { toPrompt(it) } ?: state.prompt,
         )
 
-    /** The app-schema face of a wire prompt. Total over 0051's closed set. */
+    /** The app-schema face of a wire prompt. Total over the closed set. */
     fun toPrompt(prompt: GamePromptMessage): GamePrompt =
         when (prompt) {
             is SelectPrompt -> GamePrompt.Select(message = prompt.message, options = prompt.options.toOptions())

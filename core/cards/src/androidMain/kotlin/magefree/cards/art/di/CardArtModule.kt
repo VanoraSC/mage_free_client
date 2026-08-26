@@ -66,7 +66,7 @@ val cardArtModule =
                 },
                 // The `User-Agent` is built here, from the version the platform reports, rather than
                 // inside the loader — that one string was the whole reason the art pipeline needed a
-                // `PackageManager`. Scryfall answers HTTP 400 without it (0056).
+                // `PackageManager`. Scryfall answers HTTP 400 without it.
                 userAgent = CardArtUserAgent.value(androidAppVersion(context)),
                 // Logcat is still the only place a systemic art failure is visible; there is no
                 // in-app diagnostic surface for it yet.

@@ -55,7 +55,7 @@ enum class BuilderPhase {
 /**
  * Immutable UI state for the deck builder. The deck's main pile is presented as type [groups]; the
  * [sideboard] as a flat list; [manaCurve] and [legality] are derived live from the (offline) catalog +
- * bundled legality. [policy] / [prefetch] surface the 0031 art cache toggle and the deck-scoped
+ * bundled legality. [policy] / [prefetch] surface the art cache toggle and the deck-scoped
  * pre-download so a player can make the deck viewable offline.
  *
  * **Degraded derivation.** The deck itself is authoritative and always survives; only the *derived*
@@ -92,7 +92,7 @@ data class BuilderUiState(
 /**
  * MVVM ViewModel for the touch-first deck builder. Every deck operation — add/remove,
  * sideboard, quantity, format choice, grouping, mana curve, live legality — is computed **offline**
- * from 0033's [DeckRepository]/[DeckLegality] and 0030's bundled [CardCatalog]; the only networked
+ * from the [DeckRepository]/[DeckLegality] and the bundled [CardCatalog]; the only networked
  * action is the opt-in, deck-scoped art pre-download via [DeckArtDownloader]. Submitting/playing the
  * deck is not wired here.
  */
@@ -288,7 +288,7 @@ class BuilderViewModel
          * still built — from the deck's own stored names, sets and quantities, which is all
          * [deckCardRow] needs when it has no catalog card — and the state simply reports
          * [BuilderUiState.catalogUnavailable]. The deck is never rolled back or left half-applied; only
-         * the mana curve, type grouping and legality degrade until a retry succeeds (0042, defect B).
+         * the mana curve, type grouping and legality degrade until a retry succeeds (defect B).
          */
         private suspend fun rebuild(source: Deck) {
             val entries = source.main + source.sideboard

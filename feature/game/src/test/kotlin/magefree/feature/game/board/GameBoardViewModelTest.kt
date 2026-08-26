@@ -35,12 +35,12 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Hermetic coverage of [GameBoardViewModel] over 0052's [FakeGameClient] — no bridge, no `:protocol`.
+ * Hermetic coverage of [GameBoardViewModel] over the [FakeGameClient] — no bridge, no `:protocol`.
  *
  * The properties that are about *production behaviour* rather than about projection:
  *
  * 1. **the subscription is opened before the join** — the push side-channel is replay-less, so a client
- *    that joins first can miss `GAME_INIT` entirely (0052's live test records the same ordering);
+ *    that joins first can miss `GAME_INIT` entirely (the live test records the same ordering);
  * 2. **every prompt kind is answerable, through one seam** — [GameBoardViewModel.act] is the only
  *    translator from a gesture to a client verb, and the assertions are on the fake's recorded call
  *    list, so a wrong verb or a silently-dropped action would have to show up there to ship;
@@ -122,7 +122,7 @@ class GameBoardViewModelTest {
     @Test
     fun `a later snapshot replaces the previous one rather than merging with it`() =
         runTest {
-            // State arrives as whole snapshots, never deltas (0052), so a card the server stops sending
+            // State arrives as whole snapshots, never deltas, so a card the server stops sending
             // must disappear. A board that merged would keep showing a permanent that has been destroyed.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -520,7 +520,7 @@ class GameBoardViewModelTest {
     fun `hiding the controls never hides that the server is waiting on you`() =
         runTest {
             // the hard constraint. The priority statement belongs to the board, not to the controls,
-            // so it cannot be taken away by the toggle — including in the state 0055 added `Asked` for:
+            // so it cannot be taken away by the toggle — including the state `Asked` exists for:
             // the server asking one seat to choose who goes first, *before* priority exists.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -723,7 +723,7 @@ class GameBoardViewModelTest {
         runTest {
             // Upstream asks this only when the choice is real: `selectDefender` assigns silently with one
             // legal defender, `selectBlockers` with one blockable attacker. It arrives as an
-            // ordinary `GAME_TARGET`, which 0057 already answers — so what 0061 adds is only the
+            // ordinary `GAME_TARGET`, which the protocol already answers — so combat adds only the
             // sentence saying *which* creature the question is about.
             val client = FakeGameClient()
             val viewModel = viewModel(client)

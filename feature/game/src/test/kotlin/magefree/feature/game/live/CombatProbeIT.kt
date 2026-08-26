@@ -381,7 +381,7 @@ class CombatProbeIT {
                         }
                     }
 
-                    // Added when 0061 landed. The probe's own finding was that the board offered nothing
+                    // The probe's own finding was that the board offered nothing
                     // to tap here; now it offers the server's own candidates, so the seat declares one
                     // creature per pass of the loop and closes when there are none left.
                     is PromptControlsUi.Declaration ->

@@ -157,7 +157,7 @@ data class CardDetailFaceUi(
  * leaving a permanently blank board.
  *
  * ### Snapshot replace, never merge
- * Each emission is a whole game view (0052), so each is projected on its own. Nothing here remembers a
+ * Each emission is a whole game view, so each is projected on its own. Nothing here remembers a
  * card the server has stopped sending. The two pieces of state that *do* span snapshots — [CastUi] and
  * the "have I picked a target yet" flag — are records of what **this app sent**, never of what the game
  * contains.
@@ -298,7 +298,7 @@ class GameBoardViewModel
          *   read from it fresh each time, so the board is in whichever role the server put it in, and the
          *   pairing line clears because that question has been answered;
          * - a `Target` arriving **while a declaration is in flight** is the pairing question upstream
-         *   asks when the choice is genuinely ambiguous — the same prompt kind 0057 already answers. The
+         *   asks when the choice is genuinely ambiguous — the same prompt kind the controls already answer. The
          *   only thing added is the name of the creature the player just picked;
          * - anything else — an ordinary `Select`, another prompt kind, or no prompt at all — ends it.
          *

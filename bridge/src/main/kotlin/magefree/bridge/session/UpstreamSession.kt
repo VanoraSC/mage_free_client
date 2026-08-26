@@ -34,7 +34,7 @@ public data class Credentials(
  * The test seam between the per-socket [SessionCoordinator] and the upstream XMage server. One
  * instance backs one upstream connection (one per socket).
  *
- * The real implementation ([XMageUpstreamSession]) drives 0003's `XMageSession`/`SessionImpl`; a
+ * The real implementation ([XMageUpstreamSession]) drives the `XMageSession`/`SessionImpl`; a
  * [magefree.bridge.session.FakeUpstreamSession] (test util) emits scripted sequences so every
  * [magefree.protocol.SessionStateCode] path is exercised hermetically through the real
  * WebSocket/coordinator plumbing.

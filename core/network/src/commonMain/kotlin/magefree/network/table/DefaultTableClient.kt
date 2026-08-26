@@ -41,7 +41,7 @@ import kotlin.uuid.Uuid
 /**
  * The production [TableClient], over the same [BridgeClient] singleton `LobbyClient` rides.
  *
- * **Actions** mint a `requestId`, send the matching 0036 request via [BridgeClient.request] (the erased
+ * **Actions** mint a `requestId`, send the matching table request via [BridgeClient.request] (the erased
  * `request<ServerMessage>` seam, so no `:protocol` type crosses the ABI), and map the correlated reply:
  * a [TableCreated] → [TableRef]; a [TableActionResult] with `ok = true` → success, `ok = false` →
  * [Result.failure] carrying a [TableActionFailure] with the server's reason (never a silent drop). A
@@ -50,7 +50,7 @@ import kotlin.uuid.Uuid
  *
  * **[observeTable]** merges three sources into a single folding collector (so the held state is mutated
  * by one coroutine, race-free): the [ServerPushSource] stream folded by [TableEventFold] for this table;
- * a re-sync trigger on each return to [ConnectionState.Connected] (a 0023 resume) that re-emits the held
+ * a re-sync trigger on each return to [ConnectionState.Connected] (a resume) that re-emits the held
  * state — mirroring the lobby's non-destructive refresh so a reconnect never strands the seat; and the
  * results of [refreshTable] reads, which are where [TableState.seats] and the server's
  * readiness actually come from. Reads are triggered on open, on each table-lifecycle push for this table,
@@ -92,7 +92,7 @@ internal class DefaultTableClient(
                     seatName = seatName,
                     deck = deck.toProtocolDeckList(),
                     password = password,
-                    // the seat's kind travels with the join — 0036's `JoinTable` and the
+                    // the seat's kind travels with the join — the `JoinTable` and the
                     // bridge's `TableRelay` already carry it, so seating an AI needs no wire change.
                     playerType = playerType.toCode(),
                     requestId = id,
@@ -181,7 +181,7 @@ internal class DefaultTableClient(
                                 refreshes.trySend(Unit)
                             }
                         }
-                        // A 0023 resume completed: re-emit the held state so the seat re-syncs (the
+                        // A resume completed: re-emit the held state so the seat re-syncs (the
                         // lobby's non-destructive-refresh analogue) and re-read the table, since seats
                         // may have moved while the socket was down.
                         Intent.Resync -> {
@@ -291,7 +291,7 @@ internal class DefaultTableClient(
         )
 
     /**
-     * A `false → true`-into-[ConnectionState.Connected] edge (a 0023 resume completing). The initial
+     * A `false → true`-into-[ConnectionState.Connected] edge (a resume completing). The initial
      * `Connected` (nothing before it) is skipped — the seed already covers the current state; only a
      * *return* to Connected after a drop re-syncs.
      */

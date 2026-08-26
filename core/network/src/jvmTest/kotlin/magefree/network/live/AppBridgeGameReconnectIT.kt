@@ -40,7 +40,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * **the real proof**: a client that loses its connection mid-game and reconnects can see the
+ * **The real proof**: a client that loses its connection mid-game and reconnects can see the
  * board **immediately**, without waiting for the opponent to do anything.
  *
  * This is the scenario the feature exists for and the one that fails without it. XMage has no verb that
@@ -57,8 +57,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * **How the drop is performed.** [LiveBridge.dropRadio] takes the *network* away, which is what
  * production actually does: `ReconnectingSession` ends the running attempt the moment connectivity is
  * lost, the socket closes with no `Logout` on it so the bridge **parks** the
- * session (0023), and the reconnect loop stays alive holding its `ResumeHandle` so the next attempt
- * sends `Resume` (0024). That is the shape `KtorBridgeClient`'s KDoc records from the on-device smoke —
+ * session, and the reconnect loop stays alive holding its `ResumeHandle` so the next attempt
+ * sends `Resume`. That is the shape `KtorBridgeClient`'s KDoc records from the on-device smoke —
  * Android tearing down a lingering network after a WIFI/CELLULAR hand-off.
  *
  * `LiveBridge.dropWithoutSigningOut()` deliberately is **not** used here: cancelling the session flow

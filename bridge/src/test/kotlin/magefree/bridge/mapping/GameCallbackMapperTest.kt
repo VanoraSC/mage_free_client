@@ -222,7 +222,7 @@ class GameCallbackMapperTest {
         // HumanPlayer.chooseTarget/GameController.target), with targets = null and the real, narrow
         // answer only in options[possibleTargets] -- a different shape from the PICK_ABILITY,
         // where the whole cardsView1 candidate set really is the answer set. Falling back to
-        // cardsView1 here (as 0072's fix does) would offer the entire library as if every card were a
+        // cardsView1 here (as the fix does) would offer the entire library as if every card were a
         // legal fetch.
         val plains = GameViews.card(name = "Plains")
         val forest = GameViews.card(name = "Forest") // not a legal Marsh Flats target

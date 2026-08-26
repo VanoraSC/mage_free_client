@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
  * Hermetic golden/assertion test for [RoomUserMapper], built on **real in-memory `mage.view.*`
  * fixtures**: both `RoomUsersView(List<UsersView>, int, int, int)` and the 11-arg `UsersView`
  * constructor are public and on the bridge classpath (`mage-common`), so — unlike `TableView`/
- * `GameTypeView` — the raw view can be constructed here (as 0006's `ChatMessageMapperTest` does with
+ * `GameTypeView` — the raw view can be constructed here (as the `ChatMessageMapperTest` does with
  * `ChatMessage`). This exercises the full `RoomUsersView` → `List<RoomUserSummary>` path, including the
  * wrapped-`UsersView` flattening and per-user field projection.
  */

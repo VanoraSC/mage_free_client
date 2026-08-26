@@ -55,7 +55,7 @@ import org.robolectric.annotation.Config
  * seam.
  *
  * Art is drawn through [PlaceholderCardArtRenderer], so no test loads a network image. That the
- * production route binds 0031/0032's Coil renderer instead is `GameBoardRoute`'s single line, and is
+ * production route binds the Coil renderer instead is `GameBoardRoute`'s single line, and is
  * what the on-device pass (verification standard 3) confirms.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -389,7 +389,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `hiding the controls never hides that the server is waiting on you`() {
-        // the hard constraint, and the reason 0055 added `PriorityUi.Asked`: the server asks one seat
+        // the hard constraint, and the reason `PriorityUi.Asked` exists: the server asks one seat
         // to choose who goes first *before priority exists*, so a hidden control set here would look
         // exactly like a frozen game.
         render(
@@ -880,7 +880,7 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText(CANCEL_CAST_LABEL).assertDoesNotExist()
         composeTestRule.onNodeWithText(DONE_LABEL).assertDoesNotExist()
         composeTestRule.onNodeWithText(CONFIRM_AMOUNT_LABEL).assertDoesNotExist()
-        // The way out of the game stays available, which is what 0052's KDoc says a UI should do.
+        // The way out of the game stays available, which is what the KDoc says a UI should do.
         composeTestRule.onNodeWithText(BOARD_MENU_LABEL).assertIsDisplayed()
     }
 
@@ -932,7 +932,7 @@ class GameBoardScreenTest {
 
     // ---- combat: declaring attackers and blockers -----------------------------------------
     //
-    // These are at the *screen*, not only at the projection, for the same reason 0057's were: the ids
+    // These are at the *screen*, not only at the projection, for the same reason the were: the ids
     // were in the projection the whole time and the board still offered no surface for them. A
     // declaration arrives with **`playable` empty**, so every fixture here sends it that way.
 
@@ -1011,7 +1011,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `an attacker says what it attacks and what is blocking it`() {
-        // 0055 marks attackers and blockers; what it could not say is *what* they are attacking or
+        // Attackers and blockers are marked; what that alone cannot say is *what* they are attacking or
         // blocking. `CombatGroup` is per-attacker and carries the defender's own name.
         render(blockedAttack())
 

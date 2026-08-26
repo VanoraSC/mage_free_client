@@ -4,7 +4,7 @@ import magefree.model.SkillLevel
 
 /**
  * The app-schema, UI-free projection of a single table's evolving state (
- * 0040). Two sources feed it:
+ * Two sources feed it:
  *
  * - **Server-pushed lifecycle events** ([magefree.protocol.TableUpdated],
  *   [magefree.protocol.ConstructPrompt], [magefree.protocol.SideboardPrompt],
@@ -14,7 +14,7 @@ import magefree.model.SkillLevel
  *   and [serverState]. XMage pushes **no** per-seat event before match-start (see
  *   [magefree.protocol.SeatUpdated]'s note), so seats are *read*, never invented from a phantom push.
  *
- * It carries **no** `:protocol`/`mage.*` type, so a `:feature`/`:app` consumer (0038) renders it
+ * It carries **no** `:protocol`/`mage.*` type, so a `:feature`/`:app` consumer renders it
  * without seeing a wire shape. It deliberately stops at [TablePhase.Starting] + a one-shot
  * [matchStarting]; in-game state is the game layer's.
  *
@@ -118,7 +118,7 @@ data class Seat(
 )
 
 /**
- * The **server's** lifecycle state for a table — the app-schema mirror of 0027's wire `TableStateCode`
+ * The **server's** lifecycle state for a table — the app-schema mirror of the wire `TableStateCode`
  * (itself `mage.constants.TableState`). Distinct from [TablePhase]: [TablePhase] is what *this client*
  * has observed via pushes, whereas this is what the server reports when the table is read.
  * [ReadyToStart] is the readiness truth the host's start control is gated on.
@@ -193,7 +193,7 @@ enum class TablePhase {
 
 /**
  * The kind of occupant in a [Seat] (and the seat type chosen in [CreateTableOptions]) — the app-schema
- * mirror of 0036's `SeatPlayerTypeCode`, one-to-one so a create round-trips without fidelity loss.
+ * mirror of the `SeatPlayerTypeCode`, one-to-one so a create round-trips without fidelity loss.
  */
 enum class SeatPlayerType {
     /** A human player. */
@@ -226,7 +226,7 @@ enum class RangeOfInfluence {
 
 /**
  * The app-schema description of a table to create ([TableClient.createTable]) — a `:protocol`-free mirror
- * of 0036's wire `CreateTableOptions`, mapped onto it internally so no wire type crosses the client ABI.
+ * of the wire `CreateTableOptions`, mapped onto it internally so no wire type crosses the client ABI.
  * The fields mirror the create-table settings XMage's desktop client exposes.
  *
  * @property name the table's display name.
@@ -282,7 +282,7 @@ data class MatchStarting(
 
 /**
  * The handle to a table returned by [TableClient.createTable] (and usable to seed [TableClient.observeTable]):
- * the new table's id plus the summary fields 0036's [magefree.protocol.TableCreated] carries. App-schema —
+ * the new table's id plus the summary fields the [magefree.protocol.TableCreated] carries. App-schema —
  * a projection of the wire `TableSummary`, no `:protocol` type surfaces.
  *
  * @property tableId the created table's id.
@@ -310,7 +310,7 @@ data class TableRef(
 }
 
 /**
- * The typed failure a [TableClient] verb surfaces when the server declines a table action — 0036's
+ * The typed failure a [TableClient] verb surfaces when the server declines a table action — the
  * [magefree.protocol.TableActionResult] with `ok = false` (or an unexpected reply). The [reason] is the
  * server's optional human-readable detail: a decline is a **typed result**, never a silent drop.
  */

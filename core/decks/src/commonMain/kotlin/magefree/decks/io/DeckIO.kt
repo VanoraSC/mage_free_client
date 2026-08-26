@@ -4,7 +4,7 @@ import magefree.decks.model.Deck
 
 /**
  * The pure, fully-offline import/export surface for decks. Imports parse XMage-compatible text into a
- * 0033 [Deck] (resolving names → printings via the `:core:cards` catalog); exports serialize a [Deck]
+ * deck [Deck] (resolving names → printings via the `:core:cards` catalog); exports serialize a [Deck]
  * back to text. All work runs on an injected IO dispatcher — nothing here touches the network.
  *
  * See [magefree.decks.io.internal.DefaultDeckIO] for the implementation; formats are the grammars in

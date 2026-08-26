@@ -19,7 +19,7 @@ import magefree.designsystem.theme.Spacing
 import magefree.feature.decks.library.FormatPicker
 
 /**
- * The format picker + live legality panel. Choosing a format runs 0033's offline [DeckLegality]; a
+ * The format picker + live legality panel. Choosing a format runs the offline [DeckLegality]; a
  * legal deck shows a green confirmation, an illegal one lists each structured violation inline. With no
  * format chosen it prompts for one. Stateless — the [result] is computed by [BuilderViewModel].
  */

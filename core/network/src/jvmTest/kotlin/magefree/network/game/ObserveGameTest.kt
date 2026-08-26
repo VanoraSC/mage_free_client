@@ -33,7 +33,7 @@ import org.junit.Test
 import magefree.protocol.GamePrompt as GamePromptMessage
 
 /**
- * Hermetic Turbine coverage of [DefaultGameClient.observeGame]: it seeds current state, folds the 0051
+ * Hermetic Turbine coverage of [DefaultGameClient.observeGame]: it seeds current state, folds the game
  * game events pushed through the [FakeBridgeClient]'s server-push side-channel into successive
  * [GameState]s (start → hand → a prompt appears → the prompt clears → game over), re-emits the held
  * state on a resume so a reconnect does not strand the board, and **reads**
@@ -59,7 +59,7 @@ class ObserveGameTest {
     ) = DefaultGameClient(bridgeClient = fake, pushSource = fake, connectionState = connection)
 
     /**
-     * A scripted responder for the 0054 read that records every request `observeGame` issues.
+     * A scripted responder for the read that records every request `observeGame` issues.
      *
      * It **fails loudly on anything that is not a `GetGameState`** — the surviving half of the original
      * never-reads constraint. An observer is allowed exactly one kind of request now, and a test that
@@ -200,7 +200,7 @@ class ObserveGameTest {
                 val asked = awaitItem()
                 assertEquals(GamePrompt.Ask("Mulligan?"), asked.prompt)
 
-                // A drop and a 0023/0024 resume; step through Reconnecting so the StateFlow does not
+                // A drop and a resume; step through Reconnecting so the StateFlow does not
                 // conflate the intermediate away, then return to Connected.
                 connection.value = ConnectionState.Reconnecting
                 testScheduler.runCurrent()
@@ -260,7 +260,7 @@ class ObserveGameTest {
     @Test
     fun observeGameReadsOnOpenAndAfterEachResumeAndStillNeverPolls() =
         runTest {
-            // **The updated 0052 invariant.** It used to read "never issues a request of its own",
+            // **The invariant.** It is not "never issues a request of its own",
             // because there was no request the bridge could answer and a poll of one would have been an
             // unbounded stream of unanswerable requests. The bridge has an answer, so the
             // read is now intended — but only at the two moments where the answer can have changed
@@ -408,7 +408,7 @@ class ObserveGameTest {
     fun aReadRestoresACachedPromptWhenNoneIsCurrentlyHeld() =
         runTest {
             // The scenario this exists for: the client left mid-question (a mulligan, say),
-            // so it holds no live prompt (viewerHasPriority is false pre-priority, and 0071's fallback
+            // so it holds no live prompt (viewerHasPriority is false pre-priority, and the fallback
             // correctly does not apply here either). The bridge, however, cached the last GamePrompted
             // it relayed for this session, and now serves it back on the opening read.
             val reads = Reads(snapshot(view(turn = 1, hand = 7), prompt = AskPrompt("Mulligan?")))

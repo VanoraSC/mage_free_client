@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /*
- * Session messages layered onto the 0004 envelope. These extend the sealed
+ * Session messages layered onto the envelope. These extend the sealed
  * ClientMessage/ServerMessage hierarchies — they do not fork them — so the additive,
  * forward-compatible versioning rules of ProtocolVersion continue to hold: an older peer that does
  * not know a `type` tolerates it via `ignoreUnknownKeys` (see ProtocolJson).
@@ -56,7 +56,7 @@ public data class SessionStatus(
  * to this still-live upstream session. The id is the **bridge's own** handle —
  * not the XMage server-side session id — so the app never sees upstream internals.
  *
- * Delivered as a dedicated server message (rather than mutating [SessionStatus]) so the 0005 status
+ * Delivered as a dedicated server message (rather than mutating [SessionStatus]) so the status
  * frame stays byte-for-byte unchanged; an older app that does not know this `type` ignores it via
  * `ignoreUnknownKeys` and simply never resumes. [requestId] is null on the connect-time emission and
  * echoes the [Resume]'s id on a resume ack.
@@ -70,7 +70,7 @@ public data class SessionResumable(
 
 /**
  * App→bridge: re-attach a freshly-(re)connected socket to a parked upstream session instead of
- * logging in again. Sent **after** the 0004 `ClientHello`/`ServerHello` handshake, in
+ * logging in again. Sent **after** the `ClientHello`/`ServerHello` handshake, in
  * place of a [Login]; [resumeId] is the handle the bridge previously delivered via [SessionResumable].
  *
  * On a hit the bridge re-binds its outbound stream to this socket and continues streaming the same

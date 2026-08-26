@@ -5,7 +5,7 @@ import magefree.protocol.TableUpdated
 
 /**
  * Maps an upstream `JOINED_TABLE` callback's [mage.view.TableClientMessage] to the app-schema
- * [TableUpdated] event. One of the per-callback table-lifecycle mappers (siblings of the 0006
+ * [TableUpdated] event. One of the per-callback table-lifecycle mappers (siblings of the callback
  * `ChatMessageMapper`) that make up the **single coupling surface**: `mage.view.TableClientMessage` is
  * read only here (and its sibling table mappers). Pure and deterministic.
  *

@@ -28,7 +28,7 @@ import magefree.network.game.GameState
  * "waiting on you" statement all already live behind this call.
  *
  * **It is consulted on every [GamePrompt.Select], and only there**, because that is the only prompt a
- * pass is a valid answer to (0052: `passPriority` is the `false` arm of the select). The standing
+ * pass is a valid answer to (`passPriority` is the `false` arm of the select). The standing
  * "pass until …" verbs are a different thing entirely — they are player actions, not answers — and are
  * deliberately not modelled here.
  */

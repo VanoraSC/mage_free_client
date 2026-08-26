@@ -97,7 +97,7 @@ public class GameStateCache(
         when (message) {
             is GameStarted -> put(message.gameId, message.state, prompt = null)
             is GameStateUpdated -> put(message.gameId, message.state, prompt = null)
-            // The snapshot is optional on this one (0051 models it as nullable); the narration is not.
+            // The snapshot is optional on this one (the protocol models it as nullable); the narration is not.
             is GameInformed -> message.state?.let { put(message.gameId, it, prompt = null) }
             is GamePrompted -> put(message.gameId, message.state, prompt = message.prompt)
             // The game is over: the cache must not outlive the thing it describes. The final snapshot is

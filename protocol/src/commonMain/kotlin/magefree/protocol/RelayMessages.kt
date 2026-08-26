@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /*
- * Callback-relay and request/response messages layered onto the 0004 envelope. These
+ * Callback-relay and request/response messages layered onto the envelope. These
  * extend the sealed ClientMessage/ServerMessage hierarchies — they do not fork them — so the
  * additive, forward-compatible versioning rules of ProtocolVersion continue to hold.
  *

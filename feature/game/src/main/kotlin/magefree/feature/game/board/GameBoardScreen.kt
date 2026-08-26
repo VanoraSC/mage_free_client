@@ -95,7 +95,7 @@ import magefree.network.game.TurnPhase
  * nothing about the rules. What may be tapped comes from [GameBoardUiState.controls], which is the
  * server's own candidate list for the outstanding prompt.
  *
- * @param artRenderer how card art is drawn. Production passes 0032's Coil-backed renderer (see
+ * @param artRenderer how card art is drawn. Production passes the Coil-backed renderer (see
  *   `GameBoardRoute`); previews and hermetic tests pass [PlaceholderCardArtRenderer], so no test or
  *   preview ever loads a network image.
  */

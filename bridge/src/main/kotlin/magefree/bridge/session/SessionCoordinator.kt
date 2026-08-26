@@ -70,7 +70,7 @@ import org.slf4j.LoggerFactory
 
 /**
  * Per-socket orchestration between the app-facing WebSocket and one upstream XMage session (
- * + 0023). It assumes the 0004 handshake already completed (a `ServerHello` was sent) and then
+ * ). It assumes the handshake already completed (a `ServerHello` was sent) and then
  * runs the post-handshake message loop:
  *
  * - `Ping` → `Pong` (liveness continues to work alongside a session).
@@ -96,7 +96,7 @@ import org.slf4j.LoggerFactory
  * - A second `Login`/`Resume` while a session is bound is ignored (documented choice) with a log line.
  * - Any other/malformed frame → a non-terminal `ProtocolError(UNKNOWN_MESSAGE_TYPE)`.
  *
- * **Teardown (changed in 0023).** On socket close *without* a `Logout`, a live registered session is
+ * **Teardown (changed ).** On socket close *without* a `Logout`, a live registered session is
  * **parked** (`registry.park`) rather than disconnected, so a transient app-network drop no longer
  * loses the game; a `Logout` (handled inline) still disconnects immediately, and a login that never
  * reached `CONNECTED` is simply disconnected. The chosen teardown path runs under [NonCancellable].
@@ -123,7 +123,7 @@ public class SessionCoordinator(
     /**
      * A typed failed [GameActionResult] for a game request attempted on an unbound socket,
      * carrying [GameFailureCode.SESSION_GONE]: the server was never asked, so the app must offer
-     * re-authentication rather than report a decline that did not happen (the 0050 convention).
+     * re-authentication rather than report a decline that did not happen (the convention).
      */
     private fun unboundGameFailure(request: ClientMessage): GameActionResult =
         GameActionResult(

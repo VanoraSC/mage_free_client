@@ -14,7 +14,7 @@ import magefree.protocol.DeckListCard
  *
  * This is the bridge-side reverse of the device-side `Deck ↔ DeckList` mapper: the two
  * `DeckList` shapes are field-aligned (`name`/`author`/`cards`/`sideboard`; each card `cardName`/
- * `setCode`/`collectorNumber`/`amount`) so 0037 can hand a device deck straight through.
+ * `setCode`/`collectorNumber`/`amount`) so table can hand a device deck straight through.
  *
  * Field mapping (see [DeckCardInfo]'s `cardName`/`cardNumber`/`setCode`/`amount`):
  * - [DeckListCard.collectorNumber] ↔ `DeckCardInfo.cardNumber`.

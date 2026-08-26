@@ -25,7 +25,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Hermetic coverage of [JoinTableViewModel] over 0037's [FakeTableClient] plus in-memory
+ * Hermetic coverage of [JoinTableViewModel] over the [FakeTableClient] plus in-memory
  * `DeckRepository`/`DeckLegality` fakes — no bridge, no `:protocol`, deck pick + legality entirely offline.
  * Pins the deck-pick → legality-gate → password → submit contract.
  */

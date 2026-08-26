@@ -13,13 +13,13 @@ import magefree.feature.cards.toCardDisplay
 
 /*
  * Pure presentation models + derivations for the deck builder. No Android, no Coil, no persistence —
- * just the mapping from 0033's [DeckEntry] (+ an optionally-resolved 0030 [Card]) into what the
+ * just the mapping from the [DeckEntry] (+ an optionally-resolved catalog [Card]) into what the
  * builder list, the type grouping, and the mana-curve panel render. Kept pure so it is unit-tested
  * directly and reused by [BuilderViewModel] without a device.
  */
 
 /**
- * One resolved line of a deck for the builder list: the 0033 entry identity (name + printing +
+ * One resolved line of a deck for the builder list: the entry identity (name + printing +
  * quantity) plus the design-system [display], the per-printing [artRequest] (null when the entry names
  * no resolvable printing — the tile then shows the placeholder), and the legality/curve inputs
  * ([manaValue], [primaryType]) resolved from the offline catalog. [cardId] is null when the catalog
@@ -81,7 +81,7 @@ private val TYPE_ORDER =
 fun DeckEntry.rowKey(): String = "$cardName|$setCode|$collectorNumber"
 
 /**
- * Build a [DeckCardRow] from a 0033 [entry] in [zone] and its (optionally resolved) catalog [card].
+ * Build a [DeckCardRow] from a [entry] in [zone] and its (optionally resolved) catalog [card].
  * Everything is derived offline: art from the entry's own printing, mana value / primary type / DFC
  * flag from the catalog card when known, else sensible fallbacks that keep the row renderable.
  */

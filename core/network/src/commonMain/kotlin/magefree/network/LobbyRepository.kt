@@ -20,7 +20,7 @@ import magefree.network.concurrent.AtomicRef
 /**
  * The observable, refreshable lobby data layer. Holds a single [StateFlow] of
  * [LobbySnapshot] — the tables, room users, and game types plus the current load/refresh/error
- * [status][LobbyLoadState] — that the browser UI (0029) renders.
+ * [status][LobbyLoadState] — that the browser UI renders.
  *
  * It does **not** own the session. It observes the app-level [connectionState] and drives the
  * [LobbyClient] (which rides the connected [BridgeClient]'s live socket). The lobby is meaningful only
@@ -30,7 +30,7 @@ import magefree.network.concurrent.AtomicRef
  * snapshot. A failure is captured **as state** ([LobbyLoadState.Error] + [LobbySnapshot.error]) and is
  * never thrown to the caller, keeping reconnection/refresh an expected path rather than an error.
  *
- * Sorting/filtering is deliberately **not** here — the raw snapshot is exposed and 0029 does
+ * Sorting/filtering is deliberately **not** here — the raw snapshot is exposed and the lobby UI does
  * presentation.
  */
 

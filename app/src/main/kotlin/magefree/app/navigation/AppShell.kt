@@ -61,7 +61,7 @@ fun AppShell(
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
     // the Decks tab hosts the deck library + builder (`:feature:decks`). Built here (not in
     // MageNavHost) so the shell can be driven Hilt-free in tests via the stateless overload's default.
-    // "Browse cards" navigates to [CardsRoute] within the Decks back stack (0032 browser stays reachable).
+    // "Browse cards" navigates to [CardsRoute] within the Decks back stack (card-browse browser stays reachable).
     decksScreen: @Composable () -> Unit = { DecksLibraryRoute(onBrowseCards = { navController.navigate(CardsRoute) }) },
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {

@@ -29,7 +29,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Hermetic coverage of [HostTableViewModel] over 0037's scriptable [FakeTableClient] and the in-memory
+ * Hermetic coverage of [HostTableViewModel] over the scriptable [FakeTableClient] and the in-memory
  * deck repository/legality doubles — no bridge, no `:protocol`.
  *
  * Beyond the create-table form's validation and its projection onto `CreateTableOptions`, this pins the

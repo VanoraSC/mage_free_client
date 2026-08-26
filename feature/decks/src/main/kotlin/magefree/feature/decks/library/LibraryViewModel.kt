@@ -144,7 +144,7 @@ class LibraryViewModel
         }
 
         /**
-         * Import [text] (0034 auto-detects the format) into the library as a new deck, then request the
+         * Import [text] (the format is auto-detected) into the library as a new deck, then request the
          * builder open on it. The parse issues are retained in [LibraryUiState.lastImport] for the screen.
          */
         fun importDeck(text: String) {

@@ -47,7 +47,7 @@ const val HOST_TITLE: String = "Host a table"
 const val HOST_CREATE_LABEL: String = "Create table"
 
 /**
- * Stateless host-a-table form. Every table setting maps to a subset of 0037's `CreateTableOptions`; the
+ * Stateless host-a-table form. Every table setting maps to a subset of the `CreateTableOptions`; the
  * seat rows say who fills each non-host seat (another human, or an AI to seat at create-time), and — since
  * The host picks and validates its **own deck** here, because hosting takes a seat. The
  * single dominant [HOST_CREATE_LABEL] action is enabled only for a valid form with a picked, legal deck

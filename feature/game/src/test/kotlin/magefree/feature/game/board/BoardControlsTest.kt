@@ -34,7 +34,7 @@ class BoardControlsTest {
 
     @Test
     fun `offers no controls at all when the server is not waiting on the viewer`() {
-        // `GameState.prompt` is 0052's "**the** outstanding question, or null when the server is not
+        // `GameState.prompt` is the "**the** outstanding question, or null when the server is not
         // waiting on the viewer". No prompt means no question, so there is nothing to answer — and in
         // particular a board with playable objects but no prompt offers nothing.
         val state = baseState().copy(prompt = null, playable = listOf(PlayableObject("h-1")))
@@ -335,7 +335,7 @@ class BoardControlsTest {
     @Test
     fun `the pairing question the server asks mid-declaration is an ordinary target prompt`() {
         // Both follow-ups — `TargetDefender` and `Select attacker to block` — arrive through
-        // `fireSelectTargetEvent` as `GAME_TARGET`, which 0057 already answers with
+        // `fireSelectTargetEvent` as `GAME_TARGET`, which the protocol already answers with
         // `chooseTarget`. Nothing here decides *when* the server asks.
         val controls =
             controlsFor(
@@ -730,7 +730,7 @@ class BoardControlsTest {
 
     @Test
     fun `an unrecognised prompt is a notice with nothing to press`() {
-        // 0052 gives `Unrecognised` no answering method on purpose: nothing knows what a valid reply is.
+        // `Unrecognised` has no answering method on purpose: nothing knows what a valid reply is.
         // A control here would be one the player cannot satisfy.
         val controls = controlsFor(baseState().copy(prompt = GamePrompt.Unrecognised(type = "GAME_SOMETHING_NEW")))
 

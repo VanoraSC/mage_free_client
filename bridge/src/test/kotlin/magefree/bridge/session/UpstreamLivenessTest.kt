@@ -42,7 +42,7 @@ import io.ktor.server.websocket.WebSockets as ServerWebSockets
  *
  * The failure the on-device smoke found is one-sided and time-based, which is why every existing suite
  * missed it: the app socket stays perfectly healthy while the *XMage* session underneath it dies, so
- * nothing in the app or in 0023's park/resume machinery has any reason to change state. The bridge is
+ * nothing in the app or in the park/resume machinery has any reason to change state. The bridge is
  * the only party positioned to notice — and without it it only probed a session while it was
  * **parked**, i.e. exactly when the app was not there to be told.
  *

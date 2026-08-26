@@ -17,11 +17,11 @@ package magefree.network.game
  * [GameState.priorityPlayerName] (there is no priority *id* upstream) and [GameState.hasSnapshot].
  *
  * No `:protocol` or `mage.*` type appears on anything in this file: the wire shapes stay confined to the
- * `internal` mapper/fold/client, exactly as the 0028/0037 discipline requires.
+ * `internal` mapper/fold/client, exactly as the discipline requires.
  */
 
 /**
- * One whole-game snapshot as the app holds it, folded from 0051's pushed game events by [GameEventFold]
+ * One whole-game snapshot as the app holds it, folded from the pushed game events by [GameEventFold]
  * and observed via [GameClient.observeGame].
  *
  * **Where each UI-facing field comes from** (the reachability record, standard 2 — the upstream field is
@@ -60,7 +60,7 @@ package magefree.network.game
  * @property bufferTimeSeconds the viewer's remaining buffer clock, in seconds (0 when untimed).
  * @property prompt **the** outstanding question, or `null` when the server is not waiting on the viewer.
  *   Modelled as one prompt, not a queue: upstream blocks the game thread on the player's response, so a
- *   new prompt means the previous one is finished with (0051's `GamePrompted` records the same).
+ *   new prompt means the previous one is finished with (the `GamePrompted` records the same).
  * @property lastMessage the most recent line of server narration, or `null` before the first one.
  * @property lastError the most recent server-reported game error, or `null`; sticky, since upstream's
  *   `GAME_ERROR` carries no state and nothing clears it.
@@ -522,7 +522,7 @@ data class GameSnapshot(
 
 /**
  * The typed failure [GameClient.refreshGame] surfaces when the bridge has **no state** to give
- * — 0054's `GameStateUnavailable`.
+ * — the `GameStateUnavailable`.
  *
  * It exists so that "there is nothing to show" can never arrive as an empty board. An all-defaults
  * [GameState] is a legal snapshot (a spectator of a game that has not started has exactly that), so a
@@ -537,7 +537,7 @@ class GameStateUnavailableFailure(
     val detail: String? = null,
 ) : Exception(detail ?: "no game state available for $gameId")
 
-/** Why a [GameStateUnavailableFailure] carries no state — the app-schema mirror of 0054's wire code. */
+/** Why a [GameStateUnavailableFailure] carries no state — the app-schema mirror of the wire code. */
 enum class GameStateUnavailableReason {
     /**
      * The bridge holds no snapshot for that game on this session: nothing has been pushed yet, the id
@@ -554,11 +554,11 @@ enum class GameStateUnavailableReason {
 }
 
 /**
- * The typed failure a [GameClient] verb surfaces when the server declines a game action — 0051's
+ * The typed failure a [GameClient] verb surfaces when the server declines a game action — the
  * `GameActionResult` with `ok = false`, or an unexpected reply. [reason] is the server's optional
  * human-readable detail: a decline is a **typed result**, never a silent drop.
  *
- * The game-side twin of the `TableActionFailure`, kept separate for the same reason 0051's
+ * The game-side twin of the `TableActionFailure`, kept separate for the same reason the
  * `GameFailureCode` is separate from `TableFailureCode`: a caller handling a game should not have to
  * catch a table type to learn that its reply was refused.
  */
@@ -568,7 +568,7 @@ open class GameActionFailure(
 
 /**
  * The typed failure a [GameClient] verb surfaces when the action **never reached the server** because the
- * session is gone — the bridge answered with 0051's `GameFailureCode.SESSION_GONE` (the
+ * session is gone — the bridge answered with the `GameFailureCode.SESSION_GONE` (the
  * distinction, applied to the game verbs).
  *
  * A [GameActionFailure], so every caller's error path keeps working, but a *distinct* one because the two

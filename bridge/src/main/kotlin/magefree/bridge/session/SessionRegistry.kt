@@ -55,7 +55,7 @@ import kotlin.time.Duration.Companion.seconds
  * - [keepaliveInterval] — how often a **registered** session is `ping`ed to keep the upstream link
  *   healthy (and to notice if it died). Env `RESUME_KEEPALIVE_SECONDS`; default 15s.
  *
- * **Sizing the keepalive.** Until 0050 the ping ran only while a session was
+ * **Sizing the keepalive.** The ping runs whether or not a session is
  * *parked*, so a session with a live app socket was never probed at all. XMage's `UserManagerImpl`
  * expires a user whose session has been silent for about three minutes (`disconnected due connection
  * problems`), which meant three minutes of deck-building killed the upstream session while the app
@@ -415,7 +415,7 @@ public class SessionRegistry(
 
     /**
      * Transitions the entry for [resumeId] from parked back to **bound**: cancels its TTL timer (the
-     * keepalive keeps running — it is not a parked-only concern since 0050) and returns the still-live
+     * keepalive keeps running — it is not a parked-only concern) and returns the still-live
      * session for the coordinator to re-bind. Returns `null` for an unknown or already-evicted (expired)
      * id.
      */

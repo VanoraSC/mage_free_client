@@ -25,7 +25,7 @@ public const val BRIDGE_VERSION: String = "0.1.0"
 
 /**
  * Registers the `/v1/session` WebSocket — the app-facing session transport (protocol major = the
- * `v1` path segment). It runs the 0004 version handshake, then hands off to a per-socket
+ * `v1` path segment). It runs the version handshake, then hands off to a per-socket
  * [SessionCoordinator] that awaits `Login`, drives one [UpstreamSession] to the pinned XMage server,
  * streams `SessionStatus` back, and answers app-level `Ping`/`Pong` for liveness.
  *

@@ -15,7 +15,7 @@ import magefree.protocol.RoomUserSummary
  *
  * **Testability.** Both `RoomUsersView(List<UsersView>, int, int, int)` and the 11-arg `UsersView`
  * constructor are public and on the bridge classpath (`mage-common`), so this mapper is exercised with
- * **real in-memory fixtures** by `RoomUserMapperTest` (like 0006's `ChatMessageMapperTest`).
+ * **real in-memory fixtures** by `RoomUserMapperTest` (like the `ChatMessageMapperTest`).
  *
  * Per-user field mapping (see [summaryOf]):
  * - `name` ← [UsersView.getUserName]; `flag` ← [UsersView.getFlagName].

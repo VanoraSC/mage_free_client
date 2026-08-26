@@ -10,7 +10,7 @@ android {
 
 dependencies {
     // The design system this feature renders with (theme + components); the domain vocabulary it
-    // speaks; and the 0028 LobbyRepository it observes/refreshes. `:core:network` re-exports
+    // speaks; and the LobbyRepository it observes/refreshes. `:core:network` re-exports
     // `:core:model` (api), but the feature depends on it explicitly for clarity.
     implementation(project(":core:designsystem"))
     implementation(project(":core:model"))

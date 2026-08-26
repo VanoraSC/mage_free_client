@@ -476,7 +476,7 @@ class CreatureStatusAndCountersIT {
     /**
      * One live app→bridge session, assembled from production parts only.
      *
-     * A deliberate copy of `BoardPlaysAGameIT`'s: 0057's harness is a working live run and is left
+     * A deliberate copy of `BoardPlaysAGameIT`'s: the harness is a working live run and is left
      * untouched by this.
      */
     private class LiveSession(

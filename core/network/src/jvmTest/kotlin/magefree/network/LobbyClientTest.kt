@@ -23,7 +23,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hermetic coverage of the production [LobbyClientImpl]: it sends the right 0027 `GetX` request over
+ * Hermetic coverage of the production [LobbyClientImpl]: it sends the right lobby `GetX` request over
  * the transport's request/response primitive and maps the correlated `XList` reply's `:protocol`
  * summaries into `:core:model`. A [FakeBridgeClient] with a scripted responder stands in for the live
  * socket (fakes are recordings — real `:protocol` replies through the production mapper).

@@ -110,7 +110,7 @@ class KtorBridgeClient(
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
     /**
-     * The uncorrelated server-push side-channel (the seam (b)): the relay forwards each 0036
+     * The uncorrelated server-push side-channel (the seam (b)): the relay forwards each table
      * table event (and any other spontaneous, non-lifecycle frame) here, and the table client folds the
      * ones for its table. Hot and replay-less (`replay = 0`); a slow subscriber drops the oldest rather
      * than back-pressuring the socket read loop. `:protocol`-typed but confined to `:core:network` via

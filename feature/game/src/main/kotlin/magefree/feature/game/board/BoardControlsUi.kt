@@ -462,7 +462,7 @@ private fun AmountControl(
  * Distribute a total across the server's rows.
  *
  * The amounts are sent **positionally, in the prompt's order** — upstream parses exactly that form, so a
- * reordered or short list is a wrong answer rather than a partial one (0052).
+ * reordered or short list is a wrong answer rather than a partial one.
  */
 @Composable
 private fun MultiAmountControl(

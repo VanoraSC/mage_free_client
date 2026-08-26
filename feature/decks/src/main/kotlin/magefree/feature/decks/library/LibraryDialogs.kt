@@ -85,7 +85,7 @@ fun FormatPicker(
     }
 }
 
-/** Import dialog: paste XMage-compatible deck text; the format is auto-detected on import (0034). */
+/** Import dialog: paste XMage-compatible deck text; the format is auto-detected on import. */
 @Composable
 fun ImportDeckDialog(
     onConfirm: (String) -> Unit,

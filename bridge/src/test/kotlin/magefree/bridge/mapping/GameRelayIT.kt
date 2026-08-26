@@ -55,7 +55,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import java.util.UUID
 
 /**
- * **the real proof**: a live game crossing the bridge, driven against the
+ * **The real proof**: a live game crossing the bridge, driven against the
  * reference server through a **real** [SessionImpl].
  *
  * The hermetic tests can only assert that crafted views map correctly and that each reply reaches the
@@ -162,7 +162,7 @@ class GameRelayIT {
         /** The land that pays for it. */
         const val MOUNTAIN = "Mountain"
 
-        /** A cap for the 0086 loop: several turns' worth of priority prompts, not a single turn's. */
+        /** A cap for the loop: several turns' worth of priority prompts, not a single turn's. */
         const val MAX_ANSWERS_TO_CAST = 400
 
         /**
@@ -190,7 +190,7 @@ class GameRelayIT {
         const val ISLAND = "Island"
         const val FOREST = "Forest"
 
-        /** The attachment scenario needs several turns of real play; the 0051 loop's 180s is tight. */
+        /** The attachment scenario needs several turns of real play; the loop's 180s is tight. */
         const val AURA_PLAY_TIMEOUT_MS = 240_000L
 
         /**
@@ -351,7 +351,7 @@ class GameRelayIT {
         }
 
     /**
-     * **the live check.** The hermetic mapper tests craft a `CardView` with a `targets` list
+     * **The live check.** The hermetic mapper tests craft a `CardView` with a `targets` list
      * already on it, so they prove the mapper reads the field — never that the *server* fills it on the
      * path this bridge actually reads. That is what this asserts, and it is the only way to assert it:
      * cast a real `Lightning Bolt` at the AI seat through a real `SessionImpl`, and read the target id
@@ -428,7 +428,7 @@ class GameRelayIT {
                 )
 
                 println(
-                    "GameRelayIT[0086]: stackEntry=${bolt.name} targets=${bolt.targets} " +
+                    "GameRelayIT[targets]: stackEntry=${bolt.name} targets=${bolt.targets} " +
                         "answered=${observed.answered} callbacks=${callbackSummary()}",
                 )
             } finally {
@@ -438,7 +438,7 @@ class GameRelayIT {
             }
         }
 
-    /** What the 0086 cast-and-observe loop saw. */
+    /** What the cast-and-observe loop saw. */
     private class BoltObserved {
         var targetedStackEntry: GameCardView? = null
         var last: GameStateView? = null
@@ -618,7 +618,7 @@ class GameRelayIT {
         val hostControlledByViewer: Boolean,
     )
 
-    /** What the 0087 loop saw. */
+    /** What the loop saw. */
     private class AuraObserved {
         var ownPermanent: Attachment? = null
         var opponentPermanent: Attachment? = null
@@ -844,7 +844,7 @@ class GameRelayIT {
                 )
 
                 println(
-                    "GameRelayIT[0088]: poison=${poisoned.counters} monarch=${monarch.name} " +
+                    "GameRelayIT[vitals]: poison=${poisoned.counters} monarch=${monarch.name} " +
                         "initiative=${initiative.name} answered=${observed.answered} callbacks=${callbackSummary()}",
                 )
             } finally {

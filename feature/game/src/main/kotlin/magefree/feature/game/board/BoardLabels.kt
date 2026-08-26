@@ -189,9 +189,9 @@ const val FLIP_FACE_LABEL: String = "Flip"
 /**
  * What the controls say for a prompt kind this build does not recognise.
  *
- * `GamePrompt.Unrecognised` has **no answering method** (0052, on purpose: nothing knows what a valid
+ * `GamePrompt.Unrecognised` has **no answering method** (on purpose: nothing knows what a valid
  * reply is), so it renders as a notice with no buttons rather than as a control the player cannot
- * satisfy. The board menu stays available, which is what 0052's KDoc says a UI should do.
+ * satisfy. The board menu stays available, which is what the KDoc says a UI should do.
  */
 const val UNRECOGNISED_PROMPT_NOTICE: String =
     "The server asked something this version doesn't understand. It can't be answered here — the next update replaces it."

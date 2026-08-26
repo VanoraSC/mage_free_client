@@ -41,7 +41,7 @@ import kotlin.uuid.Uuid
  * The production [GameClient], over the same [BridgeClient] singleton the lobby and table
  * clients ride — one socket, three feature clients.
  *
- * **Actions** mint a `requestId`, send the matching 0051 request through [BridgeClient.request] (the
+ * **Actions** mint a `requestId`, send the matching game request through [BridgeClient.request] (the
  * erased `request<ServerMessage>` seam, so no `:protocol` type crosses the ABI), and map the correlated
  * `GameActionResult`: `ok = true` → success; `ok = false` → a [Result.failure] carrying either
  * [GameSessionGoneFailure] (the bridge had no session, so the server was never asked) or a
@@ -269,7 +269,7 @@ internal class DefaultGameClient(
                                 trySend(next)
                             }
                         }
-                        // A 0023/0024 resume completed. Re-emit the held state (the 0037 non-destructive
+                        // A resume completed. Re-emit the held state (the non-destructive
                         // re-sync) so a collector that had stopped rendering is not stranded, *and* read
                         // the board — the buffered pushes the bridge drains into the re-bound socket
                         // cover a game that moved during the gap, but nothing covers a game that did
@@ -379,7 +379,7 @@ internal class DefaultGameClient(
         }
 
     /**
-     * A return to [ConnectionState.Connected] after something else (a 0023/0024 resume completing). The
+     * A return to [ConnectionState.Connected] after something else (a resume completing). The
      * initial `Connected` is skipped — the seed already covers the current state; only a *return* to
      * Connected re-syncs. Identical to the table client's rule, deliberately.
      */

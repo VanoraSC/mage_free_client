@@ -28,7 +28,7 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * **the real proof**: a real game, against a real AI, on the reference XMage
+ * **The real proof**: a real game, against a real AI, on the reference XMage
  * server, reaching the app through the app's **own** production stack —
  * [magefree.network.ktor.KtorBridgeClient] → `PendingRequests` → `DefaultGameClient` →
  * `GameEventFold`/`GameViewMapper` → an app-schema [GameState].

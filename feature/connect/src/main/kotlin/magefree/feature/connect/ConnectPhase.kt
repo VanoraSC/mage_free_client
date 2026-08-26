@@ -50,7 +50,7 @@ enum class ConnectPhase {
     Network,
 
     /**
-     * Recovery has truly failed — 0024's reconnect/resume budget was exhausted (or the parked session
+     * Recovery has truly failed — the reconnect/resume budget was exhausted (or the parked session
      * was rejected and re-authentication is required). A terminal surface, distinct from a clean return
      * to the form ([Idle]) and from a first-connect transport failure ([Network]): it offers a
      * re-authenticate CTA that routes back to sign-in with the last server pre-selected. Maps from a

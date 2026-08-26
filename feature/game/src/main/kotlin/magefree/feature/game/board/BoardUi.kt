@@ -13,7 +13,7 @@ import magefree.network.game.PhaseStep
 import magefree.network.game.TurnPhase
 
 /*
- * The board's **presentation model**: one pure function, [BoardUi.from], turning a 0052
+ * The board's **presentation model**: one pure function, [BoardUi.from], turning a
  * [GameState] snapshot into everything the portrait board draws. No Compose type, no Android type, no
  * coroutine — so every region and every *empty* region is provable in a plain JVM unit test.
  *
@@ -44,7 +44,7 @@ import magefree.network.game.TurnPhase
  * | card name, cost, type, rules | `GameCard.name` / `manaCost` / `typeLine` / `rules` |
  * | power/toughness | `GameCard.power` / `toughness`, shown only when `GameCard.isCreature` (see [CardUi.powerToughness]) |
  * | counters | `GameCard.counters` — name and count, on a permanent *or* a card in another zone |
- * | card **art** | `GameCard.setCode` + `GameCard.collectorNumber` -> 0031's [CardArtRequest] |
+ * | card **art** | `GameCard.setCode` + `GameCard.collectorNumber` -> the [CardArtRequest] |
  * | the prompt notice (read-only) | `GameState.prompt.message` |
  * | the narration line | `GameState.lastMessage.text` |
  * | the clock | `GameState.priorityTimeSeconds` (suppressed at 0 — see [ClockUi]) |
@@ -127,12 +127,12 @@ data class BoardUi(
          * Project [state] onto the board.
          *
          * The seat split is the load-bearing line: `players.partition { it.isViewer }` — the server's
-         * own per-seat flag (upstream `PlayerView.getControlled()`), which 0052 carries. Index-based
+         * own per-seat flag (upstream `PlayerView.getControlled()`), which the wire carries. Index-based
          * seating ("players[0] is me") is wrong against the real server and is what this exists to
          * prevent.
          */
         fun from(state: GameState): BoardUi {
-            // `playable` is meaningful ONLY while we hold priority (0052's KDoc, verified live). Outside
+            // `playable` is meaningful ONLY while we hold priority (the KDoc, verified live). Outside
             // that window it is empty for reasons that have nothing to do with a card's playability, so
             // the board must not draw any conclusion from it at all.
             val playableIds: Set<String> =
@@ -259,7 +259,7 @@ data class PermanentUi(
      * What this permanent is doing in the combat the server is currently reporting — *"attacking
      * Computer, blocked by Grizzly Bears"* — or null when it is doing nothing.
      *
-     * **Why a sentence and not two flags.** 0055 already marked attackers and blockers, and on a real
+     * **Why a sentence and not two flags.** Attackers and blockers are already marked, and on a real
      * board that is not enough to follow a fight: with two attackers and a planeswalker in play, "this
      * one is attacking" leaves out the only thing the player needs to know, which is *what* it is
      * attacking. `CombatGroup` carries the answer and is **per-attacker** — it reads "against this
@@ -382,14 +382,14 @@ sealed interface PriorityUi {
     /**
      * The server is **waiting on the viewer** without the viewer holding priority.
      *
-     * Found on device, and it is not a corner case: the very first thing a new game does is ask one
+     * Not a corner case: the very first thing a new game does is ask one
      * seat to choose who goes first, and it does that *before* priority exists. On that snapshot
      * `viewerHasPriority` is false while `prompt` is `Select a starting player` — so a banner driven by
      * priority alone reads "Waiting for opponent" at the exact moment the whole game is waiting on
      * **you**. The requirements names that failure directly: whatever else is hidden, the player must
      * never be left unable to tell a waiting game from a frozen one.
      *
-     * Its producer is `GameState.prompt`, which 0052 defines as "**the** outstanding question, or null
+     * Its producer is `GameState.prompt`, defined as "**the** outstanding question, or null
      * when the server is not waiting on the viewer" — a server fact, not an inference. It is a separate
      * state from [Yours] because the two are genuinely different: being asked a question is not the
      * same as holding priority, and the board should not claim otherwise.
@@ -451,11 +451,11 @@ data class ClockUi(
 }
 
 /**
- * A card as the board draws it: the design-system display fields, the 0031 art identity, and the
+ * A card as the board draws it: the design-system display fields, the art identity, and the
  * battlefield-relevant extras.
  *
  * @property art the printing to fetch art for — `(setCode, collectorNumber)`, which is exactly how
- *   0030/0031 identify a printing. Null when the server sent no printing, or when the card is face
+ *   a printing is identified. Null when the server sent no printing, or when the card is face
  *   down: a face-down card's art must not be fetched, because fetching it would show the player a card
  *   they are not entitled to see.
  * @property isCreature the server's own answer for *this snapshot* — see the notes on [BoardUi].
@@ -628,7 +628,7 @@ internal fun GameCard.toCardUi(): CardUi {
 }
 
 /**
- * The 0031 art identity for a printing, or null when the server did not name one — in which case the
+ * The art identity for a printing, or null when the server did not name one — in which case the
  * design-system placeholder is what renders, and the card's text stays readable.
  *
  * [isShowingAlternateFace] is `GameCard.transformed` — upstream's own live "is this

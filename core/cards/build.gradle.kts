@@ -28,7 +28,7 @@ kotlin {
                 // on-demand card-art loader/cache. `coil-core` is the ImageLoader
                 // (memory+disk cache, request de-dup); `coil-network-ktor3` is the fetcher that GETs
                 // the resolved Scryfall URL and streams it into the disk cache. `api` because the
-                // module hands out a `coil3.ImageLoader` that 0032's UI binds `AsyncImage` to.
+                // module hands out a `coil3.ImageLoader` that the UI binds `AsyncImage` to.
                 api(libs.coil.core)
                 implementation(libs.coil.network.ktor3)
                 implementation(libs.ktor.client.core)

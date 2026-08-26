@@ -190,7 +190,7 @@ class AppBridgeSessionIT {
 
                 // The other direction, live: the socket goes away with nothing written to it — a lost
                 // connection or a backgrounded app. The upstream session must survive so a reconnect can
-                // resume it. This is the guard that would catch 0046's fix being
+                // resume it. This is the guard that would catch the fix being
                 // applied to the wrong path.
                 subject.dropWithoutSigningOut()
 

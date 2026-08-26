@@ -23,7 +23,7 @@ import java.util.zip.ZipFile
  *    screen on device" shape.
  * 2. [theAppsOwnCodeReferencesEveryFeatureEntryPoint] — `:app`'s compiled classes actually **call**
  *    each feature's entry point. Read out of the class files' constant pools, so it is a fact about
- *    the built artifact, not about what the source looked like. This catches 0047 exactly: the module
+ *    the built artifact, not about what the source looked like. This catches the built-but-unreachable case exactly: the module
  *    can be on the classpath and still be dead weight if no destination renders it.
  *
  * The set of features is read from `settings.gradle.kts` rather than hard-coded, so a **new**

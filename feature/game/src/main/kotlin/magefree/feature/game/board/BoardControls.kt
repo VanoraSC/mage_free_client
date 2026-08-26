@@ -17,7 +17,7 @@ import magefree.network.game.PromptOptions
  *
  * | Gated on | Produced by |
  * |---|---|
- * | which controls exist at all | `GameState.prompt` — 0052: "**the** outstanding question, or null when the server is not waiting on the viewer" |
+ * | which controls exist at all | `GameState.prompt` — "**the** outstanding question, or null when the server is not waiting on the viewer" |
  * | the question's wording | `GamePrompt.message`, HTML-stripped by [stripServerMarkup] |
  * | button labels for yes/no and done | `PromptOptions.leftButtonText` / `rightButtonText` (upstream `UI.left.btn.text` / `UI.right.btn.text`), falling back to our own words only when the server sent none |
  * | whether a *special* button exists | `PromptOptions.specialButtonText` (upstream `specialButton`) — the server telling us the button is valid |
@@ -29,7 +29,7 @@ import magefree.network.game.PromptOptions
  * | which targets are already chosen | `PromptOptions.chosenTargets` |
  * | candidate cards not on the board (scry, piles, a library search) | the prompt's own `cards` / `pile1` / `pile2`, narrowed to what is actually pickable for a `Target` prompt (follow-up) |
  * | which mana types may be unlocked | the viewer's own `GamePlayer.manaPool` |
- * | whether cancel may be offered | `GamePrompt.Target.isRequired` / `ChooseChoice.isRequired`, and 0052's list of the four prompts `cancelPrompt` actually answers |
+ * | whether cancel may be offered | `GamePrompt.Target.isRequired` / `ChooseChoice.isRequired`, and the list of the four prompts `cancelPrompt` actually answers |
  *
  * ## The three things this file exists to get right
  *
@@ -441,9 +441,9 @@ sealed interface PromptControlsUi {
     /**
      * A prompt this build does not recognise: shown as a **notice**, never as a control.
      *
-     * 0052 gives [GamePrompt.Unrecognised] no answering method on purpose — nothing knows what a valid
+     * [GamePrompt.Unrecognised] has no answering method on purpose — nothing knows what a valid
      * reply to it is — so offering any button here would be offering the player something they cannot
-     * satisfy. The board menu (concede / quit) stays available, which is exactly what 0052's KDoc says a
+     * satisfy. The board menu (concede / quit) stays available, which is exactly what the KDoc says a
      * UI should do.
      */
     data class Notice(
@@ -603,7 +603,7 @@ internal fun controlsFor(
                                 ),
                             )
                         }
-                        // `cancelPrompt` answers this prompt (0052), so the cast can be backed out of
+                        // `cancelPrompt` answers this prompt, so the cast can be backed out of
                         // here too. Whether the *server* rewinds the whole cast from a mode choice is
                         // its behaviour and is recorded as unverified — the board claims nothing.
                         add(ControlButton(label = CANCEL_CAST_LABEL, action = BoardAction.CancelPrompt))
@@ -755,7 +755,7 @@ private fun GameState.drawnObjectIds(): Set<String> =
 /**
  * What to call [id] — a **player**, or a card in any zone the snapshot carries identities for.
  *
- * Returns null when nothing in the snapshot names it. A graveyard is a *count* upstream (0052), so a
+ * Returns null when nothing in the snapshot names it. A graveyard is a *count* upstream, so a
  * card there genuinely has no name to show; see [UNNAMED_CANDIDATE_LABEL] for why that still gets a
  * control rather than nothing.
  */

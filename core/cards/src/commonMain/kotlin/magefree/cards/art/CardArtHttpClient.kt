@@ -65,7 +65,7 @@ internal object CardArtUserAgent {
  *
  * `UserAgent` is installed as a plugin rather than appended via [defaultRequest] deliberately —
  * `defaultRequest` appends only headers that are not already present, so an engine-supplied
- * `okhttp/<version>` would win and restore exactly the defect 0056 fixed. The plugin sets the header
+ * `okhttp/<version>` would win and restore exactly the defect this avoids. The plugin sets the header
  * outright. `CardArtUserAgentTest` reads the real wire request, so this claim is checked rather
  * than assumed.
  */

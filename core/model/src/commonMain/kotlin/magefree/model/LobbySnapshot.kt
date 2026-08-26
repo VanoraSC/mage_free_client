@@ -3,7 +3,7 @@ package magefree.model
 /**
  * The whole observable state of the lobby data layer at one instant: the last-known
  * [tables], [roomUsers], and [gameTypes], plus the [status] of the current load/refresh and any
- * [error] detail. The `LobbyRepository` exposes this as a `StateFlow<LobbySnapshot>`; the UI (0029)
+ * [error] detail. The `LobbyRepository` exposes this as a `StateFlow<LobbySnapshot>`; the UI
  * renders it. A failure is modelled **as state** here ([LobbyLoadState.Error] + [error]) and never
  * thrown to the caller.
  *

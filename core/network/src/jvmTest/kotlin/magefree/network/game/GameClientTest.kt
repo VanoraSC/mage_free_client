@@ -40,7 +40,7 @@ import org.junit.Test
 
 /**
  * Hermetic coverage of the production [DefaultGameClient]: each verb mints a `requestId`, sends the
- * matching 0051 request over the [FakeBridgeClient]'s request/response seam, and maps the correlated
+ * matching game request over the [FakeBridgeClient]'s request/response seam, and maps the correlated
  * `GameActionResult` into a [Result].
  *
  * The bulk of it is the **reply-to-wire mapping**, one case per prompt kind. That mapping is the whole

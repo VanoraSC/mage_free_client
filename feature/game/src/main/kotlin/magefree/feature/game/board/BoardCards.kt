@@ -33,11 +33,11 @@ import magefree.feature.cards.CardArtRenderer
  * The board's card surfaces.
  *
  * These reuse the design system's **card vocabulary** — `CardDisplay`, [CARD_ASPECT_RATIO], the
- * `CardArtSlot` contract and [CardArtPlaceholder] — and 0032's Coil-backed [CardArtRenderer], so real
+ * `CardArtSlot` contract and [CardArtPlaceholder] — and the Coil-backed [CardArtRenderer], so real
  * card art is on the board from day one and an art miss degrades to the same placeholder every other
  * card surface in the app degrades to.
  *
- * **Why not 0014's `CardTile` itself:** `CardTile` is a *button* by construction — it takes a required
+ * **Why not the `CardTile` itself:** `CardTile` is a *button* by construction — it takes a required
  * `onTap`, wires `Modifier.cardInspectable`, and announces `Role.Button`. A read-only board must offer
  * no way to act, and a tile that looks tappable and does nothing is precisely the dead affordance this
  * project has been bitten by before. So the board draws its own tap-free surfaces over the same
@@ -339,7 +339,7 @@ internal const val ATTACKING_MARK: String = "Attacking"
 
 internal const val BLOCKING_MARK: String = "Blocking"
 
-/** What an attacker says about the creatures blocking it — the other half of a legible combat (0061). */
+/** What an attacker says about the creatures blocking it — the other half of a legible combat. */
 internal const val BLOCKED_BY_MARK: String = "Blocked by"
 
 internal const val DAMAGE_MARK: String = "Damage"

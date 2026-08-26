@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
  * Components and screens reference these named steps instead of magic numbers, so the whole app stays
  * on one rhythm and a global adjustment is a one-line change. Grouped into small `object`s exposing
  * [Dp] constants; kept intentionally minimal (foundation only — richer scales arrive with the
- * components in 0013–0015).
+ * components).
  */
 
 /** 4dp-based spacing scale for padding, gaps, and margins. */

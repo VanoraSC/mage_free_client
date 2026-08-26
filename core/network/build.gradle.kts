@@ -1,7 +1,7 @@
 plugins {
     id("magefree.kmp.android.library")
     // this module provides the repositories (ConnectionRepository, ServerRepository) and
-    // the BridgeClient/DataStore bindings, so it applies the shared DI recipe. Koin since 0081.
+    // the BridgeClient/DataStore bindings, so it applies the shared DI recipe. Koin is the DI container.
     id("magefree.koin")
     // ServerRepository serializes its persisted @Serializable DTO to the DataStore. The
     // module already consumed :protocol's generated serializers via ProtocolJson; persisting a local
@@ -25,10 +25,10 @@ kotlin {
                 // this module — nothing above `:core:network` can see them.
                 implementation(project(":protocol"))
 
-                // the table client accepts a 0033 domain `Deck` for join/submit and maps
-                // it (via 0033's own `Deck.toDeckList()`) onto the wire `DeckList`. `api` (like
+                // the table client accepts a domain `Deck` for join/submit and maps
+                // it (via the own `Deck.toDeckList()`) onto the wire `DeckList`. `api` (like
                 // `:core:model` above) because the `TableClient` ABI exposes `magefree.decks.model.Deck`
-                // in its join/submit signatures, so a consumer (0038) resolves that type transitively.
+                // in its join/submit signatures, so a consumer resolves that type transitively.
                 api(project(":core:decks"))
 
                 implementation(libs.kotlinx.coroutines.core)

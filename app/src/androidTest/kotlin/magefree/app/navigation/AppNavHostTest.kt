@@ -56,7 +56,7 @@ class AppNavHostTest {
         }
     }
 
-    /** Cold launch lands on the connect flow (0047); sign in to get into the shell. */
+    /** Cold launch lands on the connect flow; sign in to get into the shell. */
     private fun signInToShell() {
         composeTestRule.onNodeWithText(CONNECT_STAND_IN_LABEL).performClick()
     }

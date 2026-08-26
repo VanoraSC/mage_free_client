@@ -91,7 +91,7 @@ fun SettingsPlaceholderScreen(
 
         // the deliberate way out of a session. Real preferences will re-home this when the
         // Settings screen stops being a placeholder; what matters is that the shell has *an* exit at
-        // all — before 0047 the app could neither sign in nor sign out from a running APK.
+        // all — without it the app can neither sign in nor sign out from a running APK.
         OutlinedButton(
             onClick = onSignOut,
             modifier =

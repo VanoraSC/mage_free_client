@@ -19,7 +19,7 @@ android {
 
 dependencies {
     // The offline card catalog + on-demand art loader this feature renders, and
-    // the design system it renders with (theme + the 0014 card-forward components). Consumed read-only.
+    // the design system it renders with (theme + the card-forward components). Consumed read-only.
     implementation(project(":core:cards"))
     implementation(project(":core:designsystem"))
 
@@ -36,13 +36,13 @@ dependencies {
     implementation(libs.compose.material.icons.core)
     implementation(libs.kotlinx.coroutines.core)
 
-    // the loader hands out a Coil ImageLoader; 0032 binds it to AsyncImage here.
+    // the loader hands out a Coil ImageLoader; card-browse binds it to AsyncImage here.
     implementation(libs.coil.compose)
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
-    // the prefetch-size coverage test constructs 0031's CardArtCachePolicyRepository over
+    // the prefetch-size coverage test constructs the CardArtCachePolicyRepository over
     // a no-op DataStore, so the real DefaultArtCacheController (the "download all art" entry point) is
     // the thing under test rather than a stand-in.
     testImplementation(libs.androidx.datastore.preferences)

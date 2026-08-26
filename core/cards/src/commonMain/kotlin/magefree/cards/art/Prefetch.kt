@@ -93,7 +93,7 @@ interface PrefetchTargetSource {
 }
 
 /**
- * The production [PrefetchTargetSource]: enumerates the bundled 0030 catalog (read-only — no catalog
+ * The production [PrefetchTargetSource]: enumerates the bundled catalog catalog (read-only — no catalog
  * change) via [CardCatalog.filter], one printing per card, and adds the back-face request for
  * double-faced cards so full offline art includes card backs.
  */

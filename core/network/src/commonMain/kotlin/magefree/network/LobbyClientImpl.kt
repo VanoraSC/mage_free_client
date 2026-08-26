@@ -14,7 +14,7 @@ import magefree.protocol.TableList
 import kotlin.uuid.Uuid
 
 /**
- * The production [LobbyClient]: each call mints a `requestId`, sends the matching 0027 `GetX` over the
+ * The production [LobbyClient]: each call mints a `requestId`, sends the matching lobby `GetX` over the
  * live session via [BridgeClient.request], awaits the correlated `XList` reply, and maps its wire
  * summaries into `:core:model` at [LobbyMapper][magefree.network.mapper.LobbyMapper]. The `:protocol`
  * request/reply types live only here and in the mapper — they never cross the [LobbyClient] seam.

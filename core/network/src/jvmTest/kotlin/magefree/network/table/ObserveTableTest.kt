@@ -26,9 +26,9 @@ import org.junit.Test
 import magefree.protocol.MatchStarting as MatchStartingMessage
 
 /**
- * Hermetic Turbine coverage of [DefaultTableClient.observeTable]: it seeds current state, folds the 0036
+ * Hermetic Turbine coverage of [DefaultTableClient.observeTable]: it seeds current state, folds the table
  * events pushed through the [FakeBridgeClient]'s server-push side-channel into successive [TableState]s
- * (join → seat update → construct → match-starting), and re-emits the held state on a 0023 resume (a
+ * (join → seat update → construct → match-starting), and re-emits the held state on a resume (a
  * return to [ConnectionState.Connected]) so a reconnect does not strand the seat. No socket.
  *
  * The other half is the **seat read**. `observeTable` issues a `GetTable` on open, on each
@@ -328,7 +328,7 @@ class ObserveTableTest {
                 connection.value = ConnectionState.Connected
                 testScheduler.runCurrent()
 
-                // The held state is re-emitted first (the 0037 non-destructive re-sync)...
+                // The held state is re-emitted first (the non-destructive re-sync)...
                 assertFalse(awaitItem().isReadyToStart)
                 // ...then the fresh read lands, so a seat filled while the socket was down shows up.
                 assertTrue(awaitItem().isReadyToStart)
@@ -434,7 +434,7 @@ class ObserveTableTest {
                 val constructing = awaitItem()
                 assertEquals(TablePhase.Constructing, constructing.phase)
 
-                // Simulate a drop and a 0023 resume; step through Reconnecting so the StateFlow does not
+                // Simulate a drop and a resume; step through Reconnecting so the StateFlow does not
                 // conflate the intermediate away, then return to Connected.
                 connection.value = ConnectionState.Reconnecting
                 scheduler.runCurrent()

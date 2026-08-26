@@ -38,7 +38,7 @@ interface ArtCacheController {
     fun cancelPrefetch()
 }
 
-/** Production [ArtCacheController] delegating to 0031's policy repository + download manager. */
+/** Production [ArtCacheController] delegating to the policy repository + download manager. */
 class DefaultArtCacheController
     constructor(
         private val policyRepository: CardArtCachePolicyRepository,
@@ -50,7 +50,7 @@ class DefaultArtCacheController
         override suspend fun setPolicy(policy: CardArtCachePolicy) = policyRepository.setPolicy(policy)
 
         // No size argument: the manager's default warms every size the UI displays. Pinning one size
-        // here is what left the browse grid blank offline after a completed download (0043, defect A).
+        // here is what left the browse grid blank offline after a completed download (defect A).
         override fun startPrefetch(scope: PrefetchScope) = downloadManager.start(scope)
 
         override fun cancelPrefetch() = downloadManager.cancel()
@@ -69,7 +69,7 @@ data class CardArtSettingsUiState(
 }
 
 /**
- * MVVM ViewModel for the art cache-policy + bulk pre-download affordance. Observes 0031's
+ * MVVM ViewModel for the art cache-policy + bulk pre-download affordance. Observes the
  * policy + prefetch progress via [ArtCacheController] and hoists the mutations. Deliberately minimal:
  * the cache toggle and an opt-in "download all art" with progress/cancel — the full settings screen
  * lives in settings.

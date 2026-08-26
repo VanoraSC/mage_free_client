@@ -494,7 +494,7 @@ class GameViewMapperTest {
     fun `a sparse view with every collection unset maps to an empty snapshot instead of throwing`() {
         // The serialization-constructed view leaves every collection field null — the shape a drifted or
         // partially populated upstream view would have. The mapper must survive it: a snapshot the app
-        // can render is always better than an exception that costs it the whole push (0006/0026-F5).
+        // can render is always better than an exception that costs it the whole push (the never-throw invariant).
         val sparse = GameViews.game(phase = null, step = null, activePlayerName = "", priorityPlayerName = "")
         sparse.setEveryCollectionNull()
 

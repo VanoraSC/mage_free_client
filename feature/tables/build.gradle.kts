@@ -10,8 +10,8 @@ android {
 
 dependencies {
     // The design system this feature renders with; the domain vocabulary (SkillLevel) it speaks; the
-    // 0037 TableClient (+ TableState/CreateTableOptions) it drives; and the fully-offline deck library +
-    // legality (0033) reused for the deck pick. Depends on `:core:decks` directly — never `:feature:decks`
+    // table TableClient (+ TableState/CreateTableOptions) it drives; and the fully-offline deck library +
+    // legality reused for the deck pick. Depends on `:core:decks` directly — never `:feature:decks`
     // — to keep the deck pick/legality offline without feature→feature coupling.
     implementation(project(":core:designsystem"))
     implementation(project(":core:model"))
@@ -32,7 +32,7 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
-    // The scriptable 0037 FakeTableClient lives in `:core:network`'s main source set; the hermetic
+    // The scriptable table FakeTableClient lives in `:core:network`'s main source set; the hermetic
     // ViewModel tests here drive it directly (no bridge, no `:protocol`).
     //
     // One test (`TableRoomSeatSeamTest`) instead drives the room through the *real*

@@ -25,7 +25,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Hermetic coverage of [TableRoomViewModel] over 0037's [FakeTableClient] — no bridge, no `:protocol`. It
+ * Hermetic coverage of [TableRoomViewModel] over the [FakeTableClient] — no bridge, no `:protocol`. It
  * folds a scripted [TableState] (seats filling / phase transitions), pins host-start gating on the
  * server's own readiness, the leave/remove close signals, the match-starting terminal state, and the
  * spectator `watchTable` subscription.

@@ -18,8 +18,8 @@ android {
 }
 
 dependencies {
-    // The offline deck library/legality/import-export (0033/0034), the offline card catalog +
-    // on-demand art loader/prefetch (0030/0031), and the design system (theme + 0014 card components).
+    // The offline deck library/legality/import-export, the offline card catalog +
+    // on-demand art loader/prefetch, and the design system (theme + card components).
     implementation(project(":core:decks"))
     implementation(project(":core:cards"))
     implementation(project(":core:designsystem"))

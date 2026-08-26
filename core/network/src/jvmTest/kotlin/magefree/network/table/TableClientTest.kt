@@ -38,7 +38,7 @@ import org.junit.Test
 
 /**
  * Hermetic coverage of the production [DefaultTableClient]: each verb mints a `requestId`, sends the
- * matching 0036 request over the [FakeBridgeClient]'s request/response seam, and maps the correlated
+ * matching table request over the [FakeBridgeClient]'s request/response seam, and maps the correlated
  * reply into a [Result] — a `TableCreated` → [TableRef], a `TableActionResult(ok = true)` → success, and
  * an `ok = false` → a typed [TableActionFailure] surfacing the reason. No socket, no `:protocol` on the
  * exercised ABI.

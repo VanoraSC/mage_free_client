@@ -263,7 +263,7 @@ class LobbyRepositoryTest {
 
     /**
      * A transport drop resets the lobby to idle (as it
-     * must), and 0023/0024's resume brings the session back to [ConnectionState.Connected] with no user
+     * must), and the resume brings the session back to [ConnectionState.Connected] with no user
      * action at all. The subscription has to come back with it.
      */
     @Test

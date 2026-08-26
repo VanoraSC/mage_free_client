@@ -295,7 +295,7 @@ class DeckIOTest {
             assertTrue(share.content.contains("[MOD:60] Island"))
         }
 
-    // --- exact-name resolution (0042 defect D) ---
+    // --- exact-name resolution (defect D) ---
 
     @Test
     fun `import resolves names through one batched exact-name lookup, not the substring search`() =

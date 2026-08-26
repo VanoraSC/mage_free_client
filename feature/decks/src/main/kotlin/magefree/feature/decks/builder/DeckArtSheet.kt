@@ -26,7 +26,7 @@ import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
 
 /**
- * The builder's art affordance: the 0031 cache-policy toggle plus an opt-in **deck-scoped** art
+ * The builder's art affordance: the cache-policy toggle plus an opt-in **deck-scoped** art
  * pre-download (this deck's own printings) with live progress and cancel. Surfacing the policy here
  * lets a player choose on-disk caching and warm exactly this deck's art before going offline. Stateless
  * — all events hoisted; the deck-scoped download is enqueued by [BuilderViewModel].

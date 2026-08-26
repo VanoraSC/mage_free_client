@@ -84,7 +84,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * **Two things a run cannot show here, and why.**
  * 1. **A moving game.** The mulligan block above. Battlefields, the stack filling and clearing, and
- *    turn/phase advance are unreachable until 0056 can answer.
+ *    turn/phase advance are unreachable until a prompt can be answered.
  * 2. **Card art.** Not the board's doing: this emulator has **no external egress**
  *    (`nc 10.0.2.2 8080` answers the bridge; `nc <external host> 80` answers nothing), so every art
  *    request fails and the design-system placeholder renders — which is the correct degradation, and

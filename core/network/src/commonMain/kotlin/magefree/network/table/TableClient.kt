@@ -4,22 +4,22 @@ import kotlinx.coroutines.flow.Flow
 import magefree.decks.model.Deck
 
 /**
- * The app-side, **UI-free** table client: the *act* side of a table, layered over 0028's
- * multiplexed request/response and 0023's session/resume, complementing 0028's read-only `LobbyClient`.
- * Each verb turns a 0036 table-action request into a `suspend` call that maps the correlated
+ * The app-side, **UI-free** table client: the *act* side of a table, layered over the
+ * multiplexed request/response and the session/resume, complementing the read-only `LobbyClient`.
+ * Each verb turns a table-action request into a `suspend` call that maps the correlated
  * `TableActionResult`/`TableCreated` reply into a [Result] — a server decline surfaces as a typed
  * [TableActionFailure] carrying its reason, **never** a silent drop.
  *
- * The interface speaks **only** app-schema/0033 domain types: callers pass a [Deck] (mapped internally to
- * 0036's wire `DeckList`) and read back a [TableRef]/[TableState]. No `:protocol` or `mage.*` type appears
- * on this ABI — the 0028 discipline (the erased `BridgeClient.request` seam keeps wire types confined to
+ * The interface speaks **only** app-schema/deck domain types: callers pass a [Deck] (mapped internally to
+ * the wire `DeckList`) and read back a [TableRef]/[TableState]. No `:protocol` or `mage.*` type appears
+ * on this ABI — the discipline (the erased `BridgeClient.request` seam keeps wire types confined to
  * the implementation and mappers).
  *
- * [observeTable] exposes a single table's evolving [TableState], folded from 0036's server-pushed events
- * and re-synced across a 0023 resume so a reconnect never strands the seat. It stops at
+ * [observeTable] exposes a single table's evolving [TableState], folded from the server-pushed events
+ * and re-synced across a resume so a reconnect never strands the seat. It stops at
  * [TablePhase.Starting] + a one-shot [TableState.matchStarting]; in-game state is the game layer's.
  *
- * A [magefree.network.fake.FakeTableClient] backs hermetic tests of downstream (0038) code.
+ * A [magefree.network.fake.FakeTableClient] backs hermetic tests of downstream code.
  */
 interface TableClient {
     /** Create (host) a table from [options]; success yields the new [TableRef], a decline a [TableActionFailure]. */
@@ -84,7 +84,7 @@ interface TableClient {
 
     /**
      * Observe the evolving [TableState] of [tableId]: emit [seed] first, then a new state each time a
-     * 0036 event for this table folds in ([TableEventFold]). On a 0023 resume (a return to
+     * table event for this table folds in ([TableEventFold]). On a resume (a return to
      * [magefree.model.ConnectionState.Connected]) the current state is re-emitted so a reconnect does not
      * strand the seat. Cold: each collection starts a fresh subscription; the caller owns its scope.
      *

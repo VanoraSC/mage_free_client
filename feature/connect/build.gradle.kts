@@ -10,7 +10,7 @@ android {
 
 dependencies {
     // The design system this feature renders with (theme + components); the domain vocabulary it
-    // speaks; and the 0017 repositories it drives. `:core:network` re-exports `:core:model` (api), but
+    // speaks; and the repositories it drives. `:core:network` re-exports `:core:model` (api), but
     // the feature depends on it explicitly for clarity and to survive that ever changing.
     implementation(project(":core:designsystem"))
     implementation(project(":core:model"))

@@ -58,7 +58,7 @@ data class CardInspectionUiState(
 
 /**
  * MVVM ViewModel for the read-only, full-bleed card inspection view. [load] fetches a
- * single oracle [Card] from 0030's offline [CardCatalog] by id and maps it into [CardInspectionUiState];
+ * single oracle [Card] from the offline [CardCatalog] by id and maps it into [CardInspectionUiState];
  * [flipFace] toggles the shown face for a double-faced card, recomputing the art request for that face
  * (front/back via [CardArtFace]). Text always comes from the bundled catalog, so it is readable even
  * when art is uncached/offline (the screen renders the design-system placeholder on an art miss).

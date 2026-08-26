@@ -271,7 +271,7 @@ fun MageNavHost(
                 // Debug-only entry into the design-system component catalog.
                 onOpenCatalog = onOpenCatalog,
                 // the shell's one deliberate exit from the session. Hoisted all the way to
-                // the root graph, which tears the session down (0046's `signOut()` sends `Logout`) and
+                // the root graph, which tears the session down (the `signOut()` sends `Logout`) and
                 // returns to the connect flow, so the player can sign in again.
                 onSignOut = onSignOut,
             )

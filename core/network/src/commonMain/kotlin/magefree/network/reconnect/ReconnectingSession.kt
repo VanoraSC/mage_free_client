@@ -108,8 +108,8 @@ class ReconnectingSession(
      * status surface tells the truth immediately, and the transport gets its one best-effort chance to
      * close the socket while the interface is still up.
      *
-     * The outcome is an ordinary [SessionOutcome.RETRY] — a lost network is a transport drop, so 0023's
-     * park and 0024's resume still apply and the caller's back-off already waits for connectivity to
+     * The outcome is an ordinary [SessionOutcome.RETRY] — a lost network is a transport drop, so the
+     * park and the resume still apply and the caller's back-off already waits for connectivity to
      * return. A cancellation of the *loop itself* (the collector going away) is re-thrown, not swallowed.
      */
     private suspend fun runWhileOnline(

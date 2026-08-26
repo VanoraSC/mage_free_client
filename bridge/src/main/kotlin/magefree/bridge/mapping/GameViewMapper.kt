@@ -47,7 +47,7 @@ import java.util.UUID
  * - *is there an outstanding prompt* — not a `GameView` field at all: it is the **callback method**. A
  *   `GAME_SELECT`/`GAME_TARGET`/… push becomes a `GamePrompted`; `GAME_INIT`/`GAME_UPDATE` never do.
  *
- * **Never throws** (the 0006/0026-F5 invariant). The composed text getters (`getTypeText`,
+ * **Never throws** (the F5 invariant). The composed text getters (`getTypeText`,
  * `getManaCostStr`) walk several collections upstream populates lazily, so they are read through [text],
  * which turns any failure into a `null` field rather than losing the whole snapshot. [CallbackMapper]'s
  * `mapGuarded` remains the outer backstop.
@@ -220,7 +220,7 @@ public object GameViewMapper {
      * (`(setCode, collectorNumber)`, the pair the catalog resolves art by), to render a
      * text-only card, and to say what the object **currently is**.
      *
-     * **Reachability (verification standard 2/5) — what writes the 0058 fields.** Each is a getter on
+     * **Reachability (verification standard 2/5) — what writes the fields.** Each is a getter on
      * the same `CardView` the rest of this function reads, and upstream populates all three in the
      * `CardView` constructors themselves (verified against `mage-common-1.4.60`):
      * - [GameCardView.cardTypes] ← `CardView.getCardTypes()`, recomputed per snapshot from the live

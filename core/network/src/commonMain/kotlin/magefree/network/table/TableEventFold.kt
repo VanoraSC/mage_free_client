@@ -8,13 +8,13 @@ import magefree.protocol.TableUpdated
 import magefree.protocol.MatchStarting as MatchStartingMessage
 
 /**
- * The **pure** reducer that folds 0036's server-pushed table-lifecycle [ServerMessage]s into a
+ * The **pure** reducer that folds the server-pushed table-lifecycle [ServerMessage]s into a
  * [TableState]. It is the single place a wire table event becomes app-schema state; because
  * it is a plain function with no client/socket/coroutine dependency it is exhaustively unit-testable over
  * scripted event sequences (join → construct → match-starting), independent of the `TableClient`.
  *
  * [fold] is a filter *and* a reducer: it returns the next [TableState] only for a **relevant** event
- * (one of 0036's table pushes, matching the state's [TableState.tableId]) and `null` for everything else
+ * (one of the table pushes, matching the state's [TableState.tableId]) and `null` for everything else
  * (a different table, a correlated reply, a lobby/chat/ping frame the push side-channel also carries), so
  * `observeTable` emits a new state exactly when a table event actually changes it.
  *

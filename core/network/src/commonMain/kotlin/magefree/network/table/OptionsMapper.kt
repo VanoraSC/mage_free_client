@@ -10,7 +10,7 @@ import magefree.protocol.TableDetail as ProtocolTableDetail
 
 /**
  * The create-options half of the table client's mapper boundary: projects the app-schema
- * [CreateTableOptions] onto 0036's wire [ProtocolCreateTableOptions] so a caller passes a `:protocol`-free
+ * [CreateTableOptions] onto the wire [ProtocolCreateTableOptions] so a caller passes a `:protocol`-free
  * options record to [TableClient.createTable].
  *
  * The mapping is **total** — every app value has a wire code — but it is *not* lossless.
@@ -42,7 +42,7 @@ internal fun CreateTableOptions.toProtocol(): ProtocolCreateTableOptions =
     )
 
 /**
- * The read half of the boundary: projects 0040's wire [ProtocolTableDetail] — the reply to
+ * The read half of the boundary: projects the wire [ProtocolTableDetail] — the reply to
  * a `GetTable` — onto the app-schema [TableDetails] the `TableClient` ABI exposes, so no wire shape
  * reaches a `:feature` consumer. Seat order is preserved (it is the server's slot order).
  */

@@ -570,7 +570,7 @@ class SessionCoordinatorTest {
 
     @Test
     fun `GetGameState on an unbound socket is a typed SESSION_GONE, never an empty board`() {
-        // The 0050 convention on the read side: there is no session, so there is not even a cache to
+        // The convention on the read side: there is no session, so there is not even a cache to
         // look in. The app must be told to sign in again rather than shown a board with nothing on it.
         val unbound = FakeUpstreamSession(emptyList())
         scenario(unbound) { client ->
