@@ -208,6 +208,11 @@ internal object GameViewMapper {
             counters = counters.map { GameCounter(name = it.name, count = it.count) },
             alternateName = alternateName,
             transformed = transformed,
+            // Story 0086: upstream's own `CardView.getTargets()`, already de-duplicated and stably
+            // ordered by the server (`addTargets` uses a LinkedHashSet for exactly that). Carried
+            // through unchanged: these are ids into this same snapshot, and resolving one to the
+            // object it names belongs to whatever draws the arrow.
+            targets = targets,
         )
 
     private fun GamePermanentView.toPermanent(): GamePermanent =

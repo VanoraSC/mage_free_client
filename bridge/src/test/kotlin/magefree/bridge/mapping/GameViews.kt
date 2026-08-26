@@ -82,6 +82,11 @@ internal object GameViews {
      * Note that `CardView.isCreature()` is not a settable field: upstream computes it as
      * `cardTypes.contains(CREATURE)`, so [cardTypes] is what drives it here exactly as it does in a
      * running game.
+     *
+     * [targets] mirrors upstream's `CardView.targets` (story 0086), which `addTargets` allocates
+     * **only** while building a stack object with a chosen target. `null` — the default — is therefore
+     * the ordinary case for every other card, and the case the mapper must survive; the builder sets
+     * the field only when a test actually asks for targets, exactly as upstream does.
      */
     fun card(
         id: UUID = UUID.randomUUID(),
@@ -99,6 +104,7 @@ internal object GameViews {
         counters: List<Pair<String, Int>> = emptyList(),
         alternateName: String? = null,
         transformed: Boolean = false,
+        targets: List<UUID>? = null,
     ): CardView =
         allocate(CardView::class.java).apply {
             set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
@@ -117,6 +123,7 @@ internal object GameViews {
             set("faceDown", faceDown)
             set("alternateName", alternateName)
             set("transformed", transformed)
+            if (targets != null) set("targets", targets)
         }
 
     /**
@@ -147,12 +154,17 @@ internal object GameViews {
     fun stackAbilityView(
         sourceCard: CardView? = card(),
         rules: List<String> = listOf("Whenever another creature enters, you gain 1 life."),
+        targets: List<UUID>? = null,
     ): StackAbilityView =
         allocate(StackAbilityView::class.java).apply {
             set("id", UUID.randomUUID())
             set("name", "Ability")
             set("sourceCard", sourceCard)
             set("rules", rules)
+            // Story 0086: `targets` is inherited from CardView and filled by
+            // `StackAbilityView.updateTargets` (via `addTargets`, or `overrideTargets` for a mode whose
+            // effects target only through a TargetPointer). Left null unless a test asks for it.
+            if (targets != null) set("targets", targets)
         }
 
     /**

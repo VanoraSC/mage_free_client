@@ -18,6 +18,7 @@ import magefree.protocol.ChooseChoicePrompt
 import magefree.protocol.CreateTableOptions
 import magefree.protocol.DeckList
 import magefree.protocol.DeckListCard
+import magefree.protocol.GameCardView
 import magefree.protocol.GameInformed
 import magefree.protocol.GameOver
 import magefree.protocol.GamePrompt
@@ -29,6 +30,7 @@ import magefree.protocol.GetAmountPrompt
 import magefree.protocol.GetMultiAmountPrompt
 import magefree.protocol.MatchStarting
 import magefree.protocol.PhaseStepCode
+import magefree.protocol.PlayManaPrompt
 import magefree.protocol.PlayXManaPrompt
 import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.SelectPrompt
@@ -66,6 +68,12 @@ import java.util.UUID
  * (`M21` #272), seats `[HUMAN, COMPUTER_MAD]` with the AI joined first. A mono-basic deck is also what
  * keeps the prompt stream small — no spells, so no modes, no costs and no combat — which is what lets
  * the auto-responder below be a few lines rather than a rules engine.
+ *
+ * **A second scenario lives here too** (story 0086): the same table recipe with [BURN_DECK] instead,
+ * which actually *casts* something — the one way to get a targeted spell onto a real stack and read
+ * `CardView.getTargets()` back off the snapshot the server pushes. It shares this class's harness
+ * (connect, seat, start, pump, teardown) rather than copying it; only the deck and the play loop
+ * differ.
  *
  * **Ordering note.** `GAME_INIT` is fired by `GameController.startGame()` *before* the game worker
  * deals cards, so the very first snapshot legitimately has an empty hand. The opening hand arrives on a
@@ -111,6 +119,34 @@ class GameRelayIT {
                 cards = listOf(DeckListCard(cardName = "Forest", setCode = "M21", collectorNumber = "272", amount = 60)),
                 sideboard = emptyList(),
             )
+
+        /**
+         * Story 0086's deck: half `Mountain` (M21 #269), half `Lightning Bolt` (M10 #146) — the
+         * cheapest deck that can put a **targeted** spell on a real stack. One land casts a Bolt, so
+         * the whole scenario fits inside a single turn; the even split makes an opening hand missing
+         * one or the other about a 1-in-200 draw, and the play loop simply takes another turn when it
+         * happens rather than failing.
+         */
+        val BURN_DECK =
+            DeckList(
+                name = "it_bolts",
+                author = "game-relay-it",
+                cards =
+                    listOf(
+                        DeckListCard(cardName = "Mountain", setCode = "M21", collectorNumber = "269", amount = 30),
+                        DeckListCard(cardName = "Lightning Bolt", setCode = "M10", collectorNumber = "146", amount = 30),
+                    ),
+                sideboard = emptyList(),
+            )
+
+        /** The spell story 0086's live check casts, by the name the server sends back. */
+        const val BOLT = "Lightning Bolt"
+
+        /** The land that pays for it. */
+        const val MOUNTAIN = "Mountain"
+
+        /** A cap for the 0086 loop: several turns' worth of priority prompts, not a single turn's. */
+        const val MAX_ANSWERS_TO_CAST = 400
     }
 
     @Test
@@ -240,6 +276,179 @@ class GameRelayIT {
                 teardown(session, roomId, tableId, gameId)
             }
         }
+
+    /**
+     * **Story 0086's live check.** The hermetic mapper tests craft a `CardView` with a `targets` list
+     * already on it, so they prove the mapper reads the field — never that the *server* fills it on the
+     * path this bridge actually reads. That is what this asserts, and it is the only way to assert it:
+     * cast a real `Lightning Bolt` at the AI seat through a real `SessionImpl`, and read the target id
+     * back out of the snapshot the server pushes while the spell sits on the stack.
+     *
+     * **Deterministic on purpose.** The target is not whatever the AI happened to point at — it is the
+     * opponent's own player id, chosen by this test from the server's own `GAME_TARGET` candidates, and
+     * asserted by identity. (The AI is holding the same deck and will be bolting *us*; a stack entry
+     * carrying the opponent's id can therefore only be the one we cast.) Nothing here depends on an AI
+     * decision.
+     *
+     * **Targeting a player, not a creature, is the point of the flat list.** `CardView.addTargets`
+     * resolves every id through `game.getObject(uuid)` and appends them to one list with no per-kind
+     * branching, so a player target, a permanent target and a stack-object target are indistinguishable
+     * on the wire — which is exactly the contract [GameViewMapper.mapCard] claims. A player is also the
+     * one target that needs no board state to exist, which keeps the scenario inside one turn.
+     */
+    @Test
+    fun `a spell on a live stack carries the target the server was told to point it at (story 0086)`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(session, roomId, options(name = "it_tgt_$username"))
+                    }
+                assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, BURN_DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, BURN_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+
+                val started = events.awaitOfType<GameStarted>(GAME_INIT_TIMEOUT_MS, "a GAME_INIT push")
+                val opponentId =
+                    started.state.players
+                        .single { it.name == AI_SEAT_NAME }
+                        .playerId
+
+                val observed = castABoltAt(opponentId, session, gameId, events)
+
+                val bolt =
+                    requireNotNull(observed.targetedStackEntry) {
+                        "no snapshot ever carried a stack entry targeting the opponent; cast=${observed.castSent} " +
+                            "answered=${observed.answered} callbacks=${callbackSummary()} last=${observed.last}"
+                    }
+                assertEquals(BOLT, bolt.name, "the stack entry we matched should be the spell we cast")
+                assertEquals(
+                    listOf(opponentId),
+                    bolt.targets,
+                    "the server's own CardView.getTargets() should carry exactly the target we chose",
+                )
+                assertTrue(
+                    observed.last!!.players.any { it.playerId == bolt.targets.single() },
+                    "the target id must resolve against the same snapshot that carried it",
+                )
+
+                println(
+                    "GameRelayIT[0086]: stackEntry=${bolt.name} targets=${bolt.targets} " +
+                        "answered=${observed.answered} callbacks=${callbackSummary()}",
+                )
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /** What the 0086 cast-and-observe loop saw. */
+    private class BoltObserved {
+        var targetedStackEntry: GameCardView? = null
+        var last: GameStateView? = null
+        var castSent: Boolean = false
+        var answered: Int = 0
+    }
+
+    /**
+     * Plays a land, casts a `Lightning Bolt` at [opponentId], and returns as soon as a pushed snapshot
+     * shows it on the stack pointing there.
+     *
+     * **Every decision is taken from the server's own `canPlayObjects`** ([GameStateView.playable]), not
+     * from this test's idea of the rules: cast the Bolt when the server says it is castable, otherwise
+     * play a land when the server says it is playable, otherwise pass. That is what makes a missing
+     * Mountain (or a missing Bolt) in the opening hand cost one more turn rather than a failed run — and
+     * it means a refused reply cannot turn into an infinite prompt loop, because the loop only ever
+     * sends back what the server just offered.
+     *
+     * The two prompts a cast produces are answered in the order upstream asks them: `GAME_TARGET` first
+     * (`AbilityImpl.activate` chooses targets before paying), then `GAME_PLAY_MANA`, answered with the
+     * untapped Mountain — a `Mountain` has exactly one mana ability, so tapping it pays the whole cost.
+     */
+    private suspend fun castABoltAt(
+        opponentId: String,
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+    ): BoltObserved {
+        val observed = BoltObserved()
+        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                observed.last = state
+                state.stack.firstOrNull { opponentId in it.targets }?.let { observed.targetedStackEntry = it }
+            }
+            if (observed.targetedStackEntry != null) break
+            if (event is GameOver) break
+            if (event !is GamePrompted) continue
+
+            val state = event.state
+            val prompt = event.prompt
+            val playable = state.playable.map { it.objectId }.toSet()
+            val bolt = state.hand.firstOrNull { it.name == BOLT && it.id in playable }
+            val mountainInHand = state.hand.firstOrNull { it.name == MOUNTAIN && it.id in playable }
+            val untappedMountain =
+                state.players
+                    .singleOrNull { it.viewer }
+                    ?.battlefield
+                    ?.firstOrNull { it.card.name == MOUNTAIN && !it.tapped }
+            when {
+                prompt is SelectPrompt && bolt != null -> {
+                    sendUuid(session, gameId, bolt.id)
+                    observed.castSent = true
+                }
+                prompt is SelectPrompt && mountainInHand != null -> sendUuid(session, gameId, mountainInHand.id)
+                prompt is SelectPrompt -> withContext(Dispatchers.IO) { GameRelay.sendPlayerBoolean(session, gameId, false) }
+                // Only once we are the one casting: before that, a required GAME_TARGET is the server
+                // asking who chooses to go first, which `answer` already handles correctly.
+                prompt is TargetPrompt && observed.castSent && opponentId in prompt.targetIds ->
+                    sendUuid(session, gameId, opponentId)
+                prompt is PlayManaPrompt && untappedMountain != null -> sendUuid(session, gameId, untappedMountain.card.id)
+                else -> answer(session, gameId, prompt)
+            }
+            observed.answered++
+            if (observed.answered > MAX_ANSWERS_TO_CAST) {
+                throw AssertionError(
+                    "answered $MAX_ANSWERS_TO_CAST prompts without ever getting a targeted spell onto the stack. " +
+                        "cast=${observed.castSent} last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
+                )
+            }
+        }
+        return observed
+    }
+
+    /** Sends [id] as the reply to the outstanding prompt, on [Dispatchers.IO] like every other reply. */
+    private suspend fun sendUuid(
+        session: SessionImpl,
+        gameId: UUID,
+        id: String,
+    ) = withContext(Dispatchers.IO) { GameRelay.sendPlayerUuid(session, gameId, UUID.fromString(id)) }
 
     /** What the pass-and-observe loop saw, for the assertions above. */
     private class Observed {
@@ -413,6 +622,7 @@ class GameRelayIT {
         tableId: UUID,
         seatName: String,
         playerType: SeatPlayerTypeCode,
+        deck: DeckList = DECK,
     ): TableActionResult =
         withContext(Dispatchers.IO) {
             TableRelay.joinTable(
@@ -420,7 +630,7 @@ class GameRelayIT {
                 roomId,
                 tableId,
                 seatName = seatName,
-                deck = DECK,
+                deck = deck,
                 playerType = playerType,
                 skill = SkillLevelCode.CASUAL,
                 password = null,

@@ -571,6 +571,80 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `a spell on the stack carries every target it chose, in upstream's order (story 0086)`() {
+        // `CardView.addTargets` de-duplicates through a LinkedHashSet ("use linked, so it will use
+        // stable sort order"), so the order the server sends is meaningful and the mapper preserves it
+        // rather than sorting or set-ifying.
+        val creature = UUID.randomUUID()
+        val opponent = UUID.randomUUID()
+        val bolt =
+            GameViews.card(
+                name = "Lightning Bolt",
+                cardTypes = listOf(CardType.INSTANT),
+                superTypes = emptyList(),
+                subTypes = emptyList(),
+                targets = listOf(creature, opponent),
+            )
+
+        val mapped = GameViewMapper.mapCard(bolt)
+
+        assertEquals(listOf(creature.toString(), opponent.toString()), mapped.targets)
+    }
+
+    @Test
+    fun `an ability on the stack carries its target too, not only a spell (story 0086)`() {
+        // StackAbilityView inherits `targets` from CardView and fills it in `updateTargets`, so the
+        // mapper's single read covers both kinds of stack object -- no per-type branching, matching
+        // upstream's own flat list.
+        val target = UUID.randomUUID()
+        val trigger = GameViews.stackAbilityView(targets = listOf(target))
+
+        assertEquals(listOf(target.toString()), GameViewMapper.mapCard(trigger).targets)
+    }
+
+    @Test
+    fun `a target that is itself a stack entry arrives as a plain id like any other (story 0086)`() {
+        // Upstream resolves every target through `game.getObject(uuid)` and puts the ids in one flat
+        // list, so countering a spell targets a *stack* object and looks no different on the wire. The
+        // renderer joins the id against the snapshot; the mapper does not branch on what it points at.
+        val bolt =
+            GameViews.card(
+                name = "Lightning Bolt",
+                cardTypes = listOf(CardType.INSTANT),
+                superTypes = emptyList(),
+                subTypes = emptyList(),
+            )
+        val counterspell =
+            GameViews.card(
+                name = "Counterspell",
+                cardTypes = listOf(CardType.INSTANT),
+                superTypes = emptyList(),
+                subTypes = emptyList(),
+                targets = listOf(bolt.id),
+            )
+
+        val snapshot = GameViewMapper.map(GameViews.game(stack = listOf(bolt, counterspell)))
+        val mappedCounterspell = snapshot.stack.single { it.name == "Counterspell" }
+
+        assertEquals(listOf(bolt.id.toString()), mappedCounterspell.targets)
+        assertTrue(
+            snapshot.stack.any { it.id == mappedCounterspell.targets.single() },
+            "the target id must resolve against the same snapshot -- that is the whole contract",
+        )
+    }
+
+    @Test
+    fun `a card that never targeted anything carries an empty target list, never a crash (story 0086)`() {
+        // Upstream allocates `targets` only inside `addTargets`, which it calls only while building a
+        // stack object -- so null is the ordinary case for a hand card or a battlefield permanent, and
+        // `orEmpty()` in the mapper is load-bearing rather than defensive decoration.
+        val forest = GameViews.card(name = "Forest")
+
+        assertNull(forest.targets, "the fixture must reproduce upstream's null, or this proves nothing")
+        assertTrue(GameViewMapper.mapCard(forest).targets.isEmpty())
+    }
+
+    @Test
     fun `a counter list upstream never populated maps to empty rather than throwing`() {
         // `CardView.counters` is left null unless the object actually has counters (upstream only
         // allocates the list when `Card.getCounters(game)` is non-empty), so null is the ordinary case

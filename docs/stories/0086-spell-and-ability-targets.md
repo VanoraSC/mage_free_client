@@ -37,7 +37,10 @@ stack arrives the same way a permanent does** — one flat id list, no per-kind 
 **In scope**
 - `GameCardView.targets: List<String>` in `:protocol`, defaulting to `emptyList()`.
 - `GameViewMapper` reading `CardView.getTargets()` for every card it maps, including stack entries.
-- Golden-file coverage and a live check that a real targeted spell arrives with its target.
+- The app-side half of the same thread: `GameCard.targets` in `:core:network`'s `GameState`, carried
+  by its own `GameViewMapper`. The objective is "from the server to the app", and a field that stops
+  at `:protocol` has not reached the app — nothing above `:core:network` can see a `:protocol` type.
+- A live check that a real targeted spell arrives with its target.
 
 **Out of scope**
 - Drawing anything. Targeting arrows are §3.1 and EPIC-19; this story ends at the data.
@@ -62,7 +65,11 @@ val targets: List<String> = emptyList(),
 
 ```kotlin
 // :bridge — GameViewMapper.mapCard
-targets = card.targets.orEmpty().filterNotNull().map(UUID::toString),
+targets =
+    card.targets
+        .orEmpty()
+        .filterNotNull()
+        .map(UUID::toString),
 ```
 
 `targets` is `null` on a `CardView` that never had `addTargets` called, which is the ordinary case
@@ -83,28 +90,47 @@ change; no version bump, and an older app ignores it.
 1. Add `targets` to `GameCardView` with its KDoc, saying what the ids reference and that a stack
    target may itself be a stack entry.
 2. Map it in `GameViewMapper.mapCard`.
-3. Extend the `GameViews.kt` fixture builder so a card can be given targets.
-4. Regenerate the affected goldens with `UPDATE_GOLDEN=1` and read the diff before committing it.
+3. Extend the `GameViews.kt` fixture builder so a card can be given targets — leaving the field unset
+   by default, because upstream's `null` is the ordinary case and a fixture that pre-fills it would
+   hide the null path.
+4. Carry the same field through `:core:network`'s `GameCard` and its own mapper.
+5. No golden to regenerate: the only committed golden is `chat_talk.json`, and no game-state golden
+   exists. The mapper tests are the drift detector here.
 
 ## 7. Testing & verification
 
-- **Proven failing first (standard 1):** the mapper test asserting a targeted stack entry arrives
-  with its target ids must be shown failing against a mapper that drops the field, then passing.
-  A golden that was regenerated without ever being wrong proves nothing.
-- **Unit:** `GameViewMapperTest` — a `CardView` with two targets maps to both ids in order; a
-  `CardView` with `targets == null` maps to `emptyList()`, not to a crash.
-- **Live:** against the reference server, cast a spell targeting an opponent's creature and assert
-  the resulting `GameStateSnapshot` carries that permanent's id in the stack entry's `targets`. This
-  is the step that proves the server actually populates the field on the path we read.
+- **Proven failing first (standard 1):** three bridge mapper tests and the `:core:network` fold test
+  were each run against a mapper that drops the field and seen to fail, then pass. The live test was
+  put through the same treatment — with `targets` mapped to `emptyList()` it fails on the real
+  server, so it is discriminating rather than merely green.
+- **Unit (`:bridge`):** `GameViewMapperTest` — a spell with two targets maps to both ids in upstream
+  order; a `StackAbilityView` carries its target too (one read covers both stack object kinds); a
+  target that is itself a stack entry is a plain id that resolves inside the same snapshot; a card
+  with `targets == null` maps to `emptyList()`, not to a crash.
+- **Unit (`:protocol`):** the list round-trips in order, and a frame from a bridge older than this
+  story decodes with no targets — the additive-compatibility promise, asserted rather than asserted
+  about.
+- **Unit (`:core:network`):** `GameEventFoldTest` — the ids survive the fold and resolve against the
+  same snapshot; a card that targets nothing folds to an empty list.
+- **Live:** `GameRelayIT` casts a real `Lightning Bolt` at the AI seat against the reference server
+  and reads the target id back off the pushed snapshot. This is the step that proves the *server*
+  populates the field on the path we read. The target is a **player**, chosen by the test from the
+  server's own `GAME_TARGET` candidates and asserted by identity — deterministic, and it exercises
+  precisely the "one flat list, no per-kind branching" property the mapper claims. Targeting a
+  creature would have meant waiting for the AI to put one on the board, which is an AI decision, not
+  a fact about the field.
 - **Eyes-on:** none. This story renders nothing; the live test is the verification.
 
 ## 8. Acceptance criteria
 
-- [ ] `GameCardView.targets` exists, defaults to empty, and is documented.
-- [ ] `GameViewMapper` populates it for stack entries and leaves it empty elsewhere.
-- [ ] The mapper test was proven failing against a dropped field before passing.
-- [ ] A live targeted cast against the reference server arrives with the target id.
-- [ ] `./gradlew check` passes; goldens updated deliberately, with the diff reviewed.
+- [x] `GameCardView.targets` exists, defaults to empty, and is documented.
+- [x] `GameViewMapper` populates it for stack entries and leaves it empty elsewhere.
+- [x] The mapper tests were proven failing against a dropped field before passing — including the
+      live one.
+- [x] A live targeted cast against the reference server arrives with the target id.
+- [x] The field reaches the app: `GameState`'s `GameCard` carries it.
+- [x] `./gradlew check` and `:bridge:check` pass (the latter with `XMAGE_SERVER` set, so the live
+      tests really ran); no golden needed regenerating.
 
 ## 9. References
 

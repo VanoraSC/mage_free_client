@@ -193,6 +193,13 @@ data class GamePlayer(
  * @property transformed upstream `CardView.isTransformed()` (story 0076) — the live "is this permanent
  *   currently showing its back face" fact. `false` for anything that is not a permanent, and for an
  *   untransformed permanent. This is the signal for which face's art to request, never [alternateName].
+ * @property targets what this object is pointing at (story 0086), from upstream `CardView.getTargets()`
+ *   — the ids of every chosen target of a spell or ability on the stack, de-duplicated and in
+ *   upstream's own stable order. **Ids into the same [GameState]**: a battlefield permanent, a player,
+ *   or another entry on the [GameState.stack], since upstream resolves them all through
+ *   `game.getObject(uuid)` into one flat list. Resolving an id to the object it names is the
+ *   renderer's job — everything it could name is already in the same snapshot. Empty for anything that
+ *   is not a targeting stack object, which is most cards.
  */
 data class GameCard(
     val id: String,
@@ -210,6 +217,7 @@ data class GameCard(
     val counters: List<GameCounter> = emptyList(),
     val alternateName: String? = null,
     val transformed: Boolean = false,
+    val targets: List<String> = emptyList(),
 )
 
 /**

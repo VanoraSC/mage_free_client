@@ -23,6 +23,7 @@ import magefree.protocol.GameStateView
 import magefree.protocol.GameZoneView
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.TurnPhaseCode
+import java.util.UUID
 
 /**
  * The `mage.view.GameView` → app-schema [GameStateView] projection (story 0051) — the single place the
@@ -241,6 +242,25 @@ public object GameViewMapper {
      * face's art with no flip button) were all one mistake: treating `alternateName != null` as "is
      * this currently transformed," when upstream never uses it that way anywhere, including in its own
      * client. [CardView.isTransformed] already answers that question directly and needs no rederiving.
+     *
+     * **`targets` (story 0086) is one flat id list, read straight — no per-kind branching.** Upstream
+     * builds it in `CardView.addTargets(Targets, Effects, Ability, Game)`, whose own comment is *"need
+     * only unique targets for arrow drawing"*: it takes `target.getTargets()` for every `Target` that
+     * `isChosen(game)`, adds every effect's `TargetPointer.getTargets(game, source)` (so a mode that
+     * declares no target of its own still resolves through the pointer), and de-duplicates through a
+     * `LinkedHashSet` — *"use linked, so it will use stable sort order"*. The order upstream sends is
+     * therefore meaningful and is preserved here.
+     *
+     * **Reachability (verification standard 2) — what populates it.** Two call sites, and both are
+     * stack objects: `CardView`'s own constructor for a `Spell` (per selected mode, when that mode has
+     * targets), and `StackAbilityView.updateTargets` for an ability. `CardsView` also calls it when
+     * wrapping abilities for the ordering prompt. Nothing else does — so `targets` is **null** on a
+     * hand card, a battlefield permanent, or an untargeted spell, which is why `orEmpty()` is
+     * load-bearing here exactly as it is for `counters`.
+     *
+     * The ids are resolved upstream through `game.getObject(uuid)`, so a target that is itself a spell
+     * on the stack (a counterspell's target) arrives the same way a permanent does. Joining an id back
+     * to the object it names is the renderer's job — every candidate is already in the same snapshot.
      */
     public fun mapCard(card: CardView): GameCardView =
         GameCardView(
@@ -273,6 +293,14 @@ public object GameViewMapper {
             alternateName = card.alternateName,
             // Story 0076: upstream's own field for "which face is currently up" — see mapCard's KDoc.
             transformed = card.isTransformed,
+            // Story 0086: what this object is pointing at — see mapCard's KDoc. `orEmpty()` is
+            // load-bearing: upstream allocates the list only inside `addTargets`, so null is the
+            // ordinary case for everything that is not a targeting stack object.
+            targets =
+                card.targets
+                    .orEmpty()
+                    .filterNotNull()
+                    .map(UUID::toString),
         )
 
     /** The nested source `CardView` for an `AbilityView`/`StackAbilityView`, `null` for anything else. */
