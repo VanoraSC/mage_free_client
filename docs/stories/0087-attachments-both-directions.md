@@ -42,6 +42,8 @@ implemented from `attachedTo` alone; it needs `attachments` on the host.
 - `GamePermanentView.attachments: List<String>`, `attachedToPermanent: Boolean`,
   `attachedControllerDiffers: Boolean`.
 - `GameViewMapper.mapPermanent` reading all three.
+- The same three on `:core:network`'s `GamePermanent`, carried by its own mapper — same reason as
+  story 0086: a field that stops at `:protocol` has not reached the app.
 
 **Out of scope**
 - Rendering attachments as relationships, and the piling rule that consumes them. §7.4 / EPIC-19.
@@ -62,13 +64,33 @@ val attachedControllerDiffers: Boolean = false,
 
 ```kotlin
 // :bridge — GameViewMapper.mapPermanent
-attachments = permanent.attachments.orEmpty().filterNotNull().map(UUID::toString),
+attachments =
+    permanent.attachments
+        .orEmpty()
+        .filterNotNull()
+        .map(UUID::toString),
 attachedToPermanent = permanent.isAttachedToPermanent,
-attachedControllerDiffers = permanent.isAttachedControllerDiffers,
+attachedControllerDiffers = permanent.isAttachedToDifferentlyControlledPermanent,
 ```
 
-Check the exact accessor names against `PermanentView` before writing them; upstream mixes `is`/`get`
-prefixes and the Kotlin property view differs accordingly. **Read the class, do not guess.**
+**The last accessor is not named after its field, and reading the class is what caught it.** The field
+is `attachedControllerDiffers`; the getter is `isAttachedToDifferentlyControlledPermanent()`. There is
+no `isAttachedControllerDiffers`.
+
+**`attachedControllerDiffers` is narrower than its name.** Upstream computes both flags inside a single
+`game.getPermanent(attachedTo)` lookup:
+
+```java
+if (attachment != null) {
+    attachedToPermanent = true;
+    attachedControllerDiffers = !attachment.getControllerId().equals(permanent.getControllerId());
+}
+```
+
+So it is **always false when the host is a player** — a Curse on an opposing player included. It
+answers "is the host a permanent someone else controls", never "is the host someone else's". That is
+what the protocol KDoc says, because a consumer that read it the other way would be wrong in exactly
+the case it cared about.
 
 **Reachability (standard 2).** `attachments` is populated by `PermanentView`'s constructor from
 `permanent.getAttachments()` on every snapshot; `attachedToPermanent` and
@@ -85,29 +107,56 @@ live test; it is the cheapest possible check that both fields were read off the 
 2. Add the three fields to `GamePermanentView` with KDoc, including why the reverse direction exists
    and what `attachedControllerDiffers` means.
 3. Map them in `mapPermanent`.
-4. Extend `GameViews.kt` so a fixture permanent can carry attachments and the two flags.
-5. Regenerate goldens with `UPDATE_GOLDEN=1`; read the diff.
+4. Extend `GameViews.kt` so a fixture permanent can carry attachments and the two flags, leaving
+   `attachments` unset by default — upstream's constructor never sends it null, but the serialization
+   constructor the fixtures use does, which is the sparse-view path the mapper has to survive.
+5. Carry the same three through `:core:network`'s `GamePermanent` and its mapper.
+6. No golden to regenerate: the only committed golden is `chat_talk.json`.
 
 ## 7. Testing & verification
 
-- **Proven failing first (standard 1):** the mapper test asserting an Aura's host lists it in
-  `attachments` must fail against a mapper that drops the field, then pass.
-- **Unit:** `GameViewMapperTest` — a permanent with two attachments maps both ids; a permanent with
-  `attachments == null` maps to `emptyList()`; both booleans round-trip.
-- **Live:** against the reference server, attach an Aura to your own creature and assert the
-  round-trip invariant above with `attachedControllerDiffers == false`. Then attach one to the
-  **opponent's** creature and assert `attachedControllerDiffers == true` — that second case is the
-  one this story exists for and the one a fixture cannot prove.
+- **Proven failing first (standard 1):** two `:bridge` mapper tests and the `:core:network` fold test
+  each fail against a mapper that drops the fields. So does the live test — proven three times over,
+  once per field, each break producing a *different* failure:
+
+  | Break | Live failure |
+  |---|---|
+  | `attachments = emptyList()` | "the host must list the Aura back" |
+  | `attachedControllerDiffers = false` | "never saw a Rancor on the opponent's creature" |
+  | `attachedToPermanent = false` | "never saw a Rancor on our own creature" |
+
+- **Unit (`:bridge`):** a host lists its attachments in upstream's order; an Aura on an opponent's
+  creature is flagged and one on your own is not; an unattached permanent carries no attachment state
+  at all, including from a sparse view where `attachments` is null.
+- **Unit (`:protocol`):** both directions round-trip, and a frame from an older bridge decodes with
+  both flags false — "the bridge said nothing" is never "your Aura is on their creature".
+- **Unit (`:core:network`):** the relationship survives the fold *across two players' battlefields*,
+  which is the shape the differing-controller case actually has.
+- **Live:** `GameRelayIT` plays a mono-green game and casts `Rancor` twice — on our own creature and
+  on the opponent's — asserting the round-trip invariant both times, plus
+  `attachedControllerDiffers == false` then `== true`.
+
+  **The detector filters to Auras we control, and the first run is why.** Both seats hold the same
+  deck, so the AI casts Rancor too; without that filter the test matched *its* Aura on *its* own
+  creature within eight seconds and failed asserting the host was on our battlefield. The filter is
+  what makes the assertions about the casts this test made.
+
+  The opponent's creature is the one thing not ours to arrange — but it is not a coin flip either:
+  the AI holds twenty creatures in sixty cards and plays one on essentially every turn it can, and
+  the loop simply keeps passing until one is there.
 - **Eyes-on:** none. Nothing renders yet.
 
 ## 8. Acceptance criteria
 
-- [ ] All three fields exist on `GamePermanentView`, default safely, and are documented.
-- [ ] `GameViewMapper` populates them from the accessors read off `PermanentView`.
-- [ ] The mapper test was proven failing before passing.
-- [ ] The live test covers both the same-controller and differing-controller cases, and asserts the
-      `attachedTo` / `attachments` round-trip invariant.
-- [ ] `./gradlew check` passes; goldens updated deliberately.
+- [x] All three fields exist on `GamePermanentView`, default safely, and are documented.
+- [x] `GameViewMapper` populates them from the accessors read off `PermanentView` — including
+      `isAttachedToDifferentlyControlledPermanent()`, which is not named after its field.
+- [x] The mapper tests were proven failing before passing, and the live test once per field.
+- [x] The live test covers both the same-controller and differing-controller cases, and asserts the
+      `attachedTo` / `attachments` round-trip invariant in both.
+- [x] The fields reach the app: `GameState`'s `GamePermanent` carries them.
+- [x] `./gradlew check` and `:bridge:check` pass (the latter with `XMAGE_SERVER` set, so the live
+      tests really ran); no golden needed regenerating.
 
 ## 9. References
 

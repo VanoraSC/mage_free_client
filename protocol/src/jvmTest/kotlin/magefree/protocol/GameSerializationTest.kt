@@ -415,6 +415,41 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `a permanent's attachments round-trip in both directions`() {
+        // Story 0087. The host's list and the attachment's own back-pointer are separate fields and
+        // both have to survive: a board that has one but not the other cannot draw the relationship.
+        val aura =
+            GamePermanentView(
+                card = GameCardView(id = "perm-2", name = "Rancor"),
+                attachedTo = "perm-1",
+                attachedToPermanent = true,
+                attachedControllerDiffers = true,
+            )
+        val host = GamePermanentView(card = GameCardView(id = "perm-1", name = "Grizzly Bears"), attachments = listOf("perm-2"))
+
+        val roundAura = json.decodeFromString<GamePermanentView>(json.encodeToString(aura))
+        val roundHost = json.decodeFromString<GamePermanentView>(json.encodeToString(host))
+
+        assertEquals("perm-1", roundAura.attachedTo)
+        assertTrue(roundAura.attachedToPermanent)
+        assertTrue(roundAura.attachedControllerDiffers)
+        assertEquals(listOf("perm-2"), roundHost.attachments)
+    }
+
+    @Test
+    fun `a permanent frame from a bridge older than story 0087 decodes with no attachment state`() {
+        // Additive-only, per ProtocolVersion. Both flags must default to false rather than to
+        // "probably": "the bridge said nothing" is never "your aura is on their creature".
+        val frame = """{"card":{"id":"perm-1","name":"Forest"}}"""
+
+        val decoded = json.decodeFromString<GamePermanentView>(frame)
+
+        assertTrue(decoded.attachments.isEmpty())
+        assertFalse(decoded.attachedToPermanent)
+        assertFalse(decoded.attachedControllerDiffers)
+    }
+
+    @Test
     fun `a card type this build has never heard of decodes to UNKNOWN instead of throwing`() {
         // The list form of the forward-compat promise: upstream keeps adding card types (BATTLE and
         // DUNGEON are recent), and `ignoreUnknownKeys` does not cover an unknown *value* inside a list.

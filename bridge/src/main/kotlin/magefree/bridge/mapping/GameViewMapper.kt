@@ -119,7 +119,26 @@ public object GameViewMapper {
                     .map(::mapPermanent),
         )
 
-    /** Maps one battlefield `PermanentView`: the card plus the battlefield-only state. */
+    /**
+     * Maps one battlefield `PermanentView`: the card plus the battlefield-only state.
+     *
+     * **Attachments both ways (story 0087).** `attachedTo` alone forces every host to scan every
+     * battlefield for anything pointing at it; upstream already computed the reverse list once per
+     * snapshot, so [GamePermanentView.attachments] carries it rather than the client rederiving it.
+     *
+     * **The two flags are read off accessors whose names do not match their fields**, which is why
+     * `PermanentView` was read rather than guessed at:
+     * - `attachedToPermanent` ← `isAttachedToPermanent()`.
+     * - `attachedControllerDiffers` ← **`isAttachedToDifferentlyControlledPermanent()`**.
+     *
+     * **Reachability (verification standard 2/5).** All three are written unconditionally by
+     * `PermanentView`'s constructor for every battlefield permanent: `attachments` from
+     * `new ArrayList<>(permanent.getAttachments())` — so upstream never sends it null, though the
+     * `orEmpty()` still covers a sparse view — and both flags from a real `game.getPermanent(attachedTo)`
+     * lookup. That lookup is also why `attachedControllerDiffers` is **always false when the host is a
+     * player**: upstream computes it inside the "the host resolved to a permanent" branch. It answers
+     * "is the host a permanent someone else controls", not "is the host someone else's".
+     */
     private fun mapPermanent(permanent: PermanentView): GamePermanentView =
         GamePermanentView(
             card = mapCard(permanent),
@@ -129,6 +148,13 @@ public object GameViewMapper {
             summoningSickness = permanent.hasSummoningSickness(),
             damage = permanent.damage,
             attachedTo = permanent.attachedTo?.toString(),
+            attachments =
+                permanent.attachments
+                    .orEmpty()
+                    .filterNotNull()
+                    .map(UUID::toString),
+            attachedToPermanent = permanent.isAttachedToPermanent,
+            attachedControllerDiffers = permanent.isAttachedToDifferentlyControlledPermanent,
             controlledByViewer = permanent.isControlled,
         )
 

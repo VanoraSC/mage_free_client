@@ -224,6 +224,11 @@ internal object GameViewMapper {
             hasSummoningSickness = summoningSickness,
             damage = damage,
             attachedTo = attachedTo,
+            // Story 0087: both directions, because only both together describe the relationship --
+            // and the bridge already read them off one `PermanentView`, so they agree by construction.
+            attachments = attachments,
+            isAttachedToPermanent = attachedToPermanent,
+            attachedControllerDiffers = attachedControllerDiffers,
             isControlledByViewer = controlledByViewer,
         )
 
