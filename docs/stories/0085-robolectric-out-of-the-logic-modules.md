@@ -6,7 +6,13 @@
 ## 1. Objective
 
 Turn the seven Robolectric tests in `:core:cards` and `:core:decks` into plain JVM tests running on
-the `jvm()` target, and leave the other five — which are Compose tests — exactly where they are.
+the `jvm()` target, and leave the five Compose tests exactly where they are.
+
+**Widened once in flight, at Pete's direction (2026-08-25): `:core:network`'s suite moved too.** Its
+216 non-Android tests were never Robolectric tests — they were plain JVM work sitting in an Android
+source set because that was the only test source set the module had. Leaving them would have left the
+portability detector covering a third of `:core:*`. 264 tests now run on the `jvm()` target; three
+stay on Android because the Android edge is their subject.
 
 This is the story that makes Phase 0's claim *checkable*: a `:core:*` test suite that runs on the JVM
 is a portability regression detector rather than a second copy of the Android tests.
@@ -76,8 +82,9 @@ not Compose tests and not in `:feature:game`.
 **Out of scope**
 - The five Compose Robolectric tests. Not moved, not converted, not run on desktop.
 - **CI.** The repository has none and this story does not add one; `./gradlew check` is the trigger.
-- `:core:network`'s suite. Its 216 tests are almost all pure Kotlin and would move for the same
-  reasons, but they were never Robolectric tests and this story is scoped to the ones that were.
+- ~~`:core:network`'s suite.~~ **Now in scope** (Pete, 2026-08-25): its 216 non-Android tests moved
+  too. They were never Robolectric tests, but they were plain JVM work sitting in an Android source
+  set, and leaving them there would have left the portability detector covering a third of `:core:*`.
 - Rewriting what any test asserts. A moved test that also changed its assertions proves nothing
   about the move.
 - Adding new test coverage. This is a relocation.
@@ -133,9 +140,14 @@ trap worth knowing about before concluding a test is decorative.
 
 ## 6. Acceptance criteria
 
-- [ ] The seven listed tests run on the `jvm()` target with their assertions unchanged.
-- [ ] Each is proven to still fail when the behaviour it covers is broken.
-- [ ] The executed test count in `:core:cards` and `:core:decks` matches the pre-move count.
+- [ ] The seven listed tests, plus `:core:network`'s 216, run on the `jvm()` target with their
+      assertions unchanged.
+- [ ] Each is proven to still fail when the behaviour it covers is broken. For `:core:network`'s bulk
+      move this is one break per shared production seam rather than one per class, with every moved
+      class recorded as failing under at least one — except the four env-gated live IT classes, which
+      skip without a reference bridge and are unchanged by the move.
+- [ ] The executed test count in `:core:cards`, `:core:decks` and `:core:network` matches the
+      pre-move count.
 - [ ] Robolectric is no longer a dependency of `:core:cards`.
       **Corrected:** this criterion originally said "of either module". `:core:decks` keeps
       Robolectric, and should: `ExistingDeckDatabaseTest` and `FormatBundleLoaderTest` (stories 0083
