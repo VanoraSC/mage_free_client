@@ -44,13 +44,13 @@ import org.junit.Test
  * 2. **every prompt kind is answerable, through one seam** — [GameBoardViewModel.act] is the only
  *    translator from a gesture to a client verb, and the assertions are on the fake's recorded call
  *    list, so a wrong verb or a silently-dropped action would have to show up there to ship;
- * 3. **target picks are sent one at a time** (§17.2) — the server re-prompts with an updated count and
+ * 3. **target picks are sent one at a time** — the server re-prompts with an updated count and
  *    a narrowed candidate set after each pick, so a client that held picks locally could assemble a
  *    combination the server rejects. The player's confirmation is the final *done*;
- * 4. **priority is passed through one policy seam** (§14.1) — proven live in both directions: the
+ * 4. **priority is passed through one policy seam** — proven live in both directions: the
  *    shipped manual policy never passes on its own, and a policy that says to pass makes the app pass
  *    with no UI interaction at all, which is what makes the auto-pass hook real rather than decorative;
- * 5. **the visibility toggle never hides that the server is waiting** (§16.3).
+ * 5. **the visibility toggle never hides that the server is waiting**.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class GameBoardViewModelTest {
@@ -66,7 +66,7 @@ class GameBoardViewModelTest {
         Dispatchers.resetMain()
     }
 
-    // ---- joining and observing (story 0055) ---------------------------------------------------------
+    // ---- joining and observing ---------------------------------------------------------
 
     @Test
     fun `opens the subscription before joining, so the first snapshot cannot be missed`() =
@@ -259,7 +259,7 @@ class GameBoardViewModelTest {
     @Test
     fun `sends each target pick as it is made and never batches them`() =
         runTest {
-            // §17.2, verified live. Two picks must arrive as two calls, in order, *before* the done —
+            // Verified live. Two picks must arrive as two calls, in order, *before* the done —
             // a client that held them and flushed on confirm would produce a different sequence.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -272,7 +272,7 @@ class GameBoardViewModelTest {
             // here rather than only at the end: a client that held the picks locally and sent them on
             // confirm produces the *same final sequence*. What it cannot produce is the pick already
             // being at the server before the player has confirmed anything — which is exactly the
-            // property §17.2 requires, because the server's next prompt is computed from it.
+            // property that requires, because the server's next prompt is computed from it.
             assertEquals(
                 "each pick must reach the server as it is made, before any confirmation",
                 listOf("target:$GAME_ID:o-1"),
@@ -323,7 +323,7 @@ class GameBoardViewModelTest {
     @Test
     fun `cancels at the target step, where the rewind is proven`() =
         runTest {
-            // §17.1: declining the target prompt returned the Bolt to hand, cleared the stack and left
+            // Declining the target prompt returned the Bolt to hand, cleared the stack and left
             // both Mountains untapped.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -339,7 +339,7 @@ class GameBoardViewModelTest {
     @Test
     fun `cancels at the mana step, where the rewind was first proven`() =
         runTest {
-            // §6.4a: declining the mana step returned the Hawk to hand (7), cleared the stack and left
+            // Declining the mana step returned the Hawk to hand (7), cleared the stack and left
             // both Plains untapped.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -377,7 +377,7 @@ class GameBoardViewModelTest {
     @Test
     fun `a cancel says the server is rewinding, and never that the spell was not cast`() =
         runTest {
-            // `playObject` puts the spell on the stack immediately (CR 601 / §16.5) and the rewind is the
+            // `playObject` puts the spell on the stack immediately and the rewind is the
             // server's, arriving on a later snapshot. The board must not claim otherwise in between.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -400,7 +400,7 @@ class GameBoardViewModelTest {
     @Test
     fun `the cast context follows the server's questions, one continuous act`() =
         runTest {
-            // §6.4: the spell must not vanish behind each new question.
+            // The spell must not vanish behind each new question.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
             viewModel.observe(GAME_ID)
@@ -426,7 +426,7 @@ class GameBoardViewModelTest {
     @Test
     fun `the shipped policy never passes on its own, however many times the server asks`() =
         runTest {
-            // §9.1/§14.1: everything explicit and manual. A board that passed by itself would be playing
+            // Everything explicit and manual. A board that passed by itself would be playing
             // the game for the player.
             val client = FakeGameClient()
             val viewModel = viewModel(client, ManualPassPolicy)
@@ -456,7 +456,7 @@ class GameBoardViewModelTest {
     @Test
     fun `a policy that passes answers the select with no UI interaction at all`() =
         runTest {
-            // The proof that the auto-pass hook of §14.1 is load-bearing rather than decorative: swapping
+            // The proof that the auto-pass hook is load-bearing rather than decorative: swapping
             // the policy — the single thing `BoardModule` binds — changes *when* the app answers, and
             // nothing else has to change.
             val client = FakeGameClient()
@@ -519,7 +519,7 @@ class GameBoardViewModelTest {
     @Test
     fun `hiding the controls never hides that the server is waiting on you`() =
         runTest {
-            // §16.3's hard constraint. The priority statement belongs to the board, not to the controls,
+            // the hard constraint. The priority statement belongs to the board, not to the controls,
             // so it cannot be taken away by the toggle — including in the state 0055 added `Asked` for:
             // the server asking one seat to choose who goes first, *before* priority exists.
             val client = FakeGameClient()
@@ -586,7 +586,7 @@ class GameBoardViewModelTest {
     @Test
     fun `tapping a card raises it and sends nothing, and tapping it again puts it down`() =
         runTest {
-            // §5.1: the first tap raises the card and shows its detail. Committing is the *second*
+            // The first tap raises the card and shows its detail. Committing is the *second*
             // gesture, on the detail's own button — which is what guards against a misplay.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -674,13 +674,13 @@ class GameBoardViewModelTest {
             assertEquals(listOf("choice:$GAME_ID:R:false", "choice:$GAME_ID:R:true"), client.calls)
         }
 
-    // ---- combat: declaring, and the pairing question that may follow (story 0061) -------------------
+    // ---- combat: declaring, and the pairing question that may follow -------------------
 
     @Test
     fun `a declaration is answered from the prompt's own ids, with playable empty`() =
         runTest {
             // The whole defect in one assertion: with `playable` empty — which is how the server really
-            // sends a declaration (§7.2) — the controls still offer the creatures, and a tap on one is a
+            // sends a declaration — the controls still offer the creatures, and a tap on one is a
             // `chooseTarget`.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
@@ -722,7 +722,7 @@ class GameBoardViewModelTest {
     fun `a pairing question is answerable, and says which creature it is about`() =
         runTest {
             // Upstream asks this only when the choice is real: `selectDefender` assigns silently with one
-            // legal defender, `selectBlockers` with one blockable attacker (§7.5). It arrives as an
+            // legal defender, `selectBlockers` with one blockable attacker. It arrives as an
             // ordinary `GAME_TARGET`, which 0057 already answers — so what 0061 adds is only the
             // sentence saying *which* creature the question is about.
             val client = FakeGameClient()
@@ -789,7 +789,7 @@ class GameBoardViewModelTest {
             assertEquals(listOf("cancel:$GAME_ID"), client.calls)
         }
 
-    // ---- story 0077: manual peek at a DFC's other face ----------------------------------------------
+    // ---- manual peek at a DFC's other face ----------------------------------------------
 
     @Test
     fun `tapping a double-faced hand card offers a flip control once the catalog answers`() =
@@ -1014,7 +1014,7 @@ class GameBoardViewModelTest {
         )
 
     /**
-     * A declaration exactly as the server sends one (§7.2): the creature in `possibleAttackers`, and
+     * A declaration exactly as the server sends one: the creature in `possibleAttackers`, and
      * **`playable` empty**. The viewer's seat carries a Goblin Token at `y-1` so the pairing context has
      * a name to report.
      */
@@ -1043,7 +1043,7 @@ class GameBoardViewModelTest {
                 ),
         )
 
-    /** The blocking half (§7.3): `possibleBlockers`, and no shortcut. */
+    /** The blocking half: `possibleBlockers`, and no shortcut. */
     private fun declareBlockersState() =
         declareAttackersState().copy(
             step = PhaseStep.DeclareBlockers,

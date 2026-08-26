@@ -17,7 +17,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * The exact-name catalog lookup (story 0042, defect D) over the **real bundled** database, opened the
+ * The exact-name catalog lookup over the **real bundled** database, opened the
  * way the device opens it.
  *
  * This is where the "indexable" claim is actually checked: `EXPLAIN QUERY PLAN` must show SQLite
@@ -137,7 +137,7 @@ class CardCatalogExactNameTest {
     /**
      * The `EXPLAIN QUERY PLAN` rows for [sql], flattened to one string.
      *
-     * **Read straight through the driver (story 0085).** Story 0082 had to go around it: on Android,
+     * **Read straight through the driver.** On Android that is not possible:
      * `AndroidSQLiteStatement` splits into a SELECT variant and an "other" variant, an
      * `EXPLAIN QUERY PLAN` lands in the latter, and `step()` returns false without producing rows —
      * so the plan was read through `android.database.sqlite.SQLiteDatabase` against the same prepared
@@ -146,7 +146,7 @@ class CardCatalogExactNameTest {
      * indirection rather than adding one.
      *
      * These two tests are the only thing proving the NOCASE index is actually *used* rather than
-     * merely present (story 0042 defect D), so dropping them was never an option. A query plan is a
+     * merely present, so dropping them was never an option. A query plan is a
      * property of SQLite and of the database file, not of the API wrapper in front of them.
      */
     private fun queryPlan(

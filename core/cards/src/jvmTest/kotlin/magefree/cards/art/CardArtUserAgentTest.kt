@@ -25,7 +25,7 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 
 /**
- * Story 0056 — the art client must identify itself.
+ * The art client must identify itself.
  *
  * Scryfall rejects generic client defaults: `User-Agent: okhttp/4.12.0` answers **HTTP 400**
  * (`generic_user_agent`), a descriptive one answers 302 → the image. [CardImageLoader] sent none, so
@@ -47,7 +47,7 @@ import java.util.concurrent.TimeUnit
 class CardArtUserAgentTest {
     private val context: PlatformContext = PlatformContext.INSTANCE
 
-    /** Story 0085: the JVM stand-in for the Android `Context.cacheDir` these tests used to write to. */
+    /** The JVM stand-in for the Android `Context.cacheDir`. */
     private val tempRoot: File = File(System.getProperty("java.io.tmpdir"), "magefree-art-test").apply { mkdirs() }
     private lateinit var scope: CoroutineScope
     private lateinit var diskDir: File
@@ -98,7 +98,7 @@ class CardArtUserAgentTest {
             policyRepository = CardArtCachePolicyRepository(dataStore),
             appScope = scope,
             ioDispatcher = Dispatchers.Unconfined,
-            // Story 0082: no test here asserts on the failure log, but the parameter is required so a
+            // no test here asserts on the failure log, but the parameter is required so a
             // loader can never be built that silently drops it.
             logWarning = { },
             diskCacheDirectory = diskDir.toOkioPath(),
@@ -139,7 +139,7 @@ class CardArtUserAgentTest {
 
     @Test
     fun `the default loader sends an Accept header on the wire`() {
-        // Found live (Pete, 2026-08-16): Scryfall's API rejects a request missing this header too —
+        // Scryfall's API rejects a request missing this header too —
         // "HTTP requests to api.scryfall.com must contain a User-Agent and Accept header" — with a
         // *different* HTTP 400 body than the generic-User-Agent case, so a User-Agent-only fix looks
         // complete (compiles, passes the User-Agent tests above) while still failing every request.
@@ -156,7 +156,7 @@ class CardArtUserAgentTest {
     fun `the User-Agent is not a generic client default`() {
         val userAgent = warmAndRecord().getHeader("User-Agent")!!
 
-        // Asserted positively, and story 0082 is why. This test used to check only
+        // Asserted positively rather than by absence. Checking only
         // `!startsWith("okhttp/")` — the one generic default that existed when the fetcher was
         // OkHttp-based. Moving to Ktor's CIO engine changed what "generic" looks like, and a
         // `ktor-client/...` default sailed straight through the old check while being exactly as

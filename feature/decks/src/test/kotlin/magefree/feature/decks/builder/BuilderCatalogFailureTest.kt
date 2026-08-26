@@ -34,7 +34,7 @@ import org.junit.Test
 import java.io.IOException
 
 /**
- * The builder must fail **soft** when the catalog behind its derived view fails (story 0042, defect B),
+ * The builder must fail **soft** when the catalog behind its derived view fails,
  * and — the part that matters most here — a derivation failure must never cost the user an edit.
  *
  * `load`, `addCard` and every mutation's `rebuild` read the bundled catalog inside bare

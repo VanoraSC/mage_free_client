@@ -18,7 +18,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import magefree.model.SessionEvent
 
 /**
- * The resume-aware, back-off/connectivity/lifecycle-aware reconnect loop (story 0024).
+ * The resume-aware, back-off/connectivity/lifecycle-aware reconnect loop.
  *
  * Wraps a [SessionRunner] in a cold `channelFlow` that:
  * - emits [SessionEvent.Connecting] for the first attempt and [SessionEvent.Reconnecting] before each
@@ -30,8 +30,8 @@ import magefree.model.SessionEvent
  *   carrying the [ResumeHandle] forward so the runner can `Resume` the parked session;
  * - **cuts a waiting back-off short** when connectivity returns or the app is refocused, and while
  *   backgrounded **relaxes** to waiting for the foreground instead of spinning attempts (the bridge
- *   holds the session per story 0023);
- * - **ends a running attempt as soon as connectivity is lost** (story 0050 defect B), instead of
+ *   holds the session);
+ * - **ends a running attempt as soon as connectivity is lost**, instead of
  *   reporting `Connected` over a dead radio until the socket read times out.
  *
  * The single [ResumeHandle] lives for the life of the flow, so a `resumeId` captured in one attempt is
@@ -99,7 +99,7 @@ class ReconnectingSession(
         }
 
     /**
-     * Runs one session attempt, **ending it the moment connectivity is lost** (story 0050 defect B).
+     * Runs one session attempt, **ending it the moment connectivity is lost**.
      *
      * Without this the loop only learned about a dead radio when the socket read eventually failed —
      * which, when the network vanishes without a FIN, is a TCP timeout away. Until then the app went on

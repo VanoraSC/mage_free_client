@@ -45,7 +45,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * **Story 0061's live verification**: combat declared end to end, through the real
+ * **the live verification**: combat declared end to end, through the real
  * [GameBoardViewModel], from the board's **own** controls.
  *
  * ## What makes this a verification and not a probe
@@ -55,20 +55,20 @@ import java.util.concurrent.CopyOnWriteArrayList
  * actually play combat?* — and so it is bound by two rules:
  *
  * 1. **Both seats are `GameBoardViewModel`s.** Combat is two assignment problems that never belong to
- *    the same player at the same moment (§7.4), so the only way to exercise both through the board is to
+ *    the same player at the same moment, so the only way to exercise both through the board is to
  *    have a board on each side: whichever seat is attacking declares attackers, and the other declares
  *    blockers on the same turn.
  * 2. **Nothing is answered from `GameState`.** Every id comes from [PromptControlsUi.pickableObjectIds]
  *    and every reply from an action the controls themselves published. The raw snapshot is observed, but
  *    only to *record* facts (`playable` at the moment of a declaration, the resulting `combat` groups)
- *    and to identify the one `Ask` that must be answered affirmatively (§7.6). A harness that reached
- *    into `possibleAttackers` directly would pass happily against the very defect this story fixes —
+ *    and to identify the one `Ask` that must be answered affirmatively. A harness that reached
+ *    into `possibleAttackers` directly would pass happily against the very defect this fixes —
  *    the ids were in the projection all along; what was missing was a surface.
  *
  * ## What it asserts
  *
  * - a declaration was reached, and the board offered creatures to declare — **while `playable` was
- *   empty**, which is the live confirmation of §7.2 and the whole shape of the defect;
+ *   empty**, which is the whole shape of the defect;
  * - the creature the board declared is the one the server then reports as attacking, in its own
  *   `CombatGroup` — so the tap really did reach the game and not merely the log;
  * - the board was never in both roles at once.
@@ -77,7 +77,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * before a declaration fails with a message saying so; re-run it rather than reading anything into it.
  * Everything the run saw is printed either way.
  *
- * ## The deck and the three stalls (§7.6)
+ * ## The deck and the three stalls
  * 24× `Mountain` (`10E` #376) + 36× `Dragon Fodder` (`ALA` #97): two 1/1 Goblins for `{1}{R}`, so both
  * seats have bodies within a couple of turns. Resolution is by **(setCode, collectorNumber)**. The three
  * stalls that otherwise eat a run are all handled below: the mana-pool *"Pass anyway?"* is answered
@@ -177,7 +177,7 @@ class CombatDeclarationIT {
 
                 // Kept running past the three asserted facts to give the **pairing** question room to
                 // arrive: with two attackers on the board a blocker could block either, which is
-                // exactly when `selectBlockers` stops assigning silently and asks (§7.5). It is not
+                // exactly when `selectBlockers` stops assigning silently and asks. It is not
                 // asserted, because whether it is ever ambiguous in a given game is upstream's call and
                 // not this board's — the point is that the board answers it if it comes.
                 val deadline = System.currentTimeMillis() + BUDGET_MS
@@ -212,7 +212,7 @@ class CombatDeclarationIT {
         }
 
         assertTrue(
-            "no declaration was reached inside the budget — reaching combat is nondeterministic (§7.6), so re-run rather " +
+            "no declaration was reached inside the budget — reaching combat is nondeterministic, so re-run rather " +
                 "than reading anything into this",
             sawAttackerDeclaration,
         )
@@ -225,7 +225,7 @@ class CombatDeclarationIT {
             "the creature declared from the board's own controls must be the one the server reports as attacking",
             declaredAttackerConfirmed,
         )
-        assertEquals("the board must never be in both of combat's roles at once (§7.4)", false, everOfferedBothRoles)
+        assertEquals("the board must never be in both of combat's roles at once", false, everOfferedBothRoles)
     }
 
     /** Records what the *server* says about combat, so the board's claims can be checked against it. */
@@ -247,7 +247,7 @@ class CombatDeclarationIT {
      * One seat, driven **only** through what the board publishes.
      *
      * The single place the raw snapshot is consulted for a decision is the mana-pool *"Pass anyway?"*
-     * (§7.6): it must be answered affirmatively or the game never advances, and the option that
+     *: it must be answered affirmatively or the game never advances, and the option that
      * identifies it is not something the controls carry. That is a harness limitation, not a board one —
      * a player reads the question.
      */
@@ -280,7 +280,7 @@ class CombatDeclarationIT {
 
             is PromptControlsUi.Targeting -> {
                 // A target arriving while a declaration is in flight **is** the pairing question
-                // upstream asks when the choice is genuinely ambiguous (§7.5).
+                // upstream asks when the choice is genuinely ambiguous.
                 state.declaration?.let { declaration ->
                     if (!sawPairingQuestion) {
                         transcript +=
@@ -299,7 +299,7 @@ class CombatDeclarationIT {
             }
 
             is PromptControlsUi.Priority -> {
-                // Lands before spells (§7.6): a seat that casts first strands itself mid-payment and
+                // Lands before spells: a seat that casts first strands itself mid-payment and
                 // silently retries forever. `manaCost` is null for a land, which is the only signal.
                 val offered =
                     state.board.hand.cards
@@ -313,7 +313,7 @@ class CombatDeclarationIT {
                 }
             }
 
-            // The sources come from the mana prompt's own offer, never from `possibleTargets` (§7.6).
+            // The sources come from the mana prompt's own offer, never from `possibleTargets`.
             is PromptControlsUi.Mana ->
                 controls.pickableObjectIds.firstOrNull()?.let(BoardAction::PlayManaSource)
                     ?: BoardAction.CancelPrompt
@@ -471,7 +471,7 @@ class CombatDeclarationIT {
         )
 
     private companion object {
-        /** Options key present only on upstream's auto-answerable "Pass anyway?" question (§7.6). */
+        /** Options key present only on upstream's auto-answerable "Pass anyway?" question. */
         const val AUTO_ANSWER = "autoAnswerMessage"
 
         const val BRIDGE_URL_ENV = "BRIDGE_URL"

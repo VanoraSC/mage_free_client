@@ -21,7 +21,7 @@ import magefree.decks.model.DeckEntry
  * [progress] and [cancel].
  *
  * Kept as a feature-local interface so [magefree.feature.decks.builder.BuilderViewModel] is unit-testable
- * against a fake; the production impl reuses story 0031's [ArtDownloadManager]/[ArtWarmer] unchanged.
+ * against a fake; the production impl reuses the [ArtDownloadManager]/[ArtWarmer] unchanged.
  */
 interface DeckArtDownloader {
     /** Live progress of the deck-scoped pre-download (shared shape with 0031's global one). */
@@ -35,7 +35,7 @@ interface DeckArtDownloader {
 }
 
 /**
- * Production [DeckArtDownloader]. It composes story 0031's public [ArtDownloadManager] with a
+ * Production [DeckArtDownloader]. It composes the public [ArtDownloadManager] with a
  * deck-scoped [PrefetchTargetSource] ([DeckPrefetchTargetSource]) and the app's [ArtWarmer] (the
  * `CardImageLoader`). Nothing in `:core:cards` is modified: the manager, warmer, policy honoring,
  * progress model, and resume/cancel behavior are all reused as-is — only the *target set* differs.
@@ -84,7 +84,7 @@ class DeckPrefetchTargetSource(
         val current = deck ?: return emptyList()
         val entries = current.main + current.sideboard
         // One batched, indexable exact-name lookup for the whole deck rather than a substring scan per
-        // entry (story 0042, defect D).
+        // entry.
         val resolved = catalog.cardsByName(entries.map { it.cardName })
         val out = LinkedHashSet<CardArtRequest>()
         for (entry in entries) {

@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test
 import java.util.UUID
 
 /**
- * Hermetic tests for the table-lifecycle branches of [CallbackMapper] (story 0036). `TableClientMessage`
+ * Hermetic tests for the table-lifecycle branches of [CallbackMapper]. `TableClientMessage`
  * is a plain `mage-common` builder type, so a real compressed callback is built in memory (as
  * [ClientCallback]'s 3-arg constructor compresses the payload), run through the mapper, and asserted —
  * proving each new event maps correctly and that the mapper **never throws** on a malformed/unknown
@@ -97,7 +97,7 @@ class TableCallbackMapperTest {
 
     @Test
     fun `an unmapped table-adjacent callback method maps to null`() {
-        // START_TOURNAMENT also carries a TableClientMessage but is out of scope (Epic 8) — unmapped.
+        // START_TOURNAMENT also carries a TableClientMessage but is out of scope (later work) — unmapped.
         val message = TableClientMessage().withTable(table, null)
 
         assertNull(CallbackMapper.map(callback(ClientCallbackMethod.START_TOURNAMENT, message)))

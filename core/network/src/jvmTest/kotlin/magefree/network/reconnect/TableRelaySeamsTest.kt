@@ -24,7 +24,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hermetic coverage of story 0037's two relay seams, driven through [SessionRelay.run] with no socket:
+ * Hermetic coverage of the two relay seams, driven through [SessionRelay.run] with no socket:
  *
  * - **(a) Correlation** — a 0036 [TableActionResult]/[TableCreated] carrying a `requestId` that matches an
  *   outstanding [PendingRequests] waiter is routed to that waiter (not emitted as a `SessionEvent`).
@@ -115,7 +115,7 @@ class TableRelaySeamsTest {
     @Test
     fun aTableDetailAndATableNotFoundAreCorrelatedToTheirWaiters() =
         runTest {
-            // Story 0040's targeted read rides the same correlation seam: without registering these two
+            // the targeted read rides the same correlation seam: without registering these two
             // reply types the app's `refreshTable` would hang until timeout and the room would never
             // learn its seats — so this pins the registration, not just the transport.
             val pending = PendingRequests()

@@ -1,10 +1,10 @@
 package magefree.model
 
 /**
- * A connection [state] enriched with the failure **detail** that produced it (story 0019).
+ * A connection [state] enriched with the failure **detail** that produced it.
  *
- * This is the detail-carrying companion to the bare [ConnectionState]. Story 0017's repository seam
- * reduces every [SessionEvent] to a [ConnectionState] — lossless for the status bar (story 0010), but
+ * This is the detail-carrying companion to the bare [ConnectionState]. the repository seam
+ * reduces every [SessionEvent] to a [ConnectionState] — lossless for the status bar, but
  * it drops the diagnostic a *failure* carries: an [SessionEvent.AuthFailed] message, the server/bridge
  * versions on a [SessionEvent.VersionUnsupported], or the transport reason behind a
  * [SessionEvent.Error]. [ConnectionStatus] carries that diagnostic through the seam so the sign-in UI

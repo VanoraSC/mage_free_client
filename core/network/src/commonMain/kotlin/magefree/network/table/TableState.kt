@@ -3,7 +3,7 @@ package magefree.network.table
 import magefree.model.SkillLevel
 
 /**
- * The app-schema, UI-free projection of a single table's evolving state (story 0037, corrected by
+ * The app-schema, UI-free projection of a single table's evolving state (
  * 0040). Two sources feed it:
  *
  * - **Server-pushed lifecycle events** ([magefree.protocol.TableUpdated],
@@ -16,7 +16,7 @@ import magefree.model.SkillLevel
  *
  * It carries **no** `:protocol`/`mage.*` type, so a `:feature`/`:app` consumer (0038) renders it
  * without seeing a wire shape. It deliberately stops at [TablePhase.Starting] + a one-shot
- * [matchStarting]; in-game state is Epic 11's.
+ * [matchStarting]; in-game state is the game layer's.
  *
  * @property tableId the table this state describes (the fold filters pushes by it).
  * @property optionsSummary a short human summary of the table's format/options (e.g. the game type),
@@ -28,8 +28,8 @@ import magefree.model.SkillLevel
  *   for readiness (see [isReadyToStart]); [TableServerState.Unknown] until the first read lands.
  * @property phase where the table is in the client-observed join→construct→start lifecycle.
  * @property matchStarting the one-shot game-start signal once the server pushes it (the boundary to
- *   Epic 11), else `null`.
- * @property activeGameId the match's current game id (story 0069), from the last [TableDetails] read —
+ *   the game layer), else `null`.
+ * @property activeGameId the match's current game id, from the last [TableDetails] read —
  *   present on every read, unlike [matchStarting]'s one-shot push. Set by [withDetails]. This is what
  *   lets a client that opens the room *after* the match has already started still find its way in: see
  *   [resumableGameId].
@@ -45,7 +45,7 @@ data class TableState(
     val activeGameId: String? = null,
 ) {
     /**
-     * The game id to open, from whichever source knows it (story 0069): the live [matchStarting] push
+     * The game id to open, from whichever source knows it: the live [matchStarting] push
      * when this client caught the transition, else the last [activeGameId] a table read reported. Both
      * name the same thing — the match's current game — so a caller never needs to know which one fired.
      */
@@ -56,7 +56,7 @@ data class TableState(
      * (`mage.constants.TableState.READY_TO_START`, which is exactly the gate `startMatch` enforces
      * upstream). This is the only readiness rule the client honours: there is no per-seat "ready" flag
      * anywhere upstream, so inventing one client-side produced a control that could never enable
-     * (the defect story 0040 fixes).
+     * (which the seat read prevents).
      */
     val isReadyToStart: Boolean get() = serverState == TableServerState.ReadyToStart
 
@@ -66,7 +66,7 @@ data class TableState(
      * or the server itself reports the table starting / in a game / finished.
      *
      * [TableClient.observeTable] stops its while-observed refresh here — a table that has become a game
-     * is not going to gain a player, and Epic 11 owns everything past that point.
+     * is not going to gain a player, and the game layer owns everything past that point.
      */
     val isPastSeating: Boolean
         get() =
@@ -79,7 +79,7 @@ data class TableState(
 
     /**
      * Apply a [TableDetails] read: refresh the seats, the server's lifecycle state, and the match's
-     * current game id (story 0069) — the read's [TableDetails.activeGameId] replaces the held value
+     * current game id — the read's [TableDetails.activeGameId] replaces the held value
      * whether it moves forward (a game just started) or stays `null` (no game yet); it never resets a
      * value the live [matchStarting] push already set, since a `null` read merely confirms "unknown".
      */
@@ -92,7 +92,7 @@ data class TableState(
 }
 
 /**
- * One seat at a [TableState] — the app-schema projection of `mage.view.SeatView` (story 0040).
+ * One seat at a [TableState] — the app-schema projection of `mage.view.SeatView`.
  *
  * It carries only what a seat *is* on the server: its slot, who sits there, of what kind. There is no
  * per-seat "ready" or "deck submitted" flag because upstream exposes neither before match-start;
@@ -154,7 +154,7 @@ enum class TableServerState {
 
 /**
  * A one-shot snapshot of a table as the **server** currently reports it — the app-schema result of
- * [TableClient.refreshTable] (story 0040), projected from the wire `TableDetail`. This is where seats
+ * [TableClient.refreshTable], projected from the wire `TableDetail`. This is where seats
  * come from: upstream has no pre-match seat push, so the room reads the table instead.
  *
  * @property tableId the table read.
@@ -163,7 +163,7 @@ enum class TableServerState {
  * @property deckType the deck/construction type label.
  * @property serverState the server's lifecycle state (readiness lives here, not per seat).
  * @property seats the table's seats in server order — filled and empty alike.
- * @property activeGameId the match's current game id (story 0069), or `null` before it has produced one
+ * @property activeGameId the match's current game id, or `null` before it has produced one
  *   — carried on every read, unlike [MatchStarting]'s one-shot push.
  */
 data class TableDetails(
@@ -187,7 +187,7 @@ enum class TablePhase {
     /** The match is starting (a [MatchStarting] signal has arrived). */
     Starting,
 
-    /** The match has started (reserved; the in-game view is Epic 11's, past this client's boundary). */
+    /** The match has started (reserved; the in-game view is the game layer's, past this client's boundary). */
     Started,
 }
 
@@ -240,7 +240,7 @@ enum class RangeOfInfluence {
  * @property range the multiplayer range of influence.
  * @property matchTimeLimitSeconds the per-player priority time budget, in seconds (0 = none). Must be
  *   one of the budgets XMage offers: the bridge **rejects** the create with a typed failure naming the
- *   supported values rather than quietly substituting "no clock" (story 0044).
+ *   supported values rather than quietly substituting "no clock".
  * @property matchBufferTimeSeconds the per-priority buffer time, in seconds (0 = none). Validated the
  *   same way as [matchTimeLimitSeconds].
  * @property spectatorsAllowed whether spectators may watch.
@@ -268,9 +268,9 @@ data class CreateTableOptions(
 
 /**
  * The one-shot game-start signal folded into a [TableState] from [magefree.protocol.MatchStarting] —
- * the **boundary to Epic 11**. It carries only the ids needed to open the game view; no in-game state.
+ * the **boundary to the game layer**. It carries only the ids needed to open the game view; no in-game state.
  *
- * @property gameId the new game's id (the anchor Epic 11 opens the game with).
+ * @property gameId the new game's id (the anchor the game layer opens the game with).
  * @property tableId the table the game belongs to, when the push carries it.
  * @property playerId the recipient seat's id, when the push carries it.
  */
@@ -321,7 +321,7 @@ open class TableActionFailure(
 /**
  * The typed failure a [TableClient] verb surfaces when the action never reached the server because the
  * **session is gone** — the bridge answered with [magefree.protocol.TableFailureCode.SESSION_GONE]
- * (story 0050 defect A). A [TableActionFailure], so every existing caller keeps working, but a *distinct*
+ *. A [TableActionFailure], so every existing caller keeps working, but a *distinct*
  * one so a caller can tell "the server considered this and said no" from "you are not signed in any
  * more". Retrying the action cannot help; re-authenticating can, and that is what the UI must offer.
  *
@@ -334,7 +334,7 @@ class SessionGoneFailure(
 
 /**
  * The typed failure [TableClient.refreshTable] surfaces when the server does not list [tableId] any
- * more — it was removed, or the match moved past the lobby's table list (story 0040). Distinct from a
+ * more — it was removed, or the match moved past the lobby's table list. Distinct from a
  * [TableActionFailure] so a caller can tell "the table is gone" from "the action was declined", and
  * distinct from an *empty* success, which would look like a real table with no seats.
  */

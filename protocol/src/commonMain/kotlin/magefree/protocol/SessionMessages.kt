@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /*
- * Session messages layered onto the 0004 envelope (story 0005). These extend the sealed
+ * Session messages layered onto the 0004 envelope. These extend the sealed
  * ClientMessage/ServerMessage hierarchies — they do not fork them — so the additive,
  * forward-compatible versioning rules of ProtocolVersion continue to hold: an older peer that does
  * not know a `type` tolerates it via `ignoreUnknownKeys` (see ProtocolJson).
@@ -53,7 +53,7 @@ public data class SessionStatus(
  * Bridge→app: the **resume handle** for the session just established. Emitted right after the first
  * [SessionStatus]`(`[SessionStateCode.CONNECTED]`)` (and again as the positive ack of a successful
  * [Resume]), it carries the bridge-issued [resumeId] the app presents on a fresh socket to re-attach
- * to this still-live upstream session (story 0023, Epic 5). The id is the **bridge's own** handle —
+ * to this still-live upstream session. The id is the **bridge's own** handle —
  * not the XMage server-side session id — so the app never sees upstream internals.
  *
  * Delivered as a dedicated server message (rather than mutating [SessionStatus]) so the 0005 status
@@ -70,12 +70,12 @@ public data class SessionResumable(
 
 /**
  * App→bridge: re-attach a freshly-(re)connected socket to a parked upstream session instead of
- * logging in again (story 0023). Sent **after** the 0004 `ClientHello`/`ServerHello` handshake, in
+ * logging in again. Sent **after** the 0004 `ClientHello`/`ServerHello` handshake, in
  * place of a [Login]; [resumeId] is the handle the bridge previously delivered via [SessionResumable].
  *
  * On a hit the bridge re-binds its outbound stream to this socket and continues streaming the same
  * live session — **no** second upstream connect/login. On a miss (unknown/expired/inconsistent handle)
- * it replies [ResumeRejected] and the app falls back to [Login] (app-side logic is story 0024).
+ * it replies [ResumeRejected] and the app falls back to [Login].
  * [requestId] is echoed onto the resume ack/rejection for correlation.
  */
 @Serializable
@@ -88,7 +88,7 @@ public data class Resume(
 /**
  * Bridge→app: a [Resume] could not be honoured — the [resumeId] is unknown, its grace window (TTL)
  * expired, or the parked session is no longer healthy. [reason] is a human-readable detail; the app
- * should fall back to a fresh [Login] (story 0024). [requestId] echoes the rejected [Resume]'s id.
+ * should fall back to a fresh [Login]. [requestId] echoes the rejected [Resume]'s id.
  */
 @Serializable
 @SerialName("resume_rejected")

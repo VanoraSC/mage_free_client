@@ -7,7 +7,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 /**
  * `magefree.koin` — the fixed Koin recipe for any module that declares or consumes DI bindings
- * (story 0081, EPIC-18). Replaces `magefree.hilt`.
+ *. Replaces `magefree.hilt`.
  *
  * **No annotation processor, and that is the point.** Hilt needed KSP, the Hilt Gradle plugin, and
  * `enableAggregatingTask = false` in every consuming module (its legacy javac aggregating task
@@ -15,7 +15,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  * KSP itself stays where it is still earned — Room in `:core:decks`.
  *
  * **`koin-core` only, by default.** It is multiplatform, so a `:core:*` module applying this plugin
- * gains nothing that pins it to Android — which is what lets stories 0082-0084 move those modules
+ * gains nothing that pins it to Android — which is what lets those modules move
  * without unpicking their DI first. Modules that genuinely need the Android or Compose bindings add
  * them explicitly, so that need stays visible in the module's own build file rather than being
  * granted silently to everything.
@@ -59,7 +59,7 @@ class KoinConventionPlugin : Plugin<Project> {
 
     /**
      * A multiplatform module: `koin-core` belongs to `commonMain`, not to a per-target configuration
-     * (story 0083).
+     *.
      *
      * The plain `implementation` configuration a KMP + AGP module still has reaches only the Android
      * target, so a Koin module written in `commonMain` — which is where `:core:decks`' is, and where

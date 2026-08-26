@@ -34,7 +34,7 @@ import java.util.Base64
 class CardImageLoaderTest {
     private val context: PlatformContext = PlatformContext.INSTANCE
 
-    /** Story 0085: the JVM stand-in for the Android `Context.cacheDir` these tests used to write to. */
+    /** The JVM stand-in for the Android `Context.cacheDir`. */
     private val tempRoot: File = File(System.getProperty("java.io.tmpdir"), "magefree-art-test").apply { mkdirs() }
     private lateinit var scope: CoroutineScope
     private lateinit var diskDir: File
@@ -91,7 +91,7 @@ class CardImageLoaderTest {
             policyRepository = CardArtCachePolicyRepository(dataStore),
             appScope = scope,
             ioDispatcher = Dispatchers.Unconfined,
-            // Story 0082: no test here asserts on the failure log, but the parameter is required so a
+            // no test here asserts on the failure log, but the parameter is required so a
             // loader can never be built that silently drops it.
             logWarning = { },
             diskCacheDirectory = diskDir.toOkioPath(),

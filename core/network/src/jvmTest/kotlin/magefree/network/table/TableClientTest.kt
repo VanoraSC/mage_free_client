@@ -128,7 +128,7 @@ class TableClientTest {
         }
 
     /**
-     * Story 0050 defect A, second half. The two failures arrive on the same frame shape and used to be
+     * The two failures arrive on the same frame shape and used to be
      * indistinguishable, so a create attempted after XMage had quietly expired the session was reported
      * as *"the server declined to create the table"* — sending the host off to check their table options
      * for a problem that does not exist. `SESSION_GONE` says the server was never asked.
@@ -225,7 +225,7 @@ class TableClientTest {
     @Test
     fun joinTableCarriesTheSeatsPlayerTypeOntoTheWire() =
         runTest {
-            // Story 0041: a host fills its configured AI seats with this same verb, and upstream matches a
+            // a host fills its configured AI seats with this same verb, and upstream matches a
             // join to a seat *by player type* — so the type must actually reach the wire request, not be
             // silently pinned to HUMAN.
             val sent = mutableListOf<ClientMessage>()

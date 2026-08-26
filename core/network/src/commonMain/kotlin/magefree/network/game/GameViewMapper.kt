@@ -31,7 +31,7 @@ import magefree.protocol.UnknownGamePrompt
 import magefree.protocol.GamePrompt as GamePromptMessage
 
 /**
- * The single boundary where story 0051's wire game shapes become story 0052's app-schema ones (and the
+ * The single boundary where the wire game shapes become the app-schema ones (and the
  * app-schema enums become wire codes for the reply path). It is `internal` and total: every `when` here
  * is exhaustive over a closed `:protocol` set, so a future additive change upstream is a **compile**
  * error at this one file rather than a silent runtime hole further out.
@@ -49,7 +49,7 @@ internal object GameViewMapper {
      * [GameState.result], [GameState.isWatching] — are left alone here and moved only by the event that
      * produces them, in [GameEventFold].
      *
-     * [GameState.prompt] is the **one narrow exception** (story 0074): [resyncPrompt], when non-null, is
+     * [GameState.prompt] is the **one narrow exception**: [resyncPrompt], when non-null, is
      * this session's last-cached outstanding question (`GameStateSnapshot.prompt`, itself only ever set
      * from a real `GamePrompted` the bridge relayed — see `GameStateCache`'s own KDoc for why re-serving
      * it is correct rather than a guess). A resync **restores** a prompt that would otherwise be missing;
@@ -204,7 +204,7 @@ internal object GameViewMapper {
             toughness = toughness,
             rules = rules,
             isFaceDown = faceDown,
-            // Story 0058. Written on the wire by the bridge's own read of `mage.view.CardView`:
+            // Written on the wire by the bridge's own read of `mage.view.CardView`:
             // `getCardTypes()`, `isCreature()` and `getCounters()` respectively. Carried through
             // unchanged — the server owns the predicate, this is only a shape change.
             cardTypes = cardTypes.map { it.toCardType() },
@@ -212,7 +212,7 @@ internal object GameViewMapper {
             counters = counters.map { GameCounter(name = it.name, count = it.count) },
             alternateName = alternateName,
             transformed = transformed,
-            // Story 0086: upstream's own `CardView.getTargets()`, already de-duplicated and stably
+            // upstream's own `CardView.getTargets()`, already de-duplicated and stably
             // ordered by the server (`addTargets` uses a LinkedHashSet for exactly that). Carried
             // through unchanged: these are ids into this same snapshot, and resolving one to the
             // object it names belongs to whatever draws the arrow.
@@ -228,7 +228,7 @@ internal object GameViewMapper {
             hasSummoningSickness = summoningSickness,
             damage = damage,
             attachedTo = attachedTo,
-            // Story 0087: both directions, because only both together describe the relationship --
+            // both directions, because only both together describe the relationship --
             // and the bridge already read them off one `PermanentView`, so they agree by construction.
             attachments = attachments,
             isAttachedToPermanent = attachedToPermanent,

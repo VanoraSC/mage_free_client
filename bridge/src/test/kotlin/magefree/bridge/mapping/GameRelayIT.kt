@@ -55,8 +55,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import java.util.UUID
 
 /**
- * **The story's real proof** (story 0051): a live game crossing the bridge, driven against the
- * reference server (story 0022) through a **real** [SessionImpl].
+ * **the real proof**: a live game crossing the bridge, driven against the
+ * reference server through a **real** [SessionImpl].
  *
  * The hermetic tests can only assert that crafted views map correctly and that each reply reaches the
  * right upstream verb. This asserts the two things they structurally cannot:
@@ -138,7 +138,7 @@ class GameRelayIT {
             )
 
         /**
-         * Story 0086's deck: half `Mountain` (M21 #269), half `Lightning Bolt` (M10 #146) — the
+         * the deck: half `Mountain` (M21 #269), half `Lightning Bolt` (M10 #146) — the
          * cheapest deck that can put a **targeted** spell on a real stack. One land casts a Bolt, so
          * the whole scenario fits inside a single turn; the even split makes an opening hand missing
          * one or the other about a 1-in-200 draw, and the play loop simply takes another turn when it
@@ -156,7 +156,7 @@ class GameRelayIT {
                 sideboard = emptyList(),
             )
 
-        /** The spell story 0086's live check casts, by the name the server sends back. */
+        /** The spell the live check casts, by the name the server sends back. */
         const val BOLT = "Lightning Bolt"
 
         /** The land that pays for it. */
@@ -351,7 +351,7 @@ class GameRelayIT {
         }
 
     /**
-     * **Story 0086's live check.** The hermetic mapper tests craft a `CardView` with a `targets` list
+     * **the live check.** The hermetic mapper tests craft a `CardView` with a `targets` list
      * already on it, so they prove the mapper reads the field — never that the *server* fills it on the
      * path this bridge actually reads. That is what this asserts, and it is the only way to assert it:
      * cast a real `Lightning Bolt` at the AI seat through a real `SessionImpl`, and read the target id
@@ -370,7 +370,7 @@ class GameRelayIT {
      * one target that needs no board state to exist, which keeps the scenario inside one turn.
      */
     @Test
-    fun `a spell on a live stack carries the target the server was told to point it at (story 0086)`() =
+    fun `a spell on a live stack carries the target the server was told to point it at`() =
         runBlocking {
             val username = uniqueUsername()
             val client = BridgeMageClient()
@@ -1030,7 +1030,7 @@ class GameRelayIT {
      * `canPlayObjects` must be non-empty for a hand full of lands.
      *
      * The answers are deliberately the least interesting legal ones: this test is about the transport,
-     * not about playing well. Each is sent through [GameRelay], so the reply half of the story is under
+     * not about playing well. Each is sent through [GameRelay], so the reply half of this is under
      * test too — a reply that never reaches the server simply stops the stream and the loop times out.
      */
     private suspend fun playUntilOurMainPhase(

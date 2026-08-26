@@ -41,7 +41,7 @@ import magefree.feature.cards.slotFor
 const val ADD_CARDS_SEARCH_HINT: String = "Search cards to add"
 
 /**
- * The builder's card search/add surface. It reuses story 0032's offline [CardSearchUiState] pipeline,
+ * The builder's card search/add surface. It reuses the offline [CardSearchUiState] pipeline,
  * the shared [CardSearchField], [CardFilters] controls, per-row [CardArtRenderer] art, and the
  * design-system [CardTile] rendering — layering deck-add affordances (add to main / sideboard) and
  * tap-to-inspect on top. No card rendering is hand-rolled here; only the add controls are new.
@@ -49,7 +49,7 @@ const val ADD_CARDS_SEARCH_HINT: String = "Search cards to add"
  *
  * The field is the same composable `:feature:cards` uses rather than a second copy of it: this surface
  * had its own hand-rolled `OutlinedTextField` controlled on the **debounced** `uiState.query`, so it
- * carried the identical dead-text-entry defect (story 0049) and would have had to be fixed twice.
+ * carried the identical dead-text-entry defect and would have had to be fixed twice.
  */
 @Composable
 fun AddCardsScreen(

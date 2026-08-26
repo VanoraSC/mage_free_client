@@ -5,8 +5,8 @@ import org.junit.Test
 
 /**
  * The deck model must round-trip the `DeckCardLists`-equivalent [DeckList] losslessly (name, author,
- * ordered main + sideboard of card name / set code / collector number / amount) — the property Epic 7
- * (submit) and story 0034 (import/export) rely on. No `mage.*` types are involved.
+ * ordered main + sideboard of card name / set code / collector number / amount) — the property the table layer
+ * (submit) and import/export rely on. No `mage.*` types are involved.
  */
 class DeckMappersTest {
     private val sampleList =

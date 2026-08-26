@@ -30,7 +30,7 @@ interface DeckIO {
 
     /**
      * Produce shareable [DeckShareContent] for [deck] in [format]: the serialized text plus a suggested
-     * file name (deck name sanitized + extension) and mime type. The share *intent* is story 0035.
+     * file name (deck name sanitized + extension) and mime type. The share *intent* is the platform's.
      */
     suspend fun share(
         deck: Deck,

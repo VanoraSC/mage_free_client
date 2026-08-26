@@ -37,7 +37,7 @@ import java.io.Serializable
 import java.util.UUID
 
 /**
- * Hermetic tests for the in-game branches of [CallbackMapper] (story 0051). Real [ClientCallback]s are
+ * Hermetic tests for the in-game branches of [CallbackMapper]. Real [ClientCallback]s are
  * built in memory — its 3-arg constructor compresses the payload, so `map` really does the decompress +
  * cast it does in production — and each is asserted to reach the right app-schema message.
  *
@@ -189,7 +189,7 @@ class GameCallbackMapperTest {
     }
 
     @Test
-    fun `GAME_TARGET with null targets falls back to every candidate being pickable (story 0072)`() {
+    fun `GAME_TARGET with null targets falls back to every candidate being pickable`() {
         // GameController.java's PICK_ABILITY overload (ordering simultaneous triggered abilities)
         // always sends `targets = null` -- unlike PICK_TARGET, which always sends a real, possibly
         // empty Set. Prove the fix discriminates the actual bug: against the unfixed mapper,
@@ -216,11 +216,11 @@ class GameCallbackMapperTest {
     }
 
     @Test
-    fun `GAME_TARGET for a library search prefers possibleTargets over the whole cardsView1 (story 0079)`() {
-        // Found live (Pete, 2026-08-20): activating Marsh Flats offered no usable candidates.
+    fun `GAME_TARGET for a library search prefers possibleTargets over the whole cardsView1`() {
+        // Activating Marsh Flats offered no usable candidates.
         // TargetCardInLibrary sends cardsView1 as the WHOLE remaining library (read directly against
         // HumanPlayer.chooseTarget/GameController.target), with targets = null and the real, narrow
-        // answer only in options[possibleTargets] -- a different shape from story 0072's PICK_ABILITY,
+        // answer only in options[possibleTargets] -- a different shape from the PICK_ABILITY,
         // where the whole cardsView1 candidate set really is the answer set. Falling back to
         // cardsView1 here (as 0072's fix does) would offer the entire library as if every card were a
         // legal fetch.
@@ -400,7 +400,7 @@ class GameCallbackMapperTest {
 
     @Test
     fun `an out-of-scope game-adjacent callback maps to null`() {
-        // END_GAME_INFO (a GameEndView) and the draft/tournament family are not in this story's scope.
+        // END_GAME_INFO (a GameEndView) and the draft/tournament family are not here's scope.
         assertNull(CallbackMapper.map(callback(ClientCallbackMethod.END_GAME_INFO, view())))
         assertNull(CallbackMapper.map(callback(ClientCallbackMethod.DRAFT_INIT, view())))
     }

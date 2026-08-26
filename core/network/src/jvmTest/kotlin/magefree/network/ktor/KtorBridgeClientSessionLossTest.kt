@@ -45,19 +45,19 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Story 0050, **both directions on real frames** — the pin that stops the fix for a zombie session from
+ * **Both directions on real frames** - the pin that stops the fix for a zombie session from
  * destroying reconnect (0046's pattern, one layer up).
  *
  * The two failures look identical from inside the app: in each case the session it thought it had is no
  * longer usable. They must be answered in opposite ways, and only the *wire* can tell them apart:
  *
  * - **A dead upstream** — the bridge relays a terminal `SessionStatus(DISCONNECTED)` because its
- *   keepalive found the XMage session gone (story 0050 defect A). There is nothing to resume: the app
+ *   keepalive found the XMage session gone. There is nothing to resume: the app
  *   must stop, land on a disconnected state carrying the bridge's reason, and **not** loop trying to
  *   `Resume` a session the server has already thrown away.
  * - **A transport drop** — the socket simply dies with nothing on it (a network hand-off; see the
  *   ~33 s finding in [KtorBridgeClient]'s KDoc). The session upstream is fine and parked, so the app
- *   must reconnect and `Resume` it — stories 0023/0024, which this story must not regress.
+ *   must reconnect and `Resume` it, which this must not regress.
  *
  * The double is the *bridge*: a throwaway in-process Ktor endpoint that records the frame sequence per
  * socket, so "did the app try to resume, or not?" is answered by what actually reached the server.
@@ -126,7 +126,7 @@ class KtorBridgeClientSessionLossTest {
                 withTimeout(SETTLE_TIMEOUT_MS) { resumed.await() }
 
                 assertTrue(
-                    "0023/0024 must survive this story: a bare drop reconnects and presents the held " +
+                    "0023/0024 must survive this: a bare drop reconnects and presents the held " +
                         "resume handle instead of re-authenticating; the bridge saw ${bridge.log}",
                     bridge.log.containsAll(listOf(HELLO, LOGIN, CLOSED, HELLO, RESUME)),
                 )

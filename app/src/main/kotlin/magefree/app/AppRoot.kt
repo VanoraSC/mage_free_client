@@ -9,8 +9,8 @@ import org.koin.androidx.compose.koinViewModel
 
 /**
  * Application root: hosts the [AppNavHost] — the **root** Navigation-Compose graph that switches
- * between the connect/sign-in flow (story 0047), the tabbed shell (story 0008) and the immersive
- * full-screen game route (story 0011). The shell's bottom-bar/rail chrome lives inside the shell, so
+ * between the connect/sign-in flow, the tabbed shell and the immersive
+ * full-screen game route. The shell's bottom-bar/rail chrome lives inside the shell, so
  * the connect and game routes render without it.
  *
  * This is where the graph's hoisted session teardown is bound to the real thing: [SessionViewModel]

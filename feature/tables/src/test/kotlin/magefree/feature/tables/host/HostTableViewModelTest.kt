@@ -33,7 +33,7 @@ import org.junit.Test
  * deck repository/legality doubles — no bridge, no `:protocol`.
  *
  * Beyond the create-table form's validation and its projection onto `CreateTableOptions`, this pins the
- * story-0041 contract: hosting is a **sequence** — create, then each configured AI seat, then the host's
+ *  contract: hosting is a **sequence** — create, then each configured AI seat, then the host's
  * own seat with the chosen deck — and every failure in it removes the table and reports why, instead of
  * leaving a half-seated orphan in the lobby and walking into an unstartable room.
  */
@@ -79,7 +79,7 @@ class HostTableViewModelTest {
         val vm = viewModel()
         vm.start()
         assertTrue(vm.uiState.value.form.isValid)
-        // Story 0041: hosting takes a seat, and a seat needs a deck — so a valid form alone is not enough.
+        // hosting takes a seat, and a seat needs a deck — so a valid form alone is not enough.
         assertFalse(vm.uiState.value.canCreate)
 
         vm.selectDeck(DeckId("deck-1"))
@@ -286,7 +286,7 @@ class HostTableViewModelTest {
     // ---- the failure paths ---------------------------------------------------------------------
 
     /**
-     * Story 0050 defect A, second half — the smoke's actual sequence: XMage expires the idle session
+     * The smoke's actual sequence: XMage expires the idle session
      * while the host is deck-building, the create is answered `SESSION_GONE`, and the host used to be
      * told *"the server declined to create the table"*. That reads as a problem with the table, so the
      * host retries the one thing that cannot work. Say what happened and name the fix.

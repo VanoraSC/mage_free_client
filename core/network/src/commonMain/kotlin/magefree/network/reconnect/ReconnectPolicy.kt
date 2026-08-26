@@ -4,9 +4,9 @@ import kotlin.math.pow
 import kotlin.random.Random
 
 /**
- * Bounded exponential back-off with jitter for an unexpectedly-dropped socket (story 0024).
+ * Bounded exponential back-off with jitter for an unexpectedly-dropped socket.
  *
- * Replaces story 0016's fixed `(3 attempts, 1s)` policy: the delay before reconnect attempt _n_ grows
+ * Replaces the fixed `(3 attempts, 1s)` policy: the delay before reconnect attempt _n_ grows
  * geometrically ([initialDelayMillis] × [multiplier]^(n-1)), is capped at [maxDelayMillis], and is
  * spread by ±[jitterRatio] so a fleet of clients recovering from the same outage does not stampede the
  * bridge. [maxAttempts] is optional (`null` = keep trying): the reconnect loop instead stops on a

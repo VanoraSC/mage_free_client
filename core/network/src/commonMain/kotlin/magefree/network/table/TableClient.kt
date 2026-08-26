@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import magefree.decks.model.Deck
 
 /**
- * The app-side, **UI-free** table client (story 0037): the *act* side of a table, layered over 0028's
+ * The app-side, **UI-free** table client: the *act* side of a table, layered over 0028's
  * multiplexed request/response and 0023's session/resume, complementing 0028's read-only `LobbyClient`.
  * Each verb turns a 0036 table-action request into a `suspend` call that maps the correlated
  * `TableActionResult`/`TableCreated` reply into a [Result] — a server decline surfaces as a typed
@@ -17,7 +17,7 @@ import magefree.decks.model.Deck
  *
  * [observeTable] exposes a single table's evolving [TableState], folded from 0036's server-pushed events
  * and re-synced across a 0023 resume so a reconnect never strands the seat. It stops at
- * [TablePhase.Starting] + a one-shot [TableState.matchStarting]; in-game state is Epic 11's.
+ * [TablePhase.Starting] + a one-shot [TableState.matchStarting]; in-game state is the game layer's.
  *
  * A [magefree.network.fake.FakeTableClient] backs hermetic tests of downstream (0038) code.
  */
@@ -29,7 +29,7 @@ interface TableClient {
      * Join the constructed table [tableId] as [seatName], submitting [deck] at join. [password] is
      * required only for a passworded table. Success yields `Unit`; a decline a [TableActionFailure].
      *
-     * [playerType] is the **kind** of occupant being seated (story 0041). It defaults to
+     * [playerType] is the **kind** of occupant being seated. It defaults to
      * [SeatPlayerType.Human] — the ordinary "I sit down" join — but a host completing its own table also
      * seats the AI players it configured, and upstream fills those seats with this very same call,
      * differing only by the type: `Table.getNextAvailableSeat` matches a join to a seat **by player
@@ -71,7 +71,7 @@ interface TableClient {
 
     /**
      * Read the current [TableDetails] of [tableId] — its seats and the **server's** lifecycle state
-     * (story 0040). This is the room's source of seat state: XMage emits no per-seat push before
+     *. This is the room's source of seat state: XMage emits no per-seat push before
      * match-start, so the table is *read* rather than waited on.
      *
      * A table the server no longer lists yields a typed [TableNotFoundFailure]; a transport failure a
@@ -88,7 +88,7 @@ interface TableClient {
      * [magefree.model.ConnectionState.Connected]) the current state is re-emitted so a reconnect does not
      * strand the seat. Cold: each collection starts a fresh subscription; the caller owns its scope.
      *
-     * **Seats (story 0040).** It also [refreshTable]s — once when collection starts, on each
+     * **Seats.** It also [refreshTable]s — once when collection starts, on each
      * table-lifecycle push for this table, after a resume, and periodically while the table is still
      * seating — folding each [TableDetails] into [TableState.seats]/[TableState.serverState].
      *

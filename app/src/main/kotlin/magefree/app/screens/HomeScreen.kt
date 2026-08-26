@@ -52,7 +52,7 @@ private val PlayButtonMinHeight = 72.dp
  *
  * Stateless and preview-able: it holds no state and fetches nothing. Every action is emitted through
  * a hoisted callback — the shell wires these to navigation, and [onPlayClick] is a stub until the
- * real matchmaking/lobby lands in EPIC-06. This story is about home layout and the primacy of
+ * real matchmaking/lobby lives elsewhere. This screen is about home layout and the primacy of
  * "Play," not the play flow.
  */
 @Composable

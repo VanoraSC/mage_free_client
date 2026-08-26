@@ -1,10 +1,10 @@
 package magefree.network.game
 
 /*
- * The app-schema, **UI-free** projection of a running game (story 0052, EPIC-11) — the game-side twin of
- * story 0037's `TableState`, and the layer every later board story reads.
+ * The app-schema, **UI-free** projection of a running game — the game-side twin of
+ * the `TableState`, and the layer every later board work reads.
  *
- * Two facts from story 0051 shape every type here, and neither is negotiable:
+ * Two facts shape every type here, and neither is negotiable:
  *
  * 1. **State is a snapshot, not a delta.** Every in-game callback carries the *whole* `GameView`, so
  *    [GameState] is **replaced** per snapshot rather than reconciled. There is no merge logic anywhere in
@@ -184,10 +184,10 @@ data class GamePlayer(
 
 /**
  * A card as the server rendered it — the app-schema projection of `mage.view.CardView`. Deliberately
- * thin: enough to identify a printing ([setCode] + [collectorNumber], the pair story 0030's card catalog
+ * thin: enough to identify a printing ([setCode] + [collectorNumber], the pair the card catalog
  * resolves art by) and to render a text-only representation.
  *
- * **What the card currently *is* (story 0058) is game state, not printing.** [cardTypes], [isCreature]
+ * **What the card currently *is* is game state, not printing.** [cardTypes], [isCreature]
  * and [counters] are recomputed by the server for every snapshot, so an Earthbent land really does
  * arrive as a creature and stops being one when the effect ends. A UI must therefore ask [isCreature]
  * rather than reading [typeLine] — parsing that display string would be the client interpreting rules.
@@ -201,13 +201,13 @@ data class GamePlayer(
  *   creature-ness — never the printed type, never [typeLine].
  * @property counters every counter on the object, by name and count. Not battlefield-only: a card in
  *   another zone can carry them, because upstream puts them on `CardView`.
- * @property alternateName upstream `CardView.getAlternateName()` (story 0076): a catalog fact, set
+ * @property alternateName upstream `CardView.getAlternateName()`: a catalog fact, set
  *   unconditionally on any transformable/double-faced/flip/meld object to its *other* face's name,
  *   regardless of which face is currently showing. Not a signal for current face — see [transformed].
- * @property transformed upstream `CardView.isTransformed()` (story 0076) — the live "is this permanent
+ * @property transformed upstream `CardView.isTransformed()` — the live "is this permanent
  *   currently showing its back face" fact. `false` for anything that is not a permanent, and for an
  *   untransformed permanent. This is the signal for which face's art to request, never [alternateName].
- * @property targets what this object is pointing at (story 0086), from upstream `CardView.getTargets()`
+ * @property targets what this object is pointing at, from upstream `CardView.getTargets()`
  *   — the ids of every chosen target of a spell or ability on the stack, de-duplicated and in
  *   upstream's own stable order. **Ids into the same [GameState]**: a battlefield permanent, a player,
  *   or another entry on the [GameState.stack], since upstream resolves them all through
@@ -279,7 +279,7 @@ enum class CardType {
  * A permanent on the battlefield — the app-schema projection of `mage.view.PermanentView`: a [card] plus
  * the battlefield-only state a board must show.
  *
- * **Attachments travel in both directions (story 0087).** [attachedTo] is what this permanent is
+ * **Attachments travel in both directions.** [attachedTo] is what this permanent is
  * attached to; [attachments] is what is attached *to it*. The reverse direction is carried rather than
  * derived because deriving it means every host scanning every battlefield, on every frame, for anything
  * pointing at it — and upstream already computed it once for the snapshot.
@@ -501,19 +501,19 @@ enum class PassPriorityScope {
 }
 
 /**
- * The result of [GameClient.refreshGame] (story 0054): the bridge's held snapshot of a game, plus when
+ * The result of [GameClient.refreshGame]: the bridge's held snapshot of a game, plus when
  * it was captured.
  *
  * **This is a replay, not a reconstruction.** [state] is the server's own most recent `GameView` for
  * *this session*, mapped exactly as a pushed one is — nothing is merged with an older snapshot, and
- * nothing about a card the server has stopped showing is remembered (that is story 0053, deliberately
+ * nothing about a card the server has stopped showing is remembered (accumulation is deliberately
  * not this one). It is a standalone [GameState]: only the fields a snapshot owns are set, so
  * [GameState.prompt], [GameState.lastMessage], [GameState.lastError] and [GameState.result] are null —
  * a read tells you what the board looks like, never that the server is waiting on you.
  *
  * @property capturedAtEpochMs when the **bridge** captured the snapshot (wall clock). The board is
  *   current as of the last push the bridge saw, and this says when that was, so a caller can reason
- *   about staleness instead of guessing. Null only against a bridge older than story 0054.
+ *   about staleness instead of guessing. Null only against a bridge that does not stamp one.
  */
 data class GameSnapshot(
     val state: GameState,
@@ -521,13 +521,13 @@ data class GameSnapshot(
 )
 
 /**
- * The typed failure [GameClient.refreshGame] surfaces when the bridge has **no state** to give (story
- * 0054) — 0054's `GameStateUnavailable`.
+ * The typed failure [GameClient.refreshGame] surfaces when the bridge has **no state** to give
+ * — 0054's `GameStateUnavailable`.
  *
  * It exists so that "there is nothing to show" can never arrive as an empty board. An all-defaults
  * [GameState] is a legal snapshot (a spectator of a game that has not started has exactly that), so a
  * caller could not tell it from the truth and would render it — which is the whole failure mode the
- * story is about. A failed [Result] cannot be mistaken for a board.
+ * is about. A failed [Result] cannot be mistaken for a board.
  *
  * @property reason which kind of absence it is; the two demand different responses.
  */
@@ -548,7 +548,7 @@ enum class GameStateUnavailableReason {
 
     /**
      * There is no session behind the socket, so there was not even a cache to look in. Re-authenticating
-     * — not retrying — is what fixes it (story 0050's distinction, on the read side).
+     * — not retrying — is what fixes it (the distinction, on the read side).
      */
     SessionGone,
 }
@@ -558,7 +558,7 @@ enum class GameStateUnavailableReason {
  * `GameActionResult` with `ok = false`, or an unexpected reply. [reason] is the server's optional
  * human-readable detail: a decline is a **typed result**, never a silent drop.
  *
- * The game-side twin of story 0037's `TableActionFailure`, kept separate for the same reason 0051's
+ * The game-side twin of the `TableActionFailure`, kept separate for the same reason 0051's
  * `GameFailureCode` is separate from `TableFailureCode`: a caller handling a game should not have to
  * catch a table type to learn that its reply was refused.
  */
@@ -568,7 +568,7 @@ open class GameActionFailure(
 
 /**
  * The typed failure a [GameClient] verb surfaces when the action **never reached the server** because the
- * session is gone — the bridge answered with 0051's `GameFailureCode.SESSION_GONE` (story 0050's
+ * session is gone — the bridge answered with 0051's `GameFailureCode.SESSION_GONE` (the
  * distinction, applied to the game verbs).
  *
  * A [GameActionFailure], so every caller's error path keeps working, but a *distinct* one because the two

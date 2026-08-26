@@ -45,7 +45,7 @@ public interface UpstreamSession {
      * ends. The flow is **cold**: collection starts the connect. It emits a `CONNECTING`
      * [SessionStatus] first, then a terminal status (`AUTH_FAILED`/`VERSION_UNSUPPORTED`) and completes
      * on a failed login, or `CONNECTED` and stays hot to relay later `RECONNECTING`/`DISCONNECTED`
-     * transitions **and mapped server pushes** ([magefree.protocol.ChatEvent], story 0006) on the same
+     * transitions **and mapped server pushes** ([magefree.protocol.ChatEvent]) on the same
      * stream. Widening from `SessionStatus` to `ServerMessage` lets both session status and relayed
      * pushes share one per-session outbound stream. Cancelling the collection (e.g. on socket close)
      * tears the upstream down.
@@ -61,21 +61,21 @@ public interface UpstreamSession {
 
     /**
      * The open/active tables in the pinned server's main lobby room, mapped to app-schema
-     * [TableSummary] (story 0027), or an **empty list** when there is no active/connected session.
+     * [TableSummary], or an **empty list** when there is no active/connected session.
      * The blocking upstream reads run on `Dispatchers.IO`; the mapping happens at the
      * `magefree.bridge.mapping` boundary so no `mage.view.*` type crosses this interface.
      */
     public suspend fun tables(): List<TableSummary>
 
     /**
-     * The users currently in the main lobby room, mapped to app-schema [RoomUserSummary] (story 0027),
+     * The users currently in the main lobby room, mapped to app-schema [RoomUserSummary],
      * or an **empty list** when there is no active/connected session. Same IO/mapping contract as
      * [tables].
      */
     public suspend fun roomUsers(): List<RoomUserSummary>
 
     /**
-     * The game formats the pinned server offers, mapped to app-schema [GameTypeSummary] (story 0027),
+     * The game formats the pinned server offers, mapped to app-schema [GameTypeSummary],
      * or an **empty list** when there is no active/connected session. Same IO/mapping contract as
      * [tables].
      */
@@ -83,7 +83,7 @@ public interface UpstreamSession {
 
     /**
      * Creates (hosts) a table from [request] and replies with a `TableCreated` (the mapped new table)
-     * or a failed [TableActionResult] (story 0036). The `mage.*` construction happens at the
+     * or a failed [TableActionResult]. The `mage.*` construction happens at the
      * `magefree.bridge.mapping` boundary; no upstream shape crosses this interface. A create against an
      * unbound/disconnected session maps to a failed result. Runs the blocking upstream call on IO.
      */
@@ -111,7 +111,7 @@ public interface UpstreamSession {
     public suspend fun watchTable(request: WatchTable): TableActionResult
 
     /**
-     * Reads the detail (summary + per-seat state) of the table in [request] (story 0040), replying a
+     * Reads the detail (summary + per-seat state) of the table in [request], replying a
      * [magefree.protocol.TableDetail] or a typed [magefree.protocol.TableNotFound] — including when
      * there is no active/connected session, or the room does not list the table. Resolved from the
      * room's table list at the `magefree.bridge.mapping` boundary (upstream has no single-table read),
@@ -120,7 +120,7 @@ public interface UpstreamSession {
     public suspend fun tableDetail(request: GetTable): ServerMessage
 
     /**
-     * Dispatches one in-game request (story 0051) — join/watch/quit/stop, one of the five `sendPlayerX`
+     * Dispatches one in-game request — join/watch/quit/stop, one of the five `sendPlayerX`
      * answers, or a player action — and replies a typed [GameActionResult].
      *
      * A single method rather than one per verb, because unlike the table actions these share exactly one
@@ -133,7 +133,7 @@ public interface UpstreamSession {
 
     /**
      * Keepalive probe used by [SessionRegistry] while a session is **parked** (app socket dropped)
-     * to keep the upstream link healthy during the grace window (story 0023). Returns `true` if the
+     * to keep the upstream link healthy during the grace window. Returns `true` if the
      * session is still connected after the probe, `false` otherwise (a `false`/throw evicts the
      * parked entry). Backed by `SessionImpl.ping()` + `isConnected()`; a no-op returning `false` when
      * there is no active session.

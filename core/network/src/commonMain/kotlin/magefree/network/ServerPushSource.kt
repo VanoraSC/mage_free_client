@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import magefree.protocol.ServerMessage
 
 /**
- * The **internal** side-channel of spontaneous, *uncorrelated* server-pushed frames (story 0037's seam
+ * The **internal** side-channel of spontaneous, *uncorrelated* server-pushed frames (the seam
  * (b)). Where a `BridgeClient.request` reply is routed to its waiter by [magefree.network.reconnect.PendingRequests]
  * and a session-lifecycle frame becomes a `SessionEvent`, a server *push* that is neither — a 0036 table
  * event ([magefree.protocol.TableUpdated]/[magefree.protocol.ConstructPrompt]/…) — was previously dropped

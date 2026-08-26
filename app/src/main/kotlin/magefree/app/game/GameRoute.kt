@@ -3,7 +3,7 @@ package magefree.app.game
 import kotlinx.serialization.Serializable
 
 /**
- * Type-safe Navigation-Compose route for the **immersive in-game mode** (story 0011).
+ * Type-safe Navigation-Compose route for the **immersive in-game mode**.
  *
  * It is deliberately **not** a
  * [TopLevelDestination][magefree.app.navigation.TopLevelDestination]: the game is a focused,

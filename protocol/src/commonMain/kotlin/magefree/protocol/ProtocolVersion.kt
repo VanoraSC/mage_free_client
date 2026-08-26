@@ -22,7 +22,7 @@ package magefree.protocol
  * The handshake exchanges both numbers plus `bridgeVersion` so each side can log the peer's exact
  * build and, where useful, adapt behaviour to a known-newer or known-older minor.
  *
- * Downstream stories **extend** the sealed [ClientMessage]/[ServerMessage] hierarchies with new
+ * Downstream work **extend** the sealed [ClientMessage]/[ServerMessage] hierarchies with new
  * `@Serializable` subtypes; they never fork or duplicate the contract.
  */
 public object ProtocolVersion {

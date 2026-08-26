@@ -31,7 +31,7 @@ import org.junit.Test
  * spectator `watchTable` subscription.
  *
  * These tests inject a finished [TableState], so they verify the room's *composition* of the gate — not
- * that the gate's input is reachable. That reachability (the story-0040 defect) is pinned separately by
+ * that the gate's input is reachable. That reachability (the  defect) is pinned separately by
  * `TableRoomSeatSeamTest`, which drives this same ViewModel through the real client over a fake bridge.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -227,7 +227,7 @@ class TableRoomViewModelTest {
     @Test
     fun hostCanSubmitAndUpdateADeckBecauseAHostHoldsASeat() =
         runTest {
-            // Story 0041: the host's own join is the last step of the create sequence, so it occupies a
+            // the host's own join is the last step of the create sequence, so it occupies a
             // seat and has a deck to change. The room used to gate the deck surface on `role == Player`,
             // leaving a host with no way to submit or update at all.
             val deck = magefree.decks.model.Deck(id = magefree.decks.model.DeckId("deck-1"), name = "Aggro")

@@ -24,7 +24,7 @@ import org.robolectric.annotation.Config
 import kotlin.reflect.KClass
 
 /**
- * Story 0048 — the **destination** half of the wiring guards (see `src/test`'s
+ * The **destination** half of the wiring guards (see `src/test`'s
  * `FeatureWiringGuardTest` for the classpath/reference half).
  *
  * `FeatureWiringGuardTest` proves each feature ships and that `:app`'s code calls into it. This proves
@@ -32,16 +32,16 @@ import kotlin.reflect.KClass
  * to carry them there. It composes the production [AppNavHost] and [MageNavHost] — no stub graph — and
  * enumerates the destinations they register.
  *
- * A destination silently deleted from either graph fails these tests, which is the story-0047 shape:
+ * A destination silently deleted from either graph fails these tests, which is the  shape:
  * everything builds, everything is on the classpath, and the screen is simply unreachable.
  *
  * Deliberately kept to graph *structure*, not rendering — but the reason has changed. It used to be
  * that the feature routes resolved their view models through Hilt, and standing up a Hilt component
- * here would have made a cheap gate expensive. Since story 0081 that cost is gone: Koin's container
+ * here would have made a cheap gate expensive. That cost is gone: Koin's container
  * is a `startKoin` call, and
  * [magefree.app.di.ScreenViewModelResolutionTest] does render each destination for real. This test
  * stays structural because the two answer different questions — this one asks whether a destination
- * *exists* (the story-0047 shape: everything builds and the screen is simply unreachable), that one
+ * *exists* (the  shape: everything builds and the screen is simply unreachable), that one
  * asks whether it can *resolve what it needs*. A destination deleted from the graph would make the
  * other test pass by never visiting it.
  */
@@ -122,8 +122,8 @@ class FeatureDestinationWiringTest {
             mapOf(
                 ConnectRoute::class to ":feature:connect — sign-in; without it the APK can never open a session",
                 ShellRoute::class to "the tabbed browsing shell — without it a signed-in user has nowhere to go",
-                GameRoute::class to "the immersive game surface (story 0011)",
-                CatalogRoute::class to "the design-system component catalog (story 0015)",
+                GameRoute::class to "the immersive game surface",
+                CatalogRoute::class to "the design-system component catalog",
             ),
         )
     }
@@ -132,7 +132,7 @@ class FeatureDestinationWiringTest {
     fun aColdStartLandsWhereSignInIsReachable() {
         val graph = rootGraph()
 
-        // The cold-start entry policy (story 0047): a launch with no session must begin somewhere
+        // The cold-start entry policy: a launch with no session must begin somewhere
         // sign-in is reachable. Asserted against the graph's declared start destination, so a change of
         // policy has to be a deliberate edit here rather than an accident in AppNavHost.
         val start = graph.findStartDestination()

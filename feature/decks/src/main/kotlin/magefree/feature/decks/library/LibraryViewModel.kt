@@ -54,7 +54,7 @@ data class LibraryUiState(
 )
 
 /**
- * MVVM ViewModel for the deck library (story 0035). Every operation is a local [DeckRepository]
+ * MVVM ViewModel for the deck library. Every operation is a local [DeckRepository]
  * read/write — **no network, ever**. It observes the reactive library list and hoists create / rename /
  * duplicate / delete / favorite / import. Newly created or imported decks are announced via [openDeck]
  * so the route can open the builder on them.
@@ -152,7 +152,7 @@ class LibraryViewModel
                 // Import resolves every line against the bundled catalog. That read can fail for
                 // environmental reasons (no room for the ~14 MB copy on first use), and this is a bare
                 // launch: unguarded, the throw crashes the process. Fail soft — report it and leave the
-                // library, and the next import, working (story 0042, defect B).
+                // library, and the next import, working.
                 val result =
                     try {
                         deckIO.import(text)

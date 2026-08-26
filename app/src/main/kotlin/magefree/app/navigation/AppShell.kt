@@ -59,7 +59,7 @@ fun AppShell(
     onOpenCatalog: () -> Unit = {},
     onSignOut: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
-    // Story 0035: the Decks tab hosts the deck library + builder (`:feature:decks`). Built here (not in
+    // the Decks tab hosts the deck library + builder (`:feature:decks`). Built here (not in
     // MageNavHost) so the shell can be driven Hilt-free in tests via the stateless overload's default.
     // "Browse cards" navigates to [CardsRoute] within the Decks back stack (0032 browser stays reachable).
     decksScreen: @Composable () -> Unit = { DecksLibraryRoute(onBrowseCards = { navController.navigate(CardsRoute) }) },
@@ -98,7 +98,7 @@ fun AppShell(
     modifier: Modifier = Modifier,
     onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
-    // Story 0047: deliberate sign-out, surfaced on the Settings destination and hoisted to the root
+    // deliberate sign-out, surfaced on the Settings destination and hoisted to the root
     // graph, which tears the session down and returns to the connect flow. Defaults to a no-op so the
     // shell stays drivable without a session (and without Hilt) in tests.
     onSignOut: () -> Unit = {},

@@ -2,7 +2,7 @@ package magefree.model
 
 /**
  * One user present in the lobby room — the app-side domain projection of the bridge's `RoomUserSummary`
- * (story 0028). Pure `:core:model`, wire-agnostic: mapped from the wire shape at `:core:network`'s
+ *. Pure `:core:model`, wire-agnostic: mapped from the wire shape at `:core:network`'s
  * boundary. The status strings ([matchHistory]/[games]/[ping]) are pre-formatted by the server and shown
  * verbatim; the app does not parse them.
  *

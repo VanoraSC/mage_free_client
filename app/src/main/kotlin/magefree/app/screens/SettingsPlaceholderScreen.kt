@@ -26,26 +26,26 @@ const val SETTINGS_SCREEN_LABEL: String = "Settings"
 const val ENTER_GAME_STUB_LABEL: String = "Enter game (dev stub)"
 
 /**
- * Visible label on the developer entry into the design-system component catalog (story 0015). Shared
+ * Visible label on the developer entry into the design-system component catalog. Shared
  * with tests so the two agree; clearly marked as a dev-only affordance.
  */
 const val OPEN_CATALOG_STUB_LABEL: String = "Component catalog (dev)"
 
 /**
- * Visible label on the sign-out action (story 0047). Shared with tests so the two agree. This is the
- * shell's only deliberate exit from a session: it ends the session (story 0046's `signOut()`, which
+ * Visible label on the sign-out action. Shared with tests so the two agree. This is the
+ * shell's only deliberate exit from a session: it ends the session (the `signOut()`, which
  * sends `Logout` rather than letting the bridge park the session for a resume) and returns the player
  * to the connect flow, from which they can sign in again.
  */
 const val SIGN_OUT_LABEL: String = "Sign out"
 
 /**
- * Placeholder for the Settings destination. Real preferences (DataStore-backed) arrive later; story
- * 0008 only proves the shell can reach this route.
+ * Placeholder for the Settings destination. Real preferences (DataStore-backed) arrive later;
+ * only proves the shell can reach this route.
  *
- * Story 0011 adds a clearly-marked **dev stub** ([ENTER_GAME_STUB_LABEL]) that navigates into the
+ * A clearly-marked **dev stub** ([ENTER_GAME_STUB_LABEL]) navigates into the
  * immersive [GameRoute][magefree.app.game.GameRoute]. This is a temporary entry point only — real
- * entry into the game comes from the lobby/table flows in EPIC-06/07 and this button is expected to
+ * entry into the game comes from the lobby/table flows and this button is expected to
  * be removed then.
  */
 @Composable
@@ -65,8 +65,8 @@ fun SettingsPlaceholderScreen(
     ) {
         Text(text = SETTINGS_SCREEN_LABEL, style = MaterialTheme.typography.headlineMedium)
 
-        // Temporary developer affordance to reach the immersive game route (story 0011); removed
-        // once real entry from lobby/table lands (EPIC-06/07).
+        // Temporary developer affordance to reach the immersive game route; removed
+        // once real entry from lobby/table lands.
         OutlinedButton(
             onClick = onEnterGame,
             modifier =
@@ -77,7 +77,7 @@ fun SettingsPlaceholderScreen(
             Text(text = ENTER_GAME_STUB_LABEL, textAlign = TextAlign.Center)
         }
 
-        // Debug-only affordance to open the design-system component catalog (story 0015) — a visual-QA
+        // Debug-only affordance to open the design-system component catalog — a visual-QA
         // surface, not a production feature.
         OutlinedButton(
             onClick = onOpenCatalog,
@@ -89,7 +89,7 @@ fun SettingsPlaceholderScreen(
             Text(text = OPEN_CATALOG_STUB_LABEL, textAlign = TextAlign.Center)
         }
 
-        // Story 0047: the deliberate way out of a session. Real preferences will re-home this when the
+        // the deliberate way out of a session. Real preferences will re-home this when the
         // Settings screen stops being a placeholder; what matters is that the shell has *an* exit at
         // all — before 0047 the app could neither sign in nor sign out from a running APK.
         OutlinedButton(

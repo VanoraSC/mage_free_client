@@ -17,12 +17,12 @@ import magefree.designsystem.theme.MageTheme
 /** Text rendered by [DecksPlaceholderScreen]; shared with tests so the two agree. */
 const val DECKS_SCREEN_LABEL: String = "Decks"
 
-/** Label on the entry into the card catalog browser (story 0032). */
+/** Label on the entry into the card catalog browser. */
 const val DECKS_BROWSE_CARDS_LABEL: String = "Browse cards"
 
 /**
  * Placeholder for the Decks destination. The touch-first deck builder is owned by its feature epic
- * (Epic 9); story 0008 only proves the shell can reach this route. Story 0032 adds a read-only entry
+ * this route exists so the shell can reach it. A read-only entry
  * into the card catalog browser via [onBrowseCards].
  */
 @Composable

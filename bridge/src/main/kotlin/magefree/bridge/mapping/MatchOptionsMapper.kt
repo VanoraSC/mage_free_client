@@ -123,7 +123,7 @@ public object MatchOptionsMapper {
 }
 
 /**
- * A requested clock XMage has no value for (story 0044). Carried as the failure of
+ * A requested clock XMage has no value for. Carried as the failure of
  * [MatchOptionsMapper.toMatchOptions] so an unsupported budget is reported to the host — as a failed
  * `TableActionResult` naming [supported] — instead of being silently downgraded to "no clock" under a
  * successful create.

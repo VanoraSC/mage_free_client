@@ -83,7 +83,7 @@ internal object GameViews {
      * `cardTypes.contains(CREATURE)`, so [cardTypes] is what drives it here exactly as it does in a
      * running game.
      *
-     * [targets] mirrors upstream's `CardView.targets` (story 0086), which `addTargets` allocates
+     * [targets] mirrors upstream's `CardView.targets`, which `addTargets` allocates
      * **only** while building a stack object with a chosen target. `null` — the default — is therefore
      * the ordinary case for every other card, and the case the mapper must survive; the builder sets
      * the field only when a test actually asks for targets, exactly as upstream does.
@@ -127,7 +127,7 @@ internal object GameViews {
         }
 
     /**
-     * An `AbilityView` (story 0072) — what upstream wraps a triggered ability in for the
+     * An `AbilityView` — what upstream wraps a triggered ability in for the
      * ordering-simultaneous-triggers prompt (`CardsView(Collection<Ability>, Game)`). Real upstream
      * instances always carry the literal placeholder `name = "Ability"` for the ordinary case (its
      * constructor hardcodes this — never `sourceCard`'s real name, never `expansionSetCode`/
@@ -147,7 +147,7 @@ internal object GameViews {
         }
 
     /**
-     * A `StackAbilityView` (story 0072) — the *separate* sibling type upstream uses for the ordinary
+     * A `StackAbilityView` — the *separate* sibling type upstream uses for the ordinary
      * game stack (`GameView.stack`), not to be confused with [abilityView]. Same "carries upstream's
      * literal placeholder, uncorrected" rationale.
      */
@@ -161,7 +161,7 @@ internal object GameViews {
             set("name", "Ability")
             set("sourceCard", sourceCard)
             set("rules", rules)
-            // Story 0086: `targets` is inherited from CardView and filled by
+            // `targets` is inherited from CardView and filled by
             // `StackAbilityView.updateTargets` (via `addTargets`, or `overrideTargets` for a mode whose
             // effects target only through a TargetPointer). Left null unless a test asks for it.
             if (targets != null) set("targets", targets)
@@ -201,7 +201,7 @@ internal object GameViews {
             set("summoningSickness", summoningSickness)
             set("damage", damage)
             set("attachedTo", attachedTo)
-            // Story 0087: upstream's constructor always allocates `attachments`
+            // upstream's constructor always allocates `attachments`
             // (`new ArrayList<>(permanent.getAttachments())`), so a real view never has it null — but
             // the serialization constructor does, which is the sparse-view case the mapper must
             // survive. Left unset unless a test asks for it, so both paths are reachable here.

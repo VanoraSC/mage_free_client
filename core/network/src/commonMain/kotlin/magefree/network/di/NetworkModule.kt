@@ -25,8 +25,8 @@ import org.koin.core.scope.Scope
 import org.koin.dsl.module
 
 /**
- * Koin provisioning for `:core:network`'s session/persistence layer, in common (story 0084; was
- * Hilt's `NetworkModule`, then story 0081's Koin module).
+ * Koin provisioning for `:core:network`'s session/persistence layer, in common (
+ * Hilt's `NetworkModule`, then the Koin module).
  *
  * - Binds the production [BridgeClient] to the real Ktor WebSocket implementation; tests construct a
  *   [magefree.network.fake.FakeBridgeClient] directly and never touch Koin.
@@ -52,16 +52,16 @@ fun networkDefinitions(
 ): Module =
     module {
         /**
-         * The device-connectivity observer (story 0024) that lets the reconnect loop wake a waiting
+         * The device-connectivity observer that lets the reconnect loop wake a waiting
          * back-off the instant the network returns. Android-backed; a JVM/unit context uses the
          * always-on default inside [KtorBridgeClient].
          */
         single<ConnectivityObserver> { connectivityObserver() }
 
         /**
-         * The whole-app foreground/background observer (story 0024). On Android it is backed by
+         * The whole-app foreground/background observer. On Android it is backed by
          * `ProcessLifecycleOwner`: it nudges a reconnect on foreground and relaxes retries while
-         * backgrounded (the bridge holds the session per story 0023). Bound here (not in `:app`) so
+         * backgrounded (the bridge holds the session). Bound here (not in `:app`) so
          * `:app` needs no lifecycle wiring.
          */
         single<AppLifecycleObserver> { lifecycleObserver() }
@@ -69,14 +69,14 @@ fun networkDefinitions(
         single<BridgeClient> { KtorBridgeClient(connectivity = get(), lifecycle = get()) }
 
         /**
-         * The production [LobbyClient] (story 0028), riding the same [BridgeClient] singleton (the
+         * The production [LobbyClient], riding the same [BridgeClient] singleton (the
          * live session) via its request/response primitive. Constructed with the `:protocol`-free
          * [BridgeClient], so nothing in the graph above `:core:network` sees a wire type.
          */
         single<LobbyClient> { LobbyClientImpl(bridgeClient = get()) }
 
         /**
-         * The production [TableClient] (story 0037), riding the same [BridgeClient] singleton as the
+         * The production [TableClient], riding the same [BridgeClient] singleton as the
          * lobby. Assembled by [TableClients] because the implementation also needs the **internal**
          * server-push side-channel — the same singleton, cast — which stays off the cross-module
          * graph so `:protocol` never surfaces above `:core:network`.
@@ -84,7 +84,7 @@ fun networkDefinitions(
         single<TableClient> { TableClients.overBridge(get(), get()) }
 
         /**
-         * The production [GameClient] (story 0052), riding the same [BridgeClient] singleton as the
+         * The production [GameClient], riding the same [BridgeClient] singleton as the
          * lobby and table clients — one socket, three feature clients. Assembled by [GameClients]
          * for the same reason the table client is.
          */
@@ -94,7 +94,7 @@ fun networkDefinitions(
 
         /**
          * The app-level connection state as a plain [StateFlow], sourced from the
-         * single-source-of-truth [ConnectionRepository] (story 0017). [LobbyRepository] observes it
+         * single-source-of-truth [ConnectionRepository]. [LobbyRepository] observes it
          * to gate the lobby on an active connection without owning the session.
          */
         single<StateFlow<ConnectionState>> { get<ConnectionRepository>().connectionState }

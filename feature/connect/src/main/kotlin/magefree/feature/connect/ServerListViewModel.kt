@@ -64,7 +64,7 @@ data class ServerEditorState(
 }
 
 /**
- * MVVM ViewModel for the server list / add-server surface, driving story 0017's [ServerRepository].
+ * MVVM ViewModel for the server list / add-server surface, driving the [ServerRepository].
  * Exposes a single immutable [ServerListUiState] as a [StateFlow]; every event is a function call.
  *
  * Picking a server is *not* VM state — selection is a navigation event the host handles, so the

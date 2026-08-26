@@ -43,7 +43,7 @@ class TableEventFoldTest {
         state = fold(state, ConstructPrompt(tableId = "t-1", remainingSeconds = 60))
         assertEquals(TablePhase.Constructing, state.phase)
 
-        // The match starts — the one-shot signal + Starting phase (the Epic 11 boundary).
+        // The match starts — the one-shot signal + Starting phase (the game boundary).
         state = fold(state, MatchStartingMessage(gameId = "g-9", tableId = "t-1", playerId = "p-1"))
         assertEquals(TablePhase.Starting, state.phase)
         assertEquals(MatchStarting(gameId = "g-9", tableId = "t-1", playerId = "p-1"), state.matchStarting)
@@ -80,7 +80,7 @@ class TableEventFoldTest {
 
     @Test
     fun aSeatUpdateWithNoPlayerIdCannotGrowAPhantomSeatList() {
-        // The defect (story 0040): a null-playerId SeatUpdated used to *append* a brand-new seat on
+        // The defect: a null-playerId SeatUpdated used to *append* a brand-new seat on
         // every push, so a repeated push grew `seats` without bound. It carries no key, so it must be
         // ignored outright — the fold returns null (no state change, nothing emitted).
         assertNull(TableEventFold.fold(seed, SeatUpdated(tableId = "t-1", playerId = null)))
@@ -106,7 +106,7 @@ class TableEventFoldTest {
 
     @Test
     fun aKeyedSeatUpdateFillsAKnownEmptySlotRatherThanAppending() {
-        // A table read (story 0040) established two slots; a push naming a player fills the free one
+        // A table read established two slots; a push naming a player fills the free one
         // instead of appending a third seat.
         val known =
             seed.copy(

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * The wiring half of stories 0054 + 0070: that a [LiveSession]'s cache is fed by its outbound pump,
+ * The wiring half: a [LiveSession]'s cache is fed by its outbound pump,
  * that it survives (and keeps advancing across) a park, and that it survives the *session itself*
  * ending too — outliving eviction for the same username, though never crossing between usernames.
  *
@@ -93,8 +93,8 @@ class SessionGameStateCacheTest {
     @Test
     fun `a snapshot pushed while the session is parked is cached just the same`() =
         registryScenario { registry ->
-            // Story 0023 keeps the pump running with no socket attached, which is exactly the window this
-            // story exists for: the cached board must go on advancing while the app is away, not freeze
+            // The pump keeps running with no socket attached, which is exactly the window this
+            // exists for: the cached board must go on advancing while the app is away, not freeze
             // at the moment the socket died. If the cache were fed from the *socket* forwarder instead of
             // the pump, this is the test that would fail — and only a real reconnect would reveal it.
             val fake = FakeUpstreamSession(listOf(SessionStatus(SessionStateCode.CONNECTED)))
@@ -131,7 +131,7 @@ class SessionGameStateCacheTest {
     @Test
     fun `evicting the session preserves its cache for the same username's next session`() =
         registryScenario { registry ->
-            // Story 0070's defect, reproduced: an eviction is not necessarily the game ending, or even
+            // the defect, reproduced: an eviction is not necessarily the game ending, or even
             // the same person leaving — a resume-TTL expiry, a sign-out, or (the live case) an upstream
             // keepalive failure all evict, and XMage gives a rejoining player no way to ask for a fresh
             // state (GameController.join's rejoin path only logs; watch refuses a seated player). So the

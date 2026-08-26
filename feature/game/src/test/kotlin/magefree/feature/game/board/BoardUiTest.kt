@@ -119,7 +119,7 @@ class BoardUiTest {
 
     @Test
     fun `the first real snapshot legitimately has an empty hand and still renders the rest`() {
-        // Verified live (story 0052): GAME_INIT fires before the game worker deals, so the first
+        // Verified live: GAME_INIT fires before the game worker deals, so the first
         // snapshot carries seats and a turn with an empty hand. The board must not treat that as
         // "nothing has arrived".
         val state = twoSeatState(viewerFirst = false).copy(hand = emptyList())
@@ -149,7 +149,7 @@ class BoardUiTest {
 
     @Test
     fun `holding priority with nothing playable is stated in words, not left to an absent highlight`() {
-        // Requirements §4.2: this state genuinely occurs, and a glow-only design cannot express it.
+        // the requirements: this state genuinely occurs, and a glow-only design cannot express it.
         val board =
             BoardUi.from(
                 twoSeatState(viewerFirst = false).copy(viewerHasPriority = true, playable = emptyList()),
@@ -201,11 +201,11 @@ class BoardUiTest {
 
     @Test
     fun `says the server is waiting on you when it asks a question you do not hold priority for`() {
-        // FOUND ON DEVICE (2026-08-13). The first thing a new game does is ask one seat to choose who
+        // The first thing a new game does is ask one seat to choose who
         // goes first, and it does that before priority exists: the live snapshot was
         // `viewerHasPriority=false, prompt=Target('Select a starting player')`, and the server's own
         // narration on the same push was "Waiting for <font …>Player</font>" — i.e. waiting on us. The
-        // banner said "Waiting for opponent". Requirements §16.3 forbids exactly that: the player must
+        // banner said "Waiting for opponent". The requirements forbids exactly that: the player must
         // never be unable to tell a waiting game from a frozen one.
         val board =
             BoardUi.from(
@@ -302,8 +302,8 @@ class BoardUiTest {
     }
 
     @Test
-    fun `requests the back face for a transformed permanent (story 0076)`() {
-        // Found live (Pete, 2026-08-17): Kytheon, Hero of Akros transformed into Gideon,
+    fun `requests the back face for a transformed permanent`() {
+        // Kytheon, Hero of Akros transformed into Gideon,
         // Battle-Forged, but the board kept showing Kytheon's art. `GameCard.transformed` -- upstream's
         // own live "is this permanent currently showing its back face" fact -- is the real signal; a
         // DFC's two faces share one setCode/collectorNumber, so CardArtFace is the only thing that can
@@ -329,7 +329,7 @@ class BoardUiTest {
     }
 
     @Test
-    fun `an untransformed card still requests the front face (story 0076)`() {
+    fun `an untransformed card still requests the front face`() {
         val state = twoSeatState(viewerFirst = false)
         val ordinary = card("perm-1", "Grizzly Bears")
         val board =
@@ -346,8 +346,8 @@ class BoardUiTest {
     }
 
     @Test
-    fun `an untransformed permanent requests the front face even when alternateName is set (story 0076, found live again)`() {
-        // Found live (Pete, 2026-08-22): Ajani, Nacatl Pariah on the battlefield, UNTRANSFORMED, showed
+    fun `an untransformed permanent requests the front face even when alternateName is set`() {
+        // Ajani, Nacatl Pariah on the battlefield, UNTRANSFORMED, showed
         // Ajani, Nacatl Avenger's (the back face's) art. Upstream sets alternateName unconditionally on
         // any transformable permanent regardless of state, so a non-null alternateName here must not
         // flip the requested face -- only `transformed` does that.
@@ -439,11 +439,11 @@ class BoardUiTest {
         assertEquals("2/2", bear.card.powerToughness)
     }
 
-    // ---- story 0058: what a permanent currently *is* -----------------------------------------------
+    // ---- what a permanent currently *is* -----------------------------------------------
 
     @Test
     fun `a land that is not a creature shows no power toughness and no summoning sickness`() {
-        // The defect this story exists to fix, seen on device: "0/0 · Summoning sick" under a Mountain.
+        // The defect this exists to fix, seen on device: "0/0 · Summoning sick" under a Mountain.
         // Upstream really does send "0"/"0" for a noncreature permanent and really does set summoning
         // sickness for anything that arrived this turn — so both must be gated on what the card *is*.
         val mountain =
@@ -561,7 +561,7 @@ class BoardUiTest {
         assertEquals(listOf("quest ×3"), permanent.card.counters.map { it.label })
     }
 
-    /** The viewer's single permanent, for the story-0058 cases that only care about one card. */
+    /** The viewer's single permanent, for the  cases that only care about one card. */
     private fun onlyPermanent(permanent: GamePermanent): PermanentUi {
         val state = twoSeatState(viewerFirst = false)
         val board =
@@ -598,7 +598,7 @@ class BoardUiTest {
 
     @Test
     fun `an attacker says what it is attacking, and what is blocking it`() {
-        // Story 0061: marking a creature "Attacking" is not enough to follow a fight — with two
+        // marking a creature "Attacking" is not enough to follow a fight — with two
         // attackers and a planeswalker in play, *what* it attacks is the whole question. The defender's
         // name is the server's own (`CombatGroup.defenderName`), and a defender is not always a player.
         val state = twoSeatState(viewerFirst = false)
@@ -635,7 +635,7 @@ class BoardUiTest {
     @Test
     fun `a planeswalker being attacked is named as the defender, not the opposing player`() {
         // A defender is not always the opposing player — planeswalkers and battles are legal defenders
-        // in ordinary 1v1 (§7.4). A board that said "attacking Computer" here would be lying.
+        // in ordinary 1v1. A board that said "attacking Computer" here would be lying.
         val state = twoSeatState(viewerFirst = false)
         val board =
             BoardUi.from(
@@ -657,7 +657,7 @@ class BoardUiTest {
 
     @Test
     fun `two attackers are two groups with the defender repeated, and each says so`() {
-        // Measured live (§7.3): `CombatGroup` is **per-attacker**, so two attackers produced two groups
+        // Measured live: `CombatGroup` is **per-attacker**, so two attackers produced two groups
         // rather than one group with two attackers. A projection that assumed one group per defender
         // would silently drop the second attacker.
         val state = twoSeatState(viewerFirst = false)

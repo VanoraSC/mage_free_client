@@ -154,7 +154,7 @@ class SignInViewModelTest {
     @Test
     fun authFailedDetailReachesTheUi() =
         runTest {
-            // Story 0019: the auth message flows through the enriched connectionStatus seam.
+            // the auth message flows through the enriched connectionStatus seam.
             val vm = viewModel(listOf(SessionEvent.Connecting, SessionEvent.AuthFailed("bad creds")))
             vm.uiState.test {
                 awaitItem()
@@ -171,7 +171,7 @@ class SignInViewModelTest {
     @Test
     fun versionUnsupportedDetailReachesTheUi() =
         runTest {
-            // Story 0019: the server=… bridge=… version detail is carried through to the surface.
+            // the server=… bridge=… version detail is carried through to the surface.
             val vm =
                 viewModel(
                     listOf(
@@ -194,7 +194,7 @@ class SignInViewModelTest {
     @Test
     fun transportErrorSurfacesAsNetworkWithDetail() =
         runTest {
-            // Story 0019: a transport fault (socket/timeout) reduces to a distinct Network surface,
+            // a transport fault (socket/timeout) reduces to a distinct Network surface,
             // NOT a login error, and its reason reaches the UI.
             val vm =
                 viewModel(
@@ -353,7 +353,7 @@ class SignInViewModelTest {
     @Test
     fun cancelIsADeliberateSignOut() =
         runTest {
-            // Story 0046's reachability answer: this ViewModel's cancel() *is* the app's sign-out — the
+            // the reachability answer: this ViewModel's cancel() *is* the app's sign-out — the
             // failure surfaces' Cancel, the screen's Back and the session-lost re-authenticate choice all
             // land here. So it must take the deliberate teardown, which puts a `Logout` on the wire and
             // frees the username immediately; the intent-free one would leave the upstream session (and
@@ -425,7 +425,7 @@ class SignInViewModelTest {
             mutableState.value = ConnectionState.Disconnected
         }
 
-        /** How many deliberate sign-outs (story 0046) this client was asked for. */
+        /** How many deliberate sign-outs this client was asked for. */
         var signOuts: Int = 0
             private set
 

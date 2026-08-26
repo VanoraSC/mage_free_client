@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.flowOf
 /**
  * Observes whole-app foreground/background transitions so the reconnect loop can nudge a
  * reconnect/health-check when the app returns to the foreground and relax its retry cadence while
- * backgrounded (story 0024). The bridge holds the session across a background stretch (story 0023), so
+ * backgrounded. The bridge holds the session across a background stretch, so
  * a quiet app resumes on return rather than spending battery on aggressive retries.
  *
  * [isForeground] is a hot `Flow<Boolean>` — `true` from `ON_START`, `false` from `ON_STOP`. The Android

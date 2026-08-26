@@ -74,7 +74,7 @@ data class JoinTableUiState(
 }
 
 /**
- * MVVM ViewModel for joining a table (story 0038). It observes the offline deck [DeckRepository] library,
+ * MVVM ViewModel for joining a table. It observes the offline deck [DeckRepository] library,
  * resolves the table's format for the offline [DeckLegality] gate, and — on a legal pick with any required
  * password — submits the chosen [Deck] via [TableClient.joinTable]. A success announces on [joined] so the
  * route can open the table room; a decline surfaces as [JoinTableUiState.errorMessage]. Deck pick + legality
@@ -112,7 +112,7 @@ class JoinTableViewModel
                 .observeLibrary()
                 .onEach { decks -> _uiState.value = _uiState.value.copy(library = decks) }
                 // Fail soft: an unguarded throw here escapes through launchIn to viewModelScope, whose
-                // SupervisorJob has no CoroutineExceptionHandler — a process crash (story 0042, B).
+                // SupervisorJob has no CoroutineExceptionHandler — a process crash.
                 .catch { error ->
                     _uiState.value = _uiState.value.copy(errorMessage = message(LIBRARY_ERROR, error))
                 }.launchIn(viewModelScope)
@@ -132,7 +132,7 @@ class JoinTableViewModel
          * The legality check reads the bundled card catalog, and this is a bare `launch`. A catalog
          * failure must not take the process down — it surfaces as [JoinTableUiState.errorMessage] with
          * no legality result, which leaves [JoinTableUiState.canJoin] false (an unverified deck is not
-         * waved through) and leaves a later pick working (story 0042, defect B).
+         * waved through) and leaves a later pick working.
          */
         fun selectDeck(id: DeckId) {
             viewModelScope.launch {

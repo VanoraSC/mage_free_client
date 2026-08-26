@@ -39,7 +39,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * The regression guard for story 0040's defect, driven **through the client seam**.
+ * The regression guard for the defect, driven **through the client seam**.
  *
  * `TableRoomViewModelTest` injects a finished `TableState` through a `FakeTableClient`, which is exactly
  * why the original defect shipped green: it proved the start gate's *logic* while the gate's *input* was

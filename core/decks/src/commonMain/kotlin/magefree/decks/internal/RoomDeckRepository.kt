@@ -21,7 +21,7 @@ import kotlin.uuid.Uuid
  * [now] and [newId] are injected so persistence tests get deterministic timestamps and ids.
  *
  * The defaults are the multiplatform stdlib's [Clock] and [Uuid] rather than `System
- * .currentTimeMillis()` and `java.util.UUID` (story 0083) — same wall-clock milliseconds, same v4
+ * .currentTimeMillis()` and `java.util.UUID` — same wall-clock milliseconds, same v4
  * UUID string shape, so the values already stored on devices stay comparable to the ones written
  * next. Both are Stable on the pinned Kotlin: `Clock` since 2.3, `Uuid` since 2.4. No opt-in.
  */

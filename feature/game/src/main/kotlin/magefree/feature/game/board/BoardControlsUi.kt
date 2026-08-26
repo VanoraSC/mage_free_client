@@ -40,13 +40,13 @@ import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
 
 /*
- * The **floating controls** of requirements §16.2, and the visibility toggle of §16.3 (story 0057).
+ * The **floating controls** of the requirements, and the visibility toggle.
  *
  * ## Nothing here is modal, and that is structural rather than a promise
  *
- * §6.1 originally sent "self-contained" prompts — ask, get-amount, choose-choice, choose-ability,
- * choose-pile — to a **modal dialog**, and §6.2 carved out targeting and mana payment because a modal
- * would hide the very board being tapped. §16.2 makes the exception the rule: *every* prompt kind is
+ * An earlier design sent "self-contained" prompts — ask, get-amount, choose-choice, choose-ability,
+ * choose-pile — to a **modal dialog**, carving out targeting and mana payment because a modal
+ * would hide the very board being tapped. The exception is the rule here: *every* prompt kind is
  * answered by the same panel floating over a board that stays visible and live.
  *
  * Concretely, and checkably:
@@ -54,11 +54,11 @@ import magefree.feature.cards.CardArtRenderer
  *   nothing intercepts the board's touches;
  * - the panel is **bottom-anchored and height-capped** ([ControlsMaxHeight]), scrolling internally
  *   rather than growing, so a long list of choices cannot swallow the board;
- * - the distinction §6.2 drew survives as data, not as presentation: a prompt answered *by touching the
+ * - that distinction survives as data, not as presentation: a prompt answered *by touching the
  *   board* publishes [PromptControlsUi.pickableObjectIds] and the board lights those cards up; a prompt
  *   answered *from its own content* publishes buttons and candidate cards instead.
  *
- * ## The toggle's hard constraint (§16.3)
+ * ## The toggle's hard constraint
  *
  * Hiding the controls must **never** hide that the server is waiting on the player. Two independent
  * things guarantee it here: the priority banner lives in the board's own status rail (see [StatusRail])
@@ -70,8 +70,8 @@ import magefree.feature.cards.CardArtRenderer
  * The tallest the floating panel is allowed to get before it scrolls inside itself.
  *
  * Chosen against the portrait layout rather than picked: with the hand's peek edge below it, a panel this
- * tall stops above the **tap point of the viewer's own permanents**, which is what mana payment (§6.3)
- * and targeting (§5.2) both need to stay reachable while the panel is open. `GameBoardScreenTest`
+ * tall stops above the **tap point of the viewer's own permanents**, which is what mana payment
+ * and targeting both need to stay reachable while the panel is open. `GameBoardScreenTest`
  * measures exactly that, so the number cannot drift without a test noticing.
  */
 internal val ControlsMaxHeight: Dp = 200.dp
@@ -142,11 +142,11 @@ internal fun FloatingControls(
                 BoardMenu(onAction = onAction, onDone = { menuExpanded = false })
             }
 
-            // §6.4: the spell does not vanish behind each new question.
+            // The spell does not vanish behind each new question.
             cast?.let { CastContext(cast = it) }
 
             // …and the same for a declaration: which of combat's two roles this is, and — while the
-            // server is asking a pairing question — which creature it is asking about (§7.4/§7.5).
+            // server is asking a pairing question — which creature it is asking about.
             declaration?.let { DeclarationContext(declaration = it) }
 
             controls?.message?.let { message ->
@@ -176,7 +176,7 @@ internal fun FloatingControls(
                         Note(text = TAP_TO_PLAY_NOTE)
                     }
 
-                // One role's instruction, never both (§7.4): the note comes off the role the *server*
+                // One role's instruction, never both: the note comes off the role the *server*
                 // put the board in, so there is no state here that can drift out of step with it. A
                 // declaration with nothing in it is a real state — upstream sends `Select attackers`
                 // even when no creature can attack — and it says so rather than showing an instruction
@@ -242,7 +242,7 @@ internal fun FloatingControls(
     }
 }
 
-/** The cast in flight (§6.4): what is being cast, which decision is open, and whether it is rewinding. */
+/** The cast in flight: what is being cast, which decision is open, and whether it is rewinding. */
 @Composable
 private fun CastContext(cast: CastUi) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -274,7 +274,7 @@ private fun CastContext(cast: CastUi) {
 }
 
 /**
- * The declaration in flight (story 0061): which of combat's two roles the board is in, and — while the
+ * The declaration in flight: which of combat's two roles the board is in, and — while the
  * server is asking a **pairing** question — which creature that question is about.
  *
  * The second line exists because the server's own prose does not say. `Select attacker to block` names
@@ -319,8 +319,7 @@ private fun Note(text: String) {
 }
 
 /**
- * One button in the panel — and, for a button that carries a [ControlButton.confirmLabel], §16.4's
- * confirm step.
+ * One button in the panel — and, for a button that carries a [ControlButton.confirmLabel], the * confirm step.
  *
  * The armed flag is **view state and nothing else**: arming sends nothing, so a player who arms "All
  * attack" and then taps a creature instead has not told the server anything. It is keyed on the prompt
@@ -515,7 +514,7 @@ private fun MultiAmountControl(
 }
 
 /**
- * Concede and quit — **separate, explicit actions** (§12.2), mirroring upstream's separate verbs
+ * Concede and quit — **separate, explicit actions**, mirroring upstream's separate verbs
  * (`concedeGame` and `quitMatch`). Each is behind its own second tap, because both are irreversible and
  * neither should ever be reachable by a mis-tap during a game.
  */
@@ -554,7 +553,7 @@ private fun BoardMenu(
 }
 
 /**
- * What replaces the panel when the controls are hidden (§16.3).
+ * What replaces the panel when the controls are hidden.
  *
  * It is deliberately more than a "show" button: whenever the server is waiting on the player it says so
  * on the control itself, so a hidden control set can never become an invisible stall. The board's own
@@ -593,7 +592,7 @@ internal fun HiddenControlsToggle(
 }
 
 /**
- * The tapped card's detail (§5.1, §11.1): first tap raises the card and shows what it is; the detail is
+ * The tapped card's detail: first tap raises the card and shows what it is; the detail is
  * where the action is committed, and **any tap elsewhere closes it**.
  *
  * The action button appears only when the *server* has offered this object for the outstanding prompt —
@@ -611,8 +610,8 @@ internal fun CardDetailOverlay(
     detailFace: CardDetailFaceUi? = null,
     onFlip: () -> Unit = {},
 ) {
-    // Story 0077: a manual peek at the other face, entirely local to this overlay — it never touches
-    // the object's actual live face ([CardUi.art]/[CardUi.name], story 0076's automatic selection).
+    // a manual peek at the other face, entirely local to this overlay — it never touches
+    // the object's actual live face ([CardUi.art]/[CardUi.name], the automatic selection).
     val shownCard =
         if (detailFace != null) {
             card.copy(
@@ -625,7 +624,7 @@ internal fun CardDetailOverlay(
         }
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // The "tap elsewhere closes it" surface. It is transparent: the board stays fully visible, which
-        // is the whole point of §16.2 — the detail floats, it does not black the game out.
+        // is the whole point — the detail floats, it does not black the game out.
         Box(
             modifier =
                 Modifier

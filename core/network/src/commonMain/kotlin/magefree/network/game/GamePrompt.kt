@@ -1,7 +1,7 @@
 package magefree.network.game
 
 /**
- * **What the server is waiting for**, as a closed, typed set — the app-schema mirror of story 0051's
+ * **What the server is waiting for**, as a closed, typed set — the app-schema mirror of the
  * `magefree.protocol.GamePrompt`, with the `:protocol` type kept off this ABI (the 0028/0037 discipline).
  *
  * The point of a *closed* set is that a consumer can always know what a valid answer looks like. Each

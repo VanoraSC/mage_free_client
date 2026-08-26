@@ -22,7 +22,7 @@ import magefree.feature.connect.ConnectFlow
 data object ShellRoute
 
 /**
- * Type-safe route for the connect + sign-in flow (`:feature:connect`, EPIC-04), mounted by story 0047.
+ * Type-safe route for the connect + sign-in flow (`:feature:connect`).
  *
  * It is the **start destination** of the root [AppNavHost] and renders *outside* the shell chrome, the
  * same way [GameRoute] does: no tab bar and no connection strip over a sign-in form.
@@ -32,7 +32,7 @@ data object ConnectRoute
 
 /**
  * The **root** Navigation-Compose host, sitting *around* the shell so the connect flow and the
- * immersive [GameRoute] can render **outside** the tab chrome (story 0011's chosen approach — a
+ * immersive [GameRoute] can render **outside** the tab chrome (the chosen approach — a
  * top-level `NavHost` above the shell).
  *
  * - [ConnectRoute] renders the connect + sign-in flow, chrome-free. **The start destination.**
@@ -40,13 +40,13 @@ data object ConnectRoute
  *   Home/Decks/Profile/Settings tabs. The connection strip lives inside the shell.
  * - [GameRoute] renders the full-screen [ImmersiveGameScreen] with no shell chrome at all — no
  *   bottom bar / rail, no connection strip — so the game surface is edge-to-edge and immersive.
- * - [CatalogRoute] renders the debug-only [ComponentCatalogScreen] (story 0015), also outside the
+ * - [CatalogRoute] renders the debug-only [ComponentCatalogScreen], also outside the
  *   shell chrome; it is reached from the Settings dev entry.
  *
  * Entering the game / opening the catalog are hoisted actions ([AppShell]'s `onEnterGame` /
  * `onOpenCatalog`) so the shell needs no knowledge of the root graph; exiting simply pops back.
  *
- * ## Entry policy (story 0047)
+ * ## Entry policy
  *
  * **A launch begins on the connect flow, and the shell is only ever entered with a live session.**
  *
@@ -56,7 +56,7 @@ data object ConnectRoute
  * there is no session" is, at cold start, unconditional — which is why this graph states it as a fixed
  * [startDestination][NavHost] rather than a runtime branch that could only ever go one way. Making it
  * a branch would be a gate that reads state nothing produces, which is exactly the defect class this
- * story fixes.
+ * fixes.
  *
  * The two transitions keep that invariant true:
  * - **sign-in success** ([connectFlow]'s `onConnected`) navigates to [ShellRoute] popping [ConnectRoute]
@@ -75,7 +75,7 @@ data object ConnectRoute
  *   `ConnectionRepository.retry()`, which re-runs the last connect command and is a no-op when there is
  *   none. The strip lives inside the shell, and the entry policy above means the shell is only reachable
  *   after a successful connect — so wherever Retry is visible there is always a command to re-run. It is
- *   never the first-connect affordance, and it is never the dead control it was before this story (when
+ *   never the first-connect affordance, and it is never the dead control it was without it (when
  *   the app launched straight into the shell with no session and Retry had nothing to retry).
  *
  * @param connectFlow the connect destination's content, hoisted so the shell's navigation tests can
@@ -114,7 +114,7 @@ fun AppNavHost(
                 onOpenCatalog = { navController.navigate(CatalogRoute) },
                 connectionStatusBar = connectionStatusBar,
                 onSignOut = {
-                    // Teardown first (story 0046: a deliberate exit sends Logout, it is not a drop),
+                    // Teardown first (a deliberate exit sends Logout, it is not a drop),
                     // then return to the connect flow with the signed-out shell popped.
                     onSignOut()
                     navController.navigate(ConnectRoute) {

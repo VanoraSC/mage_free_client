@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /*
- * Lobby browse request/response messages layered onto the 0004 envelope (story 0027, Epic 6). These
+ * Lobby browse request/response messages layered onto the 0004 envelope. These
  * extend the sealed ClientMessage/ServerMessage hierarchies — they do not fork them — so the additive,
  * forward-compatible versioning rules of ProtocolVersion continue to hold: an older peer that does not
  * know a `type` tolerates it via the polymorphic default deserializer (see ProtocolJson).
@@ -12,9 +12,9 @@ import kotlinx.serialization.Serializable
  * Browsing the XMage lobby is **poll/request-response**, not a server push: the app asks for the open
  * tables, the room's users, and the available game types, and the bridge replies with the correlated
  * list. Each request carries a `requestId` echoed onto its reply (the `GetServerInfo`→`ServerInfo`
- * shape of story 0006). The carried summaries are the app-schema projection of the browse-relevant
+ * shape). The carried summaries are the app-schema projection of the browse-relevant
  * `mage.view.*` fields, produced at the single mapper boundary (`magefree.bridge.mapping`) so no
- * upstream shape crosses the wire. This story is **read-only**: join/create/watch are Epic 7.
+ * upstream shape crosses the wire. this is **read-only**: join/create/watch are the table layer.
  */
 
 /**

@@ -8,7 +8,7 @@ import magefree.decks.model.DeckList as DeviceDeckList
 import magefree.decks.model.DeckListCard as DeviceDeckListCard
 
 /**
- * The deck half of the table client's mapper boundary (story 0037): projects a 0033 device-side [Deck]
+ * The deck half of the table client's mapper boundary: projects a 0033 device-side [Deck]
  * onto 0036's wire [DeckList] so a caller passes a domain deck to `join`/`submit`/`update` and never a
  * `:protocol` type.
  *

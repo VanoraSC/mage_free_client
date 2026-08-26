@@ -8,8 +8,8 @@ package magefree.model
  * (`magefree.protocol.SessionStateCode`) *into* this model at its mapper boundary, so nothing above
  * `:core:network` ever imports a wire shape.
  *
- * The states mirror story 0010's app-side `magefree.app.connection.ConnectionState` one-for-one
- * (same names, same order) so story 0017 can consolidate the shell onto this type without a
+ * The states mirror the app-side `magefree.app.connection.ConnectionState` one-for-one
+ * (same names, same order) so the shell consolidates onto this type without a
  * behavioural change.
  */
 enum class ConnectionState {
@@ -27,7 +27,7 @@ enum class ConnectionState {
 
     /**
      * The socket is back and the held session is being re-attached — a `Resume` was sent and its ack
-     * is awaited (story 0023/0024). Distinct from [Reconnecting] (still reaching the bridge) so the UI
+     * is awaited. Distinct from [Reconnecting] (still reaching the bridge) so the UI
      * can show a "restoring your session" state in the moment before [Connected].
      */
     Restoring,

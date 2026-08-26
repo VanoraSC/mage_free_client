@@ -12,12 +12,12 @@ import magefree.network.game.ManaType
 import magefree.network.game.PassPriorityScope
 
 /**
- * A scriptable [GameClient] test double (story 0052) for hermetic tests of downstream code — no bridge,
+ * A scriptable [GameClient] test double for hermetic tests of downstream code — no bridge,
  * no `:protocol`. Every verb records its call and returns its configured [Result]; [observeGame] emits
  * its `seed` **first** (exactly as production does), then replays [gameStates], then forwards anything
  * pushed through [emitGameState], so a test can drive a board through a whole game without a socket.
  *
- * The seed-first behaviour is not incidental: story 0044 found that a fake which skipped the seed
+ * The seed-first behaviour is not incidental: a fake which skips the seed
  * manufactures a loading state production never has, and would hide a regression in seed emission
  * entirely. This one mirrors `DefaultGameClient.observeGame`.
  *
@@ -43,7 +43,7 @@ class FakeGameClient(
     var gameStates: List<GameState> = emptyList()
 
     /**
-     * What [refreshGame] returns (story 0054). Defaults to the bridge's honest "nothing yet" rather than
+     * What [refreshGame] returns. Defaults to the bridge's honest "nothing yet" rather than
      * to an empty board — see [refreshGame].
      */
     var refreshResult: Result<GameSnapshot> =
@@ -136,7 +136,7 @@ class FakeGameClient(
     override suspend fun concede(gameId: String): Result<Unit> = record("concede:$gameId")
 
     /**
-     * Records the read and returns [refreshResult] (story 0054).
+     * Records the read and returns [refreshResult].
      *
      * The default is a **failure** — [GameStateUnavailableReason.NoStateYet] — because that is what the
      * real bridge answers until it has relayed a snapshot for the game, and a fake that handed back an

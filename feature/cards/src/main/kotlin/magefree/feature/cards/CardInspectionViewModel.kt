@@ -57,13 +57,13 @@ data class CardInspectionUiState(
 }
 
 /**
- * MVVM ViewModel for the read-only, full-bleed card inspection view (story 0032). [load] fetches a
+ * MVVM ViewModel for the read-only, full-bleed card inspection view. [load] fetches a
  * single oracle [Card] from 0030's offline [CardCatalog] by id and maps it into [CardInspectionUiState];
  * [flipFace] toggles the shown face for a double-faced card, recomputing the art request for that face
  * (front/back via [CardArtFace]). Text always comes from the bundled catalog, so it is readable even
  * when art is uncached/offline (the screen renders the design-system placeholder on an art miss).
  *
- * Read-only — no in-game modifications/abilities (EPIC-11+) and no deck-add (Epic 9).
+ * Read-only — no in-game modifications or abilities, and no deck-add (deck building).
  */
 
 class CardInspectionViewModel
@@ -83,7 +83,7 @@ class CardInspectionViewModel
          *
          * This is a bare `launch` and `viewModelScope`'s `SupervisorJob` carries no
          * `CoroutineExceptionHandler`, so an unguarded catalog failure would reach the default handler
-         * and crash the process. Fail soft instead (story 0042, defect B).
+         * and crash the process. Fail soft instead.
          */
         fun load(id: CardId) {
             lastRequested = id

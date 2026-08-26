@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * given [script] in order, then relays any messages later pushed via [emit], staying open until the
  * collection is cancelled (socket close / [disconnect]). This lets a test drive **every**
  * `SessionStateCode` path (and the mapped-push/`GetServerInfo` paths) through the real WebSocket +
- * [SessionCoordinator] plumbing, and — for story 0023 — prove a parked session survives an app-socket
+ * [SessionCoordinator] plumbing, and prove a parked session survives an app-socket
  * drop and continues on the resumed socket **with no second `connect`**.
  *
  * The scripted messages are the *upstream* view; the coordinator stamps the login's `requestId` onto
@@ -57,12 +57,12 @@ public class FakeUpstreamSession(
     private val scriptedTableDetail: ServerMessage? = null,
     private val scriptedActionOk: Boolean = true,
 ) : UpstreamSession {
-    /** The last table-action request the coordinator dispatched, captured for assertions (story 0036). */
+    /** The last table-action request the coordinator dispatched, captured for assertions. */
     @Volatile
     public var lastTableRequest: Any? = null
         private set
 
-    /** The last in-game request the coordinator dispatched, captured for assertions (story 0051). */
+    /** The last in-game request the coordinator dispatched, captured for assertions. */
     @Volatile
     public var lastGameRequest: ClientMessage? = null
         private set
@@ -80,7 +80,7 @@ public class FakeUpstreamSession(
      * Whether the upstream still answers a keepalive probe. Set to `false` to stand in for XMage having
      * dropped the session underneath the bridge — its `UserManagerImpl` expiring an idle user, a server
      * restart, an upstream network partition. Nothing about the app socket changes; only the upstream
-     * stops being alive, which is the one-sided failure story 0050 defect A is about.
+     * stops being alive, which is the one-sided failure liveness probing exists to catch.
      */
     @Volatile
     public var upstreamAlive: Boolean = true

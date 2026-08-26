@@ -15,7 +15,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * **The replacement for Hilt's compile-time safety (story 0081).**
+ * **The replacement for Hilt's compile-time safety.**
  *
  * Hilt failed the *build* when a binding was missing. Koin fails at *runtime*, on whichever screen
  * first asks for it — so a mechanical conversion that misses one binding compiles cleanly, ships,
@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
  * lambda — and lambda-bodied definitions are most of this graph, because several bindings do real
  * work when constructed: the Room database is built, the card catalog opens the bundled SQLite
  * asset, both DataStores are created. A binding that resolves in principle and throws in practice is
- * precisely what this story is exposed to, so the check constructs each one.
+ * precisely what this is exposed to, so the check constructs each one.
  *
  * Enumerating definitions needs `@KoinInternalApi`. That is a deliberate, test-only trade: the
  * alternative is a hand-maintained list of types to resolve, which reintroduces exactly the

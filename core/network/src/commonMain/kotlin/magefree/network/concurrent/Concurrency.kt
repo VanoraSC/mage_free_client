@@ -2,7 +2,7 @@ package magefree.network.concurrent
 
 /*
  * The thread-safe primitives this module's session layer needs, expressed so they can live in
- * `commonMain` (story 0084).
+ * `commonMain`.
  *
  * **These are `expect`s whose `actual`s are typealiases to the `java.util.concurrent` classes the
  * pre-port code named directly**, so on every current target the bytecode, the memory model and the

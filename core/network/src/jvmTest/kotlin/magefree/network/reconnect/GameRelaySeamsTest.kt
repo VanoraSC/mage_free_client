@@ -30,7 +30,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hermetic coverage of story 0052's two relay seams — the game-side twins of `TableRelaySeamsTest`,
+ * Hermetic coverage of the two relay seams — the game-side twins of `TableRelaySeamsTest`,
  * driven through [SessionRelay.run] with no socket:
  *
  * - **(a) Correlation** — a 0051 [GameActionResult] carrying a `requestId` that matches an outstanding
@@ -109,7 +109,7 @@ class GameRelaySeamsTest {
     @Test
     fun bothArmsOfTheGameStateReadAreCorrelatedToTheirWaiters() =
         runTest {
-            // Story 0054. The *miss* matters as much as the hit: an uncorrelated `GameStateUnavailable`
+            // The *miss* matters as much as the hit: an uncorrelated `GameStateUnavailable`
             // would leave the reconnecting board blocked on its waiter until the request timed out —
             // indistinguishable from a bridge that never answered, which is the exact failure the read
             // exists to remove.

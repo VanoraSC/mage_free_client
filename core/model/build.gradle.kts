@@ -2,7 +2,7 @@ plugins {
     id("magefree.kmp.library")
 }
 
-// Multiplatform (story 0080): the app's connection/session domain types. Deliberately
+// Multiplatform: the app's connection/session domain types. Deliberately
 // dependency-free — no Android SDK and no `:protocol` wire types, so it configures in the JVM-only
 // container too and stays the single, wire-agnostic vocabulary everything above `:core:network`
 // speaks. The `jvm()` target comes from the convention plugin; SDK/Java/Kotlin settings are not

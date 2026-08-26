@@ -19,9 +19,9 @@ import org.koin.dsl.module
 val cardCatalogModule =
     module {
         /**
-         * The platform edge for bundled files (story 0082). Declared as a binding rather than
-         * constructed inline so `:core:decks` can consume the same one for `formats.json` when story
-         * 0083 converts it — §9.2's point that one resource story answers both.
+         * The platform edge for bundled files. Declared as a binding rather than
+         * constructed inline so `:core:decks` can consume the same one for `formats.json` when
+         * converts it — the point that one resource boundary answers both.
          */
         single<BundledFiles> { AndroidBundledFiles(androidContext()) }
 

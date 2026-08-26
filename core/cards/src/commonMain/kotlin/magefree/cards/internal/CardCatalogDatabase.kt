@@ -26,7 +26,7 @@ import okio.use
  * copy's name embeds [LOCAL_REVISION] as well as [ASSET_VERSION], so changing what preparation does
  * re-copies once rather than leaving an already-installed copy unprepared.
  *
- * **Story 0082 took `Context` out of this object.** Where the bytes come from and where they may be
+ * **No `Context` reaches this object.** Where the bytes come from and where they may be
  * written are now [BundledFiles]' business; the copy-once, prepare-once, version-stamped logic here
  * is platform-independent and is expressed in okio so it can move to a common source set unchanged.
  */
@@ -39,7 +39,7 @@ internal object CardCatalogDatabase {
     /**
      * Bump whenever [prepare] changes, so existing copies are re-laid rather than left stale.
      *
-     * Bumped to 3 by story 0082: [prepare] now creates the index through `androidx.sqlite` rather
+     * [prepare] creates the index through `androidx.sqlite` rather
      * than `SQLiteDatabase`. An already-installed device holds a copy laid down by the old path, and
      * leaving it would be invisible until an exact-name lookup got slow — so the copy is re-laid
      * once on first launch after the upgrade.
@@ -124,7 +124,7 @@ internal object CardCatalogDatabase {
      * One-time local preparation of the private copy: add the NOCASE name index. Done here, on a
      * not-yet-published temp file, so no reader ever sees an unprepared copy.
      *
-     * **Story 0082 lost a guardrail here and it is worth stating rather than discovering.**
+     * **There is no guardrail here, and it is worth stating rather than discovering.**
      * `SQLiteDriver.open(fileName)` takes no flags, so `OPEN_READONLY` — which every post-preparation
      * open used to pass — cannot be expressed. Nothing writes to the catalog (it is an immutable
      * bundled asset and [SqliteCardCatalog] only ever issues `SELECT`s), so behaviour is unchanged;

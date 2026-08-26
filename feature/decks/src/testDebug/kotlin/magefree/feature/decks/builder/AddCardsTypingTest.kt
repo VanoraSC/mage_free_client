@@ -35,7 +35,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Story 0049 — the builder's add-cards surface must accept typing too.
+ * The builder's add-cards surface must accept typing too.
  *
  * It is the second half of the same defect: `AddCardsScreen` had its own hand-rolled
  * `OutlinedTextField` controlled on the **debounced** `uiState.query`, so a player could not find a

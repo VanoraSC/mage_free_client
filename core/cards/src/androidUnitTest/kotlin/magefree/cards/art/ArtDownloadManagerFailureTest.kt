@@ -17,7 +17,7 @@ import java.io.IOException
 import java.util.Collections
 
 /**
- * Failure **containment** for the bulk pre-download (story 0043, defect C).
+ * Failure **containment** for the bulk pre-download.
  *
  * The production app scope is a `SupervisorJob` with **no** `CoroutineExceptionHandler`, so anything
  * that escapes [ArtDownloadManager.run] reaches the default handler and crashes the process. These

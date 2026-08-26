@@ -12,7 +12,7 @@ import org.koin.core.module.Module
 private val Context.serverDataStore by preferencesDataStore(name = "server_targets")
 
 /**
- * The Android edge of [networkDefinitions] (story 0084): the two `Context`-backed reconnect
+ * The Android edge of [networkDefinitions]: the two `Context`-backed reconnect
  * observers, the Preferences DataStore, and the IO dispatcher. This is the `networkModule` `:app`
  * lists in `appModules`.
  *

@@ -15,7 +15,7 @@ import magefree.model.ServerTarget
 import okio.IOException
 
 /**
- * Persists the user's saved bridge servers (story 0017) so the list survives restarts.
+ * Persists the user's saved bridge servers so the list survives restarts.
  *
  * Backed by a Preferences [DataStore] holding one JSON-encoded, order-preserving list under a single
  * key. `:core:model`'s [ServerTarget] stays free of serialization concerns — it is mapped to a
@@ -33,7 +33,7 @@ class ServerRepository
         /**
          * The saved servers, observable and reactive to every [add] / [remove].
          *
-         * Story 0026 F6 — the read path degrades gracefully instead of throwing into the server-list
+         * The read path degrades gracefully instead of throwing into the server-list
          * screen: the canonical DataStore [catch] recovers a read [IOException] by emitting
          * [emptyPreferences] (→ an empty list), and [decodeServers] tolerates a corrupt/unparseable
          * stored value by returning `[]`.
@@ -63,7 +63,7 @@ class ServerRepository
         private fun Preferences.decodeServers(): List<ServerTarget> =
             this[KEY]
                 ?.let { stored ->
-                    // Story 0026 F6: a corrupt/stale value must not throw into every collector; degrade
+                    // A corrupt/stale value must not throw into every collector; degrade
                     // to an empty list rather than propagating the SerializationException.
                     try {
                         json.decodeFromString<List<StoredServer>>(stored)

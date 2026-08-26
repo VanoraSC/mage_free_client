@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.sp
  * The brand typography.
  *
  * Built on the platform default [FontFamily] so no font assets are bundled yet (real brand fonts are
- * tracked as a follow-up, see the story's out-of-scope note). The scale keeps Material 3's role names
+ * tracked as a follow-up, see the out-of-scope note). The scale keeps Material 3's role names
  * and relative rhythm but tightens weights for a slightly more deliberate, editorial feel. Sizes stay
  * in `sp` so dynamic type continues to scale them.
  */

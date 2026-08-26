@@ -10,7 +10,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.WatchingGame
 
 /**
- * The **pure** reducer that folds story 0051's server-pushed game events into a [GameState] (story 0052)
+ * The **pure** reducer that folds the server-pushed game events into a [GameState]
  * — the game-side twin of 0037's `TableEventFold`, and for the same reason: a plain function with no
  * client, socket or coroutine dependency is exhaustively unit-testable over scripted sequences (game
  * start → phases → a prompt appears and clears → game over), independent of [GameClient].

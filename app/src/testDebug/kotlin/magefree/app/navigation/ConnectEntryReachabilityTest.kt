@@ -29,11 +29,11 @@ import org.robolectric.annotation.Config
 import kotlin.reflect.KClass
 
 /**
- * Story 0047 — the **cold-start reachability** test for the connect flow (verification standard 2).
+ * The **cold-start reachability** test for the connect flow (verification standard 2).
  *
  * It drives the real root [AppNavHost] graph on the JVM (Robolectric), so it is part of the hermetic
  * `:app:testDebugUnitTest` gate rather than a device-only androidTest, and proves the three things
- * that were broken before this story:
+ * that were broken without it:
  *
  * 1. a launch with **no session** lands on the connect destination, not inside the shell;
  * 2. sign-in success hands off to the shell and does **not** leave connect on the back stack;

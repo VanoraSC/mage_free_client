@@ -25,7 +25,7 @@ import magefree.protocol.TargetPrompt
 import java.util.UUID
 
 /**
- * The per-callback mappers for the in-game **prompts** — "the server is waiting for you" (story 0051).
+ * The per-callback mappers for the in-game **prompts** — "the server is waiting for you".
  *
  * Every prompt callback but one carries a `mage.view.GameClientMessage`, whose fields mean different
  * things per callback (`cardsView1` is a candidate set for `GAME_TARGET` but the first pile for
@@ -59,7 +59,7 @@ public object GamePromptMapper {
      * fallbacks:
      * - `PICK_ABILITY` — ordering simultaneous triggered abilities — whose `GameController.java`
      *   overload never populates it (`Mage.Server/.../GameController.java:881-885`, read directly),
-     *   because for that prompt the candidate set *is* the answer set. Story 0072: falling back to
+     *   because for that prompt the candidate set *is* the answer set. Falling back to
      *   `cards.map { it.id }` is correct here — there is no separate narrowing.
      * - `TargetCardInLibrary` — a fetchland's "search your library" — whose `HumanPlayer.chooseTarget`
      *   overload (read directly) sends `cardsView1` as the **entire searched zone** (the whole
@@ -67,7 +67,7 @@ public object GamePromptMapper {
      *   `options["possibleTargets"]` (`target.possibleTargets(...)`, computed before the event fires).
      *   Falling back to `cards.map { it.id }` here — as the `PICK_ABILITY` case does — would offer
      *   every card in the library as if it were a legal fetch, indistinguishable from the 1-4 that
-     *   actually are (**found live, Pete, 2026-08-20**: a Marsh Flats activation with no way to tell
+     *   actually are (a Marsh Flats activation with no way to tell
      *   which of ~30 library cards could actually be picked). `possibleTargets`, when present, is
      *   therefore preferred over the whole-`cardsView1` fallback.
      */

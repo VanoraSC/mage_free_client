@@ -6,11 +6,11 @@ import kotlinx.coroutines.launch
 import magefree.network.ConnectionRepository
 
 /**
- * The shell's one session **command** (story 0047), kept apart from [ConnectionStatusViewModel], which
+ * The shell's one session **command**, kept apart from [ConnectionStatusViewModel], which
  * only *observes* state for the status strip.
  *
- * `AppRoot` binds [signOut] to the root graph's sign-out transition. It is the deliberate exit story
- * 0046 built: [ConnectionRepository.signOut] drops the connect intent **and** tells the bridge to end
+ * `AppRoot` binds [signOut] to the root graph's sign-out transition. It is the deliberate exit
+ * built: [ConnectionRepository.signOut] drops the connect intent **and** tells the bridge to end
  * the upstream XMage session now (a `Logout`), rather than the silent teardown a backgrounding or a
  * dropped socket produces, which leaves the session parked for a reconnect to resume.
  *

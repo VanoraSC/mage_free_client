@@ -24,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * **Every `koinViewModel()` call site, resolved for real (story 0081).**
+ * **Every `koinViewModel()` call site, resolved for real.**
  *
  * [KoinGraphTest] proves each declared binding can be *instantiated*, but it resolves through
  * `koin.get<T>()`. Composables reach their ViewModels through `koinViewModel()`, which is a

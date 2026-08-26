@@ -11,7 +11,7 @@ import org.robolectric.RobolectricTestRunner
 
 /**
  * `formats.json` is really bundled, and really readable through the boundary `:core:cards` reads
- * `cards.sqlite` through (story 0083).
+ * `cards.sqlite` through.
  *
  * This is verification standard 2 for the bundled-resource half of the port: on Android the bytes
  * come from `AndroidBundledFiles`, over the APK assets merged out of this module's `androidMain`,

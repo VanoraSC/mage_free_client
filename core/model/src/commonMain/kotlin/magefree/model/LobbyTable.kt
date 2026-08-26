@@ -2,7 +2,7 @@ package magefree.model
 
 /**
  * One open/active table in the lobby, as the game browser shows it — the app-side domain projection of
- * the bridge's `TableSummary` (story 0028). Pure `:core:model`: it carries **no** `:protocol`/`mage.view.*`
+ * the bridge's `TableSummary`. Pure `:core:model`: it carries **no** `:protocol`/`mage.view.*`
  * wire type, so everything above `:core:network` speaks only this shape. `:core:network`'s mapper
  * boundary is the single place a wire summary is translated into a [LobbyTable].
  *

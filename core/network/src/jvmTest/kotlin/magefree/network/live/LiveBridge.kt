@@ -26,7 +26,7 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * One live app→bridge session for the story-0045 integration tests: a **real** [KtorBridgeClient]
+ * One live app→bridge session for the  integration tests: a **real** [KtorBridgeClient]
  * (never a fake) connected to the running `bridge` compose service, plus the two production clients that
  * ride the same socket — [LobbyClientImpl] and the [TableClients] table client.
  *
@@ -42,8 +42,8 @@ internal class LiveBridge(
     private val scope: CoroutineScope,
     private val target: BridgeTarget,
     /**
-     * The reachability source the production reconnect loop watches (story 0024). Defaulting to
-     * "always online" keeps every existing test unchanged; story 0054's reconnect proof passes a
+     * The reachability source the production reconnect loop watches. Defaulting to
+     * "always online" keeps every existing test unchanged; the reconnect proof passes a
      * [magefree.network.reconnect.FakeConnectivityObserver] so it can take the **radio** away rather
      * than the collector — see [dropRadio].
      */
@@ -55,14 +55,14 @@ internal class LiveBridge(
     /** Every session event the connect flow emitted, in order — the diagnostic record for a failure. */
     val events: MutableList<SessionEvent> = CopyOnWriteArrayList()
 
-    /** The production lobby client over this socket (story 0028). */
+    /** The production lobby client over this socket. */
     val lobby: LobbyClient by lazy { LobbyClientImpl(client) }
 
-    /** The production table client over this socket (stories 0037/0040/0041). */
+    /** The production table client over this socket. */
     val tables: TableClient by lazy { TableClients.overBridge(client, client.connectionState) }
 
     /**
-     * The production game client over this same socket (story 0052) — assembled through the public,
+     * The production game client over this same socket — assembled through the public,
      * `:protocol`-free [GameClients] factory exactly as `NetworkModule` does, so the live game test
      * drives the real client rather than a double.
      */
@@ -110,7 +110,7 @@ internal class LiveBridge(
     }
 
     /**
-     * Signs out **deliberately** (story 0046): the production `signOut` puts a `Logout` on the wire
+     * Signs out **deliberately**: the production `signOut` puts a `Logout` on the wire
      * before closing, so the bridge disconnects the upstream XMage session now instead of parking it for
      * the resume TTL. Then stops collecting, as [close] does.
      */
@@ -124,7 +124,7 @@ internal class LiveBridge(
      * Ends the session the way a **lost connection or a backgrounded app** does: cancel the collection of
      * the cold `connect` flow, which closes the socket with no `Logout` on it. Nothing here calls
      * `disconnect`/`signOut` — this is the shape the bridge must read as "park it, they may be back"
-     * (stories 0023/0024).
+     *.
      *
      * Note what this does **not** do: cancelling the flow discards the `ResumeHandle` with it, so a later
      * `connect` is a fresh `Login`, not a `Resume`. For the reconnect-and-resume shape — the one an app
@@ -136,10 +136,10 @@ internal class LiveBridge(
     }
 
     /**
-     * Takes the **radio** away without touching the session flow (story 0054's reconnect proof).
+     * Takes the **radio** away without touching the session flow (the reconnect proof).
      *
      * This is the production drop, exactly: `ReconnectingSession` watches [connectivity] and ends a
-     * running attempt the moment the network goes (story 0050 defect B), so the socket closes with no
+     * running attempt the moment the network goes, so the socket closes with no
      * `Logout` on it — the bridge parks the session — while the reconnect loop stays alive holding its
      * `ResumeHandle`. It is literally the shape `KtorBridgeClient`'s KDoc records from the on-device
      * smoke: Android tearing down a lingering network after a WIFI/CELLULAR hand-off.

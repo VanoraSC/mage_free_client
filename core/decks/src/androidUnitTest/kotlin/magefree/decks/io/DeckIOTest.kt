@@ -108,7 +108,7 @@ class DeckIOTest {
     @Test
     fun `text import recognizes an MTGGoldfish export's About Name Deck Sideboard headers`() =
         runTest {
-            // Found live (Pete, 2026-08-20): this exact shape put all 75 cards in the sideboard. The
+            // This exact shape put all 75 cards in the sideboard. The
             // blank line between the About/Name preamble and Deck latched the old empty-line-switches-
             // to-sideboard heuristic, and nothing ever switched it back -- including the real Deck
             // section. Recognizing Deck/Sideboard as explicit headers (as MtgaFormat already does for

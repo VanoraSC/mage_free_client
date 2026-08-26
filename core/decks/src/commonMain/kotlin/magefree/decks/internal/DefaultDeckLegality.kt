@@ -98,7 +98,7 @@ internal class DefaultDeckLegality(
 
             // Set + rarity legality, by card name across all printings, using the offline catalog.
             // One batched, indexable exact-name lookup for the whole deck — not a substring search per
-            // distinct name (story 0042, defect D).
+            // distinct name.
             val legalSets = rules.legalSetCodes.toHashSet()
             val allowedRarities = rules.allowedRarities?.toHashSet()
             val resolved = catalog.cardsByName(names)

@@ -21,7 +21,7 @@ import org.junit.Test
 
 /**
  * Hermetic coverage of [controlsFor] — the projection of the server's outstanding prompt onto the
- * floating controls that answer it (story 0057).
+ * floating controls that answer it.
  *
  * Every test here exists because of a specific way the controls could offer the player something the
  * server did not: a target the prompt never listed, a cancel where the prompt is required, a button on
@@ -62,7 +62,7 @@ class BoardControlsTest {
 
     @Test
     fun `a select always offers a pass, including when the server offers nothing to play`() {
-        // Holding priority with nothing playable is a real state (requirements §4.2, observed live), and
+        // Holding priority with nothing playable is a real state (observed live), and
         // it is the one where a board that only lit up cards would look frozen.
         val controls = controlsFor(baseState().copy(prompt = GamePrompt.Select(message = "Select"), playable = emptyList()))
 
@@ -117,7 +117,7 @@ class BoardControlsTest {
 
     @Test
     fun `a tap on a candidate is one pick, never an accumulator`() {
-        // §17.2, verified live: the server re-prompts with an updated count and a narrowed candidate set
+        // Verified live: the server re-prompts with an updated count and a narrowed candidate set
         // after each pick, so the action a tap produces must be the pick itself.
         val controls =
             controlsFor(baseState().copy(prompt = GamePrompt.Target(message = "Select targets", targetIds = listOf("o-1", "y-1"))))
@@ -127,8 +127,8 @@ class BoardControlsTest {
     }
 
     @Test
-    fun `an optional target prompt offers both done and cancel from the start (story 0075)`() {
-        // Story 0075: an optional (`isRequired = false`) prompt is answerable with zero targets by
+    fun `an optional target prompt offers both done and cancel from the start`() {
+        // an optional (`isRequired = false`) prompt is answerable with zero targets by
         // definition, so Done must be offered from the moment it arrives, not only after a pick — the
         // previous behavior (Done withheld until `hasPicked`) left an "up to one, no legal targets"
         // prompt with no honestly-labeled way to finish, only the unrelated cast-cancel button.
@@ -144,7 +144,7 @@ class BoardControlsTest {
 
         val afterAPick = controlsFor(stateWithBoardCards().copy(prompt = prompt), hasPickedTarget = true)!!
         assertEquals(
-            "the player's confirmation is the final done (§17.2)",
+            "the player's confirmation is the final done",
             BoardAction.FinishTargeting,
             afterAPick.buttons.first { it.label == DONE_LABEL }.action,
         )
@@ -172,7 +172,7 @@ class BoardControlsTest {
     }
 
     @Test
-    fun `an up-to-one target prompt with no legal candidates uses the server's own Done label (story 0075)`() {
+    fun `an up-to-one target prompt with no legal candidates uses the server's own Done label`() {
         // The exact live scenario: Gideon, Battle-Forged's +2 ("up to one target creature an opponent
         // controls") against a board with no opposing creatures — targetIds empty, required false,
         // and upstream sends its own "Done" label rather than relying on our fallback.
@@ -208,16 +208,16 @@ class BoardControlsTest {
         )
     }
 
-    // ---- combat: declaring attackers and blockers (story 0061) --------------------------------------
+    // ---- combat: declaring attackers and blockers --------------------------------------
     //
     // Reachability (standard 2): every id these gate on is produced by the server's own
     // `GamePrompt.Select` during `DeclareAttackers`/`DeclareBlockers` — `possibleAttackers` and
-    // `possibleBlockers` in `PromptOptions.ids`, measured live and recorded in requirements §7.2/§7.3.
+    // `possibleBlockers` in `PromptOptions.ids`, measured live and recorded in the requirements.
     // They travel the bridge's generic `optionsView()` (any collection-valued option becomes an id
     // list), so nothing in `:protocol` or `:bridge` is specific to combat.
     //
     // **Every fixture here has `playable` empty**, because that is how the server really sends a
-    // declaration (§7.2: `playable = 0`). A fixture whose creatures also appeared in `playable` would
+    // declaration (`playable = 0`). A fixture whose creatures also appeared in `playable` would
     // pass against the projection that reads `playable`, and would prove nothing.
 
     @Test
@@ -260,7 +260,7 @@ class BoardControlsTest {
 
     @Test
     fun `blocking is never offered while attackers are being declared, nor the other way round`() {
-        // §7.4 (Pete): combat is two assignment problems that never belong to the same player at the
+        // Combat is two assignment problems that never belong to the same player at the
         // same moment. The board must be in exactly one of them.
         val attacking = controlsFor(declareAttackersState())!!
         assertEquals("Select attackers", attacking.message)
@@ -298,13 +298,13 @@ class BoardControlsTest {
 
     @Test
     fun `all attack is offered only when the server sent it, and never for blocking`() {
-        // The server supplies the shortcut for attacking (§7.2) and none for blocking (§7.3). Inventing
+        // The server supplies the shortcut for attacking and none for blocking. Inventing
         // an "all block" would be inventing a reply the server has no arm for.
         val attacking = controlsFor(declareAttackersState())!!
         val allAttack = attacking.buttons.single { it.action == BoardAction.UseSpecial }
         assertEquals("the label is the server's own specialButton text", "All attack", allAttack.label)
         assertEquals(
-            "committing the whole team confirms first (§16.4)",
+            "committing the whole team confirms first",
             ALL_ATTACK_CONFIRM_LABEL,
             allAttack.confirmLabel,
         )
@@ -335,7 +335,7 @@ class BoardControlsTest {
     @Test
     fun `the pairing question the server asks mid-declaration is an ordinary target prompt`() {
         // Both follow-ups — `TargetDefender` and `Select attacker to block` — arrive through
-        // `fireSelectTargetEvent` as `GAME_TARGET` (§7.5), which 0057 already answers with
+        // `fireSelectTargetEvent` as `GAME_TARGET`, which 0057 already answers with
         // `chooseTarget`. Nothing here decides *when* the server asks.
         val controls =
             controlsFor(
@@ -435,7 +435,7 @@ class BoardControlsTest {
     @Test
     fun `a candidate the board does draw stays a board tap, not a button`() {
         // The complement: what the board can show, the board shows. Only what it cannot draw is promoted
-        // into the panel, so targeting a permanent stays the tap model of §5.2.
+        // into the panel, so targeting a permanent stays the tap model.
         val controls =
             controlsFor(
                 stateWithBoardCards().copy(
@@ -504,7 +504,7 @@ class BoardControlsTest {
 
     @Test
     fun `a target prompt carrying its own cards offers them as candidates`() {
-        // The scry decision arrives exactly like this (requirements §11.3, verified live): an ordinary
+        // The scry decision arrives exactly like this (verified live): an ordinary
         // Target prompt carrying the real card, which is not on the board to be tapped.
         val controls =
             controlsFor(
@@ -523,8 +523,8 @@ class BoardControlsTest {
     }
 
     @Test
-    fun `a library search offers only the legal fetches, not the whole searched library (story 0079)`() {
-        // Found live (Pete, 2026-08-20): Marsh Flats offered no usable candidates. The bridge now maps
+    fun `a library search offers only the legal fetches, not the whole searched library`() {
+        // Marsh Flats offered no usable candidates. The bridge now maps
         // a library search's targetIds from the server's own possibleTargets (see GamePromptMapper),
         // but prompt.cards still carries the whole library it was given -- this is the UI-side half of
         // the fix, narrowing what is actually shown to what is actually pickable.
@@ -568,7 +568,7 @@ class BoardControlsTest {
             listOf(BoardAction.UnlockMana(ManaType.Red)),
             controls.buttons.map { it.action }.filterIsInstance<BoardAction.UnlockMana>(),
         )
-        assertTrue("the mana step is where cancel was first proven (§6.4a)", controls.buttons.any { it.action == BoardAction.CancelPrompt })
+        assertTrue("the mana step is where cancel was first proven", controls.buttons.any { it.action == BoardAction.CancelPrompt })
     }
 
     @Test
@@ -779,9 +779,9 @@ class BoardControlsTest {
     }
 
     /**
-     * A declaration exactly as the server sends one (§7.2/§7.3): two creatures of the viewer's own on
+     * A declaration exactly as the server sends one: two creatures of the viewer's own on
      * the battlefield, two of the opponent's, the ids in the prompt's **options** — and **`playable`
-     * empty**, which is the fact the whole story turns on.
+     * empty**, which is the fact this turns on.
      */
     private fun declarationState(
         message: String,
@@ -821,7 +821,7 @@ class BoardControlsTest {
         declarationState(
             message = "Select blockers",
             idsKey = PromptOptions.POSSIBLE_BLOCKERS,
-            // No special button: blocking has no shortcut (§7.3).
+            // No special button: blocking has no shortcut.
             options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-1", "y-2"))),
         )
 

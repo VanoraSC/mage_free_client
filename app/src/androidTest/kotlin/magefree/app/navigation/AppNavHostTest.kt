@@ -24,12 +24,12 @@ import org.junit.runner.RunWith
  * Instrumented Compose UI test for the **root** [AppNavHost]. NOT part of the hermetic
  * `./gradlew check` gate — run with a device/emulator via `./gradlew :app:connectedDebugAndroidTest`.
  *
- * It proves story-0011's core flow: the shell (with tab chrome) is reached from the connect flow; the
+ * It proves the core flow: the shell (with tab chrome) is reached from the connect flow; the
  * dev stub enters the immersive [GameRoute][magefree.app.game.GameRoute], which shows the full-bleed
  * placeholder with **no** bottom-bar chrome; and both the on-screen exit control and system back
  * return to the shell (restoring the chrome).
  *
- * A stateless connection strip and a stateless stand-in for the connect flow (story 0047 made
+ * A stateless connection strip and a stateless stand-in for the connect flow (made
  * [ConnectRoute] the start destination) keep the test free of Hilt. The cold-start entry policy itself
  * is covered hermetically by `ConnectEntryReachabilityTest` in `:app`'s unit tests.
  */
@@ -73,7 +73,7 @@ class AppNavHostTest {
     fun startsOnConnectAndSigningInShowsTheShellWithTabChrome() {
         setNavHost()
 
-        // Story 0047: a launch with no session begins on the connect flow, outside the shell chrome.
+        // a launch with no session begins on the connect flow, outside the shell chrome.
         composeTestRule.onNodeWithText(CONNECT_STAND_IN_LABEL).assertIsDisplayed()
         composeTestRule.onNodeWithText(HOME_TITLE).assertDoesNotExist()
 

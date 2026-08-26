@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * Hermetic JVM unit test for the immersive [GameRoute] wiring — part of the `./gradlew check` gate,
- * no Android framework or device required. It pins the story-0011 invariant that the game is a
+ * no Android framework or device required. It pins the  invariant that the game is a
  * distinct route hosted **outside** the top-level tab set (so the shell chrome is excluded on it).
  */
 class GameRouteTest {

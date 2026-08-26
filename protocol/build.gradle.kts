@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Multiplatform (story 0080): the bridge↔app wire contract. Converted with no source changes —
+// Multiplatform: the bridge↔app wire contract. Converted with no source changes —
 // `:bridge` consumes it from a plain Kotlin/JVM project and `:core:network` from an Android library,
 // and both resolve the `jvm` target.
 kotlin {

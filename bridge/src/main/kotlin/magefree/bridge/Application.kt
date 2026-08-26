@@ -35,7 +35,7 @@ fun main() {
 }
 
 /**
- * How often the bridge pings an app socket, and how long it then waits for the pong (story 0050
+ * How often the bridge pings an app socket, and how long it then waits for the pong (
  * defect B).
  *
  * Ktor disables the server pinger by default (`pingPeriodMillis = PINGER_DISABLED`), which meant a
@@ -72,7 +72,7 @@ fun Application.module(wsPingPeriod: Duration = APP_SOCKET_PING_PERIOD) {
         pingPeriod = wsPingPeriod
         timeout = wsPingPeriod
     }
-    // One registry per application: it holds parked sessions across app-socket drops (story 0023).
+    // One registry per application: it holds parked sessions across app-socket drops.
     // Parented to the application scope so its TTL/keepalive coroutines are cancelled on shutdown.
     val registry = SessionRegistry(parentContext = coroutineContext)
     routing {

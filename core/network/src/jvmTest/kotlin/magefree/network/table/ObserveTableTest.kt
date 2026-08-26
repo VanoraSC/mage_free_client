@@ -31,7 +31,7 @@ import magefree.protocol.MatchStarting as MatchStartingMessage
  * (join → seat update → construct → match-starting), and re-emits the held state on a 0023 resume (a
  * return to [ConnectionState.Connected]) so a reconnect does not strand the seat. No socket.
  *
- * Story 0040 adds the other half: the **seat read**. `observeTable` issues a `GetTable` on open, on each
+ * The other half is the **seat read**. `observeTable` issues a `GetTable` on open, on each
  * table-lifecycle push for this table, and after a resume — and on nothing else, so an observed room
  * never polls in the background. Those tests script `TableDetail` replies through the same fake's
  * request/response seam.
@@ -97,7 +97,7 @@ class ObserveTableTest {
         )
 
     /**
-     * A table whose match is already under way (story 0069) — the shape a late-opening client's very
+     * A table whose match is already under way — the shape a late-opening client's very
      * first `GetTable` read sees. Carries [activeGameId] the way `TableView.getGames()` does; carries no
      * `MatchStarting`, because that push already fired for whichever client caught the live transition.
      */
@@ -127,7 +127,7 @@ class ObserveTableTest {
     @Test
     fun observeTableReadsTheTableOnOpenSoSeatsAppearWithNoPushAtAll() =
         runTest {
-            // The regression this story exists for: with *no* server push of any kind, the room must
+            // The regression this exists for: with *no* server push of any kind, the room must
             // still learn its seats — because XMage never pushes them.
             val reads = Reads(listOf(waitingDetail()))
             val (client, _) = clientOver(reads)
@@ -152,7 +152,7 @@ class ObserveTableTest {
     @Test
     fun aClientThatOpensAnAlreadyStartedTableLearnsTheGameIdFromTheOpenTimeReadAlone() =
         runTest {
-            // Story 0069's defect, reproduced: this client never receives MatchStarting at all — it
+            // the defect, reproduced: this client never receives MatchStarting at all — it
             // opens the room *after* the game already started (back from the lobby, or a relaunch), so
             // the one-shot push already fired for someone else. A test built only on the MatchStarting
             // path would pass against the unfixed code; this one does not touch that path at all.

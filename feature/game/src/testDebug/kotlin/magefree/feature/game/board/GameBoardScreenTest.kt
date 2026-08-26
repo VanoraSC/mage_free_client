@@ -41,15 +41,15 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Stories 0055 + 0057 — the board's **rendering and interaction** tests, in the hermetic gate.
+ * The board's **rendering and interaction** tests, in the hermetic gate.
  *
  * They run on the JVM under Robolectric (`src/testDebug`), so `:feature:game:check` covers them
  * pre-merge. That placement is deliberate and has a history: device-only tests do not run before a
- * merge, which is how an entire epic shipped built, tested and unreachable (stories 0047/0048). A board
+ * merge, which is how an entire epic shipped built, tested and unreachable. A board
  * that renders nothing would pass a ViewModel test suite perfectly.
  *
  * What is asserted here and not in [BoardUiTest] / [BoardControlsTest]: that each region is actually
- * **on screen**, that each region's **empty state** is on screen when it is empty, and — story 0057's
+ * **on screen**, that each region's **empty state** is on screen when it is empty, and — the
  * acceptance criteria with teeth — that **nothing is modal** for any prompt kind, that the visibility
  * toggle cannot hide that the server is waiting, and that a tapped card really does reach the action
  * seam.
@@ -64,7 +64,7 @@ import org.robolectric.annotation.Config
     // Hilt component to render.
     application = Application::class,
     // A representative compact phone in **portrait** — the orientation this board is designed for
-    // (requirements §16.1). Robolectric's 320x470dp default would clip regions that are fine on any
+    // . Robolectric's 320x470dp default would clip regions that are fine on any
     // real phone and make `assertIsDisplayed` fail for the wrong reason.
     qualifiers = "w411dp-h891dp",
 )
@@ -111,7 +111,7 @@ class GameBoardScreenTest {
         }
     }
 
-    // ---- the populated board (story 0055) ------------------------------------------------------------
+    // ---- the populated board ------------------------------------------------------------
 
     @Test
     fun `draws both seats, both battlefields, the stack, the turn and the hand`() {
@@ -149,7 +149,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `states priority explicitly when the viewer holds it with nothing playable`() {
-        // Requirements §4.2's whole reason for existing: a highlight cannot say this, so words must.
+        // Requirements the whole reason for existing: a highlight cannot say this, so words must.
         render(runningGame().copy(viewerHasPriority = true, playable = emptyList()))
 
         composeTestRule.onNodeWithText("Your turn to act").assertIsDisplayed()
@@ -239,7 +239,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `filling the stack does not reflow either battlefield`() {
-        // Requirements §4.1's one surviving requirement: the stack is empty in the common case and fills
+        // Requirements the one surviving requirement: the stack is empty in the common case and fills
         // abruptly, and it must not move the battlefields when it does. Both are measured for real —
         // the same board is re-rendered with the stack full and the positions compared.
         val state = mutableStateOf(runningGame().copy(stack = emptyList()))
@@ -310,12 +310,12 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText("1G").assertIsDisplayed()
     }
 
-    // ---- story 0057: nothing is modal, for any prompt kind ---------------------------------------------
+    // ---- nothing is modal, for any prompt kind ---------------------------------------------
 
     @Test
     fun `no prompt kind produces a dialog or a popup, and the board stays on screen behind the controls`() {
-        // The §16.2 acceptance criterion, mechanised. §6.1 originally sent five of these prompt kinds to
-        // a **modal** and §6.2 carved out the other two; §16.2 made the exception the rule. A dialog or a
+        // The acceptance criterion, mechanised. An earlier design sent five of these prompt kinds to
+        // a **modal** and carved out the other two; here the exception the rule. A dialog or a
         // popup takes its own window and blocks the board, so their *absence* is what is asserted —
         // together with the board's own content still being drawn underneath.
         val prompt = mutableStateOf<GamePrompt?>(null)
@@ -342,7 +342,7 @@ class GameBoardScreenTest {
             composeTestRule.onAllNodes(isDialog()).assertCountEquals(0)
             composeTestRule.onAllNodes(isPopup()).assertCountEquals(0)
             // The board itself is still there behind the controls: both battlefields and the priority
-            // statement, for every prompt kind including the five §6.1 would have sent to a modal.
+            // statement, for every prompt kind including the five that would have sent to a modal.
             composeTestRule.onNodeWithText("Mountain").assertIsDisplayed()
             composeTestRule.onNodeWithText("Forest").assertIsDisplayed()
             composeTestRule.onNodeWithText("Your turn to act").assertIsDisplayed()
@@ -354,8 +354,8 @@ class GameBoardScreenTest {
     fun `the controls float clear of the board a player still has to tap`() {
         // "Floating, not blocking" is a layout claim, so it is measured rather than asserted in prose.
         // The three things that must stay usable underneath: the opponent's battlefield (a target lives
-        // there), the priority statement (§16.3), and — the one that decides whether mana payment works
-        // at all (§6.3) — the **tap point of the viewer's own permanents**.
+        // there), the priority statement, and — the one that decides whether mana payment works
+        // at all — the **tap point of the viewer's own permanents**.
         render(
             runningGame().copy(
                 prompt = GamePrompt.PlayMana(message = "Pay {1}{W}"),
@@ -377,7 +377,7 @@ class GameBoardScreenTest {
         assertTrue("the controls must not fill the screen", panelTop > root.size.height / 3)
     }
 
-    // ---- story 0057: the visibility toggle (§16.3) -----------------------------------------------------
+    // ---- the visibility toggle -----------------------------------------------------
 
     @Test
     fun `hiding the controls asks the board to hide them, and shows a way back`() {
@@ -389,7 +389,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `hiding the controls never hides that the server is waiting on you`() {
-        // §16.3's hard constraint, and the reason 0055 added `PriorityUi.Asked`: the server asks one seat
+        // the hard constraint, and the reason 0055 added `PriorityUi.Asked`: the server asks one seat
         // to choose who goes first *before priority exists*, so a hidden control set here would look
         // exactly like a frozen game.
         render(
@@ -432,7 +432,7 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText(SHOW_CONTROLS_LABEL).assertIsDisplayed()
     }
 
-    // ---- story 0057: playing, targeting, paying, cancelling --------------------------------------------
+    // ---- playing, targeting, paying, cancelling --------------------------------------------
 
     @Test
     fun `passing priority reaches the action seam`() {
@@ -459,7 +459,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `tapping a card raises it rather than playing it`() {
-        // §5.1: the first tap raises the card and shows its detail; committing is a second, deliberate
+        // The first tap raises the card and shows its detail; committing is a second, deliberate
         // gesture. A single-tap-to-play board has nowhere to put "and now choose targets".
         render(
             runningGame().copy(viewerHasPriority = true, playable = listOf(PlayableObject("h-1")), prompt = GamePrompt.Select("Select")),
@@ -474,7 +474,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `the raised card can be played from its detail view`() {
-        // §11.1: a playable card is played directly from the detail view.
+        // A playable card is played directly from the detail view.
         render(
             runningGame().copy(viewerHasPriority = true, playable = listOf(PlayableObject("h-1")), prompt = GamePrompt.Select("Select")),
             handExpanded = true,
@@ -487,7 +487,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `a card the server has not offered gets a detail view with nothing to press`() {
-        // §3 of the story: `playable` exists only while you hold priority, so an unoffered card means
+        // `playable` exists only while you hold priority, so an unoffered card means
         // "not your moment", not "not playable" — and the board must not present a dead button either.
         render(
             runningGame().copy(viewerHasPriority = true, playable = emptyList(), prompt = GamePrompt.Select("Select")),
@@ -507,7 +507,7 @@ class GameBoardScreenTest {
         assertEquals(listOf<String?>(null), taps)
     }
 
-    // ---- story 0058: what a permanent currently *is*, on screen -------------------------------------
+    // ---- what a permanent currently *is*, on screen -------------------------------------
 
     @Test
     fun `a land on the battlefield shows no power toughness and no summoning-sickness mark`() {
@@ -569,7 +569,7 @@ class GameBoardScreenTest {
     @Test
     fun `the raised card's detail states the power toughness and counters of what it currently is`() {
         // The permanent's own line is one ellipsised row 76dp wide, so the detail is where a player with
-        // four counters on something actually reads them (§11.1: the first tap is for looking).
+        // four counters on something actually reads them (the first tap is for looking).
         render(
             runningGame(
                 viewerPermanent =
@@ -584,7 +584,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `a target candidate on the board is picked one tap at a time`() {
-        // §17.2: each pick is sent as it is made. The gesture path is the same as playing — raise, then
+        // Each pick is sent as it is made. The gesture path is the same as playing — raise, then
         // commit — so the *action* is what proves the pick is a pick.
         val state =
             runningGame().copy(
@@ -690,8 +690,8 @@ class GameBoardScreenTest {
     }
 
     @Test
-    fun `the target step offers both done and cancel for an optional prompt, even before a pick (story 0075)`() {
-        // Story 0075: an optional (`isRequired = false`) prompt is answerable with zero targets by
+    fun `the target step offers both done and cancel for an optional prompt, even before a pick`() {
+        // an optional (`isRequired = false`) prompt is answerable with zero targets by
         // definition, so Done must render from the moment it arrives — not only after a pick. Before
         // this fix, an "up to N" prompt with no picks left only the (correctly-working, but
         // confusingly-labeled for this case) cast-cancel button visible.
@@ -711,7 +711,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `the mana step is answered by tapping your own source`() {
-        // §6.3/§6.5: the player taps lands; the server has already narrowed the choice, so the board
+        // The player taps lands; the server has already narrowed the choice, so the board
         // renders what it offered and computes nothing.
         val state =
             runningGame().copy(
@@ -729,7 +729,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `the mana step can be cancelled, which is where the rewind was first proven`() {
-        // §6.4a: declining the mana step returned the Hawk to hand (7), cleared the stack and left both
+        // Declining the mana step returned the Hawk to hand (7), cleared the stack and left both
         // Plains untapped.
         render(
             runningGame().copy(prompt = GamePrompt.PlayMana(message = "Pay {1}{W}"), playable = listOf(PlayableObject("y-1"))),
@@ -743,7 +743,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `the cast in flight stays on screen through every question the server asks`() {
-        // §6.4: casting is one continuous act, so the spell does not vanish behind each new question.
+        // Casting is one continuous act, so the spell does not vanish behind each new question.
         render(
             runningGame().copy(prompt = GamePrompt.Target(message = "Select targets", targetIds = listOf("o-1"))),
             cast = CastUi("Forked Bolt", CAST_STEP_TARGETS),
@@ -762,7 +762,7 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText(CANCELLING_NOTE).assertIsDisplayed()
     }
 
-    // ---- story 0057: the prompts answered from their own content ---------------------------------------
+    // ---- the prompts answered from their own content ---------------------------------------
 
     @Test
     fun `a yes-or-no question is answered with the server's own words`() {
@@ -867,7 +867,7 @@ class GameBoardScreenTest {
         assertEquals(listOf(BoardAction.ChoosePile(first = false)), actions)
     }
 
-    // ---- story 0057: the prompt that must never become a control ----------------------------------------
+    // ---- the prompt that must never become a control ----------------------------------------
 
     @Test
     fun `an unrecognised prompt is a notice with no control the player cannot satisfy`() {
@@ -884,7 +884,7 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText(BOARD_MENU_LABEL).assertIsDisplayed()
     }
 
-    // ---- story 0057: concede and quit are separate (§12.2) -----------------------------------------------
+    // ---- concede and quit are separate -----------------------------------------------
 
     @Test
     fun `concede and quit are separate actions, each behind its own confirmation`() {
@@ -930,11 +930,11 @@ class GameBoardScreenTest {
         composeTestRule.onNodeWithText("$ACTION_FAILED_PREFIX you can't play that now").assertIsDisplayed()
     }
 
-    // ---- combat: declaring attackers and blockers (story 0061) -----------------------------------------
+    // ---- combat: declaring attackers and blockers -----------------------------------------
     //
     // These are at the *screen*, not only at the projection, for the same reason 0057's were: the ids
     // were in the projection the whole time and the board still offered no surface for them. A
-    // declaration arrives with **`playable` empty** (§7.2), so every fixture here sends it that way.
+    // declaration arrives with **`playable` empty**, so every fixture here sends it that way.
 
     @Test
     fun `a declaration offers the creature to tap, and the tap declares it`() {
@@ -956,7 +956,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `all attack commits the whole team only behind a confirmation`() {
-        // §16.4 / §7.5 (Pete): the shortcut stays, because the server supplies it and it works — but it
+        // The shortcut stays, because the server supplies it and it works — but it
         // commits every creature at once, so it confirms first, exactly as concede does.
         render(declaringAttackers())
 
@@ -987,7 +987,7 @@ class GameBoardScreenTest {
 
     @Test
     fun `a pairing question mid-declaration says which creature it is about, and is answerable`() {
-        // The follow-up arrives as an ordinary `GAME_TARGET` (§7.5) whose prose names the *candidates*
+        // The follow-up arrives as an ordinary `GAME_TARGET` whose prose names the *candidates*
         // and never the creature being paired. Without the context line the player is asked to choose a
         // defender with no statement of what for.
         val state =
@@ -1012,7 +1012,7 @@ class GameBoardScreenTest {
     @Test
     fun `an attacker says what it attacks and what is blocking it`() {
         // 0055 marks attackers and blockers; what it could not say is *what* they are attacking or
-        // blocking. `CombatGroup` is per-attacker (§7.3) and carries the defender's own name.
+        // blocking. `CombatGroup` is per-attacker and carries the defender's own name.
         render(blockedAttack())
 
         composeTestRule.onNodeWithText("$ATTACKING_MARK Computer", substring = true).assertIsDisplayed()
@@ -1071,7 +1071,7 @@ class GameBoardScreenTest {
     )
 
     /**
-     * The server's own declare-attackers prompt (§7.2): a `Select` whose message is `Select attackers`,
+     * The server's own declare-attackers prompt: a `Select` whose message is `Select attackers`,
      * whose ids live in **`possibleAttackers`**, which carries the `specialButton` the board renders as
      * "All attack" — and whose **`playable` is empty**, which is the whole reason the ids have to come
      * from the options.
@@ -1092,7 +1092,7 @@ class GameBoardScreenTest {
                 ),
         )
 
-    /** The blocking half (§7.3): the same shape, `possibleBlockers`, and **no** special button. */
+    /** The blocking half: the same shape, `possibleBlockers`, and **no** special button. */
     private fun declaringBlockers() =
         runningGame(viewerPermanent = bears()).copy(
             step = PhaseStep.DeclareBlockers,

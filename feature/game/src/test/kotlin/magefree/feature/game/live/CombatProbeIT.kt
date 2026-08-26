@@ -46,7 +46,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * ## Why this exists
  *
  * `docs/game-board-requirements.md` §7.1 is the entire combat specification, and it decides only that
- * combat will reuse the tap model. §17 records why that is an assumption rather than a finding:
+ * combat will reuse the tap model. That is an assumption rather than a finding:
  *
  * > **Not covered by this run:** combat declaration and blocks were never reached (`combatSteps=0`) —
  * > the loop spent nine turns drawing lands before it had creatures, then ended at the cancel.
@@ -56,9 +56,9 @@ import java.util.concurrent.CopyOnWriteArrayList
  * valued option through generically — so the data path is complete **if** upstream populates those keys.
  * Whether it does, on which prompt kind, and what the message reads, is what this run records.
  *
- * `docs/live-test-decklists.md` warns that deep-game experiments belong *inside* the story that builds
+ * `docs/live-test-decklists.md` warns that deep-game experiments belong *inside* this that builds
  * the surface rather than as standalone probes. That guidance is right, and this is the deliberate
- * exception: the combat story cannot be written until the prompt shapes are known, so the probe comes
+ * exception: the combat work cannot be written until the prompt shapes are known, so the probe comes
  * first and stays small — it reaches combat, prints what arrives, and stops.
  *
  * ## Shape of the run
@@ -67,14 +67,14 @@ import java.util.concurrent.CopyOnWriteArrayList
  *   straight from `possibleAttackers`. It has to be this way round: the board has no combat handling
  *   yet, so a ViewModel-driven seat cannot be relied on to attack.
  * - **The app seat is a real [GameBoardViewModel]**, so the run also records *what today's projection
- *   does* with a declaration prompt — which is the other half of what the story needs to know.
+ *   does* with a declaration prompt — which is the other half of what this needs to know.
  * - Every prompt on both seats is printed **verbatim**, with its option keys, because the point is the
  *   shape and not a pass/fail.
  *
  * ## The deck
  * 24× `Mountain` (`10E` #376) + 36× `Dragon Fodder` (`ALA` #97). Dragon Fodder is `{1}{R}` for **two**
  * 1/1 Goblin tokens, so both seats have attackers and blockers within a couple of turns — the specific
- * failure §17 hit was nine turns of drawing lands before any creature existed. Resolution is by
+ * failure was nine turns of drawing lands before any creature existed. Resolution is by
  * **(setCode, collectorNumber)**, never by name.
  *
  * Env-gated on `BRIDGE_URL` so the hermetic gate stays offline. Run it with:
@@ -188,7 +188,7 @@ class CombatProbeIT {
         }
     }
 
-    /** Prints any prompt not printed before, with everything that might matter to the combat story. */
+    /** Prints any prompt not printed before, with everything that might matter to the combat work. */
     private fun report(
         who: String,
         state: GameState,
@@ -292,7 +292,7 @@ class CombatProbeIT {
                     val playable = state.playable
                     // **Lands before spells.** Playing whatever came first meant casting Dragon Fodder
                     // with barely enough mana, then stalling mid-payment and silently retrying the cast
-                    // forever. `manaCost` is null for lands (§0), which is the only signal needed.
+                    // forever. `manaCost` is null for lands, which is the only signal needed.
                     val landIds =
                         state.hand
                             .filter { it.manaCost == null }
@@ -372,7 +372,7 @@ class CombatProbeIT {
                         when {
                             // Kept from the original run, when a declaration still projected as an
                             // ordinary priority window with `pickable=0`: pressing the server's own
-                            // special button was the only way past declaring. Story 0061 gave a
+                            // special button was the only way past declaring. There is now a
                             // declaration its own projection, so this arm no longer fires there — see
                             // the `Declaration` arm below, which is what runs now.
                             step == PhaseStep.DeclareAttackers && special != null -> special.action
@@ -485,7 +485,7 @@ class CombatProbeIT {
 
     /**
      * Creature-dense on purpose: Dragon Fodder is `{1}{R}` for **two** 1/1 Goblins, so both seats have
-     * bodies within a couple of turns. §17's run failed to reach combat at all because its deck spent
+     * bodies within a couple of turns. the run failed to reach combat at all because its deck spent
      * nine turns drawing lands.
      */
     private val deck =

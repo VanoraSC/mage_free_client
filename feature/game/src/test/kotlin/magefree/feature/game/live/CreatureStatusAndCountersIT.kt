@@ -42,11 +42,11 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Story 0058 — the **live** proof that the board renders what a permanent *currently is*.
+ * The **live** proof that the board renders what a permanent *currently is*.
  *
  * ## What this has to show that a hermetic test cannot
  *
- * Every claim in this story is a claim about the **server's** data: that `mage.view.CardView` really
+ * Every claim here is a claim about the **server's** data: that `mage.view.CardView` really
  * answers `isCreature()` over the live object, really sends `"0"`/`"0"` for a noncreature permanent's
  * power, really sets summoning sickness on a land, and really carries counters. A fake can be made to
  * say all of that; only a real game proves it. In particular the sharpest case — a permanent whose
@@ -194,10 +194,10 @@ class CreatureStatusAndCountersIT {
                 check(!plainVault.showsSummoningSickness) {
                     "summoning sickness must not be drawn on a noncreature land"
                 }
-                // The point of the whole story: the server *did* send a power; the board declined to show it.
+                // The point: the server *did* send a power; the board declined to show it.
                 check(rawVault?.power != null) {
                     "the server is expected to send a power for a noncreature permanent — if it stopped, this " +
-                        "story's premise changed"
+                        "premise changed"
                 }
 
                 // --- 2. a land that IS a creature, with no effect involved --------------------------------
@@ -359,7 +359,7 @@ class CreatureStatusAndCountersIT {
 
             is PromptControlsUi.Amount -> controls.amountRequest?.let { BoardAction.ChooseAmount(it.min) }
             is PromptControlsUi.MultiAmount -> BoardAction.DistributeAmounts(controls.amountRows.map { it.min })
-            // This run is about what a permanent *is*, not about combat (story 0061 has its own live
+            // This run is about what a permanent *is*, not about combat (has its own live
             // run), so a declaration is closed with its own *done* rather than answered.
             is PromptControlsUi.Declaration -> BoardAction.FinishTargeting
             is PromptControlsUi.Notice -> null
@@ -477,7 +477,7 @@ class CreatureStatusAndCountersIT {
      * One live app→bridge session, assembled from production parts only.
      *
      * A deliberate copy of `BoardPlaysAGameIT`'s: 0057's harness is a working live run and is left
-     * untouched by this story.
+     * untouched by this.
      */
     private class LiveSession(
         private val scope: CoroutineScope,
@@ -531,12 +531,12 @@ class CreatureStatusAndCountersIT {
         )
     }
 
-    /** Story 0058's deck — see the class docs, and `docs/live-test-decklists.md` §5. */
+    /** the deck — see the class docs, and `docs/live-test-decklists.md` §5. */
     private val deck =
         Deck(
             id = DeckId("board-0058-animate"),
             name = "board_0058_animate",
-            author = "story-0058",
+            author = "creature-status-it",
             main =
                 listOf(
                     DeckEntry(cardName = "Mutavault", setCode = "M14", collectorNumber = "228", quantity = 24),

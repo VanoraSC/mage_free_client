@@ -9,7 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Fake-fidelity coverage of [FakeTableClient.observeTable] (story 0044). The fake used to drop the
+ * Fake-fidelity coverage of [FakeTableClient.observeTable]. The fake used to drop the
  * `seed` its production counterpart emits first, so every test built on it saw a loading/empty room
  * production never shows — and a regression in production's seed emission would have gone unnoticed.
  * These pin the emission order the fake must keep matching

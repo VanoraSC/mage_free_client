@@ -116,7 +116,7 @@ fun ConnectionState.toUiState(): ConnectionStatusUiState =
  * [ConnectionStatusUiState] exposed as [uiState] for the shell's status bar (MVVM/UDF).
  *
  * The mapping runs on [DispatcherProvider.default] (never a hard-coded dispatcher, per `AGENTS.md`).
- * The source is injected behind the [ConnectionStatusSource] seam, so EPIC-04 swaps the real session
+ * The source is injected behind the [ConnectionStatusSource] seam, so the real session
  * in without touching this ViewModel or the UI.
  */
 
@@ -137,7 +137,7 @@ class ConnectionStatusViewModel
 
         /**
          * Retry/reconnect affordance for the status bar. Delegates to the [ConnectionStatusSource] seam
-         * (story 0026 F3), which the real [ConnectionStatusSourceImpl] implements as a genuine reconnect
+         *, which the real [ConnectionStatusSourceImpl] implements as a genuine reconnect
          * via `ConnectionRepository.retry()` — so the always-visible Retry is no longer a dead control.
          */
         fun onRetry() {

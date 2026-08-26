@@ -33,7 +33,7 @@ import java.util.UUID
  * thread).
  *
  * By reusing `SessionImpl` the bridge inherits XMage's connect/auth/keepalive/reconnect and
- * Java-serialization handling correct-by-construction. Story 0005 will own one [XMageSession] per
+ * Java-serialization handling correct-by-construction. The session layer owns one [XMageSession] per
  * connected app client behind the WebSocket; here it is a plain library surface.
  *
  * @property client the callback sink `SessionImpl` drives; exposed so callers can observe the
@@ -50,7 +50,7 @@ public class XMageSession(
 
     /**
      * The server-assigned session id via `SessionImpl.getSessionId()`, or `null` before the connect
-     * handshake populates it. Stable for the life of a connection — the anchor story 0023 uses to
+     * handshake populates it. Stable for the life of a connection — the anchor a parked session uses to
      * prove a resumed session is the *same* upstream session (never reconnected/re-authed).
      */
     public fun sessionId(): String? = session.sessionId
@@ -105,7 +105,7 @@ public class XMageSession(
         }
 
     /**
-     * The open/active tables in the lobby's main room, mapped to app-schema summaries (story 0027).
+     * The open/active tables in the lobby's main room, mapped to app-schema summaries.
      * Resolves the main room id (`getMainRoomId()`) then reads `getTables(roomId)` and maps at the
      * `magefree.bridge.mapping` boundary (via [LobbyRelay]) — the raw `mage.view.TableView` never
      * leaves that package. Returns an empty list when disconnected (no main room id). Runs the blocking
@@ -118,7 +118,7 @@ public class XMageSession(
         }
 
     /**
-     * The users currently in the lobby's main room, mapped to app-schema summaries (story 0027).
+     * The users currently in the lobby's main room, mapped to app-schema summaries.
      * Same room-id resolution + mapper-boundary handling as [tables]; empty when disconnected. Runs on
      * [Dispatchers.IO].
      */
@@ -129,7 +129,7 @@ public class XMageSession(
         }
 
     /**
-     * The game formats (types) the server offers, mapped to app-schema summaries (story 0027).
+     * The game formats (types) the server offers, mapped to app-schema summaries.
      * `getGameTypes()` is room-independent. Mapped at the `magefree.bridge.mapping` boundary (via
      * [LobbyRelay]). Runs the blocking remoting call on [Dispatchers.IO].
      */
@@ -139,7 +139,7 @@ public class XMageSession(
         }
 
     // ------------------------------------------------------------------------------------------------
-    // Table actions (story 0036). Each resolves the room (the request's [roomId] or the main room),
+    // Table actions. Each resolves the room (the request's [roomId] or the main room),
     // dispatches to the wrapped `SessionImpl` verb via [TableRelay] at the mapping boundary (so no
     // `mage.*` shape leaves that package), and runs the blocking remoting call on [Dispatchers.IO]. A
     // create/join/... against a disconnected session (no resolvable room) maps to a failed result.
@@ -232,7 +232,7 @@ public class XMageSession(
 
     /**
      * Reads the detail (summary + seats) of table [tableId] in [roomId] (or the main room) for a
-     * `GetTable` (story 0040), replying [magefree.protocol.TableDetail] or a typed
+     * `GetTable`, replying [magefree.protocol.TableDetail] or a typed
      * [magefree.protocol.TableNotFound]. Resolved from the room's table list at the [TableRelay]
      * boundary — upstream has no single-table read — on [Dispatchers.IO].
      */
@@ -248,7 +248,7 @@ public class XMageSession(
         }
 
     // ------------------------------------------------------------------------------------------------
-    // In-game requests (story 0051). Room-independent: every verb is addressed by game id. Each
+    // In-game requests. Room-independent: every verb is addressed by game id. Each
     // dispatches through [GameRelay] at the mapping boundary (so no `mage.*` shape leaves that package)
     // on [Dispatchers.IO], and a request made without a connected session maps to a typed
     // SESSION_GONE failure rather than being attempted.
@@ -312,7 +312,7 @@ public class XMageSession(
      * Runs a game [request] on [Dispatchers.IO] when there is a connected session, and otherwise replies
      * a typed [GameFailureCode.SESSION_GONE] failure: upstream's verbs return a bare `false` when
      * disconnected, which is indistinguishable from a refusal, so the distinction has to be made here —
-     * where the session's liveness is actually known (story 0050).
+     * where the session's liveness is actually known.
      */
     private suspend fun gameAction(
         action: GameActionCode,
@@ -333,7 +333,7 @@ public class XMageSession(
 
     /**
      * A failed [TableActionResult] for an action attempted without a connected session/resolvable room.
-     * Tagged [TableFailureCode.SESSION_GONE] (story 0050): the server was never asked, so the app must
+     * Tagged [TableFailureCode.SESSION_GONE]: the server was never asked, so the app must
      * say "you are no longer signed in" rather than "the server declined".
      */
     private fun notConnected(action: TableActionCode): TableActionResult =
@@ -345,7 +345,7 @@ public class XMageSession(
         )
 
     /**
-     * Keepalive probe: `SessionImpl.ping()` then report `isConnected()`. Used by story 0023's
+     * Keepalive probe: `SessionImpl.ping()` then report `isConnected()`. Used by the
      * [magefree.bridge.session.SessionRegistry] to keep a **parked** session (app socket dropped)
      * alive during its grace window and to notice if the upstream link died. `ping()` itself is
      * best-effort (it routes failures through the connection-error path, surfacing a `disconnected`

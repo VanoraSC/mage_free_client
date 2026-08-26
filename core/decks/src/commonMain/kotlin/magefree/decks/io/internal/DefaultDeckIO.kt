@@ -54,7 +54,7 @@ internal class DefaultDeckIO(
             val sideboardCards = ArrayList<DeckListCard>()
 
             // Resolve every distinct name in one batched, indexable exact-name lookup rather than a
-            // substring search per line (story 0042, defect D).
+            // substring search per line.
             val resolvedNames = catalog.cardsByName(parsed.entries.map { it.name })
 
             for (entry in parsed.entries) {

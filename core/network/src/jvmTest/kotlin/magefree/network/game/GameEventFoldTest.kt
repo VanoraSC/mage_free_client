@@ -46,7 +46,7 @@ import org.junit.Test
  * Hermetic coverage of the **pure** [GameEventFold] and the [GameViewMapper] it delegates shape
  * conversion to, over scripted sequences of real `:protocol` events — no client, no socket, no coroutine.
  *
- * The sequence the story names (game start → turn/phase changes → a prompt appears and clears → game
+ * The sequence this names (game start → turn/phase changes → a prompt appears and clears → game
  * over) is `aScriptedGameFoldsFromStartThroughPromptsToGameOver`; the rest pin the individual rules the
  * fold has to get right, in particular **which** pushes clear an outstanding prompt and which must not.
  */
@@ -357,7 +357,7 @@ class GameEventFoldTest {
 
     @Test
     fun transformedAndAlternateNameSurviveFoldingTheRealSignalForWhichFaceIsCurrentlyUp() {
-        // Story 0076: found live -- Kytheon, Hero of Akros transformed into Gideon, Battle-Forged,
+        // - Kytheon, Hero of Akros transformed into Gideon, Battle-Forged,
         // but the board kept showing Kytheon's art. `transformed` (upstream's own CardView.isTransformed(),
         // correctly computed for any permanent) is the real signal for which face is up; `alternateName`
         // is a separate catalog fact (has another face, what it's called) carried through unchanged.
@@ -402,7 +402,7 @@ class GameEventFoldTest {
 
     @Test
     fun aStackEntrysTargetsSurviveFoldingAndResolveAgainstTheSameSnapshot() {
-        // Story 0086: `targets` is upstream's own de-duplicated, stably ordered id list for what a
+        // `targets` is upstream's own de-duplicated, stably ordered id list for what a
         // spell or ability on the stack is pointing at. The fold carries it unchanged -- the ids name
         // objects in this same snapshot (here: a permanent on the battlefield and the spell below it
         // on the stack), and joining them is the renderer's job, not the fold's.
@@ -445,7 +445,7 @@ class GameEventFoldTest {
 
     @Test
     fun anAuraAndItsHostBothSurviveFoldingWithTheRelationshipIntact() {
-        // Story 0087: the relationship is only renderable if BOTH directions arrive -- the host's
+        // the relationship is only renderable if BOTH directions arrive -- the host's
         // `attachments` and the aura's `attachedTo`. This aura is ours and the creature is theirs,
         // which is the case `attachedControllerDiffers` exists for, and it means the round trip
         // crosses players' battlefields rather than staying inside one.
@@ -584,7 +584,7 @@ class GameEventFoldTest {
 
     @Test
     fun aCardCarriesWhatItCurrentlyIsAndTheCountersOnIt() {
-        // Story 0058. Creature-ness is game state: the same Mountain is a land in one snapshot and a
+        // Creature-ness is game state: the same Mountain is a land in one snapshot and a
         // 0/3 creature in the next, and only the server can say which. The fold carries all three
         // fields the bridge writes from `mage.view.CardView` — nothing here re-derives them.
         val earthbentMountain =

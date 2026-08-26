@@ -90,11 +90,11 @@ data class BuilderUiState(
 }
 
 /**
- * MVVM ViewModel for the touch-first deck builder (story 0035). Every deck operation — add/remove,
+ * MVVM ViewModel for the touch-first deck builder. Every deck operation — add/remove,
  * sideboard, quantity, format choice, grouping, mana curve, live legality — is computed **offline**
  * from 0033's [DeckRepository]/[DeckLegality] and 0030's bundled [CardCatalog]; the only networked
  * action is the opt-in, deck-scoped art pre-download via [DeckArtDownloader]. Submitting/playing the
- * deck is EPIC-07 (not wired here).
+ * deck is not wired here.
  */
 
 class BuilderViewModel
@@ -127,7 +127,7 @@ class BuilderViewModel
          *
          * The builder's mutations are not all synchronous: `addCard` must resolve the card in the
          * offline catalog first, and that suspends. Without this lock two taps inside that window both
-         * read the same deck and the second write silently discards the first (story 0042, defect A).
+         * read the same deck and the second write silently discards the first.
          * Holding the lock across the whole critical section — and re-reading [deck] *inside* it, after
          * every suspension — makes each mutation atomic with respect to the others.
          */
@@ -147,7 +147,7 @@ class BuilderViewModel
          *
          * A read failure here means there is no deck to edit at all, so it becomes [BuilderPhase.Error]
          * with a retry — never an escape from `viewModelScope`, whose `SupervisorJob` carries no
-         * `CoroutineExceptionHandler` (story 0042, defect B).
+         * `CoroutineExceptionHandler`.
          */
         fun load(id: DeckId) {
             _uiState.update { it.copy(phase = BuilderPhase.Loading, deckId = id, errorMessage = null) }
@@ -281,7 +281,7 @@ class BuilderViewModel
          *
          * The whole deck's distinct names are resolved in one batched, indexable exact-name lookup —
          * `rebuild` runs after every edit, so a per-name substring scan here is what made a "+"/"−" tap
-         * expensive (story 0042, defect D).
+         * expensive.
          *
          * **This never throws.** It is called from `load` and from inside the mutation lock, after the
          * deck has been persisted. If the catalog or the legality bundle can't be read, the rows are

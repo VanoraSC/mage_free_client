@@ -24,7 +24,7 @@ import java.util.Date
  * enum translation, seat filled/total counting, and create-time normalisation. [build] is asserted
  * directly by `TableMapperTest`; [map] is the thin getter-forwarding shim, exercised end-to-end by the
  * live `LobbyRelayIT` (the reference server's table list is legitimately empty, so the shim's getter
- * wiring is covered only when real tables exist — see the story's testability note).
+ * wiring is covered only when real tables exist — see the testability note).
  *
  * Field mapping (see [build]):
  * - `tableId` ← [TableView.getTableId]`.toString()`.
@@ -34,11 +34,11 @@ import java.util.Date
  * - `isTournament`/`isRated`/`isPassworded`/`isLimited` ← the matching getters.
  * - `createdAtEpochMs` ← [TableView.getCreateTime]`.time` (0 if the date is null).
  *
- * **Per-seat detail (story 0040).** [mapDetail] adds the seat list the summary form reduces to counts:
+ * **Per-seat detail.** [mapDetail] adds the seat list the summary form reduces to counts:
  * each [mage.view.SeatView] becomes a [TableSeatSummary] via the pure [buildSeat]. The counting
  * behaviour of [map]/[build] is unchanged — [mapDetail] is purely additive.
  *
- * **Active game id (story 0069).** [mapDetail] also carries [TableView.getGames]' last element as
+ * **Active game id.** [mapDetail] also carries [TableView.getGames]' last element as
  * `activeGameId` — the match's current game, present on every read rather than only on the one-shot
  * `MatchStarting` push, so a client that opens the room after the match has already started can still
  * find its way into the game.
@@ -103,8 +103,8 @@ public object TableMapper {
 
     /**
      * Maps [view] to a [TableDetail]: the same [TableSummary] [map] produces, plus one
-     * [TableSeatSummary] per `mage.view.SeatView` in seat order (story 0040), plus the match's current
-     * game id (story 0069) — [TableView.getGames]'s last element, or `null` before the match has
+     * [TableSeatSummary] per `mage.view.SeatView` in seat order, plus the match's current
+     * game id — [TableView.getGames]'s last element, or `null` before the match has
      * produced a game. This is the reply to a `GetTable` — the room's real seat state, which the summary
      * form reduces to filled/total counts.
      */

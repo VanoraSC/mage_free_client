@@ -20,7 +20,7 @@ import org.koin.androidx.compose.koinViewModel
  * Deliberately holds no navigation dependency of its own: the selected server is kept in a
  * config-change-surviving [rememberSaveable] and the flow hands control back to the caller via
  * [onConnected]. Wiring this into `:app`'s navigation graph is a separate, out-of-scope step (0018
- * keeps the module self-contained; see the story's scope note).
+ * keeps the module self-contained; see the scope note).
  */
 @Composable
 fun ConnectFlow(

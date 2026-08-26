@@ -16,7 +16,7 @@ import magefree.cards.concurrent.AtomicCounter
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * User-initiated **bulk pre-download** that warms the disk cache for full offline art (story 0031).
+ * User-initiated **bulk pre-download** that warms the disk cache for full offline art.
  * It is opt-in — nothing runs until [start] is called — and never automatic.
  *
  * Design:
@@ -52,7 +52,7 @@ class ArtDownloadManager(
      * (call [cancel] first). Returns immediately; observe [progress] for updates.
      *
      * The default, [PREFETCH_SIZES], is every size the UI displays — warming a subset would leave the
-     * surfaces that display the other sizes blank offline (story 0043, defect A). Callers should not
+     * surfaces that display the other sizes blank offline. Callers should not
      * narrow it; the parameter exists so tests can pin a single size.
      */
     fun start(
@@ -122,7 +122,7 @@ class ArtDownloadManager(
             // Belt and braces. Per-target failures are already contained in warmOne, so reaching
             // here means something structural — but this runs in an appScope whose SupervisorJob has
             // no CoroutineExceptionHandler, so an escaping throw is an uncaught exception and a
-            // process crash, with progress frozen at RUNNING (story 0043, defect C). Land on a
+            // process crash, with progress frozen at RUNNING. Land on a
             // terminal status instead.
             publish(current = null, warmed, skipped, failed, PrefetchStatus.FAILED)
             _progress.update { it.copy(error = error.message ?: error.toString()) }

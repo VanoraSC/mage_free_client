@@ -17,13 +17,13 @@ import java.util.Collections
 
 /**
  * The bridge's answer to a question upstream cannot answer: **what does the board look like right now**
- * (story 0054).
+ *.
  *
  * XMage has no "get game" verb, and re-joining a running game does not resync (`GameController.join`
  * on an already-running game only logs "rejoined"), so a client that dropped its socket is blind until
  * the *next* push — which may be minutes away while an opponent thinks, or never. The bridge, however,
- * sees every snapshot on its way past, and a snapshot is the whole truth rather than a delta (story
- * 0051). So keeping the most recent one is sufficient, and that is exactly all this does.
+ * sees every snapshot on its way past, and a snapshot is the whole truth rather than a delta
+ *. So keeping the most recent one is sufficient, and that is exactly all this does.
  *
  * **Per session, and that is not an optimisation.** One instance belongs to one [LiveSession]. A
  * `GameView` is built by the server *for a specific player*: it carries that player's `myPlayerId`, that
@@ -40,7 +40,7 @@ import java.util.Collections
  * it describes), and [clear] drops everything when the session's pump ends or the session is evicted.
  *
  * **What it deliberately does not do.** No accumulation, no merging, no inference across snapshots —
- * that is story 0053, post-release. This holds the latest snapshot verbatim: it never remembers what a
+ * accumulation and inference are not this object's job. It holds the latest snapshot verbatim: it never remembers what a
  * card *was* once the server stops showing it, never combines an older snapshot with a newer one, and
  * never reconstructs history.
  *
@@ -78,11 +78,11 @@ public class GameStateCache(
      * a `WATCHGAME` (which carries no state) — passes through untouched.
      *
      * Called for **every** message the session relays, before it is queued to the app socket, so a
-     * snapshot pushed while the session is parked (story 0023 keeps the pump running with no socket
+     * snapshot pushed while the session is parked (keeps the pump running with no socket
      * attached) is cached just the same. That is what makes the cache keep advancing while the app is
      * away rather than freezing at the moment the socket died.
      *
-     * **The prompt half (story 0074).** Only [GamePrompted] ever carries a `prompt` — every other
+     * **The prompt half.** Only [GamePrompted] ever carries a `prompt` — every other
      * branch here passes `null`, which *clears* whatever was cached: a plain state push or narration
      * arriving after a prompt means the prompt is no longer the live truth (answered, superseded, or
      * the moment passed), so serving it again on a later resync would be wrong. `GamePrompted` is
@@ -90,11 +90,9 @@ public class GameStateCache(
      * retires one.
      */
     public fun observe(message: ServerMessage) {
-        // Temporary diagnostic (story 0074 follow-up, 2026-08-16): Pete reproduced the mulligan
-        // resync case again after rebuilding both the app and the bridge from this exact fix, so the
-        // failure is real, not stale code. This traces every observation this cache makes for a game,
-        // so a live repro's bridge log shows exactly what retired the cached prompt (if anything did)
-        // rather than guessing from source alone. Remove once the root cause is confirmed and fixed.
+        // Diagnostic for the mulligan resync case. This traces every observation this cache makes for
+        // a game, so a live repro's bridge log shows exactly what retired the cached prompt (if
+        // anything did) rather than guessing from source alone. Remove once the root cause is fixed.
         val before = message.gameIdOrNull()?.let { snapshots[it]?.prompt }
         when (message) {
             is GameStarted -> put(message.gameId, message.state, prompt = null)
@@ -142,13 +140,13 @@ public class GameStateCache(
      * legal snapshot — no players, no hand, nothing playable — so a client cannot tell it from a real
      * board and would show it, and let a player act on it, as though it were true.
      *
-     * [GameStateSnapshot.prompt] (story 0074) is [Entry.prompt] verbatim — `null` unless the most
+     * [GameStateSnapshot.prompt] is [Entry.prompt] verbatim — `null` unless the most
      * recent thing [observe] recorded for this game was a [GamePrompted] with nothing since to retire
      * it. See [observe]'s KDoc for why re-serving it is correct, not a guess.
      */
     public fun answer(request: GetGameState): ServerMessage {
         val entry = snapshots[request.gameId]
-        // Temporary diagnostic (story 0074 follow-up) — see observe()'s KDoc.
+        // Temporary diagnostic (follow-up) — see observe()'s KDoc.
         LOGGER.info("GameStateCache[{}] answer -> prompt {}", request.gameId, entry?.prompt)
         if (entry == null) return unavailable(request.gameId)
         return GameStateSnapshot(

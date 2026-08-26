@@ -5,7 +5,7 @@ import magefree.decks.model.DeckFormat
 
 /**
  * Offline deck-legality checker. Given a [Deck] and a [DeckFormat], it reports whether the deck is
- * legal and, if not, the structured [LegalityViolation]s the builder (story 0035) renders live. It
+ * legal and, if not, the structured [LegalityViolation]s the builder renders live. It
  * uses only the bundled format data (`assets/formats.json`) and the offline card catalog
  * (`:core:cards`) — never the network. The XMage server remains the authority at submit-time; this is
  * the local, while-you-build feedback.

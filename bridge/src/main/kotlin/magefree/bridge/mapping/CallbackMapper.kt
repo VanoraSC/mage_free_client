@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory
  *
  * [map] is the only place a callback's compressed payload is decompressed and cast. Downstream epics
  * register more `when` cases (lobby, deck, game). Mapping **never throws** — so a new upstream push
- * cannot crash the session (story 0006 + 0026 F5):
+ * cannot crash the session:
  * - an **unmapped** method returns `null` (the relay logs and drops it);
  * - a **known** method whose payload fails to decompress or is not the expected `mage.view.*` shape
  *   (upstream drift) is logged and returns `null` too, rather than letting the throw propagate and
@@ -42,18 +42,18 @@ public object CallbackMapper {
      * Dispatches [callback] by its [ClientCallbackMethod]:
      * - [ClientCallbackMethod.CHATMESSAGE] → [ChatMessageMapper] over the decompressed [ChatMessage].
      * - the table-lifecycle methods → their per-callback table mapper over the decompressed
-     *   [TableClientMessage] (story 0036): `JOINED_TABLE` → [JoinedTableMapper] (a `TableUpdated`),
+     *   [TableClientMessage]: `JOINED_TABLE` → [JoinedTableMapper] (a `TableUpdated`),
      *   `CONSTRUCT` → [ConstructMapper] (a `ConstructPrompt`), `SIDEBOARD` → [SideboardMapper] (a
-     *   `SideboardPrompt`), and `START_GAME` → [MatchStartingMapper] (a `MatchStarting`, the Epic-11
+     *   `SideboardPrompt`), and `START_GAME` → [MatchStartingMapper] (a `MatchStarting`, the the game layer
      *   boundary).
-     * - the in-game methods → their per-callback game mapper (story 0051). For every one of these the
+     * - the in-game methods → their per-callback game mapper. For every one of these the
      *   callback's **object id is the game id** (upstream fires them with `game.getId()`), and the
      *   payload type differs per method — a bare `GameView`, a [GameClientMessage], an
      *   [AbilityPickerView], a `String`, or a [TableClientMessage].
      * - anything else → `null` (the caller logs "unmapped callback: <method>" and drops it). That
      *   deliberately includes **`GAME_REDRAW_GUI`**, a `CLIENT_SIDE_EVENT` whose desktop handler is a
      *   bare repaint of already-held state — see `magefree.bridge.mapping.game`'s file header — and
-     *   every `DRAFT_*`/`TOURNAMENT_*` method (EPIC-08).
+     *   every `DRAFT_*`/`TOURNAMENT_*` method.
      *
      * The decompress + cast for a known method is guarded: a malformed payload is logged and mapped to
      * `null`, never thrown.
@@ -71,7 +71,7 @@ public object CallbackMapper {
             ClientCallbackMethod.START_GAME ->
                 mapGuarded(callback) { MatchStartingMapper.map(it.tableClientMessage()) }
 
-            // In-game lifecycle (story 0051).
+            // In-game lifecycle.
             ClientCallbackMethod.GAME_INIT ->
                 mapGuarded(callback) { GameStartedMapper.map(it.objectId, it.gameView()) }
             ClientCallbackMethod.GAME_UPDATE ->
@@ -87,7 +87,7 @@ public object CallbackMapper {
             ClientCallbackMethod.WATCHGAME ->
                 mapGuarded(callback) { WatchingGameMapper.map(it.objectId, it.tableClientMessage()) }
 
-            // In-game prompts (story 0051) — the closed, typed question set.
+            // In-game prompts — the closed, typed question set.
             ClientCallbackMethod.GAME_SELECT ->
                 mapGuarded(callback) { GamePromptMapper.select(it.objectId, it.gameClientMessage()) }
             ClientCallbackMethod.GAME_TARGET ->

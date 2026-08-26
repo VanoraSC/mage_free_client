@@ -7,9 +7,9 @@ import magefree.model.ConnectionStatus
  * The sign-in flow's UI-facing view of the live connection.
  *
  * The feature drives [magefree.network.ConnectionRepository.connect] and observes its
- * `StateFlow<ConnectionStatus>` (story 0019's detail-carrying seam) — a [ConnectionState] plus the
+ * `StateFlow<ConnectionStatus>` (the detail-carrying seam) — a [ConnectionState] plus the
  * failure diagnostic. [ConnectPhase] re-groups those states into the surfaces the sign-in screen
- * shows, keeping [AuthFailed], [VersionUnsupported], and [Network] **distinct** — the story's error
+ * shows, keeping [AuthFailed], [VersionUnsupported], and [Network] **distinct** — the error
  * taxonomy (first-class version mismatch; a network/timeout distinct from a login error) — rather than
  * collapsing them into a single generic error.
  */

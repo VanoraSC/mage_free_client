@@ -35,8 +35,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * **The second combat probe: does the server ask for the *pairing*?**
  *
- * `CombatProbeIT` established the declaration shapes (requirements §7.2/§7.3): `Select attackers` with
- * `possibleAttackers`, `Select blockers` with `possibleBlockers`. §7.5 then recorded a design decision —
+ * `CombatProbeIT` established the declaration shapes: `Select attackers` with
+ * `possibleAttackers`, `Select blockers` with `possibleBlockers`. A later note recorded a design decision —
  * *tap the creature, and ask for the pairing only when it is genuinely ambiguous* — **with its
  * dependency stated**: that is only free if upstream behaves the same way. Two questions were left
  * explicitly unmeasured, and this run answers them:
@@ -47,16 +47,16 @@ import java.util.concurrent.CopyOnWriteArrayList
  * 2. **Blocking:** after picking a blocker, does the server ask **which attacker** it blocks?
  *    (`CombatProbeIT` saw the blocking prompt arrive but its budget expired before answering it.)
  *
- * If upstream asks only when ambiguous, §7.5 costs nothing. If it **always** asks, then answering a
+ * If upstream asks only when ambiguous, pairing costs nothing. If it **always** asks, then answering a
  * one-option question on the player's behalf is a policy decision that belongs behind the auto-pass
- * seam (§14.1) — so the answer changes where the code goes, which is why it is measured before the
- * combat story is written rather than after.
+ * seam — so the answer changes where the code goes, which is why it is measured before the
+ * combat work is written rather than after.
  *
  * ## Shape of the run
  *
  * **Both seats are driven over a raw [GameClient]**, unlike `CombatProbeIT`. This is a protocol
  * question, not a UI one, and the board has no combat handling to drive: a ViewModel seat cannot pick
- * an attacker at all (§7.2 — `pickable=0`). Each seat picks **one** creature at a time and then simply
+ * an attacker at all (`pickable=0`). Each seat picks **one** creature at a time and then simply
  * observes, so a follow-up prompt has room to arrive and be seen.
  *
  * Every prompt is printed **the moment its message changes**, per seat, rather than deduped by kind —
@@ -194,7 +194,7 @@ class CombatPairingProbeIT {
                 )
                 say("      -> ${describe(state, prompt.targetIds)}")
                 // A Target arriving *during a declaration step*, right after a pick, is the pairing
-                // question — the shape §7.5's decision hangs on.
+                // question — the shape the decision hangs on.
                 if (state.step == PhaseStep.DeclareAttackers && pickedAnAttacker) {
                     sawDefenderQuestion = true
                     say("      *** THIS IS THE 'WHICH DEFENDER' QUESTION ***")
@@ -244,14 +244,14 @@ class CombatPairingProbeIT {
 
             when (prompt) {
                 // The mana-pool "Pass anyway?" must be answered affirmatively or the game never
-                // advances (§7.6). It is the only Ask carrying `autoAnswerMessage`.
+                // advances. It is the only Ask carrying `autoAnswerMessage`.
                 is GamePrompt.Ask ->
                     games.answerAsk(gameId, answer = prompt.options.text.containsKey(AUTO_ANSWER))
 
                 is GamePrompt.Select -> {
                     val attackers = prompt.options.possibleAttackers
                     val blockers = prompt.options.possibleBlockers
-                    // Lands before spells, or the seat strands itself mid-payment (§7.6).
+                    // Lands before spells, or the seat strands itself mid-payment.
                     val landIds =
                         state.hand
                             .filter { it.manaCost == null }
@@ -286,7 +286,7 @@ class CombatPairingProbeIT {
                     if (pick != null) games.chooseTarget(gameId, pick) else games.cancelPrompt(gameId)
                 }
 
-                // Mana sources live in `playable`, never in `possibleTargets` (§7.6).
+                // Mana sources live in `playable`, never in `possibleTargets`.
                 is GamePrompt.PlayMana -> {
                     val source = state.playable.firstOrNull()?.objectId
                     if (source != null) {

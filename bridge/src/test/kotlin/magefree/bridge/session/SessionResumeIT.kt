@@ -39,7 +39,7 @@ import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
 
 /**
- * Live end-to-end proof of story 0023 against a running XMage server: a parked upstream session
+ * Live end-to-end proof against a running XMage server: a parked upstream session
  * **survives** an app-socket drop and a `Resume` re-attaches to the **same** session without
  * re-authenticating, plus a TTL-expiry case that rejects.
  *

@@ -28,7 +28,7 @@ import org.junit.Test
 import java.io.IOException
 
 /**
- * The deck library must fail **soft** when the offline reads behind it fail (story 0042, defect B).
+ * The deck library must fail **soft** when the offline reads behind it fail.
  *
  * Import resolves every line against the bundled catalog, and it runs inside a bare
  * `viewModelScope.launch`; the library list is a flow `launchIn(viewModelScope)`. `viewModelScope`'s

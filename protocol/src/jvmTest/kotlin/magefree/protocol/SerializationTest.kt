@@ -94,7 +94,7 @@ class SerializationTest {
                 GetRoomUsers(),
                 GetGameTypes(requestId = "r-9"),
                 GetGameTypes(),
-                // Table actions (story 0036).
+                // Table actions.
                 CreateTable(options = FULL_OPTIONS, roomId = "room-1", requestId = "r-13"),
                 CreateTable(options = MINIMAL_OPTIONS),
                 JoinTable(
@@ -120,7 +120,7 @@ class SerializationTest {
                 StartMatch(tableId = "t-1"),
                 WatchTable(tableId = "t-1", roomId = "room-1", requestId = "r-20"),
                 WatchTable(tableId = "t-1"),
-                // Targeted single-table read (story 0040).
+                // Targeted single-table read.
                 GetTable(tableId = "t-1", roomId = "room-1", requestId = "r-24"),
                 GetTable(tableId = "t-1"),
             )
@@ -223,7 +223,7 @@ class SerializationTest {
                         ),
                     requestId = "r-12",
                 ),
-                // Table action results + pushed events (story 0036).
+                // Table action results + pushed events.
                 TableCreated(table = SAMPLE_TABLE, requestId = "r-21"),
                 TableCreated(table = SAMPLE_TABLE),
                 TableActionResult(action = TableActionCode.JOIN, ok = true, requestId = "r-22"),
@@ -239,7 +239,7 @@ class SerializationTest {
                 SideboardPrompt(tableId = "t-1"),
                 MatchStarting(gameId = "g-1", tableId = "t-1", parentTableId = "parent-1", playerId = "p-1"),
                 MatchStarting(gameId = "g-1"),
-                // Targeted single-table read replies (story 0040).
+                // Targeted single-table read replies.
                 TableDetail(table = SAMPLE_TABLE, seats = SAMPLE_SEATS, requestId = "r-25"),
                 TableDetail(table = SAMPLE_TABLE),
                 TableNotFound(tableId = "t-1", reason = "no such table in the room", requestId = "r-26"),
@@ -320,7 +320,7 @@ class SerializationTest {
                 .encodeToString<ServerMessage>(ProtocolError(ProtocolErrorCode.INTERNAL, "x"))
                 .contains("\"type\":\"protocol_error\""),
         )
-        // Table actions (story 0036).
+        // Table actions.
         assertTrue(
             json
                 .encodeToString<ClientMessage>(CreateTable(options = MINIMAL_OPTIONS))
@@ -368,7 +368,7 @@ class SerializationTest {
         assertTrue(
             json.encodeToString<ServerMessage>(MatchStarting(gameId = "g")).contains("\"type\":\"match_starting\""),
         )
-        // Targeted single-table read (story 0040).
+        // Targeted single-table read.
         assertTrue(json.encodeToString<ClientMessage>(GetTable(tableId = "t")).contains("\"type\":\"get_table\""))
         assertTrue(
             json.encodeToString<ServerMessage>(TableDetail(table = SAMPLE_TABLE)).contains("\"type\":\"table_detail\""),
@@ -379,7 +379,7 @@ class SerializationTest {
     }
 
     @Test
-    fun `a TableDetail decodes when a newer peer adds a seat field (story 0040)`() {
+    fun `a TableDetail decodes when a newer peer adds a seat field`() {
         // Forward-compat on the *seat* payload specifically: an added per-seat field must be ignored,
         // and an absent `seats` array must decode to an empty list rather than throwing.
         val futureFrame =
@@ -402,7 +402,7 @@ class SerializationTest {
     }
 
     @Test
-    fun `an unknown table message type decodes to the sentinel instead of throwing (story 0036)`() {
+    fun `an unknown table message type decodes to the sentinel instead of throwing`() {
         // A newer app may send a table `type` this bridge does not know; the decoder must tolerate it.
         val futureClient = """{"type":"reserve_table","tableId":"t-1"}"""
         val decodedClient = json.decodeFromString<ClientMessage>(futureClient)
@@ -435,7 +435,7 @@ class SerializationTest {
 
     @Test
     fun `an unknown ClientMessage type decodes to the sentinel instead of throwing (F1)`() {
-        // A newer peer may add an entirely new message `type`; the decoder must tolerate it (story 0026).
+        // A newer peer may add an entirely new message `type`; the decoder must tolerate it.
         val futureFrame = """{"type":"future_client_message","someField":42}"""
 
         val decoded = json.decodeFromString<ClientMessage>(futureFrame)

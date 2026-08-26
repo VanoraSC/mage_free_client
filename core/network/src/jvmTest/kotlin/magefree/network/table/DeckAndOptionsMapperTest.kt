@@ -75,7 +75,7 @@ class DeckAndOptionsMapperTest {
 
     @Test
     fun aTableDetailCarriesTheActiveGameIdThroughToTheAppSchema() {
-        // Story 0069: the wire's activeGameId — present on every GetTable reply once a match has
+        // the wire's activeGameId — present on every GetTable reply once a match has
         // produced a game, not only on the one-shot MatchStarting push — must survive this boundary.
         val summary =
             TableSummary(

@@ -27,7 +27,7 @@ import magefree.feature.tables.JoinTableRoute as JoinTableFeatureRoute
 import magefree.feature.tables.TableRoomRoute as TableRoomFeatureRoute
 
 /**
- * Type-safe route for the lobby browser (story 0029), reached from the home "Play" entry. It is a
+ * Type-safe route for the lobby browser, reached from the home "Play" entry. It is a
  * nested destination inside the shell — not a top-level tab — so the tab chrome and the connection
  * strip stay visible above it and Back returns to Home.
  */
@@ -35,15 +35,15 @@ import magefree.feature.tables.TableRoomRoute as TableRoomFeatureRoute
 data object LobbyRoute
 
 /**
- * Type-safe route for the read-only card catalog browser (story 0032), reached from the Decks library's
- * "Browse cards" action (story 0035). A nested destination inside the shell (not a top-level tab), so
+ * Type-safe route for the read-only card catalog browser, reached from the Decks library's
+ * "Browse cards" action. A nested destination inside the shell (not a top-level tab), so
  * the tab chrome and connection strip stay visible above it and Back returns to Decks.
  */
 @Serializable
 data object CardsRoute
 
 /**
- * Type-safe route for hosting a table (story 0038): the create-table form. A nested destination within
+ * Type-safe route for hosting a table: the create-table form. A nested destination within
  * the lobby's back stack (reached from the lobby's Host action), so the tab chrome stays visible and
  * Back returns to the lobby.
  */
@@ -51,7 +51,7 @@ data object CardsRoute
 data object HostTableNavRoute
 
 /**
- * Type-safe route for joining a lobby table (story 0038): the deck pick + legality + submit flow. Carries
+ * Type-safe route for joining a lobby table: the deck pick + legality + submit flow. Carries
  * the tapped table's identity/format so the offline legality gate can run before the join.
  */
 @Serializable
@@ -64,7 +64,7 @@ data class JoinTableNavRoute(
 )
 
 /**
- * Type-safe route for the table room (story 0038): seats/ready/start/leave over `observeTable`, reached
+ * Type-safe route for the table room: seats/ready/start/leave over `observeTable`, reached
  * by hosting, joining, or watching. [role] is a [TableRole] name (`Host`/`Player`/`Spectator`) chosen at
  * entry so the action set is deterministic before the first server push.
  */
@@ -77,19 +77,19 @@ data class TableRoomNavRoute(
 )
 
 /**
- * Type-safe route for the read-only game board (story 0055, `:feature:game`).
+ * Type-safe route for the read-only game board (`:feature:game`).
  *
  * It carries the **game** id, which is a different identifier from the table id the room is keyed by:
  * the server mints it when the match starts and delivers it on the table's `MatchStarting` push
  * (`magefree.network.table.MatchStarting.gameId`). That push is the only producer of a game id in the
- * whole app, and until this story nothing consumed it — the room rendered a terminal "Match starting…"
+ * whole app, and until now nothing consumed it — the room rendered a terminal "Match starting…"
  * screen and the hand-off stopped there.
  *
- * Mounted here, inside the shell graph, rather than beside story 0011's immersive [magefree.app.game.GameRoute]:
+ * Mounted here, inside the shell graph, rather than beside the immersive [magefree.app.game.GameRoute]:
  * the board is reached from the room, which lives in this graph, and keeping it here means Back behaves
  * and the connection strip stays visible over a live game. The trade-off is that the shell's tab chrome
  * takes vertical space from a portrait board; moving the board outside the chrome is a deliberate
- * follow-up, not something to improvise inside this story.
+ * follow-up, not something to improvise here.
  */
 @Serializable
 data class GameBoardNavRoute(
@@ -210,12 +210,12 @@ fun MageNavHost(
             val roomViewModel: TableRoomViewModel = koinViewModel()
             val roomState by roomViewModel.uiState.collectAsStateWithLifecycle()
 
-            // Story 0055: the Epic-7 hand-off, finally connected. `MatchStarting` is the server's own
-            // "your game exists and its id is this" push (story 0037's `TableState.matchStarting`); the
+            // the table-to-game hand-off, finally connected. `MatchStarting` is the server's own
+            // "your game exists and its id is this" push (the `TableState.matchStarting`); the
             // board is opened with that id and the room is popped, so Back from a live game returns to
             // the lobby rather than to a room whose match has already begun.
             //
-            // Story 0069: `matchStarting` is a *one-shot* push — it fires only for whichever client is
+            // `matchStarting` is a *one-shot* push — it fires only for whichever client is
             // sitting in the room at the instant the game starts. A client that opens (or re-opens) the
             // room afterwards — back from the lobby, or after a relaunch — never receives it again, and
             // was stranded with no way back into its own active game. `TableState.resumableGameId` also
@@ -253,7 +253,7 @@ fun MageNavHost(
             )
         }
         composable<DecksRoute> {
-            // Story 0035: the Decks tab hosts the deck library + builder (`:feature:decks`), provided by
+            // the Decks tab hosts the deck library + builder (`:feature:decks`), provided by
             // the caller so the shell can stay Hilt-free in tests. Card browse remains reachable from the
             // library's "Browse cards" action, which navigates to [CardsRoute] within the Decks back stack.
             decksScreen()
@@ -266,11 +266,11 @@ fun MageNavHost(
             SettingsPlaceholderScreen(
                 // Stub entry into the immersive game route. The table room does not open the board
                 // yet: the real entry is the room's match-start signal, which belongs to the in-game
-                // epic (Epic 11 — see `magefree.network.table.MatchStarting`).
+                // the game layer (see `magefree.network.table.MatchStarting`).
                 onEnterGame = onEnterGame,
-                // Debug-only entry into the design-system component catalog (story 0015).
+                // Debug-only entry into the design-system component catalog.
                 onOpenCatalog = onOpenCatalog,
-                // Story 0047: the shell's one deliberate exit from the session. Hoisted all the way to
+                // the shell's one deliberate exit from the session. Hoisted all the way to
                 // the root graph, which tears the session down (0046's `signOut()` sends `Logout`) and
                 // returns to the connect flow, so the player can sign in again.
                 onSignOut = onSignOut,

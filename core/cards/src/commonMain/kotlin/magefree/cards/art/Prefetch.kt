@@ -27,7 +27,7 @@ sealed interface PrefetchScope {
  * This matters because the art cache is keyed by resolved URL and [XMageImageSource] appends
  * `version=small` for SMALL, so SMALL and LARGE are **different cache entries**. Warming one size
  * leaves every surface that displays the other blank offline, which defeats the point of the feature
- * (story 0043, defect A). Derived from [CardArtSize.entries] so a new size cannot be silently missed.
+ *. Derived from [CardArtSize.entries] so a new size cannot be silently missed.
  */
 val PREFETCH_SIZES: Set<CardArtSize> = CardArtSize.entries.toSet()
 
@@ -72,7 +72,7 @@ data class PrefetchProgress(
 
     /**
      * True once the run has stopped for good. Every run reaches one of these, so a UI bound to this
-     * flow always gets to stop showing progress (story 0043, defect C).
+     * flow always gets to stop showing progress.
      */
     val isTerminal: Boolean
         get() = status == PrefetchStatus.COMPLETED || status == PrefetchStatus.CANCELLED || status == PrefetchStatus.FAILED

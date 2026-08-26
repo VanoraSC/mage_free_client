@@ -71,7 +71,7 @@ const val MANA_VALUE_MAX_BUCKET: Int = 6
  * "6 or more"); every axis is optional and conjunctive.
  *
  * @property legalSets a set-restricted format's pool — the catalog's own legality input. Wired through
- *   for Epic 9's deck builder (which owns format→sets definitions); the browse UI here drives the
+ *   for deck building's deck builder (which owns format→sets definitions); the browse UI here drives the
  *   simpler [setCode] axis.
  */
 data class CardBrowseFilters(

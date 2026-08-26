@@ -7,7 +7,7 @@ import magefree.network.ServerPushSource
 
 /**
  * The one place the production [GameClient] is assembled over a [BridgeClient] — the game-side twin of
- * story 0037's `TableClients`, and for the same two reasons.
+ * the `TableClients`, and for the same two reasons.
  *
  * The implementation ([DefaultGameClient]) is deliberately `internal`: it speaks `:protocol` and also
  * needs the **internal** [ServerPushSource] side-channel, neither of which may surface above
@@ -16,8 +16,8 @@ import magefree.network.ServerPushSource
  *
  * - Hilt (`NetworkModule.provideGameClient`), which passes the live `BridgeClient` singleton.
  * - A **consumer or live test** that wants the *real* client rather than a hand-written double, so it can
- *   drive a whole game through the bridge seam. Story 0045's live suite is built on exactly this property
- *   for tables; story 0052's live game test is built on it here.
+ *   drive a whole game through the bridge seam. the live suite is built on exactly this property
+ *   for tables; the live game test is built on it here.
  */
 object GameClients {
     /**

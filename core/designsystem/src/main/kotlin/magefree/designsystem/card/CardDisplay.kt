@@ -21,7 +21,7 @@ import magefree.designsystem.theme.Spacing
  * modifications) is mapped into this shape by later epics.
  *
  * [CardArtSlot] is the abstract art contract — a `@Composable (Modifier) -> Unit` slot. The design
- * system deliberately carries NO image-loading dependency: EPIC-10 supplies a Coil-backed slot here
+ * system carries NO image-loading dependency: the card layer supplies a Coil-backed slot here
  * without changing these components. When a caller supplies no slot, the components render the
  * built-in [CardArtPlaceholder] so the shell degrades gracefully while art is loading or absent.
  */
@@ -29,7 +29,7 @@ import magefree.designsystem.theme.Spacing
 /**
  * The abstract card-art slot: a composable that fills the [Modifier] it is handed with the card's art.
  *
- * The design system never loads images itself; a caller (EPIC-10) backs this slot with a real,
+ * The design system never loads images itself; a caller backs this slot with a real,
  * disk-cached loader. Previews use a solid/placeholder painter, never a network image.
  */
 typealias CardArtSlot = @Composable (Modifier) -> Unit

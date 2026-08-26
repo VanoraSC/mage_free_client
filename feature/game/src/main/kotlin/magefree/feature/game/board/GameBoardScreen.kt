@@ -40,7 +40,7 @@ import magefree.network.game.PromptOptions
 import magefree.network.game.TurnPhase
 
 /**
- * The **playable portrait board** (stories 0055 + 0057).
+ * The **playable portrait board**.
  *
  * ## The layout, and why it is this one
  *
@@ -67,25 +67,25 @@ import magefree.network.game.TurnPhase
  *   …with the floating controls and the expanded hand drawn *over* the bottom of that column.
  * ```
  *
- * - **Opponent above, you below** (§3.1) — unchanged by the portrait revision, and it reads better in
+ * - **Opponent above, you below** — unchanged by the portrait revision, and it reads better in
  *   portrait than it did in landscape. Both seats are found via `GamePlayer.isViewer`, never by index.
- * - **§4.1's side panel becomes a centre band.** See [StatusRail] for the full argument: portrait
+ * - **the side panel becomes a centre band.** See [StatusRail] for the full argument: portrait
  *   inverts which axis is scarce, so an edge panel would tax both battlefields' width forever for a
  *   region that is empty most of the game. The band costs the scarce axis once, and puts the stack
  *   where a table puts it.
  * - **Everything except the two battlefield bands has a fixed height.** The stack fills abruptly, and a
  *   prompt arrives abruptly; neither may reflow the battlefields, so both live in reserved space
  *   ([StatusRailHeight], [NOTICE_STRIP_HEIGHT]) that is the same size empty or full.
- * - **The hand is peek-and-expand** (§3.2): the peek edge is part of the column, and the expanded hand
+ * - **The hand is peek-and-expand**: the peek edge is part of the column, and the expanded hand
  *   is drawn *over* the board so opening it costs no battlefield height.
  *
- * ## Playable, and nothing modal (story 0057)
+ * ## Playable, and nothing modal
  *
  * The board answers the server's prompts through **floating controls** ([FloatingControls]) that sit
  * over the bottom of the board and can be hidden ([HiddenControlsToggle]). There is **no `Dialog` and
- * no `Popup` on this screen**, for any prompt kind — §16.2 made §6.2's exception the rule.
+ * no `Popup` on this screen**, for any prompt kind — the exception is the rule.
  *
- * Two things the layout guarantees, because §16.3 says a hidden control set must never hide that the
+ * Two things the layout guarantees, because a hidden control set must never hide that the
  * server is waiting:
  * 1. the **priority banner is part of the board's status rail**, not of the controls, so the toggle
  *    cannot take it away;
@@ -176,7 +176,7 @@ fun GameBoardScreen(
             }
 
             // The expanded hand and the floating controls both draw *over* the board rather than
-            // displacing it (§16.1: height is the scarce axis in portrait, so nothing may take it
+            // displacing it (height is the scarce axis in portrait, so nothing may take it
             // twice). They stack, controls above hand, so neither hides the other.
             Column(
                 modifier =
@@ -202,7 +202,7 @@ fun GameBoardScreen(
                 } else {
                     HiddenControlsToggle(
                         // The board's own priority banner says this too; this is the second, independent
-                        // statement §16.3 requires (see [HiddenControlsToggle]).
+                        // statement required of a hidden control set (see [HiddenControlsToggle]).
                         isServerWaiting = board.priority is PriorityUi.Yours || board.priority == PriorityUi.Asked,
                         onShow = { onControlsVisibleChange(true) },
                     )
@@ -218,7 +218,7 @@ fun GameBoardScreen(
                 }
             }
 
-            // §5.1/§11.1: the first tap raised the card; this is where it is inspected and committed.
+            // The first tap raised the card; this is where it is inspected and committed.
             uiState.selectedObjectId?.let { objectId ->
                 board.cardFor(objectId)?.let { card ->
                     CardDetailOverlay(
@@ -255,7 +255,7 @@ internal fun BoardUi.cardFor(objectId: String): CardUi? {
  * The standing statements that must survive whatever else is on screen: before the first snapshot, that
  * nothing has arrived yet, and — always — a declined join.
  *
- * Requirements §16.3 makes the equivalent point about hiding floating controls: whatever is hidden, the
+ * the requirements makes the equivalent point about hiding floating controls: whatever is hidden, the
  * player must never be left unable to tell a waiting game from a frozen one.
  */
 @Composable
@@ -442,7 +442,7 @@ private fun GameBoardTargetingPreview() {
 @Preview(name = "Board — declaring attackers", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
 private fun GameBoardDeclaringAttackersPreview() {
-    // As the server sends it (§7.2): the ids in `possibleAttackers`, the shortcut in `specialButton`,
+    // As the server sends it: the ids in `possibleAttackers`, the shortcut in `specialButton`,
     // and **`playable` empty** — the preview would be dishonest with anything in it.
     val state =
         previewState().copy(
@@ -506,7 +506,7 @@ private fun GameBoardBlockingPreview() {
             prompt =
                 GamePrompt.Select(
                     message = "Select blockers",
-                    // No special button: blocking has no shortcut, and none is invented (§7.3).
+                    // No special button: blocking has no shortcut, and none is invented.
                     options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-2"))),
                 ),
         )

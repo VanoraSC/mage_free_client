@@ -44,9 +44,9 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Story 0046, both directions, on real frames: a **deliberate sign-out** puts a `Logout` on the wire
+ * Both directions, on real frames: a **deliberate sign-out** puts a `Logout` on the wire
  * before the socket closes; a **drop / lifecycle teardown** closes without one, which is what makes the
- * bridge park the session for story 0023's resume window (and story 0024's reconnect find it).
+ * bridge park the session for the resume window (and the reconnect find it).
  *
  * The double here is the *bridge*, not the client: a throwaway in-process Ktor WebSocket server that
  * speaks the same `:protocol` handshake and records every [ClientMessage] it receives, interleaved with

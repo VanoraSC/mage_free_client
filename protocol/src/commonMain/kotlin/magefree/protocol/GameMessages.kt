@@ -14,7 +14,7 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 
 /*
- * In-game play: the app-schema projection of XMage's game protocol (story 0051, Epic 11). Where 0036
+ * In-game play: the app-schema projection of XMage's game protocol. Where 0036
  * carried a **table** to the moment a match begins ([MatchStarting]), this carries the **game** itself.
  *
  * **The shape of the upstream protocol.** It is "the server asks a typed question, the client answers
@@ -37,7 +37,7 @@ import kotlinx.serialization.json.JsonDecoder
  *
  * **The one thing upstream cannot do, and the bridge can.** There is no "get game" verb upstream at all,
  * and re-joining a running game does not resync — so the board is push-only and a reconnecting client is
- * blind until the next push. Story 0054 adds [GetGameState] → [GameStateSnapshot]/[GameStateUnavailable]:
+ * blind until the next push. [GetGameState] -> [GameStateSnapshot]/[GameStateUnavailable] answers that:
  * a read answered by the bridge from the last snapshot it relayed **to that session**, not by the server.
  * It is a replay of the server's own data, never a fabrication, and its absence is typed rather than
  * rendered as an empty board.
@@ -200,7 +200,7 @@ public data class SendPlayerAction(
 ) : ClientMessage
 
 /**
- * App→bridge: **read** the current state of the game [gameId] (story 0054) — the targeted read that
+ * App→bridge: **read** the current state of the game [gameId] — the targeted read that
  * `observeGame` has had no way to issue, and the game-side sibling of 0040's [GetTable].
  *
  * There is no upstream verb behind this, and there never will be: XMage's `GameController.join` on an
@@ -225,24 +225,24 @@ public data class GetGameState(
 // ---------------------------------------------------------------------------------------------------
 
 /**
- * Bridge→app: the reply to a [GetGameState] (story 0054) — the most recent [GameStateView] the bridge
+ * Bridge→app: the reply to a [GetGameState] — the most recent [GameStateView] the bridge
  * relayed to **this** session for [gameId], **verbatim**.
  *
  * It is the server's own snapshot replayed, never a reconstruction: nothing is merged across snapshots,
  * nothing is remembered about a card that has since been hidden, and no history is inferred (that is
- * story 0053, deliberately not this one). The [state] here is byte-identical to the one that travelled in
+ * accumulation is deliberately out of scope). The [state] here is byte-identical to the one that travelled in
  * the [GameStarted]/[GameStateUpdated]/[GameInformed]/[GamePrompted]/[GameOver] that produced it, so a
  * client folds it exactly as it folds a push.
  *
  * @property capturedAtEpochMs when the bridge captured this snapshot (wall clock, `System.currentTimeMillis`).
  *   Staleness is bounded and *knowable* rather than guessed: the snapshot is current as of the last push,
- *   and this says when that was. Null only from a bridge older than this story.
+ *   and this says when that was. Null only from a bridge older than this.
  * @property prompt the outstanding question this session was last shown for [gameId], if the most recent
  *   thing the bridge relayed for it was a [GamePrompted] and nothing has superseded that prompt since
- *   (story 0074). `null` when the session's last relayed message carried no prompt (an ordinary state
+ *. `null` when the session's last relayed message carried no prompt (an ordinary state
  *   push, or no snapshot has ever included one), which is the ordinary case — not every rejoin lands
  *   mid-question. Safe to re-serve as live truth rather than a guess: XMage never re-asks a one-shot
- *   prompt on rejoin (`GameController.join`/`watch`, confirmed by story 0070), so if nothing newer
+ *   prompt on rejoin (`GameController.join`/`watch`), so if nothing newer
  *   replaced it, the server is still, genuinely, waiting on exactly this answer.
  */
 @Serializable
@@ -256,7 +256,7 @@ public data class GameStateSnapshot(
 ) : ServerMessage
 
 /**
- * Bridge→app: the typed **"no state"** reply to a [GetGameState] (story 0054) — this session has never
+ * Bridge→app: the typed **"no state"** reply to a [GetGameState] — this session has never
  * been sent a snapshot for [gameId], the game has ended, or the socket has no bound session.
  *
  * A miss is a typed result, never a silent drop and never an empty [GameStateSnapshot]: an all-defaults
@@ -275,7 +275,7 @@ public data class GameStateUnavailable(
 
 /**
  * Why a [GameStateUnavailable] carries no state, as a **kind** rather than as prose — the same discipline
- * [GameFailureCode] applies to the action verbs (story 0050). Additive-only within a protocol major.
+ * [GameFailureCode] applies to the action verbs. Additive-only within a protocol major.
  */
 @Serializable
 public enum class GameStateUnavailableCode {
@@ -296,10 +296,10 @@ public enum class GameStateUnavailableCode {
 
 /**
  * Bridge→app: the structured result of a game request. Every upstream game verb returns a bare
- * `boolean`, so — exactly as [TableActionResult] does for tables (story 0036) — a `false` becomes a
+ * `boolean`, so — exactly as [TableActionResult] does for tables — a `false` becomes a
  * **typed result**, never a silent drop. [action] identifies which request this answers; [requestId]
  * echoes it; [failure] says what *kind* of failure it was so the app can distinguish "the server said
- * no" from "you have no session any more" (story 0050).
+ * no" from "you have no session any more".
  */
 @Serializable
 @SerialName("game_action_result")
@@ -349,7 +349,7 @@ public enum class GameActionCode {
 
 /**
  * Why a [GameActionResult] failed, as a **kind** rather than as prose — the game-side twin of
- * [TableFailureCode] (story 0050). [GameActionResult.reason] is written for a human and can say
+ * [TableFailureCode]. [GameActionResult.reason] is written for a human and can say
  * anything; the app cannot branch on it, but it can branch on this.
  */
 @Serializable
@@ -641,7 +641,7 @@ public data class GetMultiAmountPrompt(
 
 /**
  * A [GamePrompt] subtype this build does not recognise — the prompt-level twin of [UnknownServerMessage]
- * (story 0026, F1). Deserialize-only: encoding one throws, so a fabricated prompt can never reach the
+ *. Deserialize-only: encoding one throws, so a fabricated prompt can never reach the
  * wire. A consumer that receives one must **not** answer it (it cannot know what a valid reply is); it
  * logs the [type] and waits for the next push.
  */
@@ -683,7 +683,7 @@ public data class UnknownGamePrompt(
 }
 
 private const val UNKNOWN_PROMPT_DESERIALIZE_ONLY: String =
-    "UnknownGamePrompt is deserialize-only (story 0026 F1) and must never be encoded onto the wire."
+    "UnknownGamePrompt is deserialize-only and must never be encoded onto the wire."
 
 // ---------------------------------------------------------------------------------------------------
 // App-schema payloads
@@ -786,10 +786,10 @@ public data class GamePlayerView(
 
 /**
  * A card as the server rendered it, projected from `mage.view.CardView`. Deliberately thin: enough to
- * identify a printing ([setCode] + [collectorNumber], the pair story 0030's catalog resolves art by) and
+ * identify a printing ([setCode] + [collectorNumber], the pair the catalog resolves art by) and
  * to render a text-only representation. Anything richer is additive.
  *
- * **What a card *currently is* (story 0058).** [cardTypes], [creature] and [counters] are the server's
+ * **What a card *currently is*.** [cardTypes], [creature] and [counters] are the server's
  * own answer about the live game object, not about the printing: Earthbend makes a land a creature,
  * Ensoul Artifact makes an artifact one, crewing makes a Vehicle one until end of turn — and upstream
  * recomputes all three for every snapshot. They are what lets a client render "is this a creature right
@@ -803,20 +803,20 @@ public data class GamePlayerView(
  * @property counters every counter on the object, by name and count. **Not battlefield-only**: upstream
  *   populates them on `CardView` (from `Card.getCounters(game)`) as well as on `PermanentView`, so a
  *   card outside the battlefield can carry them too.
- * @property alternateName upstream `CardView.getAlternateName()` (story 0076), threaded through
+ * @property alternateName upstream `CardView.getAlternateName()`, threaded through
  *   unchanged, exactly as upstream's own client (`CardPanel.java`) treats it: a **catalog fact**, set
  *   unconditionally on any transformable/double-faced/flip/meld object regardless of which face is
  *   currently showing, to the name of its *other* face. It answers "does this have another face, and
  *   what's it called" — never "which face is up right now" (see [transformed] for that). `null` for an
  *   ordinary card with no other face.
- * @property transformed upstream `CardView.isTransformed()` (story 0076) — the live "is this permanent
+ * @property transformed upstream `CardView.isTransformed()` — the live "is this permanent
  *   currently showing its back face" fact, set by upstream's own `CardView` constructor
  *   (`if (permanent.isTransformed()) transformed = true`) for any battlefield permanent, and inherited
  *   by `PermanentView` via its `super()` call. `false` for anything that is not a permanent, and for an
  *   untransformed permanent — only `true` once the permanent has actually flipped to its back face.
  *   This, not [alternateName], is the signal for which face's art to request.
- * @property targets what this object is pointing at, from upstream `CardView.getTargets()` (story
- *   0086) — the ids of every chosen target of a spell or ability on the stack, de-duplicated and in
+ * @property targets what this object is pointing at, from upstream `CardView.getTargets()`
+ * — the ids of every chosen target of a spell or ability on the stack, de-duplicated and in
  *   upstream's own stable order. **Ids into the same snapshot**, resolvable against any object in it:
  *   a battlefield permanent, a player, or **another entry on the [GameStateView.stack]**, because
  *   upstream resolves them through `game.getObject(uuid)` and puts them in one flat list with no
@@ -824,7 +824,7 @@ public data class GamePlayerView(
  *   untargeted spell — because upstream only calls `addTargets` while building a stack object.
  *
 
- *   **Found live three times over (Pete, 2026-08-16 through 2026-08-22)** before these two fields were
+ *   before these two fields were
  *   traced fully against upstream source: a transformed permanent stuck showing front art, a hand card
  *   showing its other face's art, and an untransformed permanent showing back-face art with no flip
  *   button — all from treating `alternateName != null` as "currently transformed," which upstream never
@@ -868,7 +868,7 @@ public data class GameCounterView(
  * A card type as the server currently reports it (`mage.constants.CardType`), *after* continuous
  * effects — an animated land really does carry [CREATURE] here.
  *
- * Carried as the structured list rather than only as [GameCardView.creature] so that later stories
+ * Carried as the structured list rather than only as [GameCardView.creature] so that later work
  * (subtypes, supertypes, "why is this a creature") extend the same field instead of re-deriving from a
  * display string.
  *
@@ -921,7 +921,7 @@ public enum class CardTypeCode {
  * A permanent on the battlefield, projected from `mage.view.PermanentView` — a [card] plus the
  * battlefield-only state the UI must show.
  *
- * **Attachments travel in both directions (story 0087), because upstream computes both.**
+ * **Attachments travel in both directions, because upstream computes both.**
  * [attachedTo] says what this permanent is attached to; [attachments] says what is attached *to it*.
  * Neither is derivable from the other cheaply: without [attachments], a host would have to scan every
  * battlefield on every frame for anything pointing at it, on both players' boards — work the server
@@ -1160,7 +1160,7 @@ public enum class PhaseStepCode {
  * match upstream deliberately, but the bridge maps each explicitly (a total `when`) so an upstream
  * rename is a **compile** error at the boundary rather than a runtime surprise.
  *
- * Tournament/draft/client-lifecycle actions are excluded: they are not in-game verbs (EPIC-08 owns the
+ * Tournament/draft/client-lifecycle actions are excluded: they are not in-game verbs (tournaments and drafts own the
  * first, the session protocol owns the second).
  */
 public enum class PlayerActionCode {

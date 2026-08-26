@@ -31,19 +31,19 @@ gradlePlugin {
             id = "magefree.android.compose"
             implementationClass = "AndroidComposeConventionPlugin"
         }
-        // Story 0081 (EPIC-18): Koin replaced Hilt, so there is no annotation processor and no
+        // Koin is the DI container, so there is no annotation processor and no
         // per-module aggregation workaround left to configure.
         register("koin") {
             id = "magefree.koin"
             implementationClass = "KoinConventionPlugin"
         }
-        // Story 0080 (EPIC-18): the multiplatform logic modules — `:protocol`, `:core:model`, and
-        // `:core:cards`/`:core:decks`/`:core:network` as stories 0082-0084 convert them.
+        // The multiplatform logic modules — `:protocol`, `:core:model`, and
+        // `:core:cards`, `:core:decks` and `:core:network`.
         register("kmpLibrary") {
             id = "magefree.kmp.library"
             implementationClass = "KmpLibraryConventionPlugin"
         }
-        // Story 0082: a multiplatform `:core:*` module that still ships on Android, so it carries an
+        // a multiplatform `:core:*` module that still ships on Android, so it carries an
         // `androidTarget()` alongside `jvm()` and an `androidMain` source set for the platform edge.
         register("kmpAndroidLibrary") {
             id = "magefree.kmp.android.library"

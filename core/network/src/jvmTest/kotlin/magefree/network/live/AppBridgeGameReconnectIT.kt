@@ -40,12 +40,12 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * **Story 0054's real proof**: a client that loses its connection mid-game and reconnects can see the
+ * **the real proof**: a client that loses its connection mid-game and reconnects can see the
  * board **immediately**, without waiting for the opponent to do anything.
  *
  * This is the scenario the feature exists for and the one that fails without it. XMage has no verb that
  * reads a `GameView`, and re-joining a running game does not resync (`GameController.join` on a running
- * game only logs "rejoined"), so before this story a reconnecting client was blind until the server
+ * game only logs "rejoined"), so without it a reconnecting client was blind until the server
  * happened to push — which, while the opponent is thinking, can be minutes or never.
  *
  * **How the "nothing is being pushed" condition is guaranteed, not hoped for.** The test first plays to
@@ -56,7 +56,7 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * **How the drop is performed.** [LiveBridge.dropRadio] takes the *network* away, which is what
  * production actually does: `ReconnectingSession` ends the running attempt the moment connectivity is
- * lost (story 0050 defect B), the socket closes with no `Logout` on it so the bridge **parks** the
+ * lost, the socket closes with no `Logout` on it so the bridge **parks** the
  * session (0023), and the reconnect loop stays alive holding its `ResumeHandle` so the next attempt
  * sends `Resume` (0024). That is the shape `KtorBridgeClient`'s KDoc records from the on-device smoke —
  * Android tearing down a lingering network after a WIFI/CELLULAR hand-off.
@@ -175,7 +175,7 @@ class AppBridgeGameReconnectIT {
                     condition = { it != ConnectionState.Connected },
                 )
                 // Long enough for the bridge to see the close and park the session, comfortably inside
-                // the 60s resume TTL. A resume that arrives before the park is refused (story 0026 F4)
+                // the 60s resume TTL. A resume that arrives before the park is refused
                 // and falls back to a fresh Login — a different session, with no cache, which is exactly
                 // the failure this pause avoids.
                 delay(RADIO_OFF_MS)
@@ -253,7 +253,7 @@ class AppBridgeGameReconnectIT {
     /**
      * The claim the whole test rests on: **nothing was pushed**. Without this, a board that appeared
      * because the server happened to send a snapshot would read exactly like a board that appeared
-     * because the read worked — and only the second is this story.
+     * because the read worked — and only the second is this.
      */
     private fun assertNoGamePushes(
         pushes: List<ServerMessage>,

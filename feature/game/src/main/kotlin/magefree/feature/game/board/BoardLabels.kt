@@ -5,7 +5,7 @@ package magefree.feature.game.board
  *
  * They are `const` and public-in-module so the rendering tests assert against the **same** literal the
  * screen renders, rather than a copy that can drift. (Accessibility semantics are deliberately out of
- * scope for this story, so where a test needs a handle it uses one of these visible strings.)
+ * scope for this, so where a test needs a handle it uses one of these visible strings.)
  */
 
 /** The board's title. */
@@ -14,7 +14,7 @@ const val BOARD_TITLE: String = "Game board"
 /**
  * What the board says before the first snapshot has folded (`GameState.hasSnapshot == false`).
  *
- * The board itself still renders behind it: requirements §1.2 chose "show the board with empty regions"
+ * The board itself still renders behind it: the requirements chose "show the board with empty regions"
  * over "hold the whole board hostage to the deal".
  */
 const val WAITING_FOR_FIRST_SNAPSHOT: String = "Waiting for the first update…"
@@ -22,7 +22,7 @@ const val WAITING_FOR_FIRST_SNAPSHOT: String = "Waiting for the first update…"
 /**
  * The standing statement about what the board can do when the server is **not** asking anything.
  *
- * Story 0055's board carried a "read-only" notice here for the same reason this one carries a quiet
+ * the board carried a "read-only" notice here for the same reason this one carries a quiet
  * line: a player who cannot tell "the app won't let me" from "the game isn't asking me" reads a silent
  * board as a broken one. Now that the board can answer, the honest version of that sentence is that
  * there is nothing outstanding — which is a fact about `GameState.prompt`, not about the app.
@@ -76,7 +76,7 @@ const val EMPTY_STACK: String = "empty"
 /**
  * The qualifier the stack carries whenever it holds anything.
  *
- * The opponent's cancel is **not pushed** to us (requirements §17.4, proven by card id), so an object
+ * The opponent's cancel is **not pushed** to us (proven by card id), so an object
  * on this stack can be one its caster has already rewound. The board therefore states what the stack
  * actually is — the last thing the server pushed — instead of implying it is live truth.
  */
@@ -100,7 +100,7 @@ const val HAND_COLLAPSE_LABEL: String = "Hide hand"
  * Prefix for the server's outstanding question in the notice strip.
  *
  * The strip states the question so the player can follow the game even with the floating controls
- * hidden (§16.3). The controls themselves repeat it, because that is where it is answered.
+ * hidden. The controls themselves repeat it, because that is where it is answered.
  */
 const val PROMPT_PREFIX: String = "Server asks:"
 
@@ -113,12 +113,12 @@ const val NO_NOTICES: String = "No messages"
 /** Prefix for a declined `joinGame`, carrying the server's own reason. */
 const val JOIN_FAILED_PREFIX: String = "Couldn't join the game:"
 
-// ---- story 0057: the floating controls (§16.2), the toggle (§16.3), casting and cancel ------------
+// ---- the floating controls, the toggle, casting and cancel ------------
 
 /** The floating panel's own heading, so the player can see at a glance that it is the server asking. */
 const val CONTROLS_TITLE: String = "The server asks"
 
-/** The visibility toggle's two labels (§16.3). */
+/** The visibility toggle's two labels. */
 const val HIDE_CONTROLS_LABEL: String = "Hide controls"
 
 const val SHOW_CONTROLS_LABEL: String = "Show controls"
@@ -126,24 +126,24 @@ const val SHOW_CONTROLS_LABEL: String = "Show controls"
 /**
  * What the **hidden** toggle adds when the server is waiting on the player.
  *
- * §16.3's hard constraint: hiding the controls must never hide that the server is waiting, or a hidden
+ * the hard constraint: hiding the controls must never hide that the server is waiting, or a hidden
  * control set becomes an invisible stall and the game looks frozen. The status rail's priority banner
  * survives the toggle by construction (it is part of the board, not of the floating controls); this puts
  * the same fact on the toggle itself, where the finger that hid them already is.
  */
 const val WAITING_ON_YOU_WHILE_HIDDEN: String = "Waiting on you — show the controls"
 
-/** Pass priority — the most repeated interaction in a game (§9.1), so it is always the primary button. */
+/** Pass priority — the most repeated interaction in a game, so it is always the primary button. */
 const val PASS_LABEL: String = "Pass priority"
 
-/** The player's confirmation that they have chosen enough targets: the final *done* (§17.2). */
+/** The player's confirmation that they have chosen enough targets: the final *done*. */
 const val DONE_LABEL: String = "Done choosing"
 
 /**
- * The cancel offered wherever the server permits it (§16.5).
+ * The cancel offered wherever the server permits it.
  *
  * It says *cast* rather than *spell* deliberately: the card is already on the stack when the prompt
- * arrives (CR 601 / §16.5), so the board must not claim the spell is uncast — what is being cancelled is
+ * arrives, so the board must not claim the spell is uncast — what is being cancelled is
  * the act of casting it, which the server then rewinds.
  */
 const val CANCEL_CAST_LABEL: String = "Cancel this cast"
@@ -151,7 +151,7 @@ const val CANCEL_CAST_LABEL: String = "Cancel this cast"
 /** What the cast context says while the server is rewinding — see [CANCEL_CAST_LABEL]. */
 const val CANCELLING_NOTE: String = "Cancelling — the server rewinds the cast; the stack may still show it for a beat."
 
-/** The prefix on the persistent cast context (§6.4: casting is one continuous act). */
+/** The prefix on the persistent cast context (casting is one continuous act). */
 const val CASTING_PREFIX: String = "Casting"
 
 /** Fallbacks for a yes/no question the server sent no button labels with. */
@@ -180,10 +180,10 @@ const val TARGET_ACTION_LABEL: String = "Choose as target"
 
 const val MANA_ACTION_LABEL: String = "Tap for mana"
 
-/** Closes the tapped-card detail without acting (§11.1: any tap elsewhere closes it). */
+/** Closes the tapped-card detail without acting (any tap elsewhere closes it). */
 const val CLOSE_DETAIL_LABEL: String = "Close"
 
-/** Toggles the tapped-card detail between its front and back art (story 0077). Local peek, never sent. */
+/** Toggles the tapped-card detail between its front and back art. Local peek, never sent. */
 const val FLIP_FACE_LABEL: String = "Flip"
 
 /**
@@ -199,7 +199,7 @@ const val UNRECOGNISED_PROMPT_NOTICE: String =
 /** What the controls say when the server offered nothing playable in a priority window. */
 const val NOTHING_OFFERED_NOTE: String = "The server offers nothing to play — you can still pass."
 
-/** The board menu, and the two **separate** ways to leave (§12.2). */
+/** The board menu, and the two **separate** ways to leave. */
 const val BOARD_MENU_LABEL: String = "Game menu"
 
 const val CONCEDE_LABEL: String = "Concede game"
@@ -226,10 +226,10 @@ const val UNNAMED_CANDIDATE_LABEL: String = "Choice"
 /** Marks the viewer's own seat in a list of candidates, so "choose a player" is not a guess. */
 const val YOU_SUFFIX: String = " (you)"
 
-// ---- story 0061: combat, the two declarations (§7.4) ----------------------------------------------
+// ---- combat, the two declarations ----------------------------------------------
 //
 // Every string here belongs to exactly one of the two roles. Combat is **two** assignment problems that
-// never belong to the same player at the same moment (§7.4), so the board never has to phrase a
+// never belong to the same player at the same moment, so the board never has to phrase a
 // sentence that covers both — and a shared word here would be the first step towards a control that
 // offers both at once.
 
@@ -242,7 +242,7 @@ const val DECLARE_BLOCKER_ACTION_LABEL: String = "Declare as blocker"
  * The *done* that ends a declaration.
  *
  * It is `cancelPrompt` on the wire — upstream's shared "done / cancel" arm, the same message targeting's
- * own done sends (§17.2) and the same one the probes used to close a declaration. It is deliberately not
+ * own done sends and the same one the probes used to close a declaration. It is deliberately not
  * called *pass*: a declaration is not a priority window, and "Pass priority" on it would be a lie about
  * what the button does.
  */
@@ -254,7 +254,7 @@ const val DONE_DECLARING_BLOCKERS_LABEL: String = "Done declaring blockers"
  * The server's own shortcut, and its confirmation.
  *
  * `ALL_ATTACK_LABEL` is only ever a **fallback**: the label rendered is the server's own
- * `specialButton` text where it sent one (it sends "All attack"). The confirm step is §16.4's, applied
+ * `specialButton` text where it sent one (it sends "All attack"). The confirm step is 16.4's, applied
  * here because the shortcut commits the entire team in one press — and because `selectDefenderForAllAttack`
  * shows it is not "attack the face": with more than one legal defender the server still asks, once,
  * which one.
@@ -263,7 +263,7 @@ const val ALL_ATTACK_LABEL: String = "All attack"
 
 const val ALL_ATTACK_CONFIRM_LABEL: String = "Attack with everything — confirm"
 
-/** How each declaration explains itself. One of these is on screen; never both (§7.4). */
+/** How each declaration explains itself. One of these is on screen; never both. */
 const val DECLARE_ATTACKERS_NOTE: String = "Tap each creature you want to attack with."
 
 const val DECLARE_BLOCKERS_NOTE: String = "Tap each creature you want to block with."
@@ -273,7 +273,7 @@ const val DECLARE_BLOCKERS_NOTE: String = "Tap each creature you want to block w
  *
  * The board does not decide when this is asked — upstream does, and only when the choice is real:
  * `selectDefender` assigns silently when there is exactly one legal defender, and `selectBlockers`
- * assigns silently when the blocker could only block one attacker (§7.5). These lines only say *which
+ * assigns silently when the blocker could only block one attacker. These lines only say *which
  * creature* the question is about, which the server's own prose does not.
  */
 const val PAIRING_DEFENDER_PREFIX: String = "Attacking with"

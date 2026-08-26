@@ -36,13 +36,13 @@ import magefree.protocol.GamePrompt as GamePromptMessage
  * Hermetic Turbine coverage of [DefaultGameClient.observeGame]: it seeds current state, folds the 0051
  * game events pushed through the [FakeBridgeClient]'s server-push side-channel into successive
  * [GameState]s (start → hand → a prompt appears → the prompt clears → game over), re-emits the held
- * state on a 0023/0024 resume so a reconnect does not strand the board, and — since story 0054 — **reads**
+ * state on a resume so a reconnect does not strand the board, and **reads**
  * the board from the bridge on open and after each resume. No socket.
  *
- * **The invariant that changed, and why it was there.** Story 0052 pinned
+ * **The invariant, and why it is there.** This pins
  * `observeGameNeverIssuesARequestOfItsOwn`: game state was push-only, because upstream exposes no verb
  * that reads a `GameView`, so anything the observer sent would have been a request the bridge could not
- * answer — and a *poll* of it would have been an unbounded stream of unanswerable requests. Story 0054
+ * answer — and a *poll* of it would be an unbounded stream of unanswerable requests. The bridge's cache
  * gives the bridge an answer (from its own per-session cache), so the read is now deliberate. The test
  * is therefore **updated rather than deleted**, to
  * [observeGameReadsOnOpenAndAfterEachResumeAndStillNeverPolls]: it now asserts *exactly* the two reads
@@ -217,7 +217,7 @@ class ObserveGameTest {
     fun aResumeIsFollowedByWhateverTheBridgeBufferedSoTheBoardCatchesUp() =
         runTest {
             // There is no game read to issue after a resume; the fresh snapshot arrives as the bridge's
-            // parked-session buffer drains into the re-bound socket (story 0023). This asserts the
+            // parked-session buffer drains into the re-bound socket. This asserts the
             // client's half of that: a push after the resume folds normally onto the re-synced state.
             val fake = FakeBridgeClient()
             val connection = MutableStateFlow(ConnectionState.Connected)
@@ -262,7 +262,7 @@ class ObserveGameTest {
         runTest {
             // **The updated 0052 invariant.** It used to read "never issues a request of its own",
             // because there was no request the bridge could answer and a poll of one would have been an
-            // unbounded stream of unanswerable requests. Story 0054 gives the bridge an answer, so the
+            // unbounded stream of unanswerable requests. The bridge has an answer, so the
             // read is now intended — but only at the two moments where the answer can have changed
             // without the app hearing about it: the board opening, and the socket coming back. Nothing
             // else changes it, so a timer would ask forever for no new answer. This asserts both halves:
@@ -310,7 +310,7 @@ class ObserveGameTest {
                 assertTrue("the read fills the board with no push involved", read.hasSnapshot)
                 assertEquals(4, read.turn)
                 assertEquals(7, read.hand.size)
-                // Story 0074: a read *can* restore a cached prompt now — this fixture's snapshot simply
+                // a read *can* restore a cached prompt now — this fixture's snapshot simply
                 // did not carry one, so null is the right answer here, not an absolute rule.
                 assertNull("this snapshot cached no outstanding prompt for the session", read.prompt)
 
@@ -321,7 +321,7 @@ class ObserveGameTest {
     @Test
     fun aResumeReadsTheBoardSoAReconnectDoesNotWaitForTheOpponentToAct() =
         runTest {
-            // **The scenario the story exists for.** The socket drops mid-game; while it is down the
+            // **The scenario this exists for.** The socket drops mid-game; while it is down the
             // game moves on; the app reconnects and the opponent is thinking, so nothing is pushed. The
             // post-resume read is the only thing that can put a board on screen — this asserts a fresh
             // state arrives with no push at all after the reconnect.
@@ -371,7 +371,7 @@ class ObserveGameTest {
     @Test
     fun aReadNeverOverwritesTheOutstandingPromptOrARunningGamesResult() =
         runTest {
-            // Story 0074: a read *can* restore a cached prompt now (see the dedicated test for that),
+            // a read *can* restore a cached prompt now (see the dedicated test for that),
             // but it must never *clear* one already held just because this particular reply's own
             // snapshot happened to cache none — that would leave the server waiting forever for an
             // answer the UI no longer offers. This fixture's snapshot() call below carries no prompt on
@@ -407,7 +407,7 @@ class ObserveGameTest {
     @Test
     fun aReadRestoresACachedPromptWhenNoneIsCurrentlyHeld() =
         runTest {
-            // The exact scenario story 0074 exists for: the client left mid-question (a mulligan, say),
+            // The scenario this exists for: the client left mid-question (a mulligan, say),
             // so it holds no live prompt (viewerHasPriority is false pre-priority, and 0071's fallback
             // correctly does not apply here either). The bridge, however, cached the last GamePrompted
             // it relayed for this session, and now serves it back on the opening read.

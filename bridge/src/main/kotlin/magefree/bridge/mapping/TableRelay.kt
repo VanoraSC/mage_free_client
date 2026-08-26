@@ -17,8 +17,8 @@ import magefree.protocol.TableSummary
 import java.util.UUID
 
 /**
- * The table-action dispatch+map boundary — the sibling of [LobbyRelay] for the **act** side (story
- * 0036). Each method builds the `mage.*` arguments (`MatchOptions`, `DeckCardLists`, `PlayerType`) via
+ * The table-action dispatch+map boundary — the sibling of [LobbyRelay] for the **act** side
+ *. Each method builds the `mage.*` arguments (`MatchOptions`, `DeckCardLists`, `PlayerType`) via
  * the pure sibling mappers, dispatches to the matching `SessionImpl` verb within the resolved room, and
  * maps the result back to an app-schema [ServerMessage]. All `mage.*` construction stays **inside** this
  * package, so no upstream shape crosses the wire (`docs/architecture.md`; the same reason [LobbyRelay]
@@ -41,8 +41,8 @@ public object TableRelay {
      * (a null `TableView`).
      *
      * Options XMage cannot express — a match/buffer clock outside its closed enumerations — are
-     * rejected **before** the upstream call, as a typed failure naming the supported values (story
-     * 0044). The alternative, quietly substituting "no clock", would report success for a table whose
+     * rejected **before** the upstream call, as a typed failure naming the supported values
+     *. The alternative, quietly substituting "no clock", would report success for a table whose
      * match rules are not the ones the host asked for.
      */
     public fun createTable(
@@ -155,7 +155,7 @@ public object TableRelay {
     ): TableActionResult = resultOf(TableActionCode.WATCH, session.watchTable(roomId, tableId))
 
     /**
-     * Reads **one** table's detail — its summary plus per-seat state — for a `GetTable` (story 0040).
+     * Reads **one** table's detail — its summary plus per-seat state — for a `GetTable`.
      *
      * Upstream exposes **no single-table read** on `SessionImpl`, so this resolves the table out of the
      * room's table list (`getTables(roomId)`) filtered by [tableId], exactly as the desktop client's
@@ -206,7 +206,7 @@ public object TableRelay {
             action = action,
             ok = ok,
             reason = if (ok) null else ACTION_DECLINED,
-            // The server was asked and said no — a refusal, not a lost session (story 0050).
+            // The server was asked and said no — a refusal, not a lost session.
             failure = if (ok) null else TableFailureCode.REFUSED,
         )
 

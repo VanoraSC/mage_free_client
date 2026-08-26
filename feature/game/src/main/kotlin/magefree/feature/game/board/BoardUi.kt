@@ -13,7 +13,7 @@ import magefree.network.game.PhaseStep
 import magefree.network.game.TurnPhase
 
 /*
- * The board's **presentation model** (story 0055): one pure function, [BoardUi.from], turning a 0052
+ * The board's **presentation model**: one pure function, [BoardUi.from], turning a 0052
  * [GameState] snapshot into everything the portrait board draws. No Compose type, no Android type, no
  * coroutine — so every region and every *empty* region is provable in a plain JVM unit test.
  *
@@ -66,21 +66,21 @@ import magefree.network.game.TurnPhase
  *   nothing is exiled, so [BoardUi.exiledCardCount] sums the cards. (`GamePlayer.exileCount` is a
  *   different thing and is safe: the bridge maps it from `PlayerView.exile.size`, a set of *cards*.)
  * - **`manaCost` is null for lands** — carried through as null, never rendered as an empty cost.
- * - **Creature-ness is game state, not printing** (story 0058). Earthbend animates a land, Ensoul
+ * - **Creature-ness is game state, not printing**. Earthbend animates a land, Ensoul
  *   Artifact an artifact, crewing a Vehicle — all ordinary play. The board asks `GameCard.isCreature`
  *   (upstream's own `CardView.isCreature()`) and never the printed type or `typeLine`; parsing that
  *   display string is what would put rules interpretation in the client.
  * - **A noncreature permanent's power/toughness are `"0"`, not absent**, and `hasSummoningSickness` is
  *   set for *any* permanent that arrived this turn. Both are honest server facts that mean nothing off
  *   a creature, which is why both are gated on `isCreature` here — the board renders "0/0 · Summoning
- *   sick" under a Mountain otherwise, as it did on device before this story.
+ *   sick" under a Mountain otherwise, as it did on device without it.
  * - **`power`/`toughness` are strings and stay strings** — `*` is a real value (Tarmogoyf, Mortivore).
  *   Nothing parses them; they are only checked for presence.
  * - **Clocks read 0 on an untimed table** — [ClockUi.of] returns null there, so nothing renders
  *   "0 seconds left".
  * - **Server narration is HTML** (`<font color='#20B2AA'>Computer</font>`) — [stripServerMarkup] takes
  *   the tags off before anything is shown; markup never reaches the screen.
- * - **The opponent's stack can hold a phantom** after they cancel a cast (requirements §17.4: the
+ * - **The opponent's stack can hold a phantom** after they cancel a cast (the requirements: the
  *   rewind is not pushed to the opponent). The stack is therefore labelled as *last pushed* and is
  *   never presented as authoritative between pushes.
  */
@@ -89,7 +89,7 @@ import magefree.network.game.TurnPhase
  * Everything the read-only portrait board draws, for one [GameState] snapshot.
  *
  * **Read-only.** Nothing in this model carries a callback, an id to act on, or an "answer" of any kind.
- * [promptNotice] is text for comprehension only — the answering surface is story 0056. The per-card
+ * [promptNotice] is text for comprehension only; the controls are the answering surface. The per-card
  * [PermanentUi.isOfferedByServer] mark is decoration; it triggers nothing.
  *
  * @property hasSnapshot whether any snapshot has folded yet (`GameState.hasSnapshot`) — the board's own
@@ -191,7 +191,7 @@ data class BoardUi(
 }
 
 /**
- * One seat's vitals + battlefield — the compact per-player bar of requirements §4.3 plus the band it
+ * One seat's vitals + battlefield — the compact per-player bar of the requirements plus the band it
  * labels.
  *
  * @property isViewer whether this is the viewer's own seat (`GamePlayer.isViewer`) — the only seating
@@ -229,7 +229,7 @@ data class SeatUi(
  *
  * @property isOfferedByServer the server listed this object in `canPlayObjects` **while the viewer held
  *   priority**. It is false for everything when priority is not held — see the class docs on [BoardUi].
- *   It is a *mark*, never an affordance: this board offers no way to act on it (story 0056 does).
+ *   It is a *mark*, never an affordance: this board offers no way to act on it (does).
  */
 data class PermanentUi(
     val objectId: String,
@@ -262,7 +262,7 @@ data class PermanentUi(
      * **Why a sentence and not two flags.** 0055 already marked attackers and blockers, and on a real
      * board that is not enough to follow a fight: with two attackers and a planeswalker in play, "this
      * one is attacking" leaves out the only thing the player needs to know, which is *what* it is
-     * attacking. `CombatGroup` carries the answer and is **per-attacker** (§7.3) — it reads "against this
+     * attacking. `CombatGroup` carries the answer and is **per-attacker** — it reads "against this
      * defender, this attacker, blocked by these" — so the defender's own name is right there.
      *
      * The names are the server's: the defender's from `CombatGroup.defenderName` (which is a player, a
@@ -310,10 +310,10 @@ data class StackEntryUi(
 
 /**
  * The stack region. Usually empty and filled abruptly, so the board gives it a **fixed** slice of the
- * layout: filling it must never reflow the battlefields (requirements §4.1).
+ * layout: filling it must never reflow the battlefields.
  *
  * Not authoritative between pushes: the server does not push the opponent a snapshot when a cast is
- * cancelled (§17.4), so a spell the caster has already rewound can linger here until the next push.
+ * cancelled, so a spell the caster has already rewound can linger here until the next push.
  */
 data class StackUi(
     val entries: List<StackEntryUi> = emptyList(),
@@ -345,7 +345,7 @@ data class TurnUi(
 }
 
 /**
- * The **explicit** priority statement of requirements §4.2 — stated as words, in addition to any
+ * The **explicit** priority statement of the requirements — stated as words, in addition to any
  * per-card mark, because "I hold priority and there is nothing to play" is a real state that a card
  * highlight alone cannot express.
  *
@@ -353,7 +353,7 @@ data class TurnUi(
  * `playable` being empty: that is exactly the ambiguity this exists to remove.
  */
 sealed interface PriorityUi {
-    /** The line the board always shows, even with every floating control hidden (§16.3). */
+    /** The line the board always shows, even with every floating control hidden. */
     val headline: String
 
     /** An optional second line; null when there is nothing more to say. */
@@ -386,7 +386,7 @@ sealed interface PriorityUi {
      * seat to choose who goes first, and it does that *before* priority exists. On that snapshot
      * `viewerHasPriority` is false while `prompt` is `Select a starting player` — so a banner driven by
      * priority alone reads "Waiting for opponent" at the exact moment the whole game is waiting on
-     * **you**. Requirements §16.3 names that failure directly: whatever else is hidden, the player must
+     * **you**. The requirements names that failure directly: whatever else is hidden, the player must
      * never be left unable to tell a waiting game from a frozen one.
      *
      * Its producer is `GameState.prompt`, which 0052 defines as "**the** outstanding question, or null
@@ -465,12 +465,12 @@ data class ClockUi(
  *   sent no P/T at all, so a half-filled view cannot produce "null/2".
  * @property counters every counter on the card, by name and count, in the server's order. Present on a
  *   card in any zone, not only on a permanent.
- * @property alternateName `GameCard.alternateName` (story 0076), carried through unchanged — a catalog
+ * @property alternateName `GameCard.alternateName`, carried through unchanged — a catalog
  *   fact, non-null whenever the card has another face at all, to that other face's name, regardless of
  *   which face is currently showing (see [GameCard.alternateName]'s own KDoc). Exposed here so a manual
- *   "peek at the other face" control (story 0077) knows whether one exists and what to call it; [transformed]
+ *   "peek at the other face" control knows whether one exists and what to call it; [transformed]
  *   is what says which face is currently up.
- * @property transformed `GameCard.transformed` (story 0076), carried through unchanged — the live "is
+ * @property transformed `GameCard.transformed`, carried through unchanged — the live "is
  *   this permanent currently showing its back face" fact. This, not [alternateName], is what [art]'s
  *   requested face is chosen from.
  */
@@ -501,7 +501,7 @@ const val FACE_DOWN_NAME: String = "Face-down"
 /**
  * The current combat, indexed by permanent — the one place `GameState.combat` is read.
  *
- * `CombatGroup` is **per-attacker** (§7.3, measured live: two attackers produced two groups, each with
+ * `CombatGroup` is **per-attacker** (measured live: two attackers produced two groups, each with
  * `attackers=1` and the defender repeated), so "what is this permanent doing" is a lookup across groups
  * rather than a field on one. Building it once per snapshot keeps that out of the per-permanent path and
  * out of the composables entirely.
@@ -631,7 +631,7 @@ internal fun GameCard.toCardUi(): CardUi {
  * The 0031 art identity for a printing, or null when the server did not name one — in which case the
  * design-system placeholder is what renders, and the card's text stays readable.
  *
- * [isShowingAlternateFace] (story 0076) is `GameCard.transformed` — upstream's own live "is this
+ * [isShowingAlternateFace] is `GameCard.transformed` — upstream's own live "is this
  * permanent currently showing its back face" fact (see [GameCard.transformed]'s own KDoc), not
  * `alternateName`, which means something else entirely (whether another face *exists*, not which one is
  * up). A DFC/MDFC's two faces share one [setCode]/[collectorNumber] (one printing), so telling them

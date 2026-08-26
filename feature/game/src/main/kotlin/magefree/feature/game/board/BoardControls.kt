@@ -7,7 +7,7 @@ import magefree.network.game.ManaType
 import magefree.network.game.PromptOptions
 
 /*
- * The **answering** half of the board (story 0057): a pure projection of the server's outstanding
+ * The **answering** half of the board: a pure projection of the server's outstanding
  * prompt into the floating controls that answer it, and the closed set of actions those controls emit.
  *
  * No Compose type, no Android type, no coroutine — exactly as [BoardUi] is — so every prompt kind, every
@@ -27,22 +27,22 @@ import magefree.network.game.PromptOptions
  * | which creatures may be **declared as blockers** | `PromptOptions.possibleBlockers` on the server's `Select` during `DeclareBlockers` — likewise not `playable` |
  * | which of combat's two roles the board is in | which of those two keys the server sent ([CombatRole.of]) |
  * | which targets are already chosen | `PromptOptions.chosenTargets` |
- * | candidate cards not on the board (scry, piles, a library search) | the prompt's own `cards` / `pile1` / `pile2`, narrowed to what is actually pickable for a `Target` prompt (story 0078 follow-up) |
+ * | candidate cards not on the board (scry, piles, a library search) | the prompt's own `cards` / `pile1` / `pile2`, narrowed to what is actually pickable for a `Target` prompt (follow-up) |
  * | which mana types may be unlocked | the viewer's own `GamePlayer.manaPool` |
  * | whether cancel may be offered | `GamePrompt.Target.isRequired` / `ChooseChoice.isRequired`, and 0052's list of the four prompts `cancelPrompt` actually answers |
  *
  * ## The three things this file exists to get right
  *
- * 1. **Nothing is modal** (§16.2). These are controls that *float over* the board; the board stays
- *    visible and live underneath for every prompt kind, including the ones §6.2 used to send to a
- *    dialog. The distinction §6.2 drew — answered *from the prompt's own content* vs answered *by
+ * 1. **Nothing is modal**. These are controls that *float over* the board; the board stays
+ *    visible and live underneath for every prompt kind, including the ones an earlier design sent to a
+ *    dialog. The distinction — answered *from the prompt's own content* vs answered *by
  *    touching the board* — survives as [pickableObjectIds] being empty or not, and nothing else.
- * 2. **Target picks are never batched** (§17.2, verified live). The prompt reads *"Select targets
+ * 2. **Target picks are never batched** (verified live). The prompt reads *"Select targets
  *    (selected 0 of 2, min 1)"* and the server **re-prompts with an updated count and candidate set
  *    after each pick**, so a client that accumulated picks against the first candidate list could
  *    assemble a combination the server rejects. Each tap emits [BoardAction.ChooseTarget] on its own;
  *    the player's confirmation emits [BoardAction.FinishTargeting], which is the final *done*.
- * 3. **Legality and mana payment are never computed** (§0, §6.5). Every id offered here came from the
+ * 3. **Legality and mana payment are never computed**. Every id offered here came from the
  *    server in this snapshot. When the server offers nothing, the controls say so rather than inventing
  *    something tappable.
  */
@@ -78,9 +78,9 @@ sealed interface BoardAction {
 
     /**
      * The player's confirmation that they are done choosing targets — the final *done*
-     * (`SendPlayerBoolean(false)`), which §17.2 shows is legitimate once `min` is satisfied.
+     * (`SendPlayerBoolean(false)`), which is legitimate once `min` is satisfied.
      *
-     * It closes a **combat declaration** too (story 0061): upstream ends `Select attackers` /
+     * It closes a **combat declaration** too: upstream ends `Select attackers` /
      * `Select blockers` with the same shared "done / cancel" arm, and both probes closed a declaration
      * with exactly this message. The label differs per role; the action does not.
      *
@@ -91,9 +91,9 @@ sealed interface BoardAction {
     data object FinishTargeting : BoardAction
 
     /**
-     * Decline the outstanding prompt and let the server rewind — the cancel of §16.5, proven live to
+     * Decline the outstanding prompt and let the server rewind — the cancel, proven live to
      * return the card to hand, clear the stack and leave mana unspent at both the **target** step
-     * (§17.1) and the **mana** step (§6.4a).
+     * and the **mana** step.
      */
     data object CancelPrompt : BoardAction
 
@@ -143,10 +143,10 @@ sealed interface BoardAction {
         val amounts: List<Int>,
     ) : BoardAction
 
-    /** Concede **this game** — the opponent wins it. Separate from [QuitMatch] (§12.2). */
+    /** Concede **this game** — the opponent wins it. Separate from [QuitMatch]. */
     data object Concede : BoardAction
 
-    /** Leave the whole **match**. Separate from [Concede] (§12.2), mirroring upstream's separate verbs. */
+    /** Leave the whole **match**. Separate from [Concede], mirroring upstream's separate verbs. */
     data object QuitMatch : BoardAction
 }
 
@@ -154,7 +154,7 @@ sealed interface BoardAction {
  * One floating button: what it says, what it sends, and how prominent it is.
  *
  * @property confirmLabel when non-null, the button **arms** on the first press and sends only on the
- *   second, which presses [confirmLabel] instead. §16.4's confirm-before-submit, applied to the buttons
+ *   second, which presses [confirmLabel] instead. the confirm-before-submit, applied to the buttons
  *   that commit something in one press rather than to every button. Its state belongs to the control
  *   (nothing is held back from the server; nothing has been sent yet either), so an armed button that
  *   is never pressed again simply does nothing.
@@ -167,7 +167,7 @@ data class ControlButton(
 )
 
 /**
- * Which half of combat the board is in — **never both** (§7.4, Pete).
+ * Which half of combat the board is in — **never both**.
  *
  * > *"the attacking player assigns attackers to targets, player or battle or Planeswalker, etc. the
  * > blocker assigns blockers to attackers. we need to consider how best to represent each of these
@@ -233,7 +233,7 @@ enum class CombatRole {
          * declaring attackers, and there happen to be none to declare.
          *
          * **Attackers win if both keys ever arrive together.** The server never sends both — the two
-         * roles never belong to the same player at the same moment (§7.4) — but if it ever did, the
+         * roles never belong to the same player at the same moment — but if it ever did, the
          * board must still be in exactly one of them: offering the union would be offering blocks during
          * a declare-attackers step, which is the failure this ordering exists to make impossible.
          */
@@ -313,7 +313,7 @@ sealed interface PromptControlsUi {
 
     /**
      * The action a tap on the board object [objectId] means right now, or null when tapping it means
-     * nothing to the server. Card detail (§11.1) uses it to decide whether it can offer a play button.
+     * nothing to the server. Card detail uses it to decide whether it can offer a play button.
      */
     fun actionFor(objectId: String): BoardAction? = null
 
@@ -324,7 +324,7 @@ sealed interface PromptControlsUi {
      * `GAME_SELECT` — **you hold priority**: play something the server offered, or pass.
      *
      * The pass button is here, but the pass itself is not: [BoardAction.PassPriority] goes through
-     * [PassPolicy]'s seam in the ViewModel (§14.1).
+     * [PassPolicy]'s seam in the ViewModel.
      */
     data class Priority(
         override val message: String?,
@@ -339,10 +339,10 @@ sealed interface PromptControlsUi {
 
     /**
      * `GAME_SELECT` **during a combat declaration** — the same prompt *kind* as [Priority], and a
-     * different question entirely (story 0061).
+     * different question entirely.
      *
      * The server distinguishes it by its **options**, not by its type: a declaration carries
-     * `possibleAttackers` or `possibleBlockers` (requirements §7.2/§7.3, measured live). It is its own
+     * `possibleAttackers` or `possibleBlockers` (measured live). It is its own
      * case rather than a [Priority] with extra ids because everything about it differs — where the ids
      * come from, what a tap means, what the closing button says, and what the panel tells the player to
      * do.
@@ -351,7 +351,7 @@ sealed interface PromptControlsUi {
      * derives its pickable set from `playable` — offered nothing to tap. The board could attack with
      * everything (the server's own "All attack" button) or nothing, and could not block at all.
      *
-     * @property role which of combat's two assignment problems this is (§7.4). Exactly one, always.
+     * @property role which of combat's two assignment problems this is. Exactly one, always.
      */
     data class Declaration(
         override val message: String?,
@@ -363,7 +363,7 @@ sealed interface PromptControlsUi {
          * A declaration pick is a `chooseTarget` — the same verb targeting uses, which is what upstream
          * expects here (`HumanPlayer` answers both from the same select loop, and the probes declared
          * live this way). It is sent per tap, never batched: the server re-prompts after each pick with
-         * the remaining candidates, exactly as it does for targets (§17.2).
+         * the remaining candidates, exactly as it does for targets.
          */
         override fun actionFor(objectId: String): BoardAction? =
             if (objectId in pickableObjectIds) BoardAction.ChooseTarget(objectId) else null
@@ -376,7 +376,7 @@ sealed interface PromptControlsUi {
      *
      * @property hasPicked whether the player has already sent at least one pick in this target
      *   sequence. It decides the *label* on the closing button and nothing else: with a pick sent, the
-     *   button is the player's **done**; with none, it is a **cancel** that rewinds the cast (§17.1).
+     *   button is the player's **done**; with none, it is a **cancel** that rewinds the cast.
      *   Its producer is the ViewModel's own record of what it has sent — deliberately not the prompt
      *   text, which states progress in prose ("selected 0 of 2, min 1") that this app does not parse.
      */
@@ -395,8 +395,8 @@ sealed interface PromptControlsUi {
     }
 
     /**
-     * `GAME_PLAY_MANA` — you owe mana. The player taps their own sources on the board (§6.3); the
-     * server has **already** narrowed the choice (`ManaUtil.tryToAutoPay`, §6.5), so what is offered
+     * `GAME_PLAY_MANA` — you owe mana. The player taps their own sources on the board; the
+     * server has **already** narrowed the choice (`ManaUtil.tryToAutoPay`), so what is offered
      * here is the residue it declined to guess at, rendered as-is.
      */
     data class Mana(
@@ -412,8 +412,8 @@ sealed interface PromptControlsUi {
 
     /**
      * Every prompt answered by pressing one of a set of buttons: `GAME_ASK`, `GAME_CHOOSE_ABILITY`,
-     * `GAME_CHOOSE_CHOICE` and `GAME_CHOOSE_PILE`. §6.2 called these "answered from the prompt's own
-     * content" and sent them to a modal; §16.2 keeps the distinction and drops the modal.
+     * `GAME_CHOOSE_CHOICE` and `GAME_CHOOSE_PILE`. These are "answered from the prompt's own
+     * content"; the distinction survives and the modal.
      *
      * @property detail the server's extra sub-message where it sent one.
      */
@@ -471,7 +471,7 @@ internal fun controlsFor(
 
     return when (prompt) {
         // A `Select` is **two** different questions, told apart by its options and not by its type: a
-        // combat declaration when it carries `possibleAttackers`/`possibleBlockers` (§7.2/§7.3), an
+        // combat declaration when it carries `possibleAttackers`/`possibleBlockers`, an
         // ordinary priority window otherwise.
         is GamePrompt.Select ->
             when (val role = CombatRole.of(prompt.options)) {
@@ -481,7 +481,7 @@ internal fun controlsFor(
                         pickableObjectIds = offeredIds,
                         buttons =
                             buildList {
-                                // Pass stays first: it is the single most repeated interaction in a game (§9.1).
+                                // Pass stays first: it is the single most repeated interaction in a game.
                                 add(ControlButton(label = PASS_LABEL, action = BoardAction.PassPriority, isPrimary = true))
                                 prompt.options.specialButtonText?.cleanedOrNull()?.let {
                                     add(ControlButton(label = it, action = BoardAction.UseSpecial))
@@ -509,9 +509,9 @@ internal fun controlsFor(
                 // Narrowed to what may actually be picked, not shown verbatim: for a library search
                 // (a fetchland), `prompt.cards` is the server's *entire searched zone* — often dozens
                 // of cards — while `pickable` already carries only the legal answers (bridge's
-                // `GamePromptMapper.target`, story 0078 follow-up). Showing the unfiltered zone here
+                // `GamePromptMapper.target`). Showing the unfiltered zone here
                 // would put every unfetchable card in the same row as the real candidates with no way
-                // to tell them apart (found live, Pete, 2026-08-20: a Marsh Flats activation nobody
+                // to tell them apart (a Marsh Flats activation nobody
                 // could complete). A prompt whose whole candidate set *is* the answer set (e.g.
                 // PICK_ABILITY) is unaffected, since `pickable` there already equals `prompt.cards`.
                 candidateCards = prompt.cards.filter { it.id in pickable }.map { it.toCandidate(chosen) },
@@ -521,15 +521,12 @@ internal fun controlsFor(
                         // Candidates the board cannot draw — players, above all — come first, because
                         // without them this prompt has no answer at all.
                         addAll(offBoardCandidateButtons(state, pickable, BoardAction::ChooseTarget))
-                        // The player's confirmation *is* the final done (§17.2) — it is not a
+                        // The player's confirmation *is* the final done — it is not a
                         // client-side accumulator being flushed, because every pick was already sent.
                         // An *optional* prompt (`!prompt.isRequired`) is answerable with zero picks by
                         // definition — the server's own "Select up to N" phrasing and its own `Done`
                         // button label say so — so Done must be offered from the moment such a prompt
-                        // arrives, not only once something has been picked (story 0075, found live: an
-                        // "up to one" target with no legal candidates left the board with no honestly
-                        // labeled way to finish — only the unrelated cast-cancel button, which happens
-                        // to share the same wire answer but reads as aborting the whole action).
+                        // arrives, not only once something has been picked.
                         if (hasPicked || !prompt.isRequired) {
                             add(
                                 ControlButton(
@@ -689,11 +686,11 @@ internal fun controlsFor(
 }
 
 /**
- * The controls for one half of combat — story 0061's whole answer to *"the board cannot declare"*.
+ * The controls for one half of combat — the whole answer to *"the board cannot declare"*.
  *
  * **Where the ids come from, and why it matters.** `role.candidatesIn(options)` reads
  * `possibleAttackers` / `possibleBlockers` off the prompt the server just sent. It does **not** read
- * `state.playable`, which is empty during a declaration (§7.2, measured live) — that is the defect this
+ * `state.playable`, which is empty during a declaration (measured live) — that is the defect this
  * function exists to fix, and it is why the tests build their fixtures with `playable` empty.
  *
  * **The server's set is never widened.** `getCreaturesForcedToAttack` is consulted upstream before
@@ -732,7 +729,7 @@ private fun declarationControls(
                 )
                 // "All attack" — the server's own shortcut, kept because it is the server's and it is
                 // proven to work live, and **confirmed** because it commits the whole team in one press
-                // (§16.4 / §7.5, Pete). Blocking gets no equivalent and none is invented: this button
+                // . Blocking gets no equivalent and none is invented: this button
                 // exists only where the server sent a `specialButton`, which it does only for attacking.
                 prompt.options.specialButtonText?.cleanedOrNull()?.let {
                     add(ControlButton(label = it, action = BoardAction.UseSpecial, confirmLabel = ALL_ATTACK_CONFIRM_LABEL))
@@ -785,9 +782,9 @@ private fun GameState.nameFor(id: String): String? {
  * other. The same shape reaches us for any spell aimed at a face, and for `canPlayObjects` naming a card
  * in a zone the board does not render (flashback from a graveyard is the everyday case).
  *
- * The presentation is the one §16.2 already gives to prompts *answered from their own content* — a
+ * The presentation is the one already given to prompts *answered from their own content* — a
  * button in the floating panel — so nothing new is invented and nothing becomes modal. What the board
- * **can** draw stays a board tap (§5.2); only what it cannot is promoted.
+ * **can** draw stays a board tap; only what it cannot is promoted.
  */
 private fun offBoardCandidateButtons(
     state: GameState,
@@ -833,6 +830,6 @@ private fun GameCard.toCandidate(chosen: Set<String>): CandidateCardUi =
  * Upstream sends no maximum with `GAME_PLAY_XMANA` — the real limit is how much mana the player can
  * produce, which only the server knows — so this is a **UI convenience bound on the stepper**, not a
  * rule. Announcing more than can be paid is answered by the server, which then asks for the mana and
- * lets the player cancel (§6.4a).
+ * lets the player cancel.
  */
 private const val X_ANNOUNCE_CEILING = 20

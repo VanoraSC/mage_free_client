@@ -81,7 +81,7 @@ class CardCatalogBundleTest {
     fun `every printing points at a real card (no orphans)`() {
         // The whole table, not a sample: an orphaned printing (a `card_id` with no `card` row) is
         // invisible through the catalog API — a card simply never shows the printing — so it can only
-        // be caught by asking the database directly. Story 0044: the test previously named for this
+        // be caught by asking the database directly. The test named for this
         // check asserted only that Island had printings and was a Land, which cannot detect an orphan.
         val (printings, orphans) =
             db

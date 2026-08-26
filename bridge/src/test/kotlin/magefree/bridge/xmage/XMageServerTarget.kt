@@ -4,8 +4,8 @@ package magefree.bridge.xmage
  * A parsed `host:port` XMage server target, used to gate and drive the live integration test from
  * the `XMAGE_SERVER` environment variable (e.g. `xmage-server:17171`).
  *
- * Defined here — with its first consumer, [ConnectAuthenticateIT] — rather than in story 0002,
- * whose only realized artifact is the `xmage-server` reference container (story 0022).
+ * Defined here, with its first consumer [ConnectAuthenticateIT],
+ * whose only realized artifact is the `xmage-server` reference container.
  */
 public data class XMageServerTarget(
     val host: String,

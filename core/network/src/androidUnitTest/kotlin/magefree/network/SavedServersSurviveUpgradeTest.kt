@@ -18,7 +18,7 @@ import org.robolectric.RobolectricTestRunner
 import java.io.File
 
 /**
- * A server list written **before** the KMP port is still there after it (story 0084).
+ * A server list written **before** the KMP port is still there after it.
  *
  * **The fixture is the point.** `resources/fixtures/server_targets.preferences_pb` was produced by
  * the pre-port `ServerRepository` — its `server_targets` key, its JSON encoding, DataStore's own

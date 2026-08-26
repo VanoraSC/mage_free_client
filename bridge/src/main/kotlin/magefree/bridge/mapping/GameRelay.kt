@@ -11,7 +11,7 @@ import magefree.protocol.PlayerActionCode
 import java.util.UUID
 
 /**
- * The in-game dispatch+map boundary — the sibling of [TableRelay] for the **play** side (story 0051).
+ * The in-game dispatch+map boundary — the sibling of [TableRelay] for the **play** side.
  * Each method dispatches one app request to the matching `SessionImpl` verb and maps its bare `boolean`
  * back to a structured [GameActionResult]. The `mage.*` argument construction (`ManaType`,
  * `PlayerAction`) stays **inside** this package, so no upstream shape crosses the wire.

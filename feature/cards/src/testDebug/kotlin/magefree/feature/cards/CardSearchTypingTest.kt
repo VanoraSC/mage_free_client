@@ -33,7 +33,7 @@ import org.robolectric.annotation.Config
 import java.io.IOException
 
 /**
- * Story 0049 — the coverage whose absence let the dead search field ship (verification standards 1
+ * The coverage whose absence let the dead search field ship (verification standards 1
  * and 2).
  *
  * Every existing `CardSearchViewModel` test calls `onQueryChange(...)` directly and asserts the
@@ -200,7 +200,7 @@ class CardSearchTypingTest {
 
     @Test
     fun aCatalogFailureShowsRetryAndLeavesTheFieldTypeable() {
-        // Story 0042's fail-soft contract, observed through the rendered screen: a catalog read failure
+        // the fail-soft contract, observed through the rendered screen: a catalog read failure
         // is an error + retry surface, and the pipeline behind it survives to serve the next keystroke.
         val catalog = catalog(forest, bolt).apply { failWith = { IOException("No space left on device") } }
         renderSearchScreen(CardSearchViewModel(catalog, debounceMillis = 300L))
@@ -234,7 +234,7 @@ class CardSearchTypingTest {
         settle(afterMillis = 0L)
 
         // The field empties (the placeholder is back) and the idle prompt returns with no debounce wait
-        // — story 0042's instant blank-query reset, now observed through the rendered screen.
+        // — the instant blank-query reset, now observed through the rendered screen.
         searchField().assert(hasText(""))
         composeTestRule.onNodeWithText(CARDS_SEARCH_HINT).assertIsDisplayed()
         composeTestRule.onNodeWithText("Search for cards").assertIsDisplayed()
