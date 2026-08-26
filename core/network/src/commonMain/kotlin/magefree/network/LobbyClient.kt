@@ -5,7 +5,7 @@ import magefree.model.LobbyTable
 import magefree.model.RoomUser
 
 /**
- * The app's read-only lobby access seam (story 0028). Each call performs one 0027 request/response over
+ * The app's read-only lobby access seam. Each call performs one lobby request/response over
  * the live session (via [BridgeClient.request]) and returns the mapped `:core:model` result. The
  * interface speaks **only** `:core:model`: the wire `:protocol` summaries are confined to the
  * implementation's mapper boundary and never cross this seam.

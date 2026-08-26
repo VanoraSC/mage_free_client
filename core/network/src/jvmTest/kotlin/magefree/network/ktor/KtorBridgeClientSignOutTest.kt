@@ -44,9 +44,9 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Story 0046, both directions, on real frames: a **deliberate sign-out** puts a `Logout` on the wire
+ * Both directions, on real frames: a **deliberate sign-out** puts a `Logout` on the wire
  * before the socket closes; a **drop / lifecycle teardown** closes without one, which is what makes the
- * bridge park the session for story 0023's resume window (and story 0024's reconnect find it).
+ * bridge park the session for the resume window (and the reconnect find it).
  *
  * The double here is the *bridge*, not the client: a throwaway in-process Ktor WebSocket server that
  * speaks the same `:protocol` handshake and records every [ClientMessage] it receives, interleaved with
@@ -54,7 +54,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * `NetworkModule` assembles it. A `FakeBridgeClient`-level test could only have asserted that a method
  * was called; only a socket can answer "did a `Logout` actually reach the bridge, and in what order".
  *
- * This is the test that fails against the pre-0046 client, whose only teardown closed the socket.
+ * This is the test that fails against the earlier client, whose only teardown closed the socket.
  */
 class KtorBridgeClientSignOutTest {
     @Test
@@ -183,7 +183,7 @@ class KtorBridgeClientSignOutTest {
         }
 
     /**
-     * A minimal stand-in for `:bridge`'s session endpoint: it completes the 0004 handshake, answers a
+     * A minimal stand-in for `:bridge`'s session endpoint: it completes the handshake, answers a
      * `Login` with `CONNECTED` + a resume id (so the client reaches `Connected` exactly as it does
      * against the real bridge), and records the *sequence* of client frames and the socket close.
      */

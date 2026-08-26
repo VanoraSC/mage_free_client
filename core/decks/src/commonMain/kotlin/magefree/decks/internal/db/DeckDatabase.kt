@@ -11,7 +11,7 @@ import androidx.room.RoomDatabaseConstructor
  * store with no committed schema history to validate against yet.
  *
  * [DeckDatabaseConstructor] is how Room instantiates this class without reflection, which is what
- * makes the class usable from a common source set (story 0083).
+ * makes the class usable from a common source set.
  */
 @Database(
     entities = [DeckEntity::class, DeckCardEntity::class],

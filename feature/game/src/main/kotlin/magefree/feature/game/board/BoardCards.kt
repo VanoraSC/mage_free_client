@@ -30,18 +30,18 @@ import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
 
 /*
- * The board's card surfaces (story 0055).
+ * The board's card surfaces.
  *
  * These reuse the design system's **card vocabulary** — `CardDisplay`, [CARD_ASPECT_RATIO], the
- * `CardArtSlot` contract and [CardArtPlaceholder] — and 0032's Coil-backed [CardArtRenderer], so real
+ * `CardArtSlot` contract and [CardArtPlaceholder] — and the Coil-backed [CardArtRenderer], so real
  * card art is on the board from day one and an art miss degrades to the same placeholder every other
  * card surface in the app degrades to.
  *
- * **Why not 0014's `CardTile` itself:** `CardTile` is a *button* by construction — it takes a required
+ * **Why not the `CardTile` itself:** `CardTile` is a *button* by construction — it takes a required
  * `onTap`, wires `Modifier.cardInspectable`, and announces `Role.Button`. A read-only board must offer
  * no way to act, and a tile that looks tappable and does nothing is precisely the dead affordance this
  * project has been bitten by before. So the board draws its own tap-free surfaces over the same
- * vocabulary; when story 0056 gives a card something to do, `CardTile`'s tap model is what it adopts.
+ * vocabulary; when a card has something to do, `CardTile`'s tap model is what it adopts.
  */
 
 /** Width of a permanent on a battlefield band. */
@@ -95,14 +95,14 @@ private fun FaceDownBack(modifier: Modifier = Modifier) {
 }
 
 /**
- * The highlight a card carries for the **outstanding prompt** (story 0057) — the server's own answer to
+ * The highlight a card carries for the **outstanding prompt** — the server's own answer to
  * "may this be picked right now", never a computed one.
  *
  * Distinct from [PermanentUi.isOfferedByServer], which is the standing `canPlayObjects` mark: this says
  * *the question on screen accepts this card*, and it is what makes the card tappable.
  */
 internal enum class CardPickState {
-    /** Not part of the outstanding question. Still tappable to *inspect* (§11.1) — never to act. */
+    /** Not part of the outstanding question. Still tappable to *inspect* — never to act. */
     None,
 
     /** The server offered this object as an answer to the outstanding prompt. */
@@ -130,7 +130,7 @@ private fun pickBorder(
  * server reports — summoning sickness, marked damage, attacking/blocking, and (only while the viewer
  * holds priority) the "the server offered this" mark.
  *
- * @param onTap raises the card and opens its detail (§5.1 / §11.1). Inspecting is not acting: the
+ * @param onTap raises the card and opens its detail. Inspecting is not acting: the
  *   *action* lives on the detail's own button, and only when the server offered this object.
  */
 @Composable
@@ -339,7 +339,7 @@ internal const val ATTACKING_MARK: String = "Attacking"
 
 internal const val BLOCKING_MARK: String = "Blocking"
 
-/** What an attacker says about the creatures blocking it — the other half of a legible combat (0061). */
+/** What an attacker says about the creatures blocking it — the other half of a legible combat. */
 internal const val BLOCKED_BY_MARK: String = "Blocked by"
 
 internal const val DAMAGE_MARK: String = "Damage"

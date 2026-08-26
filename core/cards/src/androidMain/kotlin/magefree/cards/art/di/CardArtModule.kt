@@ -28,7 +28,7 @@ private val Context.cardArtDataStore by preferencesDataStore(name = "card_art_pr
 private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /**
- * Koin provisioning for the card-art loader/cache (story 0031; was Hilt's `CardArtModule`).
+ * Koin provisioning for the card-art loader/cache.
  * Everything is app-wide `single`: one [XMageImageSource], one [CardImageLoader] (which owns Coil's
  * memory+disk cache), one [ArtDownloadManager]. `:app` gets a working art loader just by depending
  * on `:core:cards`.
@@ -52,7 +52,7 @@ val cardArtModule =
                 policyRepository = get(),
                 appScope = appScope,
                 ioDispatcher = Dispatchers.IO,
-                // Story 0082: the art cache's two platform decisions are made here rather than
+                // the art cache's two platform decisions are made here rather than
                 // inside the loader. The disk cache still lives in `cacheDir` (evictable by the
                 // system), and the memory cache is still sized as a share of the device's memory
                 // class — `maxSizePercent` is Android-only, so keeping the call here preserves the
@@ -66,7 +66,7 @@ val cardArtModule =
                 },
                 // The `User-Agent` is built here, from the version the platform reports, rather than
                 // inside the loader — that one string was the whole reason the art pipeline needed a
-                // `PackageManager`. Scryfall answers HTTP 400 without it (0056).
+                // `PackageManager`. Scryfall answers HTTP 400 without it.
                 userAgent = CardArtUserAgent.value(androidAppVersion(context)),
                 // Logcat is still the only place a systemic art failure is visible; there is no
                 // in-app diagnostic surface for it yet.

@@ -16,7 +16,7 @@ import magefree.network.ServerPushSource
  * - Hilt (`NetworkModule.provideTableClient`), which passes the live `BridgeClient` singleton.
  * - A **consumer test** that wants the *real* client rather than a hand-written double, so it can drive
  *   a room end-to-end through the bridge seam (a fake `BridgeClient` scripting `TableDetail` replies).
- *   That path is why story 0040's seat regression is now catchable: a test built on the real client
+ *   That path is why the seat regression is now catchable: a test built on the real client
  *   fails the moment seats stop being reachable through it.
  */
 object TableClients {

@@ -6,7 +6,7 @@ package magefree.decks.io
  * enum names the on-disk text grammars ported from XMage's importer/exporter family.
  *
  * Each grammar is ported from a specific upstream class (cited on the constant). [extension] is the
- * suggested file suffix and [mimeType] the share-sheet content type (story 0035 wires the actual
+ * suggested file suffix and [mimeType] the share-sheet content type (wires the actual
  * intent; here it is only metadata). Everything is plain UTF-8 text.
  */
 enum class DeckFileFormat(

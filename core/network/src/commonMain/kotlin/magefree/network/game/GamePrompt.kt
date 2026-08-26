@@ -1,8 +1,8 @@
 package magefree.network.game
 
 /**
- * **What the server is waiting for**, as a closed, typed set — the app-schema mirror of story 0051's
- * `magefree.protocol.GamePrompt`, with the `:protocol` type kept off this ABI (the 0028/0037 discipline).
+ * **What the server is waiting for**, as a closed, typed set — the app-schema mirror of the
+ * `magefree.protocol.GamePrompt`, with the `:protocol` type kept off this ABI (the discipline).
  *
  * The point of a *closed* set is that a consumer can always know what a valid answer looks like. Each
  * subtype's doc therefore names the exact [GameClient] method that answers it, and those methods accept
@@ -12,7 +12,7 @@ package magefree.network.game
  *
  * **One at a time, not a queue.** [GameState.prompt] holds a single prompt. Upstream blocks the game
  * thread on the player's response, so at most one question is outstanding per game per seat; a new prompt
- * therefore *replaces* the previous one rather than joining it in a backlog. This mirrors 0051's
+ * therefore *replaces* the previous one rather than joining it in a backlog. This mirrors the wire type's
  * `GamePrompted` contract exactly.
  */
 sealed interface GamePrompt {
@@ -100,7 +100,7 @@ sealed interface GamePrompt {
      * the choice also offers a "special" option, sent with the same key and `special = true`.
      *
      * @property choices the options, always normalised to key/label pairs — upstream's `Choice` comes in
-     *   a plain-string and a keyed flavour, and 0051 flattens both, so a caller never has to know which.
+     *   a plain-string and a keyed flavour, and the wire flattens both, so a caller never has to know which.
      * @property subMessage extra server-supplied detail below the message, when it sent any.
      * @property isRequired whether the choice may be declined.
      * @property specialText the label of the extra "special" option, or `null` when none is offered.
@@ -165,7 +165,7 @@ sealed interface GamePrompt {
     ) : GamePrompt
 
     /**
-     * A prompt this build does not recognise — the app-schema face of 0051's `UnknownGamePrompt`, which
+     * A prompt this build does not recognise — the app-schema face of the `UnknownGamePrompt`, which
      * a newer bridge produces when it adds a prompt kind additively.
      *
      * **It must not be answered**: the whole value of a closed set is knowing what a valid reply is, and
@@ -241,7 +241,7 @@ data class PromptOptions(
     /** The targets that may still be chosen. */
     val possibleTargets: List<String> get() = ids[POSSIBLE_TARGETS].orEmpty()
 
-    /** The upstream keys these hints travel under; mirrored from 0051's `GamePromptOptions`. */
+    /** The upstream keys these hints travel under; mirrored from the `GamePromptOptions`. */
     companion object {
         /** [text] key behind [leftButtonText]. */
         const val LEFT_BUTTON_TEXT: String = "UI.left.btn.text"

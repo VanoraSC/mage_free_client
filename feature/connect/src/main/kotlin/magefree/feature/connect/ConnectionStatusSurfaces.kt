@@ -21,7 +21,7 @@ import magefree.model.ServerTarget
 
 /*
  * The connection-state surfaces for the sign-in flow. Each is a stateless, previewable Composable
- * built entirely from the EPIC-03 design system (LoadingState / EmptyState / DecisionPrompt) so the
+ * built entirely from the design system (LoadingState / EmptyState / DecisionPrompt) so the
  * five ConnectionState outcomes read distinctly and the retry/cancel choice comes to the thumb.
  *
  * Labels shared with tests are hoisted as constants.
@@ -110,7 +110,7 @@ fun AuthFailedSurface(
  * Version-mismatch surface — first-class and visibly distinct from [AuthFailedSurface]. [detail]
  * carries the wire diagnostic (e.g. `"server=<v> bridge=<v>"`) and is shown when present.
  *
- * As of story 0019 the `ConnectionRepository` seam carries this detail through
+ * The `ConnectionRepository` seam carries this detail through
  * `connectionStatus`, so [detail] is populated live from a real version mismatch.
  */
 @Composable
@@ -158,7 +158,7 @@ fun NetworkSurface(
 }
 
 /**
- * Terminal **session-lost** recovery surface: shown only after 0024's reconnect/resume budget is
+ * Terminal **session-lost** recovery surface: shown only after the reconnect/resume budget is
  * exhausted (or the parked session is gone and a fresh login is required). Distinct copy + a
  * re-authenticate CTA that routes back to sign-in with the last server pre-selected — visibly
  * different from [AuthFailedSurface]/[VersionUnsupportedSurface]/[NetworkSurface]. [detail] carries an

@@ -18,7 +18,7 @@ import org.junit.Test
 import java.io.IOException
 
 /**
- * Card inspection must fail **soft** when the catalog read fails (story 0042, defect B).
+ * Card inspection must fail **soft** when the catalog read fails.
  *
  * `load` runs inside a bare `viewModelScope.launch`, and `viewModelScope`'s `SupervisorJob` carries no
  * `CoroutineExceptionHandler` — so an unguarded `IOException` from the first-use asset copy crashed

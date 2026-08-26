@@ -60,7 +60,7 @@ import kotlin.concurrent.Volatile
  * On [connect] it opens `ws(s)://host:port/<major>/session`, performs the [ClientHello]/[ServerHello]
  * handshake (rejecting a major mismatch as [SessionEvent.VersionUnsupported]), then hands the socket to
  * [SessionRelay], which sends `Login` (first connect) or `Resume(resumeId)` (a reconnect resuming the
- * parked session, story 0023) and relays each server frame through [SessionMapper]. An unexpected socket
+ * parked session) and relays each server frame through [SessionMapper]. An unexpected socket
  * drop drives a [ReconnectingSession] loop: bounded exponential back-off + jitter ([ReconnectPolicy]),
  * cut short when [connectivity] returns or the app is refocused ([lifecycle]); authentication/version/
  * disconnect outcomes are terminal. The captured `resumeId` is carried across attempts via a
@@ -72,9 +72,9 @@ import kotlin.concurrent.Volatile
  *
  * ### Recorded finding — the on-device "~33 s socket close" is the platform, not this client
  *
- * Story 0048's smoke saw the bridge log `101 Switching Protocols: GET - /v1/session in
+ * the smoke saw the bridge log `101 Switching Protocols: GET - /v1/session in
  * 33099/33135/33319/33433/33516ms` on every post-offline session, each immediately followed by a
- * successful `Resume`. Story 0050 diagnosed it before changing anything; the answer is **Android's
+ * successful `Resume`. The cause is **Android's
  * network linger**, and there is nothing here to fix:
  *
  * - Neither peer runs a WebSocket pinger, so it cannot be a ping/pong timeout: Ktor 3.5.1 defaults
@@ -94,7 +94,7 @@ import kotlin.concurrent.Volatile
  *   ~33 s, and the fixed timer is why the number is so repeatable.
  *
  * So this is an ordinary transport drop on a network hand-off — **intended platform behaviour, left
- * alone** — and stories 0023/0024's park + resume is precisely the right response to it, which is why
+ * alone** - and park + resume is precisely the right response to it, which is why
  * the smoke survived it every time.
  */
 class KtorBridgeClient(
@@ -110,7 +110,7 @@ class KtorBridgeClient(
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
     /**
-     * The uncorrelated server-push side-channel (story 0037's seam (b)): the relay forwards each 0036
+     * The uncorrelated server-push side-channel (the seam (b)): the relay forwards each table
      * table event (and any other spontaneous, non-lifecycle frame) here, and the table client folds the
      * ones for its table. Hot and replay-less (`replay = 0`); a slow subscriber drops the oldest rather
      * than back-pressuring the socket read loop. `:protocol`-typed but confined to `:core:network` via
@@ -126,7 +126,7 @@ class KtorBridgeClient(
 
     /**
      * The correlation registry multiplexing [request]/response over the live socket alongside the
-     * session-event stream (story 0028). One per client instance: at most one session is active at a
+     * session-event stream. One per client instance: at most one session is active at a
      * time, and each session end fails any outstanding waiter.
      */
     private val pending = PendingRequests()
@@ -176,15 +176,15 @@ class KtorBridgeClient(
             try {
                 // Best effort, bounded: a half-dead socket must not hold the user in a session they
                 // asked to leave. Failing to signal only costs the bridge's resume TTL — the exact
-                // cost of not signalling at all, which is what happened before story 0046.
-                // KNOWN ISSUE (observed 2026-08-11, accepted — do not "fix" without a reason).
+                // cost of not signalling at all.
+                // KNOWN ISSUE, accepted — do not "fix" without a reason.
                 // This send can lose the race with the close that follows, most reliably on a
                 // freshly-resumed socket: the bridge then sees a bare close and logs
                 // `Parked session … for up to 1m` instead of `Evicted`, e.g.
                 //     11:29:54 Resumed …   11:30:47 Parked …   (that Parked was a sign-out)
                 // The session still goes away at the resume TTL (~60 s) and nothing is orphaned, so
                 // the cost is bounded and self-healing with no user-visible effect. Closing the race
-                // properly means reworking the teardown handshake, which risks story 0023/0024's
+                // properly means reworking the teardown handshake, which risks the
                 // park+resume — behaviour that is correct and load-bearing — for no observable gain.
                 // Deliberately logged rather than fixed; see docs/stories/README.md § Known issues.
                 withTimeoutOrNull(LOGOUT_SEND_TIMEOUT_MILLIS) { session.sendMessage(Logout()) }
@@ -300,19 +300,19 @@ class KtorBridgeClient(
     }
 
     companion object {
-        /** How long [request] waits for a correlated reply before failing (story 0028). */
+        /** How long [request] waits for a correlated reply before failing. */
         private const val DEFAULT_REQUEST_TIMEOUT_MILLIS = 15_000L
 
         /**
          * How long a [signOut] will wait for its `Logout` write to land before giving up and tearing
-         * down anyway (story 0046). Deliberately short: this is one frame on an already-open socket,
+         * down anyway. Deliberately short: this is one frame on an already-open socket,
          * and the user is waiting.
          */
         private const val LOGOUT_SEND_TIMEOUT_MILLIS = 2_000L
 
         /**
          * The platform's engine with the WebSockets plugin installed — OkHttp on both current
-         * targets. Story 0084 moved the engine itself behind [bridgeHttpClient] because an engine
+         * targets. The engine itself sits behind [bridgeHttpClient] because an engine
          * cannot be named from a common source set; nothing about the client this returns changed.
          */
         fun defaultHttpClient(): HttpClient = bridgeHttpClient()

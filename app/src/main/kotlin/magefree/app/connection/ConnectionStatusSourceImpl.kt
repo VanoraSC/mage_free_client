@@ -11,11 +11,11 @@ import magefree.network.ConnectionRepository
 import magefree.model.ConnectionState as DomainConnectionState
 
 /**
- * The real [ConnectionStatusSource] (story 0017), replacing story 0010's stub behind the seam.
+ * The real [ConnectionStatusSource], replacing the stub behind the seam.
  *
  * It delegates to [ConnectionRepository]'s single source-of-truth state and maps `:core:model`'s
  * [DomainConnectionState] onto the app-local [ConnectionState] the ViewModel/UI already consume. The
- * two enums are intentionally identical (0016 aligned names + order), so this is a total, lossless
+ * two enums are intentionally identical in names and order, so this is a total, lossless
  * 1:1 mapping — the swap is transparent to [ConnectionStatusViewModel] and `ConnectionStatusBar`,
  * which now reflect the *real* connection instead of the stub.
  *
@@ -40,7 +40,7 @@ class ConnectionStatusSourceImpl
                     initialValue = repository.connectionState.value.toAppState(),
                 )
 
-        /** Story 0026 F3: a real reconnect — delegate to the repository's single-source-of-truth retry. */
+        /** A real reconnect — delegate to the repository's single-source-of-truth retry. */
         override fun retry() {
             repository.retry()
         }

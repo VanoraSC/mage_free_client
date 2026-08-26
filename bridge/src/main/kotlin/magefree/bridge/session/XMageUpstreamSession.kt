@@ -50,7 +50,7 @@ import org.slf4j.LoggerFactory
 import java.util.UUID
 
 /**
- * The real [UpstreamSession] over story 0003's `XMageSession`/`BridgeMageClient`/`SessionImpl`.
+ * The real [UpstreamSession] over the `XMageSession`/`BridgeMageClient`/`SessionImpl`.
  *
  * It builds a `Connection` to the bridge's **pinned** [target], runs `connectStart` on
  * `Dispatchers.IO` (inside `XMageSession.connect`), and translates the lifecycle into
@@ -109,7 +109,7 @@ public class XMageUpstreamSession(
                     }
                 }
 
-            // Relay mapped server pushes (chat, etc.) onto the SAME outbound stream (story 0006). The
+            // Relay mapped server pushes (chat, etc.) onto the SAME outbound stream. The
             // raw callbacks are handed off by BridgeMageClient off the remoting thread; CallbackRelay
             // does the decompress+map on this coroutine and the ClientCallback/mage.view.* references
             // stay entirely inside magefree.bridge.mapping — this layer only ever sees ServerMessage.
@@ -183,7 +183,7 @@ public class XMageUpstreamSession(
     /**
      * Runs a read-only lobby [query] against the connected [XMageSession], returning an empty list when
      * there is no connected session or the blocking upstream read fails (e.g. a `MageRemoteException`
-     * transport error) — a browse must never surface as a stream error (story 0027). [name] labels the
+     * transport error) — a browse must never surface as a stream error. [name] labels the
      * log line.
      */
     private suspend fun <T> lobbyQuery(
@@ -287,7 +287,7 @@ public class XMageUpstreamSession(
     ): TableNotFound = TableNotFound(tableId = tableId, reason = reason)
 
     /**
-     * In-game request dispatch (story 0051). The `when` is what makes the protocol's game verbs total at
+     * In-game request dispatch. The `when` is what makes the protocol's game verbs total at
      * this seam: each message is answered by exactly one `XMageSession` call, and anything that is not a
      * game request is a programming error the coordinator cannot produce — reported as a typed failure
      * rather than thrown, because a game request that vanishes leaves the player waiting forever.
@@ -371,7 +371,7 @@ public class XMageUpstreamSession(
 
     /**
      * Runs a table [action] against the connected [XMageSession], mapping the absence of a connected
-     * session — or a transport failure — to a **typed** failed [TableActionResult] (story 0036): an
+     * session — or a transport failure — to a **typed** failed [TableActionResult]: an
      * action must never surface as a stream error, mirroring [lobbyQuery].
      */
     private suspend fun tableAction(
@@ -392,7 +392,7 @@ public class XMageUpstreamSession(
 
     /**
      * A typed failed action. [reason] is the human-readable detail; [failure] is the *kind* the app
-     * branches on (story 0050) — [TableFailureCode.SESSION_GONE] when there is no live upstream session
+     * branches on — [TableFailureCode.SESSION_GONE] when there is no live upstream session
      * to act through, so the app can offer re-authentication instead of reporting a server decline that
      * never happened.
      */

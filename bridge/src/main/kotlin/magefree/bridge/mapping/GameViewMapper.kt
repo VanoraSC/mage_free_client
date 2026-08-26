@@ -26,7 +26,7 @@ import magefree.protocol.TurnPhaseCode
 import java.util.UUID
 
 /**
- * The `mage.view.GameView` → app-schema [GameStateView] projection (story 0051) — the single place the
+ * The `mage.view.GameView` → app-schema [GameStateView] projection — the single place the
  * bridge reads XMage's in-game view types, and the sibling of [TableMapper] for the game side. Pure and
  * deterministic: it reads getters and builds protocol data classes, nothing more.
  *
@@ -47,7 +47,7 @@ import java.util.UUID
  * - *is there an outstanding prompt* — not a `GameView` field at all: it is the **callback method**. A
  *   `GAME_SELECT`/`GAME_TARGET`/… push becomes a `GamePrompted`; `GAME_INIT`/`GAME_UPDATE` never do.
  *
- * **Never throws** (the 0006/0026-F5 invariant). The composed text getters (`getTypeText`,
+ * **Never throws** (the F5 invariant). The composed text getters (`getTypeText`,
  * `getManaCostStr`) walk several collections upstream populates lazily, so they are read through [text],
  * which turns any failure into a `null` field rather than losing the whole snapshot. [CallbackMapper]'s
  * `mapGuarded` remains the outer backstop.
@@ -142,7 +142,7 @@ public object GameViewMapper {
     /**
      * Maps one battlefield `PermanentView`: the card plus the battlefield-only state.
      *
-     * **Attachments both ways (story 0087).** `attachedTo` alone forces every host to scan every
+     * **Attachments both ways.** `attachedTo` alone forces every host to scan every
      * battlefield for anything pointing at it; upstream already computed the reverse list once per
      * snapshot, so [GamePermanentView.attachments] carries it rather than the client rederiving it.
      *
@@ -217,10 +217,10 @@ public object GameViewMapper {
 
     /**
      * Maps one `CardView` to its app-schema form. Deliberately thin — enough to identify the printing
-     * (`(setCode, collectorNumber)`, the pair story 0030's catalog resolves art by), to render a
-     * text-only card, and (story 0058) to say what the object **currently is**.
+     * (`(setCode, collectorNumber)`, the pair the catalog resolves art by), to render a
+     * text-only card, and to say what the object **currently is**.
      *
-     * **Reachability (verification standard 2/5) — what writes the 0058 fields.** Each is a getter on
+     * **Reachability (verification standard 2/5) — what writes the fields.** Each is a getter on
      * the same `CardView` the rest of this function reads, and upstream populates all three in the
      * `CardView` constructors themselves (verified against `mage-common-1.4.60`):
      * - [GameCardView.cardTypes] ← `CardView.getCardTypes()`, recomputed per snapshot from the live
@@ -236,7 +236,7 @@ public object GameViewMapper {
      * sent, including the `"0"` a noncreature permanent reports. Deciding whether to *show* them is the
      * board's job, not the mapper's.
      *
-     * **Ability naming (story 0072).** Two distinct upstream view types wrap a non-card ability object,
+     * **Ability naming.** Two distinct upstream view types wrap a non-card ability object,
      * both read directly, and **both** hardcode a generic `name`:
      * - `AbilityView` (`mage.view.AbilityView`) — a `CardsView` built from a `Collection<Ability>`,
      *   which is how the ordering-simultaneous-triggers prompt (`GAME_TARGET`/`PICK_ABILITY`) sends its
@@ -253,7 +253,7 @@ public object GameViewMapper {
      * the source permanent/card — which this function otherwise never reads. [displayName] resolves
      * whichever one applies; `rules` (the ability's actual text, already correct upstream) is untouched.
      *
-     * **No art (found live, Pete, 2026-08-16 — Soul Warden's own triggered ability was the reported
+     * **No art (Soul Warden's own triggered ability was the reported
      * example).** Same root cause, different field: neither `AbilityView` nor `StackAbilityView` ever
      * sets `expansionSetCode`/`cardNumber` on *itself* — only the nested `sourceCard` carries the real
      * printing identity, which [setCode]/[collectorNumber] now read instead. Without this, the app's
@@ -261,7 +261,7 @@ public object GameViewMapper {
      * the object renders with no image at all — a distinct symptom from the naming bug (this one stays
      * broken even after the name displays correctly).
      *
-     * **`transformed`/`alternateName` (story 0076) are two separate upstream signals, read straight —
+     * **`transformed`/`alternateName` are two separate upstream signals, read straight —
      * do not derive one from the other.** Traced directly against upstream's `CardView`/`PermanentView`
      * constructors (pinned ref `e0fe4b6f6a`), the same way the real desktop client (`CardPanel.java`)
      * reads them, rather than reverse-engineered from the symptom:
@@ -280,16 +280,16 @@ public object GameViewMapper {
      *   constructor: `card instanceof PermanentCard && card.isTransformable()` → `alternateName =
      *   getOtherFace().getName()`, no transform check at all). It is never a signal for "which face is
      *   showing," and threading it through unfiltered — matching upstream's own field exactly — is what
-     *   the client's flip-button/peek feature (story 0077) needs: whether a flip control should exist,
+     *   the client's flip-button/peek feature needs: whether a flip control should exist,
      *   and the other face's name.
      *
-     * Three live bugs (Pete, 2026-08-16 through 2026-08-22 — a transformed permanent frozen on its
+     * Three live bugs (a transformed permanent frozen on its
      * front art; a hand card showing its other face's art; an untransformed permanent showing its back
      * face's art with no flip button) were all one mistake: treating `alternateName != null` as "is
      * this currently transformed," when upstream never uses it that way anywhere, including in its own
      * client. [CardView.isTransformed] already answers that question directly and needs no rederiving.
      *
-     * **`targets` (story 0086) is one flat id list, read straight — no per-kind branching.** Upstream
+     * **`targets` is one flat id list, read straight — no per-kind branching.** Upstream
      * builds it in `CardView.addTargets(Targets, Effects, Ability, Game)`, whose own comment is *"need
      * only unique targets for arrow drawing"*: it takes `target.getTargets()` for every `Target` that
      * `isChosen(game)`, adds every effect's `TargetPointer.getTargets(game, source)` (so a mode that
@@ -333,13 +333,13 @@ public object GameViewMapper {
                 card.counters.orEmpty().filterNotNull().map { counter ->
                     GameCounterView(name = counter.name.orEmpty(), count = counter.count)
                 },
-            // Story 0076: upstream's own field for "does this have another face, and what's it called" —
+            // upstream's own field for "does this have another face, and what's it called" —
             // a catalog fact, unconditional, never a signal for which face is currently up. See mapCard's
             // KDoc.
             alternateName = card.alternateName,
-            // Story 0076: upstream's own field for "which face is currently up" — see mapCard's KDoc.
+            // upstream's own field for "which face is currently up" — see mapCard's KDoc.
             transformed = card.isTransformed,
-            // Story 0086: what this object is pointing at — see mapCard's KDoc. `orEmpty()` is
+            // what this object is pointing at — see mapCard's KDoc. `orEmpty()` is
             // load-bearing: upstream allocates the list only inside `addTargets`, so null is the
             // ordinary case for everything that is not a targeting stack object.
             targets =

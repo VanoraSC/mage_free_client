@@ -7,9 +7,9 @@ import magefree.model.ConnectionStatus
  * The sign-in flow's UI-facing view of the live connection.
  *
  * The feature drives [magefree.network.ConnectionRepository.connect] and observes its
- * `StateFlow<ConnectionStatus>` (story 0019's detail-carrying seam) — a [ConnectionState] plus the
+ * `StateFlow<ConnectionStatus>` (the detail-carrying seam) — a [ConnectionState] plus the
  * failure diagnostic. [ConnectPhase] re-groups those states into the surfaces the sign-in screen
- * shows, keeping [AuthFailed], [VersionUnsupported], and [Network] **distinct** — the story's error
+ * shows, keeping [AuthFailed], [VersionUnsupported], and [Network] **distinct** — the error
  * taxonomy (first-class version mismatch; a network/timeout distinct from a login error) — rather than
  * collapsing them into a single generic error.
  */
@@ -50,7 +50,7 @@ enum class ConnectPhase {
     Network,
 
     /**
-     * Recovery has truly failed — 0024's reconnect/resume budget was exhausted (or the parked session
+     * Recovery has truly failed — the reconnect/resume budget was exhausted (or the parked session
      * was rejected and re-authentication is required). A terminal surface, distinct from a clean return
      * to the form ([Idle]) and from a first-connect transport failure ([Network]): it offers a
      * re-authenticate CTA that routes back to sign-in with the last server pre-selected. Maps from a

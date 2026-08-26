@@ -7,7 +7,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 /**
- * `magefree.kmp.library` — the shared config for multiplatform logic modules (story 0080, EPIC-18).
+ * `magefree.kmp.library` — the shared config for multiplatform logic modules.
  *
  * The analog of [AndroidLibraryConventionPlugin] for the modules that carry no Android at all:
  * applies the Kotlin Multiplatform plugin + ktlint, declares the targets, and pins the toolchain, so
@@ -15,7 +15,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  *
  * **One target: `jvm()`.** A second target is added when something is actually built for it — a
  * declared target nothing compiles for is exactly the unfalsifiable "portable" claim this epic
- * exists to replace with a build result (`ui-modernization-plan.md` §11 Phase 0). `:bridge` already
+ * exists to replace with a build result. `:bridge` already
  * consumes `:protocol` from a plain Kotlin/JVM project, so the JVM target has a real consumer from
  * day one.
  *
@@ -26,7 +26,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  *
  * **Tests are JUnit 5 on the JVM target, not `commonTest`.** The modules' existing suites are
  * written against `org.junit.jupiter`, which is JVM-only; moving them to `commonTest` would mean
- * rewriting every assertion onto `kotlin.test` in the same change that ports the build. Story 0080
+ * rewriting every assertion onto `kotlin.test` in the same change that ports the build. This
  * forbids that deliberately — a diff mixing a build conversion with source edits cannot be reviewed
  * for either. `commonTest` becomes worth having when a second target does.
  */

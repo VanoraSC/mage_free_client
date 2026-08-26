@@ -14,7 +14,7 @@ import magefree.network.table.TableServerState
 import magefree.network.table.TableState
 
 /**
- * A scriptable [TableClient] test double (story 0037) for hermetic tests of downstream (0038) code — no
+ * A scriptable [TableClient] test double for hermetic tests of downstream code — no
  * bridge, no `:protocol`. Each verb records its call and returns its configured [Result]; [observeTable]
  * emits its `seed` (exactly as production does), then replays [tableStates], then forwards anything
  * pushed through [emitTableState], so a test can drive a table through its lifecycle without a socket.
@@ -37,7 +37,7 @@ class FakeTableClient(
     val calls: MutableList<String> = mutableListOf()
 
     /**
-     * Every [joinTable] call, in order, with its full arguments (story 0041). [calls] records only the
+     * Every [joinTable] call, in order, with its full arguments. [calls] records only the
      * verb, which is enough to pin an *order*; a host completing a table issues several joins that differ
      * only by seat name, deck, password and player type, so those are recorded here where they can be
      * asserted.
@@ -72,7 +72,7 @@ class FakeTableClient(
     }
 
     /**
-     * Per-call override for [joinTable] (story 0041): when set, its result wins over [joinResult]. A host
+     * Per-call override for [joinTable]: when set, its result wins over [joinResult]. A host
      * completing a table issues several joins, and a test needs to fail exactly one of them — the AI seat
      * or the host's own — to exercise the two distinct cleanup paths.
      */
@@ -136,7 +136,7 @@ class FakeTableClient(
      * Mirrors [magefree.network.table.DefaultTableClient.observeTable]: the [seed] is emitted **first**,
      * before the scripted [tableStates] and any live [emitTableState]. Production emits it synchronously
      * as the flow opens, so a collector never observes an empty/loading room it would not see on a real
-     * socket — a fake that skipped it (as this one did before story 0044) manufactures a loading state
+     * socket — a fake that skips it manufactures a loading state
      * production does not have, and would hide a regression in seed emission entirely.
      */
     override fun observeTable(

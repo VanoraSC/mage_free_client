@@ -3,7 +3,7 @@ package magefree.app.catalog
 import kotlinx.serialization.Serializable
 
 /**
- * Type-safe Navigation-Compose route for the **developer component catalog** (story 0015).
+ * Type-safe Navigation-Compose route for the **developer component catalog**.
  *
  * Like [GameRoute][magefree.app.game.GameRoute], it is deliberately **not** a
  * [TopLevelDestination][magefree.app.navigation.TopLevelDestination]: the catalog is a debug-only

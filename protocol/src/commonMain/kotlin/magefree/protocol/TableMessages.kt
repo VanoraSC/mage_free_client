@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 
 /*
  * Table **action** request/response + server-pushed table-lifecycle event messages layered onto the
- * 0004 envelope (story 0036, Epic 7). Where 0027 gave the lobby **read** side (browse tables/users/
- * game types), this story gives the **act** side: create a table, join it (submitting a deck),
+ * envelope. Where the lobby messages give the **read** side (browse tables/users/
+ * game types), this gives the **act** side: create a table, join it (submitting a deck),
  * submit/update a deck during construction, leave/remove a table, start the match, and watch
  * (spectate); plus the inbound table/deck/game-start callbacks the server pushes so the app can follow
  * a table through to the moment a match begins.
@@ -23,7 +23,7 @@ import kotlinx.serialization.Serializable
  * server the app need not know it — a null [roomId] means "the pinned server's main room", which the
  * bridge resolves via `getMainRoomId()` (the same room `LobbyRelay` already reads).
  *
- * **Match-start boundary.** [MatchStarting] is the boundary to Epic 11 (in-game play): it carries the
+ * **Match-start boundary.** [MatchStarting] is the boundary to the game layer (in-game play): it carries the
  * game id and the ids needed to open the game, but no in-game state is modelled here.
  */
 
@@ -139,7 +139,7 @@ public data class WatchTable(
 
 /**
  * App→bridge: read **one** table's current detail — its [TableSummary] plus the per-seat
- * [TableSeatSummary] list (story 0040). A null [roomId] resolves to the main room.
+ * [TableSeatSummary] list. A null [roomId] resolves to the main room.
  *
  * This is the *targeted read* that replaces the never-produced [SeatUpdated] push as the room's source
  * of seat state: XMage exposes no per-seat callback before match-start and no single-table read on
@@ -189,7 +189,7 @@ public data class TableActionResult(
 ) : ServerMessage
 
 /**
- * Why a [TableActionResult] failed, as a **kind** rather than as prose (story 0050 defect A).
+ * Why a [TableActionResult] failed, as a **kind** rather than as prose.
  *
  * [reason][TableActionResult.reason] is written for a human and can say anything; the app cannot branch
  * on it. This can: the difference between "the server considered your request and said no" and "there is
@@ -214,12 +214,12 @@ public enum class TableFailureCode {
 }
 
 /**
- * Bridge→app: the reply to a [GetTable] (story 0040). [table] is the same browse-relevant [TableSummary]
+ * Bridge→app: the reply to a [GetTable]. [table] is the same browse-relevant [TableSummary]
  * a [TableList] carries — including the server's own [TableStateCode] (the readiness truth: a table is
  * [TableStateCode.READY_TO_START] once every seat is filled) — and [seats] adds the per-seat detail the
  * list form reduces to counts. [requestId] echoes the request's id.
  *
- * @property activeGameId the match's current game id (story 0069) — `mage.view.TableView.getGames()`'s
+ * @property activeGameId the match's current game id — `mage.view.TableView.getGames()`'s
  *   last element, carried on **every** read, unlike [magefree.protocol.MatchStarting], which is a
  *   one-shot push that fires only at the instant the game starts. This is what lets a client that opens
  *   (or re-opens) the table room *after* that instant still find its way into the game. `null` before
@@ -235,7 +235,7 @@ public data class TableDetail(
 ) : ServerMessage
 
 /**
- * Bridge→app: the typed "no such table" reply to a [GetTable] (story 0040) — the room no longer lists
+ * Bridge→app: the typed "no such table" reply to a [GetTable] — the room no longer lists
  * [tableId] (it was removed, or the match moved past the lobby list), or the socket has no bound
  * session. A miss is a **typed result**, never a silent drop or an empty [TableDetail] that would look
  * like a table with no seats. [reason] carries the bridge's optional human-readable detail.
@@ -298,11 +298,11 @@ public data class TableUpdated(
 
 /**
  * Bridge→app: a seat's occupancy changed at a table. Reserved for a per-seat server push; the current
- * XMage build refreshes seats via the polled room table list (story 0027) and has no seat-level
+ * XMage build refreshes seats via the polled room table list and has no seat-level
  * callback before match-start, so this carries the seat's [tableId], [playerId], and [isOwner] for
- * forward use by 0037/0038. [requestId] is unused for spontaneous pushes and left null.
+ * forward use by the table layer. [requestId] is unused for spontaneous pushes and left null.
  *
- * **This message has no producer** (story 0040): nothing in the bridge dispatches it, because upstream
+ * **This message has no producer**: nothing in the bridge dispatches it, because upstream
  * emits no such callback. The room's real seat state comes from [GetTable] → [TableDetail]; this stays
  * only as the forward-compatible shape a future upstream push would map onto. Do **not** build a
  * feature on it without a producer.
@@ -348,8 +348,8 @@ public data class SideboardPrompt(
 
 /**
  * Bridge→app: the game is starting — mapped from the upstream `START_GAME` callback. [gameId] is the
- * new game's id (the anchor Epic 11 will open the game view with); [tableId]/[parentTableId] identify
- * the table, and [playerId] the recipient's seat. This is the **boundary to Epic 11**: no in-game state
+ * new game's id (the anchor the game layer will open the game view with); [tableId]/[parentTableId] identify
+ * the table, and [playerId] the recipient's seat. This is the **boundary to the game layer**: no in-game state
  * is carried. [requestId] is left null.
  */
 @Serializable
@@ -409,7 +409,7 @@ public data class CreateTableOptions(
 )
 
 /**
- * The app-schema description of **one seat** at a table, carried by [TableDetail] (story 0040) —
+ * The app-schema description of **one seat** at a table, carried by [TableDetail] —
  * projected from `mage.view.SeatView` at the mapper boundary.
  *
  * XMage has no per-seat "ready" flag: readiness is a table-level property
@@ -469,7 +469,7 @@ public enum class RangeCode {
 /**
  * The `DeckCardLists`-equivalent carried by [JoinTable]/[SubmitDeck]/[UpdateDeck]: a plain, app-schema
  * mirror of XMage's `mage.cards.decks.DeckCardLists` (`name`, `author`, `cards`, `sideboard`). It is
- * intentionally field-aligned with story 0033's device-side `magefree.decks.model.DeckList` so 0037 can
+ * intentionally field-aligned with the device-side `magefree.decks.model.DeckList` so table can
  * map a device deck straight onto a join/submit without any `mage.*` on the device; the bridge maps
  * this onto a real `DeckCardLists` at the mapper boundary (`DeckListMapper`).
  *
@@ -488,8 +488,8 @@ public data class DeckList(
 
 /**
  * One card record in a [DeckList], mirroring XMage's `mage.cards.decks.DeckCardInfo`. [collectorNumber]
- * corresponds to `DeckCardInfo.cardNumber`; [amount] to `DeckCardInfo.amount`. Field-aligned with story
- * 0033's `magefree.decks.model.DeckListCard`.
+ * corresponds to `DeckCardInfo.cardNumber`; [amount] to `DeckCardInfo.amount`. Field-aligned with
+ *'s `magefree.decks.model.DeckListCard`.
  *
  * @property cardName the card's name.
  * @property setCode the printing's set code.

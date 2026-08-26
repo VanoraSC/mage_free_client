@@ -21,10 +21,10 @@ import magefree.decks.model.DeckEntry
  * [progress] and [cancel].
  *
  * Kept as a feature-local interface so [magefree.feature.decks.builder.BuilderViewModel] is unit-testable
- * against a fake; the production impl reuses story 0031's [ArtDownloadManager]/[ArtWarmer] unchanged.
+ * against a fake; the production impl reuses the [ArtDownloadManager]/[ArtWarmer] unchanged.
  */
 interface DeckArtDownloader {
-    /** Live progress of the deck-scoped pre-download (shared shape with 0031's global one). */
+    /** Live progress of the deck-scoped pre-download (shared shape with the global one). */
     val progress: StateFlow<PrefetchProgress>
 
     /** Start warming art for [deck]'s printings (no-op if a run is already active). */
@@ -35,7 +35,7 @@ interface DeckArtDownloader {
 }
 
 /**
- * Production [DeckArtDownloader]. It composes story 0031's public [ArtDownloadManager] with a
+ * Production [DeckArtDownloader]. It composes the public [ArtDownloadManager] with a
  * deck-scoped [PrefetchTargetSource] ([DeckPrefetchTargetSource]) and the app's [ArtWarmer] (the
  * `CardImageLoader`). Nothing in `:core:cards` is modified: the manager, warmer, policy honoring,
  * progress model, and resume/cancel behavior are all reused as-is — only the *target set* differs.
@@ -55,7 +55,7 @@ class DefaultDeckArtDownloader(
         // deck's printings via the source at run time; the PrefetchScope argument is unused here.
         // No size argument either: the manager's default warms every size the UI displays — the
         // builder's rows (LARGE) *and* the add-cards results grid (SMALL). Pinning LARGE here left the
-        // add grid blank offline, which is exactly what "viewable offline" promises (0043, defect A).
+        // add grid blank offline, which is exactly what "viewable offline" promises (defect A).
         targetSource.deck = deck
         manager.start(PrefetchScope.All)
     }
@@ -84,7 +84,7 @@ class DeckPrefetchTargetSource(
         val current = deck ?: return emptyList()
         val entries = current.main + current.sideboard
         // One batched, indexable exact-name lookup for the whole deck rather than a substring scan per
-        // entry (story 0042, defect D).
+        // entry.
         val resolved = catalog.cardsByName(entries.map { it.cardName })
         val out = LinkedHashSet<CardArtRequest>()
         for (entry in entries) {

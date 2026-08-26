@@ -42,12 +42,12 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Story 0057 — the **live two-client run**: a real game, played from the board's own logic, against a
+ * The **live two-client run**: a real game, played from the board's own logic, against a
  * second real client, with **both** seats observable.
  *
  * ## Why this test exists in this shape
  *
- * Story 0055's board was read-only, and a read-only seat **hard-blocks the game**: upstream's
+ * the board was read-only, and a read-only seat **hard-blocks the game**: upstream's
  * `Mulligan.executeMulliganPhase` → `HumanPlayer.chooseMulligan` → `waitForResponse` is an unbounded
  * `response.wait()`, so a client that cannot answer stops the game for *both* players at the mulligan.
  * Battlefields populating, the stack filling and turns advancing have therefore only ever been covered
@@ -56,16 +56,16 @@ import java.util.concurrent.CopyOnWriteArrayList
  * **The seat under test is driven through [GameBoardViewModel] itself** — not through [GameClient]. Every
  * decision leaves as a [BoardAction] through `act`, exactly as a finger on the screen would produce it,
  * and every decision is *chosen from what the board's own [PromptControlsUi] offered*. So what this run
- * exercises is the story's logic, not a parallel script that happens to talk to the same server.
- * `docs/live-test-decklists.md` records why deep-game experiments belong inside the story that builds the
+ * exercises is the logic, not a parallel script that happens to talk to the same server.
+ * `docs/live-test-decklists.md` records why deep-game experiments belong inside this that builds the
  * surface rather than as standalone probes; this is that.
  *
  * ## The deck, and why this one
  *
- * The requirements §17 deck: 20× `Mountain` (`10E` #376), 20× `Forked Bolt` (`ROE` #146), 20× `Dragon
+ * The the requirements deck: 20× `Mountain` (`10E` #376), 20× `Forked Bolt` (`ROE` #146), 20× `Dragon
  * Fodder` (`ALA` #97). Forked Bolt costs `{R}`, is genuinely multi-target (*2 damage divided among one or
  * two targets*) and can point at a player, so it produces a **target prompt on turn one** — the step
- * §17.1 proved the server rewinds. Deck resolution is by **(setCode, collectorNumber)**, never by name.
+ * The server rewinds. Deck resolution is by **(setCode, collectorNumber)**, never by name.
  *
  * ## What it drives, in order
  *
@@ -93,7 +93,7 @@ class BoardPlaysAGameIT {
         /** Play a land when one is offered; otherwise pass. */
         BuildMana,
 
-        /** Begin casting Forked Bolt and **decline the target step** (§17.1's rewind). */
+        /** Begin casting Forked Bolt and **decline the target step** (the rewind). */
         CastAndCancel,
 
         /** Cast it again, choose a target, confirm, and pay. */
@@ -231,7 +231,7 @@ class BoardPlaysAGameIT {
                 )
 
                 phase = Phase.CastAndCancel
-                // The board reaches the target step: the spell is on the stack already (CR 601 / §16.5).
+                // The board reaches the target step: the spell is on the stack already.
                 val atTargets =
                     awaitApp(viewModel, "the target prompt for Forked Bolt", LONG_MS) {
                         it.controls is PromptControlsUi.Targeting && it.cast != null
@@ -256,7 +256,7 @@ class BoardPlaysAGameIT {
                     "AFTER CANCEL hand=${rewound.board.hand.count} stack=${rewound.board.stack.count} " +
                         "untappedLands=${untappedLands(rewound)}",
                 )
-                say("             opponent sees stack=${opponentState?.stack?.map { it.name }} (§17.4: the rewind is not pushed)")
+                say("             opponent sees stack=${opponentState?.stack?.map { it.name }} (the rewind is not pushed)")
                 check(untappedLands(rewound) == untappedAtCast) {
                     "cancelling must leave mana unspent: $untappedAtCast -> ${untappedLands(rewound)}"
                 }
@@ -362,11 +362,11 @@ class BoardPlaysAGameIT {
 
             is PromptControlsUi.Targeting ->
                 when {
-                    // §17.1: decline the target step and let the server rewind the whole cast.
+                    // Decline the target step and let the server rewind the whole cast.
                     phase == Phase.CastAndCancel -> BoardAction.CancelPrompt
                     phase == Phase.RecastAndResolve && !pickedForRecast ->
                         pickATarget(state, controls)?.also { pickedForRecast = true }
-                    // The confirmation *is* the final done (§17.2) — every pick was already sent.
+                    // The confirmation *is* the final done — every pick was already sent.
                     phase == Phase.RecastAndResolve -> BoardAction.FinishTargeting
                     else -> pickATarget(state, controls)
                 }
@@ -382,7 +382,7 @@ class BoardPlaysAGameIT {
 
             is PromptControlsUi.Amount -> controls.amountRequest?.let { BoardAction.ChooseAmount(it.min) }
             is PromptControlsUi.MultiAmount -> BoardAction.DistributeAmounts(controls.amountRows.map { it.min })
-            // This run is about casting and cancelling, not combat (story 0061 has its own live run), so
+            // This run is about casting and cancelling, not combat (has its own live run), so
             // a declaration is simply closed with its own *done* — the equivalent of declaring nothing.
             is PromptControlsUi.Declaration -> BoardAction.FinishTargeting
             // Nothing knows a valid answer; the board offers no control and neither does this.
@@ -392,7 +392,7 @@ class BoardPlaysAGameIT {
     /**
      * Choose a target **the way the screen offers one** — and only that way.
      *
-     * This deliberately does *not* reach into `pickableObjectIds` first. The blocking defect this story
+     * This deliberately does *not* reach into `pickableObjectIds` first. The blocking defect this
      * shipped and had caught on a device was a Target prompt whose candidates were **players**: the
      * projection held the ids the whole time, so a harness that read them directly answered the prompt
      * happily while the screen showed nothing to press. Answering through the same two surfaces a finger
@@ -477,7 +477,7 @@ class BoardPlaysAGameIT {
 
     // ---- helpers ------------------------------------------------------------------------------------------
 
-    /** How many of our own lands are untapped — the mana-unspent check of §6.4a / §17.1. */
+    /** How many of our own lands are untapped — the mana-unspent check. */
     private fun untappedLands(state: GameBoardUiState): Int =
         state.board.viewerSeat
             ?.battlefield
@@ -585,14 +585,14 @@ class BoardPlaysAGameIT {
     }
 
     /**
-     * The requirements §17 deck. Resolution is by **(setCode, collectorNumber)**, never by name — a wrong
+     * The the requirements deck. Resolution is by **(setCode, collectorNumber)**, never by name — a wrong
      * pair fails with "Card not found" even when the name is spelled correctly.
      */
     private val deck =
         Deck(
             id = DeckId("board-0057-bolt"),
             name = "board_0057_bolt",
-            author = "story-0057",
+            author = "board-play-it",
             main =
                 listOf(
                     DeckEntry(cardName = "Mountain", setCode = "10E", collectorNumber = "376", quantity = 20),

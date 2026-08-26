@@ -156,7 +156,7 @@ class SessionCoordinatorTest {
                 assertEquals(SessionStateCode.CONNECTED, connected.state)
                 assertNull(connected.requestId)
 
-                // Story 0023: on CONNECTED the app receives its bridge-issued resume handle.
+                // on CONNECTED the app receives its bridge-issued resume handle.
                 val resumable = expectResumable()
                 assertNotNull(resumable.resumeId)
             }
@@ -355,7 +355,7 @@ class SessionCoordinatorTest {
 
     @Test
     fun `GetTable replies the correlated table detail, and a typed not-found on an unbound socket`() {
-        // Story 0040: the room's seats travel this exchange, so the coordinator must dispatch it to the
+        // the room's seats travel this exchange, so the coordinator must dispatch it to the
         // bound session and stamp the requestId — otherwise the app's read never correlates and the
         // room never learns its seats.
         val detail =
@@ -420,7 +420,7 @@ class SessionCoordinatorTest {
     }
 
     /**
-     * Story 0050 defect A, second half: a table action on a socket with no session must be answered with
+     * A table action on a socket with no session must be answered with
      * the **kind** of failure, not just prose. The app branches on
      * [magefree.protocol.TableFailureCode.SESSION_GONE] to say "you are signed out" instead of repeating
      * a server refusal that never happened — the server was never asked.
@@ -447,7 +447,7 @@ class SessionCoordinatorTest {
     }
 
     /**
-     * Story 0051: every in-game request must reach the upstream seam and come back **correlated**. The
+     * every in-game request must reach the upstream seam and come back **correlated**. The
      * risk this guards is specific — the game verbs share one dispatch arm in the coordinator, so a
      * mis-wired reply would answer with the wrong [magefree.protocol.GameActionCode] (or lose the
      * `requestId`) and the app would match a prompt answer to the wrong outstanding request.
@@ -494,7 +494,7 @@ class SessionCoordinatorTest {
     }
 
     /**
-     * Story 0051 + 0050: a game request on a socket with no session is answered with the **kind** of
+     * A game request on a socket with no session is answered with the **kind** of
      * failure. A player who has been signed out must be told that, not told the server declined their
      * pass — the server was never asked, and retrying will never work.
      */
@@ -517,7 +517,7 @@ class SessionCoordinatorTest {
 
     @Test
     fun `GetGameState replies the correlated snapshot the session was pushed, and a typed no-state before it`() {
-        // Story 0054, over the socket: the read is answered from *this session's* cache, which the
+        // Over the socket: the read is answered from *this session's* cache, which the
         // outbound pump fills as the snapshot goes past. Before the first push the reply is a typed
         // no-state — never an empty GameStateView, which the app could not tell from a real board.
         val state =
@@ -570,7 +570,7 @@ class SessionCoordinatorTest {
 
     @Test
     fun `GetGameState on an unbound socket is a typed SESSION_GONE, never an empty board`() {
-        // The 0050 convention on the read side: there is no session, so there is not even a cache to
+        // The convention on the read side: there is no session, so there is not even a cache to
         // look in. The app must be told to sign in again rather than shown a board with nothing on it.
         val unbound = FakeUpstreamSession(emptyList())
         scenario(unbound) { client ->

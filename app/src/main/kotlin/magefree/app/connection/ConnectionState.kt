@@ -5,7 +5,7 @@ package magefree.app.connection
  * connection-status indicator.
  *
  * This is deliberately **independent of any bridge/protocol type**: it conceptually mirrors the
- * bridge's session states (story 0005 `SessionStateCode`), but EPIC-04 maps the real session state
+ * bridge's session states (`SessionStateCode`), but this maps the real session state
  * *into* this app model rather than the UI importing wire shapes. Keeping the type app-local means
  * the shell and its tests have no dependency on the bridge module.
  */

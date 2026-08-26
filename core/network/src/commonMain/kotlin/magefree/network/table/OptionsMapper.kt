@@ -9,8 +9,8 @@ import magefree.protocol.CreateTableOptions as ProtocolCreateTableOptions
 import magefree.protocol.TableDetail as ProtocolTableDetail
 
 /**
- * The create-options half of the table client's mapper boundary (story 0037): projects the app-schema
- * [CreateTableOptions] onto 0036's wire [ProtocolCreateTableOptions] so a caller passes a `:protocol`-free
+ * The create-options half of the table client's mapper boundary: projects the app-schema
+ * [CreateTableOptions] onto the wire [ProtocolCreateTableOptions] so a caller passes a `:protocol`-free
  * options record to [TableClient.createTable].
  *
  * The mapping is **total** — every app value has a wire code — but it is *not* lossless.
@@ -20,7 +20,7 @@ import magefree.protocol.TableDetail as ProtocolTableDetail
  * and re-created therefore lands as `Casual`; every other value round-trips one-to-one.
  *
  * The numeric fields (clocks, ratios, ratings) pass through unvalidated — the bridge is where a clock
- * XMage has no value for is rejected (`MatchOptionsMapper`, story 0044).
+ * XMage has no value for is rejected (`MatchOptionsMapper`).
  */
 internal fun CreateTableOptions.toProtocol(): ProtocolCreateTableOptions =
     ProtocolCreateTableOptions(
@@ -42,7 +42,7 @@ internal fun CreateTableOptions.toProtocol(): ProtocolCreateTableOptions =
     )
 
 /**
- * The read half of the boundary (story 0040): projects 0040's wire [ProtocolTableDetail] — the reply to
+ * The read half of the boundary: projects the wire [ProtocolTableDetail] — the reply to
  * a `GetTable` — onto the app-schema [TableDetails] the `TableClient` ABI exposes, so no wire shape
  * reaches a `:feature` consumer. Seat order is preserved (it is the server's slot order).
  */
@@ -91,7 +91,7 @@ private fun SeatPlayerTypeCode.toSeatType(): SeatPlayerType =
 
 /**
  * App-schema [SeatPlayerType] → wire [SeatPlayerTypeCode] (the write direction of [toSeatType]). Used by
- * the create mapping above and — since story 0041 — by `joinTable`, which carries the seat's kind so a
+ * the create mapping above and by `joinTable`, which carries the seat's kind so a
  * host can fill its configured AI seats with the same verb.
  */
 internal fun SeatPlayerType.toCode(): SeatPlayerTypeCode =

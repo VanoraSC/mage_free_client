@@ -12,7 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Golden coverage of the story-0028 lobby mapper boundary: real `:protocol` summaries in, pure
+ * Golden coverage of the  lobby mapper boundary: real `:protocol` summaries in, pure
  * `:core:model` types out. Asserts every browse-relevant field is carried and that the wire enum codes
  * map to the model enums (including the `Unknown` forward-compat fallback).
  */

@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test
  * on the bridge classpath, so the mapping is asserted directly over a crafted [CreateTableOptions],
  * plus exhaustive per-enum translation.
  *
- * The clock cases pin story 0044's contract: a budget XMage has no value for is a typed
+ * The clock cases pin the contract: a budget XMage has no value for is a typed
  * [UnsupportedMatchOption] failure that reaches the host as a failed `CREATE` result — it is never
  * silently downgraded to "no clock" under a successful create.
  */

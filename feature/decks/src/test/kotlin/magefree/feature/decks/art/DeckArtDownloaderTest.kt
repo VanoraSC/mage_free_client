@@ -27,7 +27,7 @@ import org.junit.Test
 import java.util.Collections
 
 /**
- * "Make this deck viewable offline" must warm **every size the deck surfaces display** (story 0043,
+ * "Make this deck viewable offline" must warm **every size the deck surfaces display** (
  * defect A, deck-scoped half). SMALL and LARGE resolve to different URLs and therefore different Coil
  * cache entries, so warming only one leaves the other surface blank offline — which defeats the whole
  * point of the feature.

@@ -107,7 +107,7 @@ fun LegalitySummary(
     }
 }
 
-/** Human-readable rendering of a structured [LegalityViolation] (mirrors 0035's builder wording). */
+/** Human-readable rendering of a structured [LegalityViolation] (mirrors the builder wording). */
 private fun LegalityViolation.describe(): String =
     when (this) {
         is LegalityViolation.UnknownFormat -> "No bundled rules for '$formatKey' — legality can't be checked."

@@ -23,7 +23,7 @@ import java.io.File
 
 /**
  * A deck library written **before** the KMP port opens, reads and writes under the ported code
- * (story 0083).
+ *.
  *
  * **The fixture is the point.** `resources/fixtures/decks-preport.db` was produced by the pre-port
  * `:core:decks` — `Room.databaseBuilder(context, DeckDatabase::class.java, name)` over the Android

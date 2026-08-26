@@ -47,8 +47,8 @@ class FakeBridgeClient(
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
     /**
-     * The server-push side-channel (story 0037's seam (b)) mirrored for tests: a test drives an
-     * uncorrelated 0036 table event by [emitPush]-ing a real `:protocol` [ServerMessage] here, exactly as
+     * The server-push side-channel (the seam (b)) mirrored for tests: a test drives an
+     * uncorrelated table table event by [emitPush]-ing a real `:protocol` [ServerMessage] here, exactly as
      * the production relay's `featurePush` would. Replay-less like production — a test subscribes its
      * `observeTable` collector before emitting.
      */
@@ -84,7 +84,7 @@ class FakeBridgeClient(
         }.onEach { _connectionState.value = it.connectionState }
 
     /**
-     * Replay a scripted reply for a request/response exchange (story 0028). The [responder] maps the
+     * Replay a scripted reply for a request/response exchange. The [responder] maps the
      * sent [ClientMessage] to its [ServerMessage] reply; the default throws so a test that does not
      * script requests is unaffected. Mirrors the real client's correlation without a socket.
      */
@@ -103,7 +103,7 @@ class FakeBridgeClient(
     }
 
     /**
-     * Mirrors the production client's deliberate sign-out (story 0046): the real
+     * Mirrors the production client's deliberate sign-out: the real
      * [magefree.network.ktor.KtorBridgeClient] sends `Logout` before closing, which a socket-less fake
      * cannot do — so it records the *intent* instead. Tests over this fake assert which teardown a
      * caller chose; that `signOut` actually puts a `Logout` on the wire is pinned against a real socket
@@ -114,7 +114,7 @@ class FakeBridgeClient(
         _connectionState.value = ConnectionState.Disconnected
     }
 
-    /** The teardown entry points a caller can choose between (story 0046). */
+    /** The teardown entry points a caller can choose between. */
     enum class Teardown {
         /** [disconnect] — close without signalling intent; the bridge parks the session. */
         DISCONNECT,

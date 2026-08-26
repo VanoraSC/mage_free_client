@@ -13,7 +13,7 @@ import magefree.network.di.networkModule
 import org.koin.core.module.Module
 
 /**
- * Every Koin module in the app, in one list (story 0081).
+ * Every Koin module in the app, in one list.
  *
  * **This list is the graph.** Hilt assembled the component at compile time by scanning
  * `@InstallIn` annotations across ten modules, so nothing had to enumerate them and nothing could

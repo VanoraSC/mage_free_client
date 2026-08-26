@@ -69,8 +69,8 @@ import magefree.protocol.WatchTable
 import org.slf4j.LoggerFactory
 
 /**
- * Per-socket orchestration between the app-facing WebSocket and one upstream XMage session (stories
- * 0005 + 0023). It assumes the 0004 handshake already completed (a `ServerHello` was sent) and then
+ * Per-socket orchestration between the app-facing WebSocket and one upstream XMage session (
+ * ). It assumes the handshake already completed (a `ServerHello` was sent) and then
  * runs the post-handshake message loop:
  *
  * - `Ping` → `Pong` (liveness continues to work alongside a session).
@@ -83,20 +83,20 @@ import org.slf4j.LoggerFactory
  *   it acks with [SessionResumable] and **re-binds** the outbound stream to this socket — no second
  *   upstream connect/login; on a miss it replies [ResumeRejected].
  * - `Logout` evicts (and cleanly `disconnect()`s) the session immediately.
- * - `GetServerInfo` replies with `ServerInfo` correlated by `requestId` (story 0006).
+ * - `GetServerInfo` replies with `ServerInfo` correlated by `requestId`.
  * - `GetTables`/`GetRoomUsers`/`GetGameTypes` reply with the correlated `TableList`/`RoomUserList`/
- *   `GameTypeList` browsed from the bound session's main room (story 0027); an unbound socket replies
+ *   `GameTypeList` browsed from the bound session's main room; an unbound socket replies
  *   an empty list. Read-only — no join/create/watch here.
  * - `GetTable` replies the correlated `TableDetail` (summary + per-seat state) for one table, or a typed
- *   `TableNotFound` when the room does not list it / no session is bound (story 0040).
+ *   `TableNotFound` when the room does not list it / no session is bound.
  * - `GetGameState` replies the correlated `GameStateSnapshot` for one game — the latest snapshot **this
  *   session** was sent, held by its own [LiveSession] cache — or a typed `GameStateUnavailable` when no
- *   snapshot exists for it / no session is bound (story 0054). Answered entirely by the bridge: upstream
+ *   snapshot exists for it / no session is bound. Answered entirely by the bridge: upstream
  *   has no verb that reads a game.
  * - A second `Login`/`Resume` while a session is bound is ignored (documented choice) with a log line.
  * - Any other/malformed frame → a non-terminal `ProtocolError(UNKNOWN_MESSAGE_TYPE)`.
  *
- * **Teardown (changed in 0023).** On socket close *without* a `Logout`, a live registered session is
+ * **Teardown (changed ).** On socket close *without* a `Logout`, a live registered session is
  * **parked** (`registry.park`) rather than disconnected, so a transient app-network drop no longer
  * loses the game; a `Logout` (handled inline) still disconnects immediately, and a login that never
  * reached `CONNECTED` is simply disconnected. The chosen teardown path runs under [NonCancellable].
@@ -108,9 +108,9 @@ public class SessionCoordinator(
     private val logger = LoggerFactory.getLogger(SessionCoordinator::class.java)
 
     /**
-     * A typed failed [TableActionResult] for a table action attempted on an unbound socket (story 0036),
+     * A typed failed [TableActionResult] for a table action attempted on an unbound socket,
      * carrying [TableFailureCode.SESSION_GONE] so the app can say "you are not signed in" rather than
-     * "the server declined" — the server was never asked (story 0050).
+     * "the server declined" — the server was never asked.
      */
     private fun unboundFailure(action: TableActionCode): TableActionResult =
         TableActionResult(
@@ -121,9 +121,9 @@ public class SessionCoordinator(
         )
 
     /**
-     * A typed failed [GameActionResult] for a game request attempted on an unbound socket (story 0051),
+     * A typed failed [GameActionResult] for a game request attempted on an unbound socket,
      * carrying [GameFailureCode.SESSION_GONE]: the server was never asked, so the app must offer
-     * re-authentication rather than report a decline that did not happen (the 0050 convention).
+     * re-authentication rather than report a decline that did not happen (the convention).
      */
     private fun unboundGameFailure(request: ClientMessage): GameActionResult =
         GameActionResult(
@@ -171,7 +171,7 @@ public class SessionCoordinator(
             is TableActionResult -> copy(requestId = id)
             is TableDetail -> copy(requestId = id)
             is TableNotFound -> copy(requestId = id)
-            // Story 0054's game-state read: both arms are correlated, so a miss is as answerable as a
+            // the game-state read: both arms are correlated, so a miss is as answerable as a
             // hit — an uncorrelated not-found would leave the app's waiter blocked until it timed out.
             is GameStateSnapshot -> copy(requestId = id)
             is GameStateUnavailable -> copy(requestId = id)
@@ -245,7 +245,7 @@ public class SessionCoordinator(
                             } else {
                                 val live = registry.resume(message.resumeId)
                                 if (live == null) {
-                                    // Story 0050 defect B: the id may be refused because the entry is
+                                    // The id may be refused because the entry is
                                     // still *bound* to a socket that silently died (a radio that went
                                     // away delivers no FIN). The app holding this handle has just shown
                                     // it abandoned that socket, so reap the stale session — otherwise
@@ -296,7 +296,7 @@ public class SessionCoordinator(
                             ws.sendSerialized<ServerMessage>(info.copy(requestId = message.requestId))
                         }
 
-                        // Read-only lobby browse (story 0027): query the bound session's main room,
+                        // Read-only lobby browse: query the bound session's main room,
                         // map at the mapper boundary, and reply the correlated list. An unbound/not-yet-
                         // connected socket replies an empty list (never an error) — the blocking upstream
                         // reads already ran on Dispatchers.IO inside the upstream session.
@@ -317,7 +317,7 @@ public class SessionCoordinator(
                             )
                         }
 
-                        // Table actions (story 0036): dispatch the action to the bound session's room
+                        // Table actions: dispatch the action to the bound session's room
                         // via TableRelay and reply the correlated result. An unbound/not-yet-connected
                         // socket replies a typed failure (never an error), mirroring the read side. The
                         // create reply is a TableCreated on success or a failed TableActionResult; the
@@ -371,7 +371,7 @@ public class SessionCoordinator(
                                     .copy(requestId = message.requestId),
                             )
 
-                        // Targeted single-table read (story 0040): reply the table's detail (summary +
+                        // Targeted single-table read: reply the table's detail (summary +
                         // seats) resolved from the bound session's room, or a typed not-found. An
                         // unbound socket replies a not-found rather than an error, mirroring the other
                         // reads — the app surfaces it as a failed refresh, never a hang.
@@ -382,7 +382,7 @@ public class SessionCoordinator(
                             ws.sendSerialized<ServerMessage>(reply.withRequestId(message.requestId))
                         }
 
-                        // Targeted game-state read (story 0054): answered from *this session's* cache of
+                        // Targeted game-state read: answered from *this session's* cache of
                         // the snapshots the bridge already relayed to it — there is no upstream verb to
                         // ask, and re-joining a running game does not resync, so this is the only way a
                         // reconnecting client can see the board before the next push. An unbound socket
@@ -400,7 +400,7 @@ public class SessionCoordinator(
                             ws.sendSerialized<ServerMessage>(reply.withRequestId(message.requestId))
                         }
 
-                        // In-game requests (story 0051): join/watch/quit/stop, the five sendPlayerX
+                        // In-game requests: join/watch/quit/stop, the five sendPlayerX
                         // answers, and player actions. All share one shape — a game id plus a payload
                         // answered by a bare upstream boolean — so they route through a single
                         // `gameRequest` seam and reply the correlated GameActionResult. An unbound
@@ -423,7 +423,7 @@ public class SessionCoordinator(
                             )
 
                         is UnknownClientMessage -> {
-                            // Additive forward-compat (story 0026 F1): a newer app may send a `type` this
+                            // Additive forward-compat: a newer app may send a `type` this
                             // bridge does not know. Per ProtocolVersion's minor-tolerance contract we log
                             // and DROP it — no ProtocolError, no close — so the session is unaffected.
                             logger.info("Dropping unknown client message type '{}' (forward-compat).", message.type)

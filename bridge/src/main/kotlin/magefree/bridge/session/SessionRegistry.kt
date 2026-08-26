@@ -48,14 +48,14 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Tunables for session parking, read from the environment with sane defaults (story 0023).
+ * Tunables for session parking, read from the environment with sane defaults.
  *
  * - [ttl] — the **grace window** a session is held after its app socket drops before it is evicted
- *   and disconnected. Env `RESUME_TTL_SECONDS` (the story's `RESUME_TTL`); default 60s.
+ *   and disconnected. Env `RESUME_TTL_SECONDS` (the `RESUME_TTL`); default 60s.
  * - [keepaliveInterval] — how often a **registered** session is `ping`ed to keep the upstream link
  *   healthy (and to notice if it died). Env `RESUME_KEEPALIVE_SECONDS`; default 15s.
  *
- * **Sizing the keepalive (story 0050 defect A).** Until 0050 the ping ran only while a session was
+ * **Sizing the keepalive.** The ping runs whether or not a session is
  * *parked*, so a session with a live app socket was never probed at all. XMage's `UserManagerImpl`
  * expires a user whose session has been silent for about three minutes (`disconnected due connection
  * problems`), which meant three minutes of deck-building killed the upstream session while the app
@@ -102,12 +102,12 @@ public data class ResumeConfig(
 
 /**
  * A single upstream session whose outbound [ServerMessage] stream is **pumped on a bridge-level
- * scope** so it outlives any one app socket (story 0023). Because the pump is not tied to a socket
+ * scope** so it outlives any one app socket. Because the pump is not tied to a socket
  * coroutine, an app-socket drop no longer tears the session down: the underlying [UpstreamSession]
  * (its `SessionImpl`) stays connected to XMage while parked, and a reconnecting app re-binds by
  * consuming this same [messages] channel — **no second upstream connect/login**.
  *
- * The outbound channel is the durable, rebindable "sink" the story describes: exactly one socket
+ * The outbound channel is the durable, rebindable "sink" this describes: exactly one socket
  * forwarder consumes it at a time (enforced by [SessionRegistry]'s state transitions). While parked
  * (no consumer) the pump keeps producing; the channel's `DROP_OLDEST` policy keeps the pump
  * non-blocking and bounds memory — stale status frames are dropped, never the live session.
@@ -118,8 +118,8 @@ public class LiveSession internal constructor(
     private val upstream: UpstreamSession,
     scope: CoroutineScope,
     /**
-     * The latest game snapshot per game (story 0054), fed by the pump below — handed in by
-     * [SessionRegistry.createSession] rather than owned here (story 0070).
+     * The latest game snapshot per game, fed by the pump below — handed in by
+     * [SessionRegistry.createSession] rather than owned here.
      *
      * It is scoped **per username**, not per [LiveSession]: a `GameView` is built for a specific
      * player (that player's own hand, `canPlayObjects` only for the priority holder), so two different
@@ -147,12 +147,12 @@ public class LiveSession internal constructor(
     // coroutine), so it survives socket drops. send() never suspends (DROP_OLDEST). On completion the
     // channel closes so the current forwarder's loop ends and the registry evicts a dead session.
     //
-    // Story 0054: every message is offered to this session's game-state cache **before** it is queued,
-    // so a snapshot pushed while the session is parked (no socket attached, pump still running — story
-    // 0023) is cached exactly as one pushed to a bound socket is. That is what keeps the cached board
+    // every message is offered to this session's game-state cache **before** it is queued,
+    // so a snapshot pushed while the session is parked (no socket attached, pump still running —
+    // ) is cached exactly as one pushed to a bound socket is. That is what keeps the cached board
     // advancing during a disconnection instead of freezing at the moment the socket died.
     //
-    // Story 0070: the cache is deliberately NOT cleared here on teardown. It is owned by the registry,
+    // the cache is deliberately NOT cleared here on teardown. It is owned by the registry,
     // keyed by username, so it outlives this one LiveSession — a later session for the same person
     // inherits it warm instead of starting blank. Only GameOver (inside GameStateCache itself) ever
     // drops an entry.
@@ -174,7 +174,7 @@ public class LiveSession internal constructor(
 
     /**
      * Puts a **terminal** [SessionStatus] on the durable outbound stream saying the upstream session is
-     * gone (story 0050 defect A). Non-suspending, so it is safe to call from the registry's keepalive
+     * gone. Non-suspending, so it is safe to call from the registry's keepalive
      * immediately before [close]/eviction: a `Channel.close()` still lets the current forwarder drain
      * what is already buffered, so a *bound* socket relays this frame to the app before the stream ends.
      * Without it the channel would simply close and the app would keep showing `Connected` — no frame,
@@ -193,47 +193,47 @@ public class LiveSession internal constructor(
     /** The upstream server info for a `GetServerInfo` request while this session is bound. */
     internal suspend fun serverInfo(): ServerInfo? = upstream.serverInfo()
 
-    /** The main-room open tables for a `GetTables` request while this session is bound (story 0027). */
+    /** The main-room open tables for a `GetTables` request while this session is bound. */
     internal suspend fun tables(): List<TableSummary> = upstream.tables()
 
-    /** The main-room users for a `GetRoomUsers` request while this session is bound (story 0027). */
+    /** The main-room users for a `GetRoomUsers` request while this session is bound. */
     internal suspend fun roomUsers(): List<RoomUserSummary> = upstream.roomUsers()
 
-    /** The server's game types for a `GetGameTypes` request while this session is bound (story 0027). */
+    /** The server's game types for a `GetGameTypes` request while this session is bound. */
     internal suspend fun gameTypes(): List<GameTypeSummary> = upstream.gameTypes()
 
-    /** Creates a table for a `CreateTable` request while this session is bound (story 0036). */
+    /** Creates a table for a `CreateTable` request while this session is bound. */
     internal suspend fun createTable(request: CreateTable): ServerMessage = upstream.createTable(request)
 
-    /** Joins a table for a `JoinTable` request while this session is bound (story 0036). */
+    /** Joins a table for a `JoinTable` request while this session is bound. */
     internal suspend fun joinTable(request: JoinTable): TableActionResult = upstream.joinTable(request)
 
-    /** Submits a deck for a `SubmitDeck` request while this session is bound (story 0036). */
+    /** Submits a deck for a `SubmitDeck` request while this session is bound. */
     internal suspend fun submitDeck(request: SubmitDeck): TableActionResult = upstream.submitDeck(request)
 
-    /** Updates a deck for an `UpdateDeck` request while this session is bound (story 0036). */
+    /** Updates a deck for an `UpdateDeck` request while this session is bound. */
     internal suspend fun updateDeck(request: UpdateDeck): TableActionResult = upstream.updateDeck(request)
 
-    /** Leaves a table for a `LeaveTable` request while this session is bound (story 0036). */
+    /** Leaves a table for a `LeaveTable` request while this session is bound. */
     internal suspend fun leaveTable(request: LeaveTable): TableActionResult = upstream.leaveTable(request)
 
-    /** Removes a table for a `RemoveTable` request while this session is bound (story 0036). */
+    /** Removes a table for a `RemoveTable` request while this session is bound. */
     internal suspend fun removeTable(request: RemoveTable): TableActionResult = upstream.removeTable(request)
 
-    /** Starts the match for a `StartMatch` request while this session is bound (story 0036). */
+    /** Starts the match for a `StartMatch` request while this session is bound. */
     internal suspend fun startMatch(request: StartMatch): TableActionResult = upstream.startMatch(request)
 
-    /** Watches a table for a `WatchTable` request while this session is bound (story 0036). */
+    /** Watches a table for a `WatchTable` request while this session is bound. */
     internal suspend fun watchTable(request: WatchTable): TableActionResult = upstream.watchTable(request)
 
-    /** Reads one table's detail for a `GetTable` request while this session is bound (story 0040). */
+    /** Reads one table's detail for a `GetTable` request while this session is bound. */
     internal suspend fun tableDetail(request: GetTable): ServerMessage = upstream.tableDetail(request)
 
-    /** Dispatches an in-game request while this session is bound (story 0051). */
+    /** Dispatches an in-game request while this session is bound. */
     internal suspend fun gameRequest(request: ClientMessage): GameActionResult = upstream.gameRequest(request)
 
     /**
-     * Answers a `GetGameState` for this session from [gameStates] (story 0054) — a
+     * Answers a `GetGameState` for this session from [gameStates] — a
      * [magefree.protocol.GameStateSnapshot] of the last snapshot **this session** was sent for that
      * game, or a typed [magefree.protocol.GameStateUnavailable].
      *
@@ -243,13 +243,13 @@ public class LiveSession internal constructor(
      */
     internal fun gameState(request: GetGameState): ServerMessage = gameStates.answer(request)
 
-    /** How many games this session currently has cached (story 0054) — for assertions about eviction. */
+    /** How many games this session currently has cached — for assertions about eviction. */
     internal fun cachedGameCount(): Int = gameStates.size()
 
     /**
      * Cancels the pump and disconnects the upstream. Idempotent.
      *
-     * Does **not** touch the game-state cache (story 0070) — it is owned by [SessionRegistry], keyed by
+     * Does **not** touch the game-state cache — it is owned by [SessionRegistry], keyed by
      * username, and outlives this one session so a later reconnect for the same person starts warm.
      */
     internal suspend fun close() {
@@ -259,7 +259,7 @@ public class LiveSession internal constructor(
 }
 
 /**
- * Bridge-level registry of resumable sessions, keyed by a bridge-issued **resume id** (story 0023).
+ * Bridge-level registry of resumable sessions, keyed by a bridge-issued **resume id**.
  * One instance is shared across every app socket, so it must be — and is — **thread-safe**: all
  * entry-map mutations happen under a single [Mutex], and every TTL/keepalive timer runs on this
  * registry's own [scope], never on a per-socket coroutine.
@@ -268,13 +268,13 @@ public class LiveSession internal constructor(
  * - [createSession] builds a [LiveSession] whose pump starts immediately on [scope]; if the upstream
  *   ever ends, the entry (if any) is evicted so a later resume is rejected.
  * - [register] (on `Login`→`CONNECTED`) mints the resume id, inserts a **bound** entry (no TTL) and
- *   starts the liveness keepalive that runs until the entry is evicted (story 0050).
+ *   starts the liveness keepalive that runs until the entry is evicted.
  * - [park] (on an unexpected app-socket close) starts the grace-window TTL.
  * - [resume] (on a `Resume` frame) cancels those timers and hands back the still-live session to
  *   re-bind to the new socket; returns `null` on an unknown/expired id.
  * - [evict] (on `Logout`, TTL expiry, or upstream death) removes the entry and `disconnect()`s it.
  *
- * The `park(session, sink) -> resumeId` shape sketched in the story is realised here as
+ * The `park(session, sink) -> resumeId` shape sketched in this is realised here as
  * [register] (mint the id at `CONNECTED`, before any drop, so the app can receive it immediately)
  * plus [park] (start the grace timer at drop). The "last-bound sink" is [LiveSession.messages] — the
  * durable outbound channel a reconnecting socket re-consumes.
@@ -299,7 +299,7 @@ public class SessionRegistry(
     private val entries = HashMap<String, Entry>()
 
     /**
-     * Per-username game-state caches (story 0070), outliving any one [LiveSession] — see the
+     * Per-username game-state caches, outliving any one [LiveSession] — see the
      * [LiveSession] constructor doc for why. [ConcurrentHashMap] because [createSession] can run
      * concurrently for different sockets/usernames; [GameStateCache] is itself internally synchronized,
      * so handing the same instance to a later session for the same username is safe.
@@ -325,7 +325,7 @@ public class SessionRegistry(
      * never be resumed. The session is not yet registered — call [register] once it reaches
      * `CONNECTED`.
      *
-     * Story 0070: hands the session [credentials.username]'s game-state cache — the same instance a
+     * hands the session [credentials.username]'s game-state cache — the same instance a
      * previous session for that username left behind, if any, so a reconnect after any session
      * discontinuity (not only a park/resume) starts warm rather than blank.
      */
@@ -343,7 +343,7 @@ public class SessionRegistry(
 
     /**
      * Mints a resume id and inserts a bound entry (no TTL), starting the **liveness keepalive** that
-     * runs for the whole life of the entry — bound and parked alike (story 0050 defect A). Returns the
+     * runs for the whole life of the entry — bound and parked alike. Returns the
      * id to hand to the app.
      */
     public suspend fun register(live: LiveSession): String {
@@ -363,7 +363,7 @@ public class SessionRegistry(
      * [LiveSession.reportUpstreamLost], which a bound socket's forwarder relays as a terminal
      * `DISCONNECTED`) and evict.
      *
-     * Before story 0050 this ran only from [park], so nothing probed a session whose app socket was
+     * This runs for every live session, not only parked ones: a session whose app socket is
      * alive: XMage would expire an idle user after ~3 minutes and the app went on showing `Connected`
      * until the user's *next* action failed with a generic refusal. Running it from [register] fixes
      * both halves — the ping is an activity touch that stops the expiry, and a genuinely dead upstream
@@ -394,7 +394,7 @@ public class SessionRegistry(
     /**
      * Transitions the entry for [resumeId] from bound to **parked**: records the drop and starts the TTL
      * eviction timer. The keepalive ping loop is already running — it starts at [register] and covers the
-     * whole life of the entry (story 0050) — so parking only adds the grace window. No-op if unknown or
+     * whole life of the entry — so parking only adds the grace window. No-op if unknown or
      * already parked. Safe to call under `NonCancellable` from a socket teardown.
      */
     public suspend fun park(resumeId: String) {
@@ -415,14 +415,14 @@ public class SessionRegistry(
 
     /**
      * Transitions the entry for [resumeId] from parked back to **bound**: cancels its TTL timer (the
-     * keepalive keeps running — it is not a parked-only concern since 0050) and returns the still-live
+     * keepalive keeps running — it is not a parked-only concern) and returns the still-live
      * session for the coordinator to re-bind. Returns `null` for an unknown or already-evicted (expired)
      * id.
      */
     public suspend fun resume(resumeId: String): LiveSession? =
         mutex.withLock {
             val entry = entries[resumeId] ?: return@withLock null
-            // One-consumer invariant (story 0026 F4): only a PARKED entry may be resumed. A Resume
+            // One-consumer invariant: only a PARKED entry may be resumed. A Resume
             // arriving while the entry is still bound (fast reconnect before the old socket parked, or a
             // duplicate client) must be rejected — handing the same non-broadcast outbound channel to two
             // forwarders would split the stream and corrupt both.
@@ -452,10 +452,9 @@ public class SessionRegistry(
 
     /**
      * Evicts [resumeId] **only if it is still bound** — i.e. a live socket is nominally holding it —
-     * and reports whether it did. Story 0050 defect B.
+     * and reports whether it did.
      *
-     * [resume] deliberately refuses a bound entry (story 0026 F4: two forwarders on one non-broadcast
-     * channel would split the stream), and that refusal is right. But refusing alone left the entry
+     * [resume] deliberately refuses a bound entry, and that refusal is right. But refusing alone left the entry
      * there: when a phone's radio dies no FIN reaches the bridge, so the old socket is still "bound"
      * long after it is dead, and the returning app — which is the *only* holder of that resume id, and
      * has just proved it abandoned the old socket by presenting the handle on a new one — was pushed

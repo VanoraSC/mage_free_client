@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Turbine coverage of the story-0024 reconnect loop over a **fake [SessionRunner] + fake connectivity/
+ * Turbine coverage of the  reconnect loop over a **fake [SessionRunner] + fake connectivity/
  * lifecycle**, exercising every path hermetically: an unexpected drop auto-reconnects (surfacing
  * `Reconnecting`) and carries the resume handle forward; a terminal outcome and an explicit disconnect
  * stop the loop; a connectivity return and a foreground refocus cut a waiting back-off short; a
@@ -260,7 +260,7 @@ class ReconnectingSessionTest {
         }
 
     /**
-     * Story 0050 defect B. When the radio dies there is no FIN and no socket error — the read simply
+     * When the radio dies there is no FIN and no socket error — the read simply
      * never returns — so before this the loop stayed inside a "live" attempt and the app went on
      * reporting `Connected` over a link that no longer existed. The bridge, on the other side, kept the
      * session **bound** to that socket rather than parking it, which is what made a returning app open a
@@ -309,7 +309,7 @@ class ReconnectingSessionTest {
                 assertTrue("the dead attempt must actually be torn down", ended.isCompleted)
 
                 // …and the network coming back resumes rather than re-authenticating: the loop keeps the
-                // handle and the caller's runner is offered it again (stories 0023/0024, unchanged).
+                // handle and the caller's runner is offered it again (unchanged).
                 connectivity.set(true)
                 assertTrue(awaitItem() is SessionEvent.Connected)
                 awaitComplete()

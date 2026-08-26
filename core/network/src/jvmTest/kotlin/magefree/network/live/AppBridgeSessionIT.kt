@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Live proof that the **app's own** session + lobby stack talks to a **real bridge** (story 0045).
+ * Live proof that the **app's own** session + lobby stack talks to a **real bridge**.
  *
  * Everything above `:bridge` — [KtorBridgeClient], the handshake, `SessionRelay`'s `Login`,
  * `PendingRequests` correlation, `LobbyClientImpl` and `LobbyMapper` — had only ever run against
@@ -23,7 +23,7 @@ import org.junit.Test
  * discriminator rename or a `ServerHello` major bump would all pass hermetically and fail in production.
  * These tests are the first thing in the repo that would notice.
  *
- * Story 0046 added the two teardown tests at the end: they are the same kind of proof one level down —
+ * The two teardown tests at the end are the same kind of proof one level down —
  * the bridge offers a capability (`Logout`) that no fake could have shown the app was failing to use,
  * and only a real server's own view of who is logged in can tell a torn-down session from a parked one.
  *
@@ -155,7 +155,7 @@ class AppBridgeSessionIT {
 
                 subject.signOut()
 
-                // Before story 0046 this could not pass: sign-out closed the socket with no `Logout`, the
+                // Without an explicit `Logout` this could not pass: closing the socket alone leaves the
                 // bridge could not tell it from a dropped connection, and it parked the session — leaving
                 // this user logged in upstream for the whole resume TTL (see the sibling test below,
                 // which asserts exactly that for a real drop).
@@ -190,7 +190,7 @@ class AppBridgeSessionIT {
 
                 // The other direction, live: the socket goes away with nothing written to it — a lost
                 // connection or a backgrounded app. The upstream session must survive so a reconnect can
-                // resume it (stories 0023/0024). This is the guard that would catch 0046's fix being
+                // resume it. This is the guard that would catch the fix being
                 // applied to the wrong path.
                 subject.dropWithoutSigningOut()
 
@@ -212,7 +212,7 @@ class AppBridgeSessionIT {
     }
 
     /**
-     * Story 0050 defect A, live: **`Connected` must mean connected.**
+     * **`Connected` must mean connected.**
      *
      * XMage's `UserManagerImpl.checkExpired` drops a user whose session has been silent for about three
      * minutes (`disconnected due connection problems`). Nothing on either side used to be looking — the
@@ -257,7 +257,7 @@ class AppBridgeSessionIT {
                 assertTrue(
                     "after ${IDLE_PAST_EXPIRY_MS}ms idle the server must still know '$username'; it " +
                         "listed ${users.map { it.name }}. An empty or missing entry here with the app " +
-                        "still reporting Connected is the story-0050 zombie session.",
+                        "still reporting Connected is the  zombie session.",
                     users.any { it.name == username },
                 )
             } finally {

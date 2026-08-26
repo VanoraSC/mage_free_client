@@ -16,20 +16,20 @@ import magefree.protocol.TableNotFound
 
 /**
  * The thread-safe correlation registry that multiplexes **request/response** over the single live
- * session socket (story 0028), alongside the session-event/push stream the [SessionRelay] already
+ * session socket, alongside the session-event/push stream the [SessionRelay] already
  * relays. A `BridgeClient.request` registers a waiter keyed by its `requestId`; the relay's inbound
  * loop routes a matching correlated reply to that waiter (via [tryComplete]) instead of mapping it to a
  * `SessionEvent`; and an ended/dropped session fails every outstanding waiter ([failAll]) so a blocked
  * requester surfaces the failure as state rather than hanging.
  *
- * The correlated replies are the 0027 lobby list replies ([TableList]/[RoomUserList]/[GameTypeList]),
- * the 0036 table-action replies ([TableCreated]/[TableActionResult], story 0037), 0040's targeted
- * table-read replies ([TableDetail]/[TableNotFound]), 0051's game-action replies
- * ([GameActionResult], story 0052 — every join/watch/quit and every prompt answer) and 0054's targeted
+ * The correlated replies are the lobby list replies ([TableList]/[RoomUserList]/[GameTypeList]),
+ * the table-action replies ([TableCreated]/[TableActionResult]), the targeted
+ * table-read replies ([TableDetail]/[TableNotFound]), the game-action replies
+ * ([GameActionResult] - every join/watch/quit and every prompt answer) and the targeted
  * game-state read replies ([GameStateSnapshot]/[GameStateUnavailable]) — each keyed by its
- * echoed `requestId`. Resume flow-control frames, session-status pushes, and the spontaneous 0036 table
- * and 0051 game *events* (no `requestId` — routed to the push side-channel instead) are left untouched,
- * so the existing session-event behaviour (stories 0016/0024) is unchanged.
+ * echoed `requestId`. Resume flow-control frames, session-status pushes, and the spontaneous table table
+ * and game game *events* (no `requestId` — routed to the push side-channel instead) are left untouched,
+ * so the existing session-event behaviour is unchanged.
  */
 internal class PendingRequests {
     private val waiters = ConcurrentMap<String, CompletableDeferred<ServerMessage>>()
@@ -77,11 +77,11 @@ internal class PendingRequests {
             is TableActionResult -> requestId
             is TableDetail -> requestId
             is TableNotFound -> requestId
-            // Story 0052: every game verb's reply — without this the game client's `request` would wait
+            // every game verb's reply — without this the game client's `request` would wait
             // out its timeout on a reply that did in fact arrive, which is the shape of defect this
             // registry exists to prevent.
             is GameActionResult -> requestId
-            // Story 0054: the game-state read's two arms. **Both** are correlated: an uncorrelated
+            // the game-state read's two arms. **Both** are correlated: an uncorrelated
             // "no state" would leave the reconnecting board blocked on a waiter until it timed out —
             // indistinguishable from the bridge never answering, which is the very failure the read
             // exists to remove.

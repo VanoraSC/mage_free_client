@@ -3,14 +3,14 @@ package magefree.network.game
 import kotlinx.coroutines.flow.Flow
 
 /**
- * The app-side, **UI-free** game client (story 0052, EPIC-11): the *act* side of a running game, layered
- * over 0028's multiplexed request/response and 0023/0024's session/resume — the game-side counterpart of
- * story 0037's `TableClient`, which stops at the moment a match begins.
+ * The app-side, **UI-free** game client: the *act* side of a running game, layered
+ * over the multiplexed request/response and park-and-resume — the game-side counterpart of
+ * the `TableClient`, which stops at the moment a match begins.
  *
- * Every verb turns a 0051 game request into a `suspend` call that maps the correlated `GameActionResult`
+ * Every verb turns a game request into a `suspend` call that maps the correlated `GameActionResult`
  * into a [Result]: a server decline surfaces as a typed [GameActionFailure] carrying the server's reason,
- * and a decline that means *there was no session to ask* surfaces as [GameSessionGoneFailure] (story
- * 0050's distinction). Never a silent drop, and never an unhandled throw — a transport failure is
+ * and a decline that means *there was no session to ask* surfaces as [GameSessionGoneFailure] (
+ * 's distinction). Never a silent drop, and never an unhandled throw — a transport failure is
  * captured as a failed [Result] too.
  *
  * **The reply surface is typed by prompt, not by wire message.** Upstream's client→server game protocol
@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * No `:protocol` or `mage.*` type appears on this ABI; the implementation is `internal` and is assembled
  * by [GameClients.overBridge], the `:protocol`-free factory (the seam that lets a test drive the real
- * client — the property story 0045's live suite depends on).
+ * client — the property the live suite depends on).
  *
  * A [magefree.network.fake.FakeGameClient] backs hermetic tests of downstream code.
  */
@@ -198,8 +198,8 @@ interface GameClient {
     // --- reading -------------------------------------------------------------------------------------
 
     /**
-     * Read the current board of [gameId] **on demand** (story 0054) — the game-side counterpart of
-     * `TableClient.refreshTable`, and the thing 0052 could not offer.
+     * Read the current board of [gameId] **on demand** — the game-side counterpart of
+     * `TableClient.refreshTable`, which a push-only board cannot offer.
      *
      * **Nothing upstream answers this.** XMage has no verb that reads a `GameView`, and re-joining a
      * running game does not resync, so a client that dropped its socket used to be blind until the next
@@ -221,23 +221,23 @@ interface GameClient {
 
     /**
      * Observe the evolving [GameState] of [gameId]: emit [seed] first, then a new state each time one of
-     * story 0051's game pushes folds in ([GameEventFold]). Cold — each collection starts a fresh
+     * the game pushes folds in ([GameEventFold]). Cold — each collection starts a fresh
      * subscription and the caller owns its scope.
      *
      * **Snapshot replace.** Every state-carrying push carries the whole game view, so each emission is a
      * complete picture rather than a patch; a consumer renders the latest and never reconciles.
      *
-     * **Reads (story 0054).** [refreshGame] is issued **on open** and **again on each return to
-     * [magefree.model.ConnectionState.Connected]** (a 0023/0024 resume), and its snapshot is folded onto
+     * **Reads.** [refreshGame] is issued **on open** and **again on each return to
+     * [magefree.model.ConnectionState.Connected]** (a resume), and its snapshot is folded onto
      * the held state exactly as a push would be. That is what makes a reconnecting board show something
-     * before the opponent acts. Until 0054 there was nothing to issue — game state was push-only — and
+     * before the opponent acts. Upstream offers nothing to issue — game state was push-only — and
      * `observeGameNeverIssuesARequestOfItsOwn` existed to stop anyone polling against a request the
      * bridge could not answer; it now pins these two reads and the continued **absence of a poll**.
      *
-     * **Resume (0023/0024).** The held state is also re-emitted on that return, so a collector that had
+     * **Resume.** The held state is also re-emitted on that return, so a collector that had
      * stopped rendering is not stranded — the same non-destructive re-sync `TableClient.observeTable`
      * performs. The bridge's parked session keeps pumping into a durable, re-bindable buffer while the
-     * app socket is down (story 0023), so pushes produced during the gap still arrive when the socket
+     * app socket is down, so pushes produced during the gap still arrive when the socket
      * re-binds; the read is what covers the case where **no** push comes.
      *
      * @param seed the starting state; defaults to an empty [GameState] for [gameId]. A caller that

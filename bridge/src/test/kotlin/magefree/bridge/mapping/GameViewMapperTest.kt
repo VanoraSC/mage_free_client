@@ -287,7 +287,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `a host permanent lists what is attached to it, in upstream's order (story 0087)`() {
+    fun `a host permanent lists what is attached to it, in upstream's order`() {
         // The reverse direction is the whole point: without it, rendering an Aura on its host means
         // every permanent scanning every battlefield, every frame, for anything pointing at it.
         val rancor = UUID.randomUUID()
@@ -311,8 +311,8 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `your aura on their creature is flagged as such, and on your own creature is not (story 0087)`() {
-        // `attachedControllerDiffers` is the easily-missed board state §7.4 names: you control the Aura,
+    fun `your aura on their creature is flagged as such, and on your own creature is not`() {
+        // `attachedControllerDiffers` is the easily-missed board state: you control the Aura,
         // they control the creature. Read from upstream's `isAttachedToDifferentlyControlledPermanent()`
         // -- note the accessor name, which is nothing like the field's.
         val theirCreature = UUID.randomUUID()
@@ -350,7 +350,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `an unattached permanent carries no attachment state at all (story 0087)`() {
+    fun `an unattached permanent carries no attachment state at all`() {
         // Both flags default to false and the list to empty. Upstream computes `attachedToPermanent`
         // by actually resolving the host, so "not attached" and "attached to a player" both land here.
         val forest = GameViews.permanent(card = GameViews.card(name = "Forest"))
@@ -494,7 +494,7 @@ class GameViewMapperTest {
     fun `a sparse view with every collection unset maps to an empty snapshot instead of throwing`() {
         // The serialization-constructed view leaves every collection field null — the shape a drifted or
         // partially populated upstream view would have. The mapper must survive it: a snapshot the app
-        // can render is always better than an exception that costs it the whole push (0006/0026-F5).
+        // can render is always better than an exception that costs it the whole push (the never-throw invariant).
         val sparse = GameViews.game(phase = null, step = null, activePlayerName = "", priorityPlayerName = "")
         sparse.setEveryCollectionNull()
 
@@ -527,7 +527,7 @@ class GameViewMapperTest {
         assertNull(card.manaCost, "the composed mana cost degrades to null")
     }
 
-    // ---- story 0058: what a card currently *is* -----------------------------------------------------
+    // ---- what a card currently *is* -----------------------------------------------------
 
     @Test
     fun `a land that an effect has animated is carried as the creature it currently is`() {
@@ -636,8 +636,8 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `transformed survives mapping, the real signal for which face is currently up (story 0076)`() {
-        // Found live (Pete, 2026-08-17): Kytheon, Hero of Akros transformed into Gideon,
+    fun `transformed survives mapping, the real signal for which face is currently up`() {
+        // Kytheon, Hero of Akros transformed into Gideon,
         // Battle-Forged, but the board kept showing Kytheon's art. Confirmed against upstream source:
         // CardView.isTransformed() is set correctly for any permanent by CardView's own constructor
         // (`if (permanent.isTransformed()) transformed = true`), inherited unchanged by PermanentView
@@ -658,10 +658,10 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `transformed is false for an untransformed permanent even though alternateName is set (story 0076, found live again)`() {
-        // Found live (Pete, 2026-08-22): Ajani, Nacatl Pariah on the battlefield, UNTRANSFORMED,
-        // showed Ajani, Nacatl Avenger's (the back face's) art -- and the manual flip control (story
-        // 0077) never appeared until it actually transformed. Root cause: alternateName was being
+    fun `transformed is false for an untransformed permanent even though alternateName is set`() {
+        // Ajani, Nacatl Pariah on the battlefield, UNTRANSFORMED,
+        // showed Ajani, Nacatl Avenger's (the back face's) art -- and the manual flip control
+        // never appeared until it actually transformed. Root cause: alternateName was being
         // treated as the "currently transformed" signal, but upstream sets it unconditionally on any
         // transformable permanent regardless of state -- it means "has another face", not "is
         // showing it". `transformed` is upstream's own dedicated, correctly-computed field for that.
@@ -697,8 +697,8 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `a plain CardView's alternateName is threaded through unchanged, story 0076 follow-up`() {
-        // Found live (Pete, 2026-08-17): an untransformed Kytheon sitting in hand showed Gideon's
+    fun `a plain CardView's alternateName is threaded through unchanged`() {
+        // An untransformed Kytheon sitting in hand showed Gideon's
         // art -- from treating a non-null alternateName as a face signal. Upstream sets alternateName
         // unconditionally for any transformable card, to the name of its OTHER face, regardless of
         // which face is showing; a hand card's `transformed` is simply false (only permanents
@@ -718,7 +718,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `a spell on the stack carries every target it chose, in upstream's order (story 0086)`() {
+    fun `a spell on the stack carries every target it chose, in upstream's order`() {
         // `CardView.addTargets` de-duplicates through a LinkedHashSet ("use linked, so it will use
         // stable sort order"), so the order the server sends is meaningful and the mapper preserves it
         // rather than sorting or set-ifying.
@@ -739,7 +739,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `an ability on the stack carries its target too, not only a spell (story 0086)`() {
+    fun `an ability on the stack carries its target too, not only a spell`() {
         // StackAbilityView inherits `targets` from CardView and fills it in `updateTargets`, so the
         // mapper's single read covers both kinds of stack object -- no per-type branching, matching
         // upstream's own flat list.
@@ -750,7 +750,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `a target that is itself a stack entry arrives as a plain id like any other (story 0086)`() {
+    fun `a target that is itself a stack entry arrives as a plain id like any other`() {
         // Upstream resolves every target through `game.getObject(uuid)` and puts the ids in one flat
         // list, so countering a spell targets a *stack* object and looks no different on the wire. The
         // renderer joins the id against the snapshot; the mapper does not branch on what it points at.
@@ -781,7 +781,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `a card that never targeted anything carries an empty target list, never a crash (story 0086)`() {
+    fun `a card that never targeted anything carries an empty target list, never a crash`() {
         // Upstream allocates `targets` only inside `addTargets`, which it calls only while building a
         // stack object -- so null is the ordinary case for a hand card or a battlefield permanent, and
         // `orEmpty()` in the mapper is load-bearing rather than defensive decoration.
@@ -819,7 +819,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `mapCard names an AbilityView from its source card, not upstream's literal placeholder (story 0072)`() {
+    fun `mapCard names an AbilityView from its source card, not upstream's literal placeholder`() {
         // AbilityView.java (mage-common) hardcodes `this.name = "Ability"` for the ordinary case --
         // confirmed by reading the constructor directly, not assumed. The real name is only on the
         // nested getSourceCard(). Prove the fix reads it, and that `rules` (already correct) survives.
@@ -842,7 +842,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `mapCard names a StackAbilityView from its source card too (story 0072)`() {
+    fun `mapCard names a StackAbilityView from its source card too`() {
         // StackAbilityView is a *separate* sibling class from AbilityView (does not extend it) --
         // upstream's own comment on the field says its view "will be replaced by sourceCard" in the
         // GUI, confirming this is the sanctioned way to read it, not a guess.
@@ -852,8 +852,8 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `mapCard resolves art for an AbilityView from its source card, not its own (blank) identity (story 0072)`() {
-        // Found live (Pete, 2026-08-16) after the naming fix above shipped: Soul Warden's own
+    fun `mapCard resolves art for an AbilityView from its source card, not its own (blank) identity`() {
+        // after the naming fix above shipped: Soul Warden's own
         // triggered ability had no art at all. AbilityView never sets expansionSetCode/cardNumber on
         // itself -- only the nested sourceCard carries the real printing, which the art loader keys
         // requests on. Distinct defect from the naming one: this stays broken even once the name
@@ -867,7 +867,7 @@ class GameViewMapperTest {
     }
 
     @Test
-    fun `mapCard resolves art for a StackAbilityView from its source card too (story 0072)`() {
+    fun `mapCard resolves art for a StackAbilityView from its source card too`() {
         val stackAbilityView = GameViews.stackAbilityView(sourceCard = GameViews.card(setCode = "SOI", collectorNumber = "17"))
 
         val mapped = GameViewMapper.mapCard(stackAbilityView)

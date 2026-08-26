@@ -8,18 +8,18 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 /**
  * `magefree.kmp.android.library` — the shared config for a multiplatform `:core:*` module that
- * **still ships on Android** (story 0082, EPIC-18).
+ * **still ships on Android**.
  *
  * The difference from [KmpLibraryConventionPlugin] is the second target. `:protocol` and
- * `:core:model` carry no Android at all, so a `jvm()` target is the whole story there. `:core:cards`
- * (and, as stories 0083/0084 arrive, `:core:decks` and `:core:network`) has a real Android edge —
+ * `:core:model` carry no Android at all, so a `jvm()` target is all they need. `:core:cards`
+ * (as do `:core:decks` and `:core:network`) has a real Android edge —
  * bundled APK assets, the platform SQLite driver, `Context` — which lives in `androidMain` while the
  * logic above it lives in `commonMain`.
  *
  * **No `useJUnitPlatform()` here, and that is deliberate.** [KmpLibraryConventionPlugin] sets it
  * because those modules' suites are JUnit 5. This module's are JUnit 4 under Robolectric, and
  * switching the runner would not fail loudly — the tests would simply stop being discovered, which
- * is precisely the silent failure story 0080 built its test-count guard against. Android unit tests
+ * is precisely the silent failure the test-count guard exists to catch. Android unit tests
  * default to JUnit 4; leaving the default alone is what keeps them running.
  */
 class KmpAndroidLibraryConventionPlugin : Plugin<Project> {
@@ -31,7 +31,7 @@ class KmpAndroidLibraryConventionPlugin : Plugin<Project> {
                 apply("org.jlleitschuh.gradle.ktlint")
             }
             extensions.configure<KotlinMultiplatformExtension> {
-                // Story 0084: every module here now declares `expect` classes — Room's database
+                // every module here now declares `expect` classes — Room's database
                 // constructor in `:core:decks`, and the `java.util.concurrent` aliases that let
                 // `:core:cards`/`:core:network` keep their real concurrency primitives while naming
                 // no `java.*` type in `commonMain`. Expect/actual *classes* are still flagged Beta by

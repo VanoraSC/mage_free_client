@@ -22,7 +22,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Turbine coverage of story 0019's **seam enrichment**: [ConnectionRepository.connectionStatus]
+ * Turbine coverage of the **seam enrichment**: [ConnectionRepository.connectionStatus]
  * reduces the active session's [SessionEvent]s to a detail-carrying [magefree.model.ConnectionStatus]
  * — the same categorical reduction as the bare `connectionState`, but preserving each failure's
  * diagnostic (auth message, `server=… bridge=…` version detail, a transport [ConnectionError]). A
@@ -121,7 +121,7 @@ class ConnectionStatusReductionTest {
     @Test
     fun bareConnectionStateStaysConsistentWithStatus() =
         runTest {
-            // Proves the derived connectionState (0010's dependency) mirrors connectionStatus.state.
+            // Proves the derived connectionState (the dependency) mirrors connectionStatus.state.
             val repository =
                 repository(
                     ScriptedBridgeClient(

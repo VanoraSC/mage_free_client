@@ -184,7 +184,7 @@ class ConnectionRepositoryTest {
                 assertEquals(ConnectionState.Disconnected, awaitItem())
                 cancelAndIgnoreRemainingEvents()
             }
-            // Story 0046: which teardown the repository picks is the whole point — the deliberate one
+            // which teardown the repository picks is the whole point — the deliberate one
             // sends `Logout` so the bridge drops the upstream session instead of parking it. Taking the
             // intent-free `disconnect()` here would silently restore the defect.
             assertEquals(
@@ -197,7 +197,7 @@ class ConnectionRepositoryTest {
     @Test
     fun aCancelledSessionCollectionIsNotASignOut() =
         runTest {
-            // The drop/lifecycle direction (stories 0023/0024): the repository shares the session flow
+            // The drop/lifecycle direction: the repository shares the session flow
             // `WhileSubscribed`, so the last collector going away ends the session by cancellation. That
             // must never look like a sign-out, or the bridge would stop parking and a reconnect could no
             // longer resume.

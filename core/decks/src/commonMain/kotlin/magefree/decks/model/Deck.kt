@@ -5,7 +5,7 @@ package magefree.decks.model
  * card-catalog generator (`tools/card-catalog-generator`) is the only boundary that touches `mage.*`,
  * and it emits the bundled data this module reads. Nothing here needs the network — decks are the
  * user's on-device data (see [magefree.decks.DeckRepository]); the only networked part of the whole
- * deck experience is artwork (story 0031), which lives elsewhere.
+ * deck experience is artwork, which lives elsewhere.
  */
 
 /** Stable identity of a deck in the local library (a UUID string; the persistence primary key). */
@@ -19,7 +19,7 @@ enum class DeckZone { MAIN, SIDEBOARD }
 
 /**
  * A single line in a deck: a specific printing (identified by set code + collector number, matching
- * story 0030's `CardPrinting` identity) plus how many copies. [cardName] is carried alongside so the
+ * the `CardPrinting` identity) plus how many copies. [cardName] is carried alongside so the
  * model round-trips XMage's `DeckCardInfo` losslessly (it stores the name, not a catalog id) and so a
  * deck can reference a card even if it is unknown to the bundled catalog.
  */

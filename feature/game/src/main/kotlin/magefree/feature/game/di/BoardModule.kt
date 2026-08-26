@@ -10,7 +10,7 @@ import org.koin.dsl.module
  * Koin provisioning for `:feature:game` (was Hilt's `BoardModule`).
  *
  * It binds one thing beyond the ViewModel: the [PassPolicy] the board answers priority prompts with
- * (requirements §14.1). That is the whole point of the seam — **when stops and configurable
+ *. That is the whole point of the seam — **when stops and configurable
  * auto-pass arrive, this binding is what changes**, and nothing in the ViewModel or on the screen
  * has to.
  *
@@ -20,7 +20,7 @@ import org.koin.dsl.module
  */
 val boardModule =
     module {
-        /** Everything explicit and manual, as this release ships (§9.1, §14.1). */
+        /** Everything explicit and manual, as this release ships. */
         factory<PassPolicy> { ManualPassPolicy }
 
         viewModel { GameBoardViewModel(gameClient = get(), passPolicy = get(), cardCatalog = get()) }

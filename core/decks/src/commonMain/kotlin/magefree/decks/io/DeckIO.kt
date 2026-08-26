@@ -4,7 +4,7 @@ import magefree.decks.model.Deck
 
 /**
  * The pure, fully-offline import/export surface for decks. Imports parse XMage-compatible text into a
- * 0033 [Deck] (resolving names → printings via the `:core:cards` catalog); exports serialize a [Deck]
+ * deck [Deck] (resolving names → printings via the `:core:cards` catalog); exports serialize a [Deck]
  * back to text. All work runs on an injected IO dispatcher — nothing here touches the network.
  *
  * See [magefree.decks.io.internal.DefaultDeckIO] for the implementation; formats are the grammars in
@@ -30,7 +30,7 @@ interface DeckIO {
 
     /**
      * Produce shareable [DeckShareContent] for [deck] in [format]: the serialized text plus a suggested
-     * file name (deck name sanitized + extension) and mime type. The share *intent* is story 0035.
+     * file name (deck name sanitized + extension) and mime type. The share *intent* is the platform's.
      */
     suspend fun share(
         deck: Deck,

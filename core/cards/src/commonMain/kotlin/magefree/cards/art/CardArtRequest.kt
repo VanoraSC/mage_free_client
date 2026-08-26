@@ -49,7 +49,7 @@ data class CardArtRequest(
         /**
          * The front-face request for [card], using its first printing (the catalog orders printings
          * by set + collector number). Returns `null` for a card with no printings — the caller then
-         * shows the placeholder and falls back to the always-available card text (0030).
+         * shows the placeholder and falls back to the always-available card text.
          */
         fun frontOf(
             card: Card,

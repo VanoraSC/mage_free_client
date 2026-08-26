@@ -3,7 +3,7 @@ package magefree.network.reconnect
 import magefree.model.SessionEvent
 
 /**
- * The bridge-issued resume handle (story 0023) carried across reconnect attempts.
+ * The bridge-issued resume handle carried across reconnect attempts.
  *
  * A fresh [connect][magefree.network.BridgeClient.connect] starts with an empty handle and sends
  * `Login`; when the bridge delivers a `SessionResumable`, [resumeId] is captured here so the **next**

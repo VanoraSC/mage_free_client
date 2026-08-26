@@ -33,7 +33,7 @@ data class RoomArgs(
 )
 
 /**
- * Host-a-table entry: on a successful create **and seating** (story 0041 — the AI seats, then the host's
+ * Host-a-table entry: on a successful create **and seating** (the AI seats, then the host's
  * own, all before the room opens), hands the new room's [RoomArgs] to [onOpenRoom]. [onBuildDeck] is the
  * escape hatch when the deck library is empty and the host has nothing legal to sit down with.
  *

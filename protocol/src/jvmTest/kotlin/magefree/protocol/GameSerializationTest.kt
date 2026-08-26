@@ -11,9 +11,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Wire-contract tests for the in-game protocol (story 0051): every game request/result/event and every
+ * Wire-contract tests for the in-game protocol: every game request/result/event and every
  * [GamePrompt] subtype round-trips through the polymorphic envelope unchanged, and both levels of
- * unknown-`type` tolerance hold — the envelope's (story 0026 F1) and the **nested prompt's**, which the
+ * unknown-`type` tolerance hold — the envelope's and the **nested prompt's**, which the
  * envelope's own tolerance does not cover.
  */
 class GameSerializationTest {
@@ -304,7 +304,7 @@ class GameSerializationTest {
 
     @Test
     fun `the game-state read carries its own discriminators`() {
-        // Story 0054. The read and its two replies must be distinguishable on the wire from the pushes
+        // The read and its two replies must be distinguishable on the wire from the pushes
         // that carry the same payload — a `game_state_snapshot` that encoded as `game_state_updated`
         // would be folded as a fresh server push rather than correlated to its waiter.
         assertEquals(
@@ -323,7 +323,7 @@ class GameSerializationTest {
 
     @Test
     fun `a no-state reply is typed, and never decodes as a snapshot of an empty board`() {
-        // The acceptance criterion this story turns on: before any snapshot exists the honest answer is
+        // The acceptance criterion this turns on: before any snapshot exists the honest answer is
         // a *kind*, not a GameStateView full of defaults. An empty board is indistinguishable from a real
         // one — no players, no hand, nothing playable is a legal snapshot — so a client that received one
         // would render it as truth. Decoding must therefore land on a different type entirely.
@@ -340,7 +340,7 @@ class GameSerializationTest {
 
     @Test
     fun `a snapshot from a bridge that does not stamp a capture time still decodes`() {
-        // Additive tolerance in the older-peer direction: `capturedAtEpochMs` is new in 0054, so a reply
+        // Additive tolerance in the older-peer direction: `capturedAtEpochMs` is newer than the first
         // without it must decode rather than throw — and must report the absence rather than a fake zero.
         val frame = """{"type":"game_state_snapshot","gameId":"g-1","state":{"turn":4},"requestId":"r-1"}"""
 
@@ -352,7 +352,7 @@ class GameSerializationTest {
         assertNull(snapshot.capturedAtEpochMs, "an absent capture time is null, never a fabricated instant")
     }
 
-    // ---- story 0058: what a card currently *is* -----------------------------------------------------
+    // ---- what a card currently *is* -----------------------------------------------------
 
     @Test
     fun `a card carries its current types, creature status and counters`() {
@@ -383,7 +383,7 @@ class GameSerializationTest {
 
     @Test
     fun `a card frame from an older bridge decodes with the 0058 fields defaulted`() {
-        // Additive-only: the fields added by this story must have defaults, so a payload written before
+        // Additive-only: the fields added by this must have defaults, so a payload written before
         // them still decodes rather than throwing.
         val frame = """{"id":"c-3","name":"Forest"}"""
 
@@ -396,7 +396,7 @@ class GameSerializationTest {
 
     @Test
     fun `a stack entry's targets round-trip in the order the server sent them`() {
-        // Story 0086. Upstream de-duplicates through a LinkedHashSet precisely so the order is stable
+        // Upstream de-duplicates through a LinkedHashSet precisely so the order is stable
         // across snapshots, so the wire must not turn the list into a set or sort it.
         val bolt = GameCardView(id = "s-1", name = "Lightning Bolt", targets = listOf("perm-9", "p-2"))
 
@@ -406,7 +406,7 @@ class GameSerializationTest {
     }
 
     @Test
-    fun `a card frame from a bridge older than story 0086 decodes with no targets`() {
+    fun `a card frame from a bridge that does not send targets decodes with none`() {
         // Additive-only, per ProtocolVersion: a payload written before the field still decodes, and its
         // absence means "this is not pointing at anything" -- which for most cards is simply true.
         val decoded = json.decodeFromString<GameCardView>("""{"id":"c-3","name":"Forest"}""")
@@ -416,7 +416,7 @@ class GameSerializationTest {
 
     @Test
     fun `a permanent's attachments round-trip in both directions`() {
-        // Story 0087. The host's list and the attachment's own back-pointer are separate fields and
+        // The host's list and the attachment's own back-pointer are separate fields and
         // both have to survive: a board that has one but not the other cannot draw the relationship.
         val aura =
             GamePermanentView(
@@ -437,7 +437,7 @@ class GameSerializationTest {
     }
 
     @Test
-    fun `a permanent frame from a bridge older than story 0087 decodes with no attachment state`() {
+    fun `a permanent frame from a bridge that does not send attachment state decodes with none`() {
         // Additive-only, per ProtocolVersion. Both flags must default to false rather than to
         // "probably": "the bridge said nothing" is never "your aura is on their creature".
         val frame = """{"card":{"id":"perm-1","name":"Forest"}}"""
@@ -513,7 +513,7 @@ class GameSerializationTest {
 
     @Test
     fun `the prompt set names its reply shape for every subtype`() {
-        // A guard on the contract this story exists to make honest: each prompt must be answerable.
+        // A guard on the contract this exists to make honest: each prompt must be answerable.
         // (The mapping itself is documented per subtype; here we assert the set has not silently grown
         // a member with no discriminator/round-trip coverage above.)
         assertEquals(10, PROMPTS.size, "the closed prompt set should have one member per upstream prompt callback")

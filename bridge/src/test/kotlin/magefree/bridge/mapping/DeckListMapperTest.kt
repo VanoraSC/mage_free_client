@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Hermetic tests for [DeckListMapper]. `mage.cards.decks.DeckCardLists`/`DeckCardInfo` are plain,
- * field-constructor `mage-common` types (like 0006's `ChatMessage`), so the mapper is exercised with
+ * field-constructor `mage-common` types (like the `ChatMessage`), so the mapper is exercised with
  * real in-memory fixtures round-tripping protocol [DeckList] → `DeckCardLists` → protocol [DeckList].
  */
 class DeckListMapperTest {

@@ -4,9 +4,9 @@ import okio.Path
 import okio.Source
 
 /**
- * Where a bundled file's bytes come from, and where this process may write (story 0082).
+ * Where a bundled file's bytes come from, and where this process may write.
  *
- * **This is §9.2's "bundled assets are their own case", made concrete.** Two modules ship a file
+ * **This is the "bundled assets are their own case", made concrete.** Two modules ship a file
  * inside the application and read it at runtime — `:core:cards` for the 14 MB `cards.sqlite`, and
  * `:core:decks` for `formats.json` — and both did it through `Context.getAssets()`, which is the
  * single reason each of them needed an Android `Context` at all. The mechanism is identical at both

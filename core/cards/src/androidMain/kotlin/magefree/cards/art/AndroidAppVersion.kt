@@ -13,7 +13,7 @@ import android.content.pm.PackageManager
  * manifest under test declares no `versionName`, so this yields `null` there — which is why the
  * tests assert on the descriptive tokens, not on a version string.
  *
- * Its own file because it is the only Android-specific line in the art pipeline: story 0082 moved
+ * Its own file because it is the only Android-specific line in the art pipeline:
  * the `User-Agent` string-building into [CardArtUserAgent.value], leaving the KMP conversion a file
  * to relocate rather than a pipeline to unpick.
  */

@@ -195,7 +195,7 @@ class DeckLegalityTest {
             )
         }
 
-    // --- Unknown / unbundled format (0042 defect C) ---
+    // --- Unknown / unbundled format (defect C) ---
 
     @Test
     fun `a format the bundle does not cover yields a structured result rather than throwing`() =
@@ -222,7 +222,7 @@ class DeckLegalityTest {
             assertTrue(catalog.searchQueries.isEmpty())
         }
 
-    // --- Exact-name resolution (0042 defect D) ---
+    // --- Exact-name resolution (defect D) ---
 
     @Test
     fun `card resolution uses the batched exact-name lookup, never the substring search`() =

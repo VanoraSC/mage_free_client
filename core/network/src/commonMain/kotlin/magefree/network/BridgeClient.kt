@@ -37,13 +37,13 @@ interface BridgeClient {
     /**
      * Tear down the active session, if any, **without telling the bridge why**: the socket simply
      * closes. That is what a dropped connection or a lifecycle pause looks like on the wire, so the
-     * bridge *parks* the upstream session for its resume TTL (story 0023) and a later [connect]
-     * resumes it (story 0024). Use [signOut] — never this — for a deliberate sign-out.
+     * bridge *parks* the upstream session for its resume TTL and a later [connect]
+     * resumes it. Use [signOut] — never this — for a deliberate sign-out.
      */
     suspend fun disconnect()
 
     /**
-     * Tear down the active session **deliberately** (story 0046): tell the bridge the exit is
+     * Tear down the active session **deliberately**: tell the bridge the exit is
      * intentional so it disconnects the upstream XMage session immediately instead of parking it,
      * then close as [disconnect] does.
      *
@@ -61,7 +61,7 @@ interface BridgeClient {
     suspend fun signOut()
 
     /**
-     * Perform one **request/response** exchange over the *live* session socket (story 0028): send
+     * Perform one **request/response** exchange over the *live* session socket: send
      * [message] and suspend until the correlated reply carrying [requestId] arrives, then return it.
      * The exchange is multiplexed with the session-event/push stream on the same socket.
      *

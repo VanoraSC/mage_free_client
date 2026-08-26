@@ -42,14 +42,14 @@ import magefree.network.table.TableState
 /** Title of the table room; shared with tests so the two agree. */
 const val ROOM_TITLE: String = "Table room"
 
-/** The terminal "match starting" text — the Epic-11 hand-off marker; shared with tests. */
+/** The terminal "match starting" text — the game hand-off marker; shared with tests. */
 const val MATCH_STARTING_LABEL: String = "Match starting…"
 
 /**
  * Stateless table room. Renders the table's **actual** seats (who sits where, of what kind, which slots
  * are open) and the server's own table state, the format/options summary, and
  * the role-appropriate actions (host start/remove; player leave; deck submit/update for **either** seated
- * role, since a host occupies a seat too — story 0041; spectator read-only). On
+ * role, since a host occupies a seat too; spectator read-only). On
  * the match-start signal it shows the terminal [MATCH_STARTING_LABEL] hand-off state — no gameplay. Every
  * event is hoisted; the composable performs no I/O.
  */
@@ -95,7 +95,7 @@ fun TableRoomScreen(
     }
 }
 
-/** The terminal hand-off surface: the game has begun on the server; Epic 11 replaces this with the board. */
+/** The terminal hand-off surface: the game has begun on the server; the game layer replaces this with the board. */
 @Composable
 private fun MatchStartingView(modifier: Modifier = Modifier) {
     Column(
@@ -169,7 +169,7 @@ private fun RoomContent(
             Text(text = uiState.actionError, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
 
-        // A host holds a seat too (story 0041), so the deck surface is offered to either seated role.
+        // A host holds a seat too, so the deck surface is offered to either seated role.
         if (uiState.showSeatActions) {
             MageSectionHeader(text = "Submit your deck")
             DeckPicker(
@@ -205,7 +205,7 @@ private fun RoomContent(
 
 /**
  * One seat row: who sits in the slot (or that it is open) and what kind of player it holds. There is no
- * "ready" caption — readiness is a table-level property the server reports (story 0040), not a per-seat
+ * "ready" caption — readiness is a table-level property the server reports, not a per-seat
  * flag XMage exposes.
  */
 @Composable

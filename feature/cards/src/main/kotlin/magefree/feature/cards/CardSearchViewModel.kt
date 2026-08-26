@@ -46,13 +46,13 @@ enum class CardSearchPhase {
 
 /**
  * Immutable UI state for the card search/browse screen. The [CardSearchViewModel] runs the *debounced*
- * query + active [filters] through 0030's [CardCatalog] into this shape: the mapped [results], the
+ * query + active [filters] through the [CardCatalog] into this shape: the mapped [results], the
  * derived [phase], and the "showing N" [countSummary].
  *
  * [query] is the exception, and deliberately so: it is the text the player has typed **right now**,
  * published synchronously by [CardSearchViewModel.onQueryChange], not the debounced text the current
  * [results] were resolved for. It used to be the debounced text, and a field controlled on it could
- * never accumulate a character (story 0049); nothing may publish state about the search box that is up
+ * never accumulate a character; nothing may publish state about the search box that is up
  * to a debounce window out of date.
  */
 data class CardSearchUiState(
@@ -74,9 +74,9 @@ data class CardSearchUiState(
 }
 
 /**
- * MVVM ViewModel for the read-only card search/browse screen (story 0032). It owns a [query] and a
- * [CardBrowseFilters] flow, **debounces the catalog query** — not the text the field shows (story
- * 0049) — so typing does not fire a catalog query per keystroke, and runs the search on 0030's
+ * MVVM ViewModel for the read-only card search/browse screen. It owns a [query] and a
+ * [CardBrowseFilters] flow, **debounces the catalog query** — not the text the field shows
+ * — so typing does not fire a catalog query per keystroke, and runs the search on the
  * fully-offline [CardCatalog]:
  * - blank query + no filters -> [CardSearchPhase.Idle] (no query issued);
  * - a name query with no filters -> the catalog's ranked [CardCatalog.search];
@@ -84,7 +84,7 @@ data class CardSearchUiState(
  *
  * [flatMapLatest] means a newer query/filter cancels the in-flight one, so only the latest results
  * ever land. Everything is offline; art is resolved per-row as a [magefree.cards.art.CardArtRequest]
- * (null when a card has no printing -> placeholder). Read-only: no deck-add here (Epic 9).
+ * (null when a card has no printing -> placeholder). Read-only: no deck-add here (deck building).
  */
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class CardSearchViewModel
@@ -131,7 +131,7 @@ class CardSearchViewModel
                     // keystroke, filter tap, or retry is still served. Without it the throw escapes
                     // through launchIn to viewModelScope, whose SupervisorJob has no
                     // CoroutineExceptionHandler — the default handler crashes the process and the
-                    // combine/flatMapLatest pipeline is gone for good (story 0042, defect B).
+                    // combine/flatMapLatest pipeline is gone for good.
                     flow {
                         emit(loadingState(request))
                         emit(resolve(request))
@@ -140,7 +140,7 @@ class CardSearchViewModel
             }.onEach { state ->
                 // `state.query` is the *debounced* text this result was resolved for; the field must
                 // keep showing whatever the player has typed since, so the live raw query wins here.
-                // (Story 0049: publishing the debounced text as `uiState.query` is what reverted every
+                // (Publishing the debounced text as `uiState.query` is what reverts every
                 // keystroke.)
                 _uiState.value = state.copy(query = query.value)
             }.launchIn(viewModelScope)
@@ -157,7 +157,7 @@ class CardSearchViewModel
          * **Reachability (verification standard 2).** The glyph a keystroke draws is produced by
          * [CardSearchField] itself, synchronously — this ViewModel is not in that path at all, and a
          * field controlled on state that only arrives after the debounce is exactly what shipped dead
-         * (story 0049). What is published *here*, synchronously on the caller's thread, is
+         *. What is published *here*, synchronously on the caller's thread, is
          * [CardSearchUiState.query]: so the state describing the search box always matches what is on
          * screen instead of trailing it by a debounce window. The debounce below still governs the one
          * thing it was ever meant to: catalog queries.

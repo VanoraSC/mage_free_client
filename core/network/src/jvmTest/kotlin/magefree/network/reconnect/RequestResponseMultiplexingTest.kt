@@ -20,9 +20,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hermetic coverage of the story-0028 request/response multiplexing added to the frame relay: a
+ * Hermetic coverage of the  request/response multiplexing added to the frame relay: a
  * correlated reply is routed to its waiting requester (via [PendingRequests]) and is *not* mapped to a
- * `SessionEvent`, so the session-event stream (stories 0016/0024) is undisturbed; and an ended session
+ * `SessionEvent`, so the session-event stream is undisturbed; and an ended session
  * fails every outstanding waiter so a blocked requester surfaces the failure rather than hanging.
  */
 @OptIn(ExperimentalCoroutinesApi::class)

@@ -43,7 +43,7 @@ import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
 
 /**
- * Hermetic coverage of story 0023's park / resume / evict flow through the real WebSocket +
+ * Hermetic coverage of the park / resume / evict flow through the real WebSocket +
  * [SessionCoordinator] + [SessionRegistry] plumbing, driven by a [FakeUpstreamSession]. Every branch
  * is exercised: park→resume (same session, no second upstream connect), TTL eviction→reject,
  * logout→evict→later-reject, and an unknown handle→reject. No XMage server involved.

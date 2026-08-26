@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The deck library persists and reads back through real SQLite (via Room), on the `jvm()` target with
- * no Android runtime at all (story 0085). Covers create / save+load / rename / favorite / duplicate / delete,
+ * no Android runtime at all. Covers create / save+load / rename / favorite / duplicate / delete,
  * the reactive library flow, and that data survives being re-read through a fresh repository instance
  * over the same store (persistence). Everything is local; no network is involved.
  */
@@ -45,7 +45,7 @@ class DeckRepositoryTest {
 
     @Before
     fun setUp() {
-        // Story 0085: Room's multiplatform in-memory builder over `BundledSQLiteDriver`, which
+        // Room's multiplatform in-memory builder over `BundledSQLiteDriver`, which
         // carries its own SQLite so no Android runtime is involved. The pre-move Android builder
         // took a `Context` and needed `setQueryExecutor`/`allowMainThreadQueries` to run everything
         // on the calling thread; `setQueryCoroutineContext` with the test dispatcher is the same

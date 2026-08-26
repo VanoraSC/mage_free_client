@@ -104,7 +104,7 @@ class ConnectionStatusViewModelTest {
         val reconnecting = ConnectionState.Reconnecting.toUiState()
         assertEquals(ConnectionSeverity.Progress, restoring.severity)
         assertFalse(restoring.showRetry)
-        // Visually/semantically distinct from a plain reconnect (story 0025).
+        // Visually/semantically distinct from a plain reconnect.
         assertTrue(restoring.label != reconnecting.label)
         assertTrue(restoring.contentDescription != reconnecting.contentDescription)
     }
@@ -123,7 +123,7 @@ class ConnectionStatusViewModelTest {
     @Test
     fun onRetryDelegatesToTheSourceRetry() =
         runTest {
-            // Story 0026 F3: the status-bar Retry must be a real reconnect through the seam, not a no-op.
+            // The status-bar Retry must be a real reconnect through the seam, not a no-op.
             var retries = 0
             val source =
                 object : ConnectionStatusSource {

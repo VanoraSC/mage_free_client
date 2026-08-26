@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Pure unit coverage for the story-0024 back-off shape: geometric growth, the max-delay cap, the
+ * Pure unit coverage for the  back-off shape: geometric growth, the max-delay cap, the
  * bounded jitter band, and the constructor invariants. No coroutines — [ReconnectPolicy.delayForAttempt]
  * is deterministic given an injected random source.
  */

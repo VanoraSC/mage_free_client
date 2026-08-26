@@ -20,7 +20,7 @@ import magefree.decks.model.toDeckList
 
 /**
  * [DeckIO] over the offline [CardCatalog]. Each format's pure parser produces a [ParsedDeck]; this
- * class resolves every [RawEntry]'s name → a catalog printing and assembles the 0033 [Deck], reporting
+ * class resolves every [RawEntry]'s name → a catalog printing and assembles the [Deck], reporting
  * unresolved / ambiguous / malformed lines. Serialization delegates back to the format objects.
  *
  * **Name resolution.** Every distinct name in the file is resolved in a single batched, exact,
@@ -35,7 +35,7 @@ import magefree.decks.model.toDeckList
  * round-trip is stable.
  *
  * The imported [Deck] is built with a blank [DeckId] and no library metadata (format/timestamps/
- * favorite) — those are assigned when the deck is persisted (0033 repository / 0035 UI).
+ * favorite) — those are assigned when the deck is persisted.
  */
 internal class DefaultDeckIO(
     private val catalog: CardCatalog,
@@ -54,7 +54,7 @@ internal class DefaultDeckIO(
             val sideboardCards = ArrayList<DeckListCard>()
 
             // Resolve every distinct name in one batched, indexable exact-name lookup rather than a
-            // substring search per line (story 0042, defect D).
+            // substring search per line.
             val resolvedNames = catalog.cardsByName(parsed.entries.map { it.name })
 
             for (entry in parsed.entries) {

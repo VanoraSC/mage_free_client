@@ -8,9 +8,9 @@ import java.io.File
 import java.util.zip.ZipFile
 
 /**
- * Story 0048 — **hermetic wiring guards** (verification standard 2, mechanised).
+ * **hermetic wiring guards** (verification standard 2, mechanised).
  *
- * Story 0047 found `:feature:connect` built, unit-tested, merged and **never reachable**: `:app` did
+ * A feature can be built, unit-tested, merged and **never reachable**, if `:app` does
  * not depend on it and nothing rendered it, so the installed APK could not sign in. Nothing failed,
  * because every existing test drove screens directly and never asked *"can the app get here?"*.
  *
@@ -23,7 +23,7 @@ import java.util.zip.ZipFile
  *    screen on device" shape.
  * 2. [theAppsOwnCodeReferencesEveryFeatureEntryPoint] — `:app`'s compiled classes actually **call**
  *    each feature's entry point. Read out of the class files' constant pools, so it is a fact about
- *    the built artifact, not about what the source looked like. This catches 0047 exactly: the module
+ *    the built artifact, not about what the source looked like. This catches the built-but-unreachable case exactly: the module
  *    can be on the classpath and still be dead weight if no destination renders it.
  *
  * The set of features is read from `settings.gradle.kts` rather than hard-coded, so a **new**
@@ -81,7 +81,7 @@ class FeatureWiringGuardTest {
             fail(
                 buildString {
                     appendLine("Feature module(s) on the classpath but UNREACHABLE from :app's own code.")
-                    appendLine("This is the story-0047 defect: built, tested, merged, and rendered by nothing.")
+                    appendLine("This is the  defect: built, tested, merged, and rendered by nothing.")
                     unreferenced.forEach { (module, entry) ->
                         appendLine("  - $module: nothing in :app calls ${entry.entryPointClass}")
                     }
@@ -269,7 +269,7 @@ class FeatureWiringGuardTest {
          */
         val FEATURE_ENTRY_POINTS =
             mapOf(
-                // Mounted by story 0047 as the root graph's start destination (AppNavHost).
+                // The root graph's start destination (AppNavHost).
                 ":feature:connect" to
                     FeatureEntry(
                         entryPointClass = "magefree.feature.connect.ConnectFlowKt",
@@ -279,13 +279,13 @@ class FeatureWiringGuardTest {
                                 "magefree.feature.connect.SignInViewModel",
                             ),
                     ),
-                // Story 0029: the lobby browser behind Home's "Play" (MageNavHost's LobbyRoute).
+                // the lobby browser behind Home's "Play" (MageNavHost's LobbyRoute).
                 ":feature:lobby" to
                     FeatureEntry(
                         entryPointClass = "magefree.feature.lobby.LobbyScreenKt",
                         runtimeOnlyClasses = listOf("magefree.feature.lobby.LobbyViewModel"),
                     ),
-                // Story 0032: the card catalog browser behind the deck library's "Browse cards".
+                // the card catalog browser behind the deck library's "Browse cards".
                 ":feature:cards" to
                     FeatureEntry(
                         entryPointClass = "magefree.feature.cards.CardsRouteKt",
@@ -295,7 +295,7 @@ class FeatureWiringGuardTest {
                                 "magefree.feature.cards.CardInspectionViewModel",
                             ),
                     ),
-                // Story 0035: the deck library + builder on the Decks tab (AppShell's decksScreen default).
+                // the deck library + builder on the Decks tab (AppShell's decksScreen default).
                 ":feature:decks" to
                     FeatureEntry(
                         entryPointClass = "magefree.feature.decks.DecksRouteKt",
@@ -305,15 +305,15 @@ class FeatureWiringGuardTest {
                                 "magefree.feature.decks.builder.BuilderViewModel",
                             ),
                     ),
-                // Story 0055: the read-only game board, reached from the table room's MatchStarting
-                // hand-off (MageNavHost's GameBoardNavRoute). Before this story the hand-off ended at a
+                // the read-only game board, reached from the table room's MatchStarting
+                // hand-off (MageNavHost's GameBoardNavRoute). without it the hand-off ended at a
                 // terminal "Match starting…" screen and no destination consumed the game id at all.
                 ":feature:game" to
                     FeatureEntry(
                         entryPointClass = "magefree.feature.game.GameRoutesKt",
                         runtimeOnlyClasses = listOf("magefree.feature.game.board.GameBoardViewModel"),
                     ),
-                // Story 0038: host / join / table-room, reached from the lobby.
+                // host / join / table-room, reached from the lobby.
                 ":feature:tables" to
                     FeatureEntry(
                         entryPointClass = "magefree.feature.tables.TablesRoutesKt",

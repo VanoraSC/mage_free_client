@@ -39,8 +39,8 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Live end-to-end proof of the table-action relay (story 0036): drive a **real** [SessionImpl] against
- * the reference server (story 0022) through the whole host → seat → start round trip —
+ * Live end-to-end proof of the table-action relay: drive a **real** [SessionImpl] against
+ * the reference server through the whole host → seat → start round trip —
  * `TableRelay.createTable`/`joinTable`/`startMatch` — and observe the server's own pushed
  * lifecycle callbacks mapped by [CallbackMapper].
  *
@@ -50,9 +50,9 @@ import java.util.concurrent.CopyOnWriteArrayList
  * [DeckListMapper]-built `DeckCardLists`, the mapped `PlayerType` and the skill int; that a real
  * `TableView` comes back and maps to a [TableCreated] with a usable table id; and that `START_GAME`
  * really reaches the app schema as a [MatchStarting]. It stops at the game-start signal — gameplay past
- * it is Epic 11.
+ * it is the game layer.
  *
- * **Seat state (story 0040).** It also reads the table back through [TableRelay.tableDetail] at each
+ * **Seat state.** It also reads the table back through [TableRelay.tableDetail] at each
  * stage: after the AI is seated the read shows one filled seat carrying the AI's name and mapped player
  * type (and one still-open human seat), and after the host joins the server itself reports
  * `READY_TO_START`. That is the regression guard the original defect lacked — the room's seats and the
@@ -84,7 +84,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * (`roomLeaveTableOrTournament` returns false unless the table is WAITING/READY_TO_START), whereas the
  * owner's `removeTable` tears it down in any state.
  *
- * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring 0003's `ConnectAuthenticateIT`);
+ * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring the `ConnectAuthenticateIT`);
  * otherwise JUnit reports it *skipped*, keeping `./scripts/dev gradle check` hermetic.
  *
  * ```
@@ -171,7 +171,7 @@ class TableRelayIT {
                     aiJoin,
                     "the server should seat a COMPUTER_MAD player with the mapped deck",
                 )
-                // 2a. Read the table back (story 0040): the AI is really in a seat, with its name and
+                // 2a. Read the table back: the AI is really in a seat, with its name and
                 //     mapped player type, and the human seat is still open. This is the assertion the
                 //     original defect could never have satisfied — the room had no way to see a seat.
                 val seated =
@@ -236,7 +236,7 @@ class TableRelayIT {
                 )
 
                 // 4. Observe — the pushed START_GAME, mapped by CallbackMapper to a MatchStarting. This
-                //    is the Epic-11 boundary: the game id is asserted to be real, nothing is played.
+                //    is the game boundary: the game id is asserted to be real, nothing is played.
                 val event = withTimeout(MATCH_START_TIMEOUT_MS) { matchStarting.await() }
                 assertNotNull(event, "the server should push a START_GAME once the match starts")
                 assertEquals(
@@ -250,7 +250,7 @@ class TableRelayIT {
                 )
                 assertNotNull(event.playerId, "MatchStarting should identify our own seat")
 
-                // 5. Story 0069 — a *read* of the table after the match started must independently
+                // 5. A *read* of the table after the match started must independently
                 //    report the same game id `MatchStarting` pushed, proving `TableView.getGames()`
                 //    really is populated at this point and not just in theory. This is what lets a
                 //    client that missed the one-shot push (it opened the room afterwards) still learn

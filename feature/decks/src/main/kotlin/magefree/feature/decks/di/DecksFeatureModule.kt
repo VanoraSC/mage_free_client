@@ -20,7 +20,7 @@ private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatch
  * `DeckRepository`/`DeckLegality`/`DeckIO` (`:core:decks`), `CardCatalog` + [CardImageLoader]
  * (`:core:cards`), and `ArtCacheController` (`:feature:cards`) — is provided elsewhere in the graph.
  *
- * The downloader reuses story 0031's `ArtDownloadManager` and the app-wide [CardImageLoader] (as the
+ * The downloader reuses the `ArtDownloadManager` and the app-wide [CardImageLoader] (as the
  * `ArtWarmer`); only its *target set* is deck-scoped.
  */
 val decksFeatureModule =

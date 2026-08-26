@@ -9,7 +9,7 @@ value class CardId(
 /**
  * A single printing of a card: which set it appeared in, its collector number within that set, and
  * the rarity it was printed at. These are the per-printing legality inputs (`setCode` + `rarity`)
- * that a deck validator (Epic 9) consumes, and the identity story 0031 uses to resolve artwork.
+ * that a deck validator consumes, and the identity the art pipeline resolves artwork by.
  */
 data class CardPrinting(
     val setCode: String,
@@ -41,9 +41,9 @@ data class Card(
 ) {
     val isColorless: Boolean get() = colors.isEmpty()
 
-    /** Distinct set codes this card has been printed in — a legality input for Epic 9. */
+    /** Distinct set codes this card has been printed in — a legality input for deck building. */
     val setCodes: Set<String> get() = printings.mapTo(LinkedHashSet()) { it.setCode }
 
-    /** Distinct rarities this card has been printed at — a legality input for Epic 9. */
+    /** Distinct rarities this card has been printed at — a legality input for deck building. */
     val rarities: Set<Rarity> get() = printings.mapTo(LinkedHashSet()) { it.rarity }
 }

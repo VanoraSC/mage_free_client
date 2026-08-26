@@ -15,7 +15,7 @@ const val PROFILE_SCREEN_LABEL: String = "Profile"
 
 /**
  * Placeholder for the Profile/Social destination. Presence, friends, and account content arrive in
- * their owning epics; story 0008 only proves the shell can reach this route.
+ * their owning epics; this route exists so the shell can reach it.
  */
 @Composable
 fun ProfilePlaceholderScreen(modifier: Modifier = Modifier) {

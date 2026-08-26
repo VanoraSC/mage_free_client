@@ -50,7 +50,7 @@ private val TileMinWidth = 150.dp
 
 /**
  * Stateless card search/browse screen. The shared [CardSearchField] over the catalog — its text is
- * immediate, only the catalog query behind it is debounced (story 0049) — the
+ * immediate, only the catalog query behind it is debounced — the
  * [CardFilters] controls, and an adaptive grid of design-system [CardTile]s (art via the injected
  * [CardArtRenderer]). Renders the idle prompt / loading / "no matches" empty surfaces via the design
  * system's [EmptyState] / [LoadingState], and a catalog read failure via [ErrorState] with retry.

@@ -29,14 +29,14 @@ import magefree.model.TableState as LobbyTableState
 
 /**
  * The live host flow, driven end to end by the app's **real** [TableClient] over a real bridge and the
- * reference XMage server (story 0045): create → seat an AI → seat ourselves → the table becomes
+ * reference XMage server: create → seat an AI → seat ourselves → the table becomes
  * **ready** → start → the `MatchStarting` signal.
  *
  * This is the app-side counterpart of `:bridge`'s `TableRelayIT`. That test proves the *bridge* speaks
  * XMage correctly; this one proves the layer the user actually sits behind —
  * [magefree.network.ktor.KtorBridgeClient] → `PendingRequests` → `DefaultTableClient` →
  * `TableEventFold`/`OptionsMapper`/`DeckListMapper` — turns real server data into the right
- * **app-schema** [TableState]. Stories 0037/0040/0041 were all previously verified only against
+ * **app-schema** [TableState]. The hermetic tests cover it only against
  * `FakeBridgeClient`/`FakeTableClient`, i.e. against the app's own idea of what the server would say.
  *
  * **Why these particular scenario values** (each is what the real server actually accepts; see
@@ -46,7 +46,7 @@ import magefree.model.TableState as LobbyTableState
  *   minimum deck size 0, so the test stays about the client's contract and not about deck legality.
  * - 60× `Forest` (`M21` #272) — `Deck.load` resolves a card by **(setCode, cardNumber)**, so the
  *   printing must exist; basic lands are unlimited in every format.
- * - seats `[Human, ComputerMad]`, joined **AI first** — the desktop's solo-vs-AI flow (story 0041).
+ * - seats `[Human, ComputerMad]`, joined **AI first** — the desktop's solo-vs-AI flow.
  *   `Table.getNextAvailableSeat` matches a join to a seat *by player type*, so the AI join must name
  *   [SeatPlayerType.ComputerMad] and our own join [SeatPlayerType.Human].
  *
@@ -116,7 +116,7 @@ class AppBridgeHostTableIT {
                 assertTrue("the host's start gate should be open before starting", ready.isReadyToStart)
                 bridge.tables.startMatch(created.tableId).expect("the server should start a fully seated match")
 
-                // 5. The pushed game-start signal, folded into the observed state. This is the Epic-11
+                // 5. The pushed game-start signal, folded into the observed state. This is the the game layer
                 //    boundary: the game id is asserted to be real, nothing is played.
                 val starting =
                     awaitValue(
@@ -190,7 +190,7 @@ class AppBridgeHostTableIT {
      * After the AI join: the observed state shows **two** seats, one filled by the AI with its mapped
      * player type and one still open for a human, and the server is not ready yet.
      *
-     * Seats are the assertion story 0040 exists for: XMage pushes no per-seat event before match-start,
+     * Seats are the assertion that matters most: XMage pushes no per-seat event before match-start,
      * so they arrive only through the `GetTable` read `observeTable` issues. If that read ever stops
      * carrying seats, this fails — which is precisely what no fake-backed test could notice.
      */
@@ -234,7 +234,7 @@ class AppBridgeHostTableIT {
     }
 
     /*
-     * Why there is no live resume/reconnect test here (story 0045 explicitly allows skipping it if it
+     * Why there is no live resume/reconnect test here (explicitly allows skipping it if it
      * cannot be made deterministic).
      *
      * A resume needs the *socket* to drop while the app still wants the session. KtorBridgeClient

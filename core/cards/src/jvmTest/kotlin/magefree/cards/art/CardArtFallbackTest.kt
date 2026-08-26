@@ -27,7 +27,7 @@ import java.util.Collections
 
 /**
  * The documented `resolve()` fallback, exercised end-to-end through the real Coil pipeline with a fake
- * OkHttp engine — no network (story 0043, defect B).
+ * OkHttp engine — no network.
  *
  * [XMageImageSource.resolve] returns the localized path first and the no-language
  * `include_variations=true` alternative second — upstream's documented workaround for promos and
@@ -44,7 +44,7 @@ import java.util.Collections
 class CardArtFallbackTest {
     private val context: PlatformContext = PlatformContext.INSTANCE
 
-    /** Story 0085: the JVM stand-in for the Android `Context.cacheDir` these tests used to write to. */
+    /** The JVM stand-in for the Android `Context.cacheDir`. */
     private val tempRoot: File = File(System.getProperty("java.io.tmpdir"), "magefree-art-test").apply { mkdirs() }
     private lateinit var scope: CoroutineScope
     private lateinit var diskDir: File
@@ -113,7 +113,7 @@ class CardArtFallbackTest {
             policyRepository = CardArtCachePolicyRepository(dataStore),
             appScope = scope,
             ioDispatcher = Dispatchers.Unconfined,
-            // Story 0082: no test here asserts on the failure log, but the parameter is required so a
+            // no test here asserts on the failure log, but the parameter is required so a
             // loader can never be built that silently drops it.
             logWarning = { },
             diskCacheDirectory = diskDir.toOkioPath(),

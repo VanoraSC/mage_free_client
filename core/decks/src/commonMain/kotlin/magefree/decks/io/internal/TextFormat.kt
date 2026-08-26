@@ -10,7 +10,7 @@ import magefree.decks.model.DeckZone
  * MTGO/deckstats plain-text grammar, ported from `mage.cards.decks.importer.TxtDeckImporter` and
  * `mage.cards.decks.exporter.MtgOnlineDeckExporter` (ref e0fe4b6f6a), plus explicit section-header
  * recognition for exports (MTGGoldfish and others) that label their sections instead of relying on a
- * blank line — see the "found live" note below.
+ * blank line — see the "" note below.
  *
  * Grammar (per line, trimmed):
  * - `//…` comment → skipped; `//sideboard` switches subsequent cards to the sideboard.
@@ -28,8 +28,7 @@ import magefree.decks.model.DeckZone
  *   count `<= 0` or `>= 100` is reported as malformed. Section headers in [IGNORE_NAMES] are skipped.
  * - names have no set/number, so the catalog picks the printing.
  *
- * **Found live (Pete, 2026-08-20): an MTGGoldfish export put all 75 cards in the sideboard.**
- * Goldfish's plain-text export looks like `About` / `Name <deck>` / blank / `Deck` / … / blank /
+ * * Goldfish's plain-text export looks like `About` / `Name <deck>` / blank / `Deck` / … / blank /
  * `Sideboard` / … — upstream's own blank-line rule has no way back to the main deck once it fires
  * (confirmed by reading `TxtDeckImporter.readLine` directly: `sideboard` is only ever set, never
  * cleared, unlike [MtgaFormat.parse]'s explicit `Deck`/`Mainboard` reset), so the blank line between

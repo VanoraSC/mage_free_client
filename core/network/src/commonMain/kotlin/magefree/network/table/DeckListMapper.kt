@@ -8,11 +8,11 @@ import magefree.decks.model.DeckList as DeviceDeckList
 import magefree.decks.model.DeckListCard as DeviceDeckListCard
 
 /**
- * The deck half of the table client's mapper boundary (story 0037): projects a 0033 device-side [Deck]
- * onto 0036's wire [DeckList] so a caller passes a domain deck to `join`/`submit`/`update` and never a
+ * The deck half of the table client's mapper boundary: projects a device-side [Deck]
+ * onto the wire [DeckList] so a caller passes a domain deck to `join`/`submit`/`update` and never a
  * `:protocol` type.
  *
- * It reuses 0033's own [Deck.toDeckList] to get the interchange [DeviceDeckList] (`magefree.decks.model.DeckList`)
+ * It reuses the own [Deck.toDeckList] to get the interchange [DeviceDeckList] (`magefree.decks.model.DeckList`)
  * — the single place that drops app-only deck metadata (id/format/favorite/timestamps) — then copies its
  * field-aligned records onto the protocol [DeckList] (`magefree.protocol.DeckList`). The two `DeckList`
  * types are intentionally the same shape (both mirror XMage's `DeckCardLists`); they are distinct types
@@ -20,7 +20,7 @@ import magefree.decks.model.DeckListCard as DeviceDeckListCard
  */
 internal fun Deck.toProtocolDeckList(): DeckList = toDeckList().toProtocol()
 
-/** Copy the 0033 interchange [DeviceDeckList] onto the field-aligned wire [DeckList]. */
+/** Copy the interchange [DeviceDeckList] onto the field-aligned wire [DeckList]. */
 private fun DeviceDeckList.toProtocol(): DeckList =
     DeckList(
         name = name,

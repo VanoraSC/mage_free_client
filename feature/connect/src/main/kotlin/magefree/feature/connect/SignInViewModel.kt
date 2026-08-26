@@ -41,16 +41,16 @@ data class SignInUiState(
 }
 
 /**
- * MVVM ViewModel for the sign-in surface. It drives story 0017's [ConnectionRepository]: [connect]
+ * MVVM ViewModel for the sign-in surface. It drives the [ConnectionRepository]: [connect]
  * calls [ConnectionRepository.connect] with the bound server and entered [Credentials], and the UI
- * renders the resulting [ConnectPhase] + failure [SignInUiState.detail] observed from story 0019's
+ * renders the resulting [ConnectPhase] + failure [SignInUiState.detail] observed from the
  * detail-carrying [ConnectionRepository.connectionStatus].
  *
  * The bound [ServerTarget] arrives via [bind] (the flow's coordinator seeds it) rather than a nav
  * argument, keeping the VM usable both under Hilt and directly in hermetic tests.
  *
  * Credentials are held only in transient form state and sent per sign-in; nothing is logged or
- * persisted (see `AGENTS.md` / the story's credential rule). Token/secure storage is deliberately
+ * persisted (see `AGENTS.md` / the credential rule). Token/secure storage is deliberately
  * deferred to a later decision.
  */
 
@@ -112,7 +112,7 @@ class SignInViewModel
          * failure surfaces' Cancel, the sign-in screen's Back, and the session-lost re-authenticate
          * choice. So it takes the deliberate teardown ([ConnectionRepository.signOut]), which tells the
          * bridge to drop the upstream XMage session now rather than park it for the resume window
-         * (story 0046); a drop or a backgrounding never comes through here.
+         *; a drop or a backgrounding never comes through here.
          */
         fun cancel() {
             viewModelScope.launch { connectionRepository.signOut() }

@@ -4,7 +4,7 @@ package magefree.bridge.xmage
  * A lifecycle event observed by [BridgeMageClient] on an XMage **remoting thread** and re-published
  * on [BridgeMageClient.events] for consumers to collect on their own coroutine/dispatcher.
  *
- * This is the thread-safe hand-off boundary (story 0005): `SessionImpl` drives the [BridgeMageClient]
+ * This is the thread-safe hand-off boundary: `SessionImpl` drives the [BridgeMageClient]
  * callbacks from JBoss-remoting threads, which must never touch a Ktor WebSocket directly. Instead
  * each callback becomes one of these immutable events, pushed into a buffered flow; the collector
  * (e.g. `XMageUpstreamSession`) turns them into protocol `SessionStatus` frames on the Ktor side.

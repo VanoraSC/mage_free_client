@@ -17,7 +17,7 @@ import org.junit.Test
 /**
  * Keeps [FakeGameClient] honest against the production [magefree.network.game.DefaultGameClient] it
  * stands in for. A fake that behaves differently from production is a defect in the fake (see the
- * project's verification standards), and the property that matters most here is the one story 0044 found
+ * project's verification standards), and the property that matters most here is the one a fake most easily gets wrong
  * missing in `FakeTableClient`: **the seed is emitted first**, synchronously, exactly as production does.
  * A fake that skipped it would manufacture a blank/loading state a real board never shows.
  */

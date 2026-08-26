@@ -322,7 +322,7 @@ class TableRelayTest {
         assertEquals(detail, TableRelay.detailMessage(table.toString(), detail))
 
         // A miss is a *typed* not-found, never an empty TableDetail (which would be indistinguishable
-        // from a real table with no seats — exactly the ambiguity story 0040 exists to remove).
+        // from a real table with no seats — exactly the ambiguity the seat read removes).
         val miss = TableRelay.detailMessage(table.toString(), null)
         assertTrue(miss is TableNotFound, "a missing table must reply TableNotFound, got $miss")
         assertEquals(table.toString(), (miss as TableNotFound).tableId)

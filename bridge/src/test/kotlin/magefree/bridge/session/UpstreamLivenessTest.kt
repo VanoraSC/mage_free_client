@@ -38,12 +38,12 @@ import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
 
 /**
- * Story 0050 defect A: **a dead upstream must reach the app**, and a live one must be kept that way.
+ * **a dead upstream must reach the app**, and a live one must be kept that way.
  *
  * The failure the on-device smoke found is one-sided and time-based, which is why every existing suite
  * missed it: the app socket stays perfectly healthy while the *XMage* session underneath it dies, so
- * nothing in the app or in 0023's park/resume machinery has any reason to change state. The bridge is
- * the only party positioned to notice — and before this story it only probed a session while it was
+ * nothing in the app or in the park/resume machinery has any reason to change state. The bridge is
+ * the only party positioned to notice — and without it it only probed a session while it was
  * **parked**, i.e. exactly when the app was not there to be told.
  *
  * These tests drive the real WebSocket + [SessionCoordinator] + [SessionRegistry] plumbing over a
@@ -159,7 +159,7 @@ class UpstreamLivenessTest {
                 val resumeId = loginAndCaptureResumeId("deckbuilder")
 
                 // The socket never drops and the user never acts — the deck-building case. Before this
-                // story the keepalive only ran while *parked*, so this session was probed zero times and
+                // the keepalive would only run while *parked*, so this session was probed zero times and
                 // XMage's idle expiry was free to kill it behind the app's back.
                 withContext(Dispatchers.Default) {
                     withTimeout(FRAME_TIMEOUT_MS) {

@@ -18,9 +18,9 @@ import magefree.model.LobbySnapshot
 import magefree.network.concurrent.AtomicRef
 
 /**
- * The observable, refreshable lobby data layer (story 0028). Holds a single [StateFlow] of
+ * The observable, refreshable lobby data layer. Holds a single [StateFlow] of
  * [LobbySnapshot] — the tables, room users, and game types plus the current load/refresh/error
- * [status][LobbyLoadState] — that the browser UI (0029) renders.
+ * [status][LobbyLoadState] — that the browser UI renders.
  *
  * It does **not** own the session. It observes the app-level [connectionState] and drives the
  * [LobbyClient] (which rides the connected [BridgeClient]'s live socket). The lobby is meaningful only
@@ -30,7 +30,7 @@ import magefree.network.concurrent.AtomicRef
  * snapshot. A failure is captured **as state** ([LobbyLoadState.Error] + [LobbySnapshot.error]) and is
  * never thrown to the caller, keeping reconnection/refresh an expected path rather than an error.
  *
- * Sorting/filtering is deliberately **not** here — the raw snapshot is exposed and 0029 does
+ * Sorting/filtering is deliberately **not** here — the raw snapshot is exposed and the lobby UI does
  * presentation.
  */
 
@@ -50,7 +50,7 @@ class LobbyRepository
          * The in-flight refresh. Written from the caller's thread ([refresh]) and from the connection
          * collector on [scope] (an IO-dispatcher application scope), so the handle is held atomically:
          * `getAndSet` makes "take the current handle and install mine" one indivisible step, and no
-         * thread can read a stale/absent handle for a refresh that is already running (story 0044).
+         * thread can read a stale/absent handle for a refresh that is already running.
          */
         private val refreshJob = AtomicRef<Job?>(null)
 
@@ -59,7 +59,7 @@ class LobbyRepository
             // (disconnect, reconnecting, auth-failed, …), cancelling any in-flight refresh — and fetch
             // again the moment the session is (re-)established.
             //
-            // Story 0050 defect C: the reset half existed on its own, so a resumed session left the lobby
+            // The reset half existed on its own, so a resumed session left the lobby
             // parked on the idle/empty snapshot the drop installed. With no auto-refresh loop and no
             // server push for the table list, the *only* thing that repopulated it was the user pulling
             // to refresh — which is how the smoke saw `Connected` on the status strip beside the lobby's

@@ -8,12 +8,12 @@ import java.io.File
 
 /**
  * The JVM [BundledFiles]: classpath resources for bundled bytes, a directory under the JVM's temp
- * root for writable storage (story 0085).
+ * root for writable storage.
  *
- * This is the half of story 0082's boundary that had been named but never written. Its immediate job
+ * This is the half of the boundary that had been named but never written. Its immediate job
  * is the `jvm()` target's test suite — `CardCatalogBundleTest` opens the real `cards.sqlite` through
  * it, which is what makes those tests a portability check rather than a second copy of the Android
- * ones — and it is what a desktop build (EPIC-22) will use unchanged.
+ * ones — and it is what a desktop build uses unchanged.
  *
  * **A classpath resource is the JVM's APK asset.** `AssetManager.open(name)` and
  * `ClassLoader.getResourceAsStream(name)` have the same contract: a read-only stream over a file

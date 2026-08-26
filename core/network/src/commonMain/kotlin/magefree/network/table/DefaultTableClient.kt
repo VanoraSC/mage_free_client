@@ -39,9 +39,9 @@ import magefree.protocol.WatchTable
 import kotlin.uuid.Uuid
 
 /**
- * The production [TableClient] (story 0037), over the same [BridgeClient] singleton `LobbyClient` rides.
+ * The production [TableClient], over the same [BridgeClient] singleton `LobbyClient` rides.
  *
- * **Actions** mint a `requestId`, send the matching 0036 request via [BridgeClient.request] (the erased
+ * **Actions** mint a `requestId`, send the matching table request via [BridgeClient.request] (the erased
  * `request<ServerMessage>` seam, so no `:protocol` type crosses the ABI), and map the correlated reply:
  * a [TableCreated] → [TableRef]; a [TableActionResult] with `ok = true` → success, `ok = false` →
  * [Result.failure] carrying a [TableActionFailure] with the server's reason (never a silent drop). A
@@ -50,9 +50,9 @@ import kotlin.uuid.Uuid
  *
  * **[observeTable]** merges three sources into a single folding collector (so the held state is mutated
  * by one coroutine, race-free): the [ServerPushSource] stream folded by [TableEventFold] for this table;
- * a re-sync trigger on each return to [ConnectionState.Connected] (a 0023 resume) that re-emits the held
+ * a re-sync trigger on each return to [ConnectionState.Connected] (a resume) that re-emits the held
  * state — mirroring the lobby's non-destructive refresh so a reconnect never strands the seat; and the
- * results of [refreshTable] reads (story 0040), which are where [TableState.seats] and the server's
+ * results of [refreshTable] reads, which are where [TableState.seats] and the server's
  * readiness actually come from. Reads are triggered on open, on each table-lifecycle push for this table,
  * after a resume, and — because upstream tells a seated player nothing when someone else takes a seat —
  * every [SEAT_REFRESH_INTERVAL_MS] while the table is still seating. That poll is launched **inside** the
@@ -92,7 +92,7 @@ internal class DefaultTableClient(
                     seatName = seatName,
                     deck = deck.toProtocolDeckList(),
                     password = password,
-                    // Story 0041: the seat's kind travels with the join — 0036's `JoinTable` and the
+                    // the seat's kind travels with the join — the `JoinTable` and the
                     // bridge's `TableRelay` already carry it, so seating an AI needs no wire change.
                     playerType = playerType.toCode(),
                     requestId = id,
@@ -146,7 +146,7 @@ internal class DefaultTableClient(
             var state = seed
             trySend(state)
 
-            // The single seat/readiness re-read trigger every source funnels into (story 0040).
+            // The single seat/readiness re-read trigger every source funnels into.
             // CONFLATED is what coalesces them: at most one token is ever pending, and the reader below
             // is sequential (it suspends inside the read), so a tick that lands while a push-triggered
             // read is in flight collapses into one follow-up read instead of a second concurrent one.
@@ -181,7 +181,7 @@ internal class DefaultTableClient(
                                 refreshes.trySend(Unit)
                             }
                         }
-                        // A 0023 resume completed: re-emit the held state so the seat re-syncs (the
+                        // A resume completed: re-emit the held state so the seat re-syncs (the
                         // lobby's non-destructive-refresh analogue) and re-read the table, since seats
                         // may have moved while the socket was down.
                         Intent.Resync -> {
@@ -266,7 +266,7 @@ internal class DefaultTableClient(
     private fun TableActionResult.asUnit(): Result<Unit> = if (ok) Result.success(Unit) else asFailure()
 
     /**
-     * A declined action becomes a typed failure — and, since story 0050, the *right* typed failure: a
+     * A declined action becomes a typed failure — and, the *right* typed failure: a
      * [magefree.protocol.TableFailureCode.SESSION_GONE] reply means the bridge had no session to act
      * through, so the action never reached the server and the caller must offer re-authentication rather
      * than repeat the server's (non-existent) refusal. Anything else stays a plain [TableActionFailure],
@@ -291,13 +291,13 @@ internal class DefaultTableClient(
         )
 
     /**
-     * A `false → true`-into-[ConnectionState.Connected] edge (a 0023 resume completing). The initial
+     * A `false → true`-into-[ConnectionState.Connected] edge (a resume completing). The initial
      * `Connected` (nothing before it) is skipped — the seed already covers the current state; only a
      * *return* to Connected after a drop re-syncs.
      */
     internal companion object {
         /**
-         * How often an **observed** table is re-read while it is still seating (story 0040).
+         * How often an **observed** table is re-read while it is still seating.
          *
          * Three seconds is paced to the server, not to the UI: `GamesRoomImpl` rebuilds the lobby's
          * table-list snapshot — the very list a `GetTable` is resolved from — on a **two-second** timer,

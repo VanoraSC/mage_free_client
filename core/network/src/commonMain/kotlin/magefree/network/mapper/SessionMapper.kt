@@ -55,7 +55,7 @@ object SessionMapper {
         }
 
     /**
-     * The bridge-issued resume handle carried by a [SessionResumable] (story 0023), or `null` for any
+     * The bridge-issued resume handle carried by a [SessionResumable], or `null` for any
      * other message. The relay captures this so a later reconnect can `Resume` the parked session; it is
      * not a lifecycle transition, so [toSessionEvent] deliberately ignores [SessionResumable].
      */
@@ -63,14 +63,14 @@ object SessionMapper {
 
     /**
      * `true` when [message] is the bridge rejecting a `Resume` ([ResumeRejected]) — the parked session
-     * is unknown/expired/inconsistent and the app must fall back to a fresh `Login` (story 0024). Like
+     * is unknown/expired/inconsistent and the app must fall back to a fresh `Login`. Like
      * [SessionResumable] this is flow-control, not a lifecycle event, so [toSessionEvent] ignores it.
      */
     fun isResumeRejected(message: ServerMessage): Boolean = message is ResumeRejected
 
     /**
      * `true` when [message] is the [UnknownServerMessage] sentinel — a `type` this build does not know,
-     * decoded by `ProtocolJson`'s polymorphic default (story 0026 F1). The app **ignores** it (no
+     * decoded by `ProtocolJson`'s polymorphic default. The app **ignores** it (no
      * lifecycle event, and — crucially — no reconnect): honouring [ProtocolVersion]'s minor-tolerance
      * promise for additive new server messages. [toSessionEvent] also maps it to `null`.
      */

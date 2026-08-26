@@ -6,7 +6,7 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
 /**
- * Application entry point and DI root (story 0081; was Hilt's `@HiltAndroidApp`).
+ * Application entry point and DI root.
  *
  * **Where the graph is assembled, and where it fails.** Hilt built the component at compile time
  * from annotations scattered across ten modules; Koin builds it here, from an explicit list

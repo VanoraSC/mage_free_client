@@ -26,8 +26,8 @@ import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
 
 /**
- * The lightweight art cache/download affordance (story 0032) — NOT a full settings screen (EPIC-17).
- * Stateless: it surfaces story 0031's cache policy (Persistent / Session only) as a two-option toggle,
+ * The lightweight art cache/download affordance — NOT a full settings screen.
+ * Stateless: it surfaces the cache policy (Persistent / Session only) as a two-option toggle,
  * and an opt-in "download all art" action with live progress + cancel. Every event is hoisted.
  */
 @Composable

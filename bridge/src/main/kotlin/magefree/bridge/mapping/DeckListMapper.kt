@@ -12,9 +12,9 @@ import magefree.protocol.DeckListCard
  * `JoinTable`/`SubmitDeck`/`UpdateDeck` carry the pure [DeckList] and the bridge builds the real deck
  * at this boundary. Pure and deterministic — no I/O or hidden state.
  *
- * This is the bridge-side reverse of story 0033's device-side `Deck ↔ DeckList` mapper: the two
+ * This is the bridge-side reverse of the device-side `Deck ↔ DeckList` mapper: the two
  * `DeckList` shapes are field-aligned (`name`/`author`/`cards`/`sideboard`; each card `cardName`/
- * `setCode`/`collectorNumber`/`amount`) so 0037 can hand a device deck straight through.
+ * `setCode`/`collectorNumber`/`amount`) so table can hand a device deck straight through.
  *
  * Field mapping (see [DeckCardInfo]'s `cardName`/`cardNumber`/`setCode`/`amount`):
  * - [DeckListCard.collectorNumber] ↔ `DeckCardInfo.cardNumber`.

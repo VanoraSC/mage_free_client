@@ -31,7 +31,7 @@ import magefree.designsystem.theme.Spacing
  * the shown face (front/back) via [onFlip]. Art comes through the injected [CardArtRenderer] so an
  * uncached/offline face degrades to the design-system placeholder while the card text stays readable.
  *
- * Read-only: no in-game modifications/abilities (EPIC-11+); the deck-add action is Epic 9.
+ * Read-only: no in-game modifications or abilities; the deck-add action is deck building.
  */
 @Composable
 fun CardInspectionScreen(

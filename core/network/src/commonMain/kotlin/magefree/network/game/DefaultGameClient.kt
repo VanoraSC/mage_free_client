@@ -38,27 +38,27 @@ import magefree.protocol.WatchGame
 import kotlin.uuid.Uuid
 
 /**
- * The production [GameClient] (story 0052), over the same [BridgeClient] singleton the lobby and table
- * clients ride — one socket, three feature clients, exactly as story 0037 established.
+ * The production [GameClient], over the same [BridgeClient] singleton the lobby and table
+ * clients ride — one socket, three feature clients.
  *
- * **Actions** mint a `requestId`, send the matching 0051 request through [BridgeClient.request] (the
+ * **Actions** mint a `requestId`, send the matching game request through [BridgeClient.request] (the
  * erased `request<ServerMessage>` seam, so no `:protocol` type crosses the ABI), and map the correlated
  * `GameActionResult`: `ok = true` → success; `ok = false` → a [Result.failure] carrying either
- * [GameSessionGoneFailure] (the bridge had no session, so the server was never asked — story 0050) or a
+ * [GameSessionGoneFailure] (the bridge had no session, so the server was never asked) or a
  * plain [GameActionFailure] with the server's reason. A transport failure thrown by `request` (no
  * session, timeout, drop) is captured as a failed [Result] rather than propagated.
  *
  * **[observeGame]** merges three sources into a single folding collector, so the held state is mutated by
  * exactly one coroutine and no lock is needed: the [ServerPushSource] stream folded by [GameEventFold]
  * for this game, a re-sync trigger on each return to [ConnectionState.Connected] that re-emits the held
- * state, and — since story 0054 — a **targeted read** ([refreshGame]) issued on open and on each such
+ * state, and a **targeted read** ([refreshGame]) issued on open and on each such
  * return. Unlike the table client there is still **no periodic poll**: the two triggers are "the board
  * opened" and "the socket came back", and nothing else changes the answer, so a timer would ask the
  * bridge the same question forever.
  *
  * The read is answered by the *bridge*, not by XMage — upstream has no verb that reads a `GameView` and
- * re-joining a running game does not resync, which is exactly why story 0052 could not have this. The
- * bridge's parked-session buffer (story 0023) still carries the pushes produced during a socket gap; the
+ * re-joining a running game does not resync, which is why a targeted read is the only way to get one. The
+ * bridge's parked-session buffer still carries the pushes produced during a socket gap; the
  * read is what covers the gap in which the game produced **none**, which is when a reconnecting player
  * would otherwise sit in front of an empty board until the opponent moved.
  *
@@ -234,7 +234,7 @@ internal class DefaultGameClient(
         callbackFlow {
             var state = seed
 
-            // The single read trigger every source funnels into (story 0054), CONFLATED exactly as the
+            // The single read trigger every source funnels into, CONFLATED exactly as the
             // table client's is: at most one token is ever pending and the reader below suspends inside
             // its own branch, so a resume that lands while an open-read is in flight collapses into one
             // follow-up read rather than a second concurrent one. There is deliberately **no** timer
@@ -269,7 +269,7 @@ internal class DefaultGameClient(
                                 trySend(next)
                             }
                         }
-                        // A 0023/0024 resume completed. Re-emit the held state (the 0037 non-destructive
+                        // A resume completed. Re-emit the held state (the non-destructive
                         // re-sync) so a collector that had stopped rendering is not stranded, *and* read
                         // the board — the buffered pushes the bridge drains into the re-bound socket
                         // cover a game that moved during the gap, but nothing covers a game that did
@@ -282,7 +282,7 @@ internal class DefaultGameClient(
                         // A completed read. The snapshot is applied exactly as a pushed one is —
                         // replacing every field a `GameView` owns and touching none it does not, so the
                         // last narration and a terminal result survive it. The outstanding prompt is the
-                        // one exception (story 0074): `intent.reply.prompt` is this session's last-cached
+                        // one exception: `intent.reply.prompt` is this session's last-cached
                         // question, and GameViewMapper.apply *restores* it when non-null (never clears an
                         // existing one when it is null — see that function's KDoc). A finished game is
                         // left alone: re-applying a board to it would resurrect one that no longer exists.
@@ -297,7 +297,7 @@ internal class DefaultGameClient(
                     }
                 }.launchIn(this)
 
-            // Read the board once as the game opens. Before story 0054 this was impossible — there was
+            // Read the board once as the game opens. Upstream cannot answer this - there is
             // no request the bridge could answer — which is why a client re-opening a running game saw
             // nothing until the next push.
             reads.trySend(Unit)
@@ -371,7 +371,7 @@ internal class DefaultGameClient(
             Result.success(Unit)
         } else {
             Result.failure(
-                // Story 0050's distinction, on the game verbs: SESSION_GONE means the bridge had nothing
+                // the distinction, on the game verbs: SESSION_GONE means the bridge had nothing
                 // to act through, so the server never saw the request. Retrying cannot help;
                 // re-authenticating can, and only a distinct type lets a caller tell the two apart.
                 if (failure == GameFailureCode.SESSION_GONE) GameSessionGoneFailure(reason) else GameActionFailure(reason),
@@ -379,7 +379,7 @@ internal class DefaultGameClient(
         }
 
     /**
-     * A return to [ConnectionState.Connected] after something else (a 0023/0024 resume completing). The
+     * A return to [ConnectionState.Connected] after something else (a resume completing). The
      * initial `Connected` is skipped — the seed already covers the current state; only a *return* to
      * Connected re-syncs. Identical to the table client's rule, deliberately.
      */

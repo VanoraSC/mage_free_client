@@ -30,8 +30,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Unit coverage of [GameStateCache] (story 0054): what fills it, what it answers, what empties it, and
- * — the property the whole story turns on — that two caches never see each other's snapshots.
+ * Unit coverage of [GameStateCache]: what fills it, what it answers, what empties it, and
+ * — the property this turns on — that two caches never see each other's snapshots.
  *
  * The end-to-end version of the same claims, through the real WebSocket + [SessionCoordinator] +
  * [LiveSession] pump, lives in [SessionCoordinatorTest]; these are the unit half.
@@ -101,8 +101,8 @@ class GameStateCacheTest {
     }
 
     @Test
-    fun `a GamePrompted's prompt is cached and served on the next answer (story 0074)`() {
-        // The root cause this story fixes: GamePrompted already carries the prompt alongside the
+    fun `a GamePrompted's prompt is cached and served on the next answer`() {
+        // The root cause this fixes: GamePrompted already carries the prompt alongside the
         // state, but the cache used to discard it. Prove it now survives into the reply.
         val cache = GameStateCache()
         val prompt = SelectPrompt(message = "Play a land")
@@ -113,7 +113,7 @@ class GameStateCacheTest {
     }
 
     @Test
-    fun `a later state-only push retires a previously cached prompt (story 0074)`() {
+    fun `a later state-only push retires a previously cached prompt`() {
         // A plain state push or narration after a prompt means the prompt is no longer live truth --
         // re-serving it on a later resync would tell a rejoining client to answer a question that is
         // no longer outstanding.
@@ -128,7 +128,7 @@ class GameStateCacheTest {
 
     @Test
     fun `the cached state is the pushed one verbatim, not a rebuild of it`() {
-        // Story 0053 is where accumulation and inference live; this story replays. Asserting identity
+        // The cache replays rather than accumulating or inferring. Asserting identity
         // (not just equality) is what pins that: a cache that rebuilt, merged or normalised a snapshot
         // would still be `equals`, and would still be wrong.
         val cache = GameStateCache()
@@ -143,7 +143,7 @@ class GameStateCacheTest {
     fun `a message that carries no snapshot leaves the cache alone`() {
         val cache = GameStateCache()
 
-        // A GameInformed *can* carry a snapshot (0051 models it as nullable) — one without must not be
+        // A GameInformed *can* carry a snapshot (the protocol models it as nullable) — one without must not be
         // treated as "the board is now empty".
         cache.observe(GameStateUpdated(gameId = "g-1", state = view(turn = 5)))
         cache.observe(GameInformed(gameId = "g-1", message = "You lost the roll", personal = true))

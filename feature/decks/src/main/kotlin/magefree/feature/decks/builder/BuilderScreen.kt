@@ -52,7 +52,7 @@ import magefree.designsystem.theme.Spacing
  * Stateless deck-builder screen: the deck grouped by card type, a live mana curve, a format picker with
  * live legality, and a sideboard section — each line with fast quantity controls. The add-cards surface,
  * share, and deck-scoped art download are hoisted (opened by the route). Every deck operation is offline;
- * submitting/playing the deck is EPIC-07 and intentionally absent.
+ * submitting or playing the deck is intentionally absent.
  */
 @Composable
 fun BuilderScreen(

@@ -4,7 +4,7 @@ import io.ktor.client.HttpClient
 
 /**
  * The platform's Ktor [HttpClient] for the bridge session socket, with the WebSockets plugin
- * installed (story 0084).
+ * installed.
  *
  * **Only the engine is platform-specific, and it has to be.** Ktor's client is multiplatform, but an
  * engine is not: `OkHttp` is named from a JVM-family artifact, and Ktor's engine-less `HttpClient { }`

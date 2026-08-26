@@ -11,8 +11,8 @@ import magefree.cards.model.Rarity
 import magefree.designsystem.card.CardDisplay
 
 /*
- * The presentation models that sit between 0030's catalog [Card] and the design system's card-forward
- * components (0014). Pure/mapping logic only — no Android, no Coil, no image loading — so it is unit
+ * The presentation models that sit between the catalog [Card] and the design system's card-forward
+ * components. Pure/mapping logic only — no Android, no Coil, no image loading — so it is unit
  * tested directly and reused by both the search and inspection ViewModels.
  */
 
@@ -20,7 +20,7 @@ import magefree.designsystem.card.CardDisplay
  * One search result, mapped from a catalog [Card] into exactly what a list tile needs: the design
  * system's [CardDisplay] (name / mana / type / oracle) plus the per-printing art identity and a set
  * label. [artRequest] is `null` when the card has no printing to resolve art for — the tile then
- * renders the design-system placeholder and the always-available card text (0030), which is also the
+ * renders the design-system placeholder and the always-available card text, which is also the
  * offline-art degradation path.
  */
 data class CardRow(
@@ -66,12 +66,12 @@ val BROWSE_RARITIES: List<Rarity> = listOf(Rarity.COMMON, Rarity.UNCOMMON, Rarit
 const val MANA_VALUE_MAX_BUCKET: Int = 6
 
 /**
- * The active client-side browse filters, a presentation-facing mirror of 0030's [CardFilter] so the UI
+ * The active client-side browse filters, a presentation-facing mirror of the [CardFilter] so the UI
  * never speaks the catalog's shape directly. [manaValue] is a single bucket (the top bucket, 6, means
  * "6 or more"); every axis is optional and conjunctive.
  *
  * @property legalSets a set-restricted format's pool — the catalog's own legality input. Wired through
- *   for Epic 9's deck builder (which owns format→sets definitions); the browse UI here drives the
+ *   for deck building's deck builder (which owns format→sets definitions); the browse UI here drives the
  *   simpler [setCode] axis.
  */
 data class CardBrowseFilters(
@@ -100,7 +100,7 @@ data class CardBrowseFilters(
             else -> mv..mv
         }
 
-    /** Fold these filters (plus the current name [query]) into 0030's conjunctive [CardFilter]. */
+    /** Fold these filters (plus the current name [query]) into the conjunctive [CardFilter]. */
     fun toCardFilter(query: String): CardFilter =
         CardFilter(
             nameQuery = query.ifBlank { null },

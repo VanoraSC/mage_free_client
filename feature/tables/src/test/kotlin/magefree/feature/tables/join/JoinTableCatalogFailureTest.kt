@@ -29,7 +29,7 @@ import org.junit.Test
 import java.io.IOException
 
 /**
- * The join deck-pick must fail **soft** when the offline legality check fails (story 0042, defect B).
+ * The join deck-pick must fail **soft** when the offline legality check fails.
  *
  * `selectDeck` runs inside a bare `viewModelScope.launch` and `DeckLegality.check` reads the bundled
  * card catalog, whose first use copies a ~14 MB asset into `filesDir`. `viewModelScope`'s

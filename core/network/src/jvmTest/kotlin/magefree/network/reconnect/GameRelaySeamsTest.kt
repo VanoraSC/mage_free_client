@@ -30,14 +30,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hermetic coverage of story 0052's two relay seams — the game-side twins of `TableRelaySeamsTest`,
+ * Hermetic coverage of the two relay seams — the game-side twins of `TableRelaySeamsTest`,
  * driven through [SessionRelay.run] with no socket:
  *
- * - **(a) Correlation** — a 0051 [GameActionResult] carrying a `requestId` that matches an outstanding
+ * - **(a) Correlation** — a [GameActionResult] carrying a `requestId` that matches an outstanding
  *   [PendingRequests] waiter is routed to that waiter (not emitted as a `SessionEvent`, not pushed).
  *   Without the registration this pins, every `GameClient` verb — join included — would wait out its
  *   timeout on a reply that had already arrived, which looks exactly like a bridge that never answers.
- * - **(b) Push side-channel** — every spontaneous 0051 game *event* (no correlation, not a lifecycle
+ * - **(b) Push side-channel** — every spontaneous game game *event* (no correlation, not a lifecycle
  *   frame) is forwarded to `featurePush` so `observeGame` can fold it, rather than dropped.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -109,7 +109,7 @@ class GameRelaySeamsTest {
     @Test
     fun bothArmsOfTheGameStateReadAreCorrelatedToTheirWaiters() =
         runTest {
-            // Story 0054. The *miss* matters as much as the hit: an uncorrelated `GameStateUnavailable`
+            // The *miss* matters as much as the hit: an uncorrelated `GameStateUnavailable`
             // would leave the reconnecting board blocked on its waiter until the request timed out —
             // indistinguishable from a bridge that never answered, which is the exact failure the read
             // exists to remove.

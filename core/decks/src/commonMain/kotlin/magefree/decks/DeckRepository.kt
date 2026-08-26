@@ -9,7 +9,7 @@ import magefree.decks.model.DeckSummary
 /**
  * The local, fully-offline deck library. Decks are the user's on-device data: every operation is a
  * local persistence read/write — no bridge, no network, ever. Reads run on an injected IO dispatcher
- * and the library list is exposed reactively so the UI (story 0035) updates on any change.
+ * and the library list is exposed reactively so the UI updates on any change.
  *
  * Expected-but-absent conditions (loading/duplicating a deck that isn't there) are modelled as
  * `null`/no-op results rather than thrown exceptions, per the repo's error-as-state convention.

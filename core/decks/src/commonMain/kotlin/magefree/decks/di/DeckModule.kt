@@ -17,7 +17,7 @@ import org.koin.core.scope.Scope
 import org.koin.dsl.module
 
 /**
- * Koin provisioning for `:core:decks`, in common (story 0083).
+ * Koin provisioning for `:core:decks`, in common.
  *
  * Exposes only the public [DeckRepository] (fully-offline deck library, Room-backed) and
  * [DeckLegality] (offline checker over the bundled `formats.json` + the `:core:cards` [CardCatalog]);

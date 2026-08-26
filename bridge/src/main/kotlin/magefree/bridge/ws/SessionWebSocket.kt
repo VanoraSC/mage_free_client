@@ -25,11 +25,11 @@ public const val BRIDGE_VERSION: String = "0.1.0"
 
 /**
  * Registers the `/v1/session` WebSocket — the app-facing session transport (protocol major = the
- * `v1` path segment). It runs the 0004 version handshake, then (story 0005) hands off to a per-socket
+ * `v1` path segment). It runs the version handshake, then hands off to a per-socket
  * [SessionCoordinator] that awaits `Login`, drives one [UpstreamSession] to the pinned XMage server,
  * streams `SessionStatus` back, and answers app-level `Ping`/`Pong` for liveness.
  *
- * @param registry the **shared** session registry (story 0023) that holds parked sessions across
+ * @param registry the **shared** session registry that holds parked sessions across
  *   app-socket drops. One instance backs every socket, so it is created once (by [magefree.bridge.module]
  *   or a test) and passed in — never per-socket. Defaults to a standalone registry for convenience.
  * @param newUpstream builds a per-**login** upstream session. Defaults to the real

@@ -14,7 +14,7 @@ import kotlin.reflect.KClass
  *
  * Each is a [Serializable] `data object` used with type-safe `composable<Route> { … }` entries in
  * [MageNavHost] and `navController.navigate(Route)` in [AppShell]. Content of each destination is a
- * stub (story 0008) — real screens arrive in their owning epics.
+ * stub — real screens arrive in their owning epics.
  */
 @Serializable
 data object HomeRoute

@@ -75,7 +75,7 @@ class ArtDownloadManagerTest {
             val manager = newManager(FixedTargets(requests(10)), warmer)
 
             // Default sizes: the run covers every size the UI displays, so the totals are per-size
-            // targets x sizes — not one size's worth (story 0043, defect A).
+            // targets x sizes — not one size's worth.
             manager.start(PrefetchScope.All)
             advanceUntilIdle()
 

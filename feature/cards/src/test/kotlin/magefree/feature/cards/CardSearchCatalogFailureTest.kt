@@ -18,7 +18,7 @@ import org.junit.Test
 import java.io.IOException
 
 /**
- * A catalog read failure must fail **soft** (story 0042, defect B).
+ * A catalog read failure must fail **soft**.
  *
  * The catalog is a bundled read-only asset, and its first use copies ~14 MB into `filesDir`; on a
  * device with no free storage that copy throws `IOException`. The search flow calls the catalog inside

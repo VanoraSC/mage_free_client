@@ -38,7 +38,7 @@ import magefree.designsystem.theme.Spacing
  * primary choice is given clear (filled) emphasis and receives default focus; the title/message are
  * merged into a single accessibility announcement (marked as a heading) so the prompt reads as one
  * unit, while each choice remains an individually actionable, >= 48dp target. Emphasis is expressed
- * by button style (not color alone). EPIC-13's targeting / choices UI renders into this primitive.
+ * by button style (not color alone). Targeting / choices UI renders into this primitive.
  *
  * Placement: the surface fills its width and is meant to sit at the bottom of the screen (e.g. a
  * Scaffold bottom slot, or aligned to the bottom of a Box) — see the preview.

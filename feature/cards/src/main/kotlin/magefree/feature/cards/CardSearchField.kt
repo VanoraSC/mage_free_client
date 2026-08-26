@@ -23,7 +23,7 @@ const val CARDS_CLEAR_SEARCH_CONTENT_DESCRIPTION: String = "Clear search"
 
 /**
  * The one card-search text field, shared by `:feature:cards`' search screen and the deck builder's
- * add-cards surface (story 0049). Both surfaces search the same catalog through the same
+ * add-cards surface. Both surfaces search the same catalog through the same
  * [CardSearchViewModel], so they get the same field rather than two hand-rolled copies that can drift
  * apart — which is how one of them could have been fixed and the other left dead.
  *

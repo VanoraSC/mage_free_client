@@ -28,14 +28,14 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * **The story's real proof** (story 0052): a real game, against a real AI, on the reference XMage
+ * **The real proof**: a real game, against a real AI, on the reference XMage
  * server, reaching the app through the app's **own** production stack —
  * [magefree.network.ktor.KtorBridgeClient] → `PendingRequests` → `DefaultGameClient` →
  * `GameEventFold`/`GameViewMapper` → an app-schema [GameState].
  *
  * `:bridge`'s `GameRelayIT` proves the *bridge* speaks XMage's game protocol correctly. This proves the
  * layer the user actually sits behind, which is a different claim and the one that matters here: every
- * hermetic test in this story asserts that *crafted* views map correctly and that each reply becomes the
+ * hermetic test here asserts that *crafted* views map correctly and that each reply becomes the
  * right wire message. Only a live run can say whether the server's own `GameView` — built by a real game,
  * over a real deck, on a real turn — becomes a [GameState] a board could actually be drawn from.
  *
@@ -236,7 +236,7 @@ class AppBridgeGameIT {
      * moment where the server's `canPlayObjects` must be non-empty for a hand full of lands.
      *
      * Every answer goes through the **real** [magefree.network.game.GameClient], so the reply half of the
-     * story is under test too: a reply that never reaches the server simply stops the stream and this
+     * is under test too: a reply that never reaches the server simply stops the stream and this
      * times out.
      */
     private suspend fun playUntilOurMainPhase(

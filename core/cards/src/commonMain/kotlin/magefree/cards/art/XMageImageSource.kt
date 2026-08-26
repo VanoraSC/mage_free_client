@@ -5,7 +5,7 @@ package magefree.cards.art
  *
  * The URL construction is **ported from XMage's own desktop image-download source**
  * (`org.mage.plugins.card.dl.sources.ScryfallImageSource` in `Mage.Client`, pinned upstream ref
- * `e0fe4b6f6a`). We reuse its *source/URL logic* only — not its bulk-download UX — per story 0031.
+ * `e0fe4b6f6a`). We reuse its *source/URL logic* only — not its bulk-download UX.
  */
 interface XMageImageSource {
     /**

@@ -62,7 +62,7 @@ data class TypeLine(
 /**
  * Multi-face metadata carried straight from XMage's `CardInfo`, enough for a browser to know a card
  * is a split / flip / transforming double-faced / meld / adventure card and to name the other face.
- * (Artwork for the faces is out of scope here — story 0031.)
+ * (Artwork for the faces is out of scope here.)
  */
 data class CardFaces(
     val splitCard: Boolean = false,

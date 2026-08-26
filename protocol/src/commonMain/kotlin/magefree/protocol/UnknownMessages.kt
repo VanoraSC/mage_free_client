@@ -11,7 +11,7 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 
 /*
- * Additive, **deserialize-only** sentinels for an unknown message `type` (story 0026, F1).
+ * Additive, **deserialize-only** sentinels for an unknown message `type`.
  *
  * `ProtocolVersion` promises that "both sides must tolerate an unknown message `type` gracefully".
  * `ignoreUnknownKeys` only covers unknown *fields*, not an unknown sealed-subtype discriminator, so
@@ -99,4 +99,4 @@ public data class UnknownServerMessage(
 }
 
 private const val DESERIALIZE_ONLY: String =
-    "Unknown* sentinels are deserialize-only (story 0026 F1) and must never be encoded onto the wire."
+    "Unknown* sentinels are deserialize-only and must never be encoded onto the wire."

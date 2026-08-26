@@ -40,7 +40,7 @@ import org.junit.Test
 
 /**
  * Hermetic coverage of the production [DefaultGameClient]: each verb mints a `requestId`, sends the
- * matching 0051 request over the [FakeBridgeClient]'s request/response seam, and maps the correlated
+ * matching game request over the [FakeBridgeClient]'s request/response seam, and maps the correlated
  * `GameActionResult` into a [Result].
  *
  * The bulk of it is the **reply-to-wire mapping**, one case per prompt kind. That mapping is the whole
@@ -310,7 +310,7 @@ class GameClientTest {
     @Test
     fun aSessionGoneDeclineSurfacesAsItsOwnFailureSoTheCallerCanReAuthenticate() =
         runTest {
-            // Story 0050's distinction, on the game verbs: the request never reached the server, so
+            // the distinction, on the game verbs: the request never reached the server, so
             // retrying cannot help and only re-authenticating can. A caller that cannot tell the two
             // apart shows the user "the server declined" for a session that simply expired.
             val client =
@@ -366,7 +366,7 @@ class GameClientTest {
             assertEquals("no active session", result.exceptionOrNull()?.message)
         }
 
-    // --- the targeted read (story 0054) ---------------------------------------------------------------
+    // --- the targeted read ---------------------------------------------------------------
 
     @Test
     fun refreshGameSendsGetGameStateAndMapsTheSnapshotOntoAppSchemaState() =
@@ -430,7 +430,7 @@ class GameClientTest {
     @Test
     fun refreshGameDistinguishesALostSessionFromAGameWithNoStateYet() =
         runTest {
-            // Story 0050's distinction on the read side: "wait, nothing yet" and "you are signed out"
+            // the distinction on the read side: "wait, nothing yet" and "you are signed out"
             // demand opposite responses, and prose cannot be branched on.
             val client =
                 client {

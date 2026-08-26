@@ -50,13 +50,13 @@ const val LOBBY_TITLE: String = "Lobby"
 /** Accessibility label on the refresh action (also the error-with-data retry). */
 const val LOBBY_REFRESH_CONTENT_DESCRIPTION: String = "Refresh lobby"
 
-/** Accessibility label on the host-a-table action (story 0038). */
+/** Accessibility label on the host-a-table action. */
 const val LOBBY_HOST_CONTENT_DESCRIPTION: String = "Host a table"
 
-/** Label on the (now enabled) join action in a table's detail sheet (story 0038). */
+/** Label on the (now enabled) join action in a table's detail sheet. */
 const val LOBBY_JOIN_LABEL: String = "Join"
 
-/** Label on the spectate action in a table's detail sheet (story 0038). */
+/** Label on the spectate action in a table's detail sheet. */
 const val LOBBY_WATCH_LABEL: String = "Watch"
 
 /** Accessibility label on the back / up control. */
@@ -286,7 +286,7 @@ private fun RefreshErrorBanner(
 }
 
 /**
- * A minimal table detail: the table's settings at a glance and the (story 0038) join / spectate actions.
+ * A minimal table detail: the table's settings at a glance and the join / spectate actions.
  * Join opens the deck-pick + submit flow; Watch opens a read-only room. A full table offers only Watch.
  */
 @Composable
@@ -315,7 +315,7 @@ private fun TableDetailDialog(
             }
         },
         confirmButton = {
-            // Story 0038: Join is live for a table with an open seat; a full table offers Watch only.
+            // Join is live for a table with an open seat; a full table offers Watch only.
             MagePrimaryButton(
                 text = LOBBY_JOIN_LABEL,
                 onClick = {

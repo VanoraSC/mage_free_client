@@ -14,13 +14,13 @@ import java.util.concurrent.atomic.AtomicReference
  * The bridge's implementation of XMage's [MageClient] callback sink — the object `SessionImpl`
  * drives during connect/auth and for the lifetime of a connection.
  *
- * Responsibilities in story 0003 are deliberately minimal: report a [MageVersion] derived from the
+ * Its responsibilities are narrow: report a [MageVersion] derived from the
  * baked `mage-common` (so the mandatory version handshake matches the server), and *record* the
  * connection lifecycle and any callbacks that arrive. It performs **no decoding** of callback
- * payloads and does **no** `mage.view.*` mapping — those are stories 0004–0006. `onCallback` only
+ * payloads and does **no** `mage.view.*` mapping — those belong to the mapping layer. `onCallback` only
  * counts the callback and remembers the last method for observability.
  *
- * **Thread hand-off (story 0005).** `SessionImpl` invokes these callbacks on JBoss-remoting threads.
+ * **Thread hand-off.** `SessionImpl` invokes these callbacks on JBoss-remoting threads.
  * In addition to recording state, each lifecycle callback is re-published as an [XMageClientEvent] on
  * [events] — a buffered, non-suspending [MutableSharedFlow] — so a coroutine consumer
  * (`XMageUpstreamSession`) can translate them into protocol frames without ever being called on, or
@@ -45,7 +45,7 @@ public class BridgeMageClient : MageClient {
             onBufferOverflow = BufferOverflow.DROP_OLDEST,
         )
 
-    // Raw server callbacks re-published for the mapping/relay layer (story 0006). Same non-blocking
+    // Raw server callbacks re-published for the mapping/relay layer. Same non-blocking
     // hand-off as [eventFlow]: onCallback runs on a remoting thread and only tryEmits; the *decompress
     // + mage.view.* mapping* happens on the collector's coroutine (magefree.bridge.mapping), never here.
     private val callbackFlow =

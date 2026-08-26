@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * It starts [Disconnected][ConnectionState.Disconnected] — the honest state when nothing is wired to
  * a server yet — and lets callers push arbitrary states via [emit]. Tests drive it to exercise every
- * state; an optional debug affordance could drive it in a running build. EPIC-04 replaces this with a
+ * state; an optional debug affordance could drive it in a running build. The real implementation is a
  * source backed by the real session.
  */
 
@@ -24,6 +24,6 @@ class StubConnectionStatusSource
             mutableState.value = state
         }
 
-        /** No real connection to re-attempt behind the stub (story 0026 F3); nothing to do. */
+        /** No real connection to re-attempt behind the stub; nothing to do. */
         override fun retry() = Unit
     }

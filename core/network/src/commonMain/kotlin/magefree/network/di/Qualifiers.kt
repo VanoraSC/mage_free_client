@@ -3,7 +3,7 @@ package magefree.network.di
 import org.koin.core.qualifier.named
 
 /*
- * Koin qualifiers for the two bindings whose *type* does not identify them (story 0081).
+ * Koin qualifiers for the two bindings whose *type* does not identify them.
  *
  * Hilt distinguished these with `@Qualifier` annotation classes resolved at compile time; Koin
  * resolves by name at runtime, so they are constants rather than annotations. Declaring them here as

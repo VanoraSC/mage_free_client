@@ -30,8 +30,8 @@ const val IMMERSIVE_GAME_LABEL: String = "In-game (immersive placeholder)"
 const val EXIT_GAME_CONTENT_DESCRIPTION: String = "Exit game and return to the app"
 
 /**
- * The immersive in-game surface (story 0011): a full-bleed placeholder that stands in for the real
- * board (EPIC-11+). It calls [ImmersiveSystemUi] so the system bars hide while it is shown and
+ * The immersive in-game surface: a full-bleed placeholder that stands in for the real
+ * board. It calls [ImmersiveSystemUi] so the system bars hide while it is shown and
  * restore when it leaves composition, and hosts an always-visible, accessible exit control.
  *
  * Stateless and preview-able: it holds no state and fetches nothing. Both the on-screen exit control

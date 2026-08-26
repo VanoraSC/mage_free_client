@@ -30,7 +30,7 @@ import java.util.UUID
  * `BridgeMageClient`), maps it via [CallbackMapper], normalizes the non-deterministic fields (username
  * and timestamp) to the golden's fixed values, and asserts it matches `chat_talk.json`.
  *
- * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring 0003's `ConnectAuthenticateIT`);
+ * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring the `ConnectAuthenticateIT`);
  * otherwise JUnit reports it *skipped*, keeping `./scripts/dev gradle check` hermetic.
  *
  * ```

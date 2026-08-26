@@ -15,7 +15,7 @@ import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
 
 /**
- * The persistent context of a cast in flight — requirements §6.4's organizing principle: *"a player
+ * The persistent context of a cast in flight — requirements the organizing principle: *"a player
  * casting a spell is performing one continuous act with several decisions inside it. The board must
  * present it that way — not as unrelated dialogs that happen to arrive in sequence."*
  *
@@ -29,7 +29,7 @@ import magefree.network.game.GameState
  *   arrived after the cast began (never from the prompt's prose).
  * @property isCancelling the player has declined a step and the server is rewinding. The wording
  *   deliberately does **not** claim the spell is uncast: `playObject` puts it on the stack immediately
- *   (CR 601 / §16.5) and the rewind is the server's, arriving on a later snapshot.
+ * and the rewind is the server's, arriving on a later snapshot.
  */
 data class CastUi(
     val cardName: String,
@@ -38,17 +38,17 @@ data class CastUi(
 )
 
 /**
- * The **declaration in flight** (story 0061) — combat's equivalent of [CastUi], and the same kind of
+ * The **declaration in flight** — combat's equivalent of [CastUi], and the same kind of
  * thing: the app's record of what the player is in the middle of doing, so the act stays legible while
  * the server asks its questions.
  *
  * **What it is not:** it is not a model of combat, it decides nothing, and it never causes a question to
  * be asked or answered. Whether the server asks *which defender* or *which attacker to block* is
  * entirely upstream's: `selectDefender` and `selectBlockers` each assign silently when the set of legal
- * pairings has exactly one member, and ask otherwise (§7.5, read from `mage-player-human-1.4.60.jar`).
+ * pairings has exactly one member, and ask otherwise (read from `mage-player-human-1.4.60.jar`).
  * The board renders the question if and only if it arrives.
  *
- * @property role which of combat's two assignment problems the server has the board in (§7.4).
+ * @property role which of combat's two assignment problems the server has the board in.
  * @property pairingCreatureName the creature the outstanding pairing question is about — the one the
  *   player last tapped — or null when no pairing question is outstanding. Its producer is this app's own
  *   record of the pick it just sent, because the server's prompt prose names the *candidates*, never the
@@ -70,28 +70,28 @@ data class DeclarationUi(
 }
 
 /**
- * Immutable UI state for the playable board (stories 0055 + 0057).
+ * Immutable UI state for the playable board.
  *
  * @property board the projected snapshot — see [BoardUi] for the field-by-field reachability record.
  * @property isJoining true until the join has been answered; the board itself renders throughout
- *   (requirements §1.2 — the board appears before the hand exists), so this only drives a small status
+ *   (the requirements — the board appears before the hand exists), so this only drives a small status
  *   line, never a gate on the board.
  * @property joinError the server's own reason when `joinGame` was declined, else null.
- * @property isHandExpanded whether the peek-and-expand hand (§3.2) is open. **View state, not game
+ * @property isHandExpanded whether the peek-and-expand hand is open. **View state, not game
  *   state**: opening the hand looks at cards the player already holds and sends nothing to the server.
- * @property areControlsVisible whether the floating controls are shown (§16.3). Also view state — and
+ * @property areControlsVisible whether the floating controls are shown. Also view state — and
  *   hiding them must never hide that the server is waiting, which is why [BoardUi.priority] is drawn by
  *   the board itself rather than by the controls, and why the collapsed toggle restates it.
  * @property controls the floating controls for the outstanding prompt, or null when the server is not
  *   waiting on the viewer. Projected by [controlsFor] from `GameState.prompt` alone.
- * @property selectedObjectId the card the player has tapped (§5.1: first tap raises it and shows its
+ * @property selectedObjectId the card the player has tapped (first tap raises it and shows its
  *   detail; a second tap or the detail's own button commits). Cleared whenever the prompt changes, so a
  *   detail view can never outlive the question it was opened against.
- * @property cast the cast in flight (§6.4), or null.
- * @property declaration the combat declaration in flight (§7.4/§7.5), or null when the server has the
+ * @property cast the cast in flight, or null.
+ * @property declaration the combat declaration in flight, or null when the server has the
  *   board in neither role. Never both roles at once — [DeclarationUi.role] holds exactly one.
  * @property actionError the server's own reason for declining the last action, else null.
- * @property detailFace the peek state for the tapped card's art (story 0077) — null while no card is
+ * @property detailFace the peek state for the tapped card's art — null while no card is
  *   selected, or before the catalog has answered whether it is even a double-faced card.
  */
 data class GameBoardUiState(
@@ -109,8 +109,8 @@ data class GameBoardUiState(
 )
 
 /**
- * The manual "peek at the other face" control for the tapped-card detail (story 0077) — distinct from
- * story 0076's automatic face selection, which reflects the *live* transform state and cannot be
+ * The manual "peek at the other face" control for the tapped-card detail — distinct from
+ * the automatic face selection, which reflects the *live* transform state and cannot be
  * overridden. This is purely a local viewing choice: it never sends anything to the server and never
  * changes what [BoardUi.from] reports as the object's actual, current face.
  *
@@ -135,16 +135,16 @@ data class CardDetailFaceUi(
  * snapshot through [BoardUi.from] and [controlsFor], and answers the server's prompts through
  * [act] — the **single** place in `feature/game` that calls a [GameClient] verb.
  *
- * ### The seams this story is built around
+ * ### The seams this is built around
  *
  * 1. **One action seam.** Every control, every tapped card and every menu item emits a [BoardAction];
  *    [act] is the only translator from an action to a client verb. So "what can this screen send?" is
  *    answered by reading one `when`, and no Composable holds a [GameClient].
- * 2. **One pass seam.** [PassPolicy] decides *when* the app answers a priority prompt (§14.1). It is
+ * 2. **One pass seam.** [PassPolicy] decides *when* the app answers a priority prompt. It is
  *    consulted on every arriving [GamePrompt.Select] and by the player's own pass, and both routes end
  *    at the same single [GameClient.passPriority] call. Auto-pass and stops replace the policy and
  *    nothing else.
- * 3. **Never batch target picks** (§17.2, verified live). [BoardAction.ChooseTarget] is sent the moment
+ * 3. **Never batch target picks** (verified live). [BoardAction.ChooseTarget] is sent the moment
  *    the player taps, so the server can re-prompt with an updated count and a narrowed candidate set;
  *    the player's confirmation is [BoardAction.FinishTargeting] — the final *done*, not a flush of
  *    locally-held picks.
@@ -152,12 +152,12 @@ data class CardDetailFaceUi(
  * ### Ordering, and why a missed `GAME_INIT` is survivable
  * The push side-channel is replay-less, so [observe] starts collecting **before** it calls `joinGame` —
  * a subscription opened afterwards can miss the game's very first snapshot. That ordering is not the
- * only defence, though: since story 0054, `observeGame` issues a **targeted read** of the bridge's held
+ * only defence, though: `observeGame` issues a **targeted read** of the bridge's held
  * snapshot as the flow opens, so even a genuinely missed `GAME_INIT` is repaired by the read rather than
  * leaving a permanently blank board.
  *
  * ### Snapshot replace, never merge
- * Each emission is a whole game view (0052), so each is projected on its own. Nothing here remembers a
+ * Each emission is a whole game view, so each is projected on its own. Nothing here remembers a
  * card the server has stopped sending. The two pieces of state that *do* span snapshots — [CastUi] and
  * the "have I picked a target yet" flag — are records of what **this app sent**, never of what the game
  * contains.
@@ -262,7 +262,7 @@ class GameBoardViewModel
                     detailFace = if (promptChanged) null else previous.detailFace,
                 )
 
-            // The one place the app decides *when* to answer a priority prompt (§14.1). Asked once per
+            // The one place the app decides *when* to answer a priority prompt. Asked once per
             // prompt instance, so a re-emission of the same question cannot pass twice.
             val prompt = state.prompt
             if (prompt is GamePrompt.Select && prompt !== policyAskedFor) {
@@ -272,7 +272,7 @@ class GameBoardViewModel
         }
 
         /**
-         * How the cast context (§6.4) follows the server's questions.
+         * How the cast context follows the server's questions.
          *
          * The act ends when priority comes back (`Select`) or when nothing is outstanding — by then the
          * cast has either completed or been rewound, and either way the continuous act is over. Until
@@ -291,14 +291,14 @@ class GameBoardViewModel
         }
 
         /**
-         * How the declaration context (§7.4/§7.5) follows the server's questions.
+         * How the declaration context follows the server's questions.
          *
          * Three states, and the server drives every transition:
          * - a `Select` carrying `possibleAttackers`/`possibleBlockers` **is** a declaration: the role is
          *   read from it fresh each time, so the board is in whichever role the server put it in, and the
          *   pairing line clears because that question has been answered;
          * - a `Target` arriving **while a declaration is in flight** is the pairing question upstream
-         *   asks when the choice is genuinely ambiguous — the same prompt kind 0057 already answers. The
+         *   asks when the choice is genuinely ambiguous — the same prompt kind the controls already answer. The
          *   only thing added is the name of the creature the player just picked;
          * - anything else — an ordinary `Select`, another prompt kind, or no prompt at all — ends it.
          *
@@ -325,7 +325,7 @@ class GameBoardViewModel
             _uiState.value = _uiState.value.copy(actionError = null, selectedObjectId = null)
             when (action) {
                 is BoardAction.PlayObject -> {
-                    // §6.4: the cast becomes visible as one act from the moment it begins. The name comes
+                    // The cast becomes visible as one act from the moment it begins. The name comes
                     // from the board projection, so it is the server's own name for the card.
                     _uiState.value = _uiState.value.copy(cast = CastUi(cardName = nameOf(action.objectId)))
                     send { it.playObject(id, action.objectId) }
@@ -336,7 +336,7 @@ class GameBoardViewModel
 
                 is BoardAction.ChooseTarget -> {
                     // Sent per pick, never batched: the server re-prompts with an updated count and a
-                    // narrowed candidate set after each one (§17.2). A declaration pick is the same verb
+                    // narrowed candidate set after each one. A declaration pick is the same verb
                     // and the same rule — upstream re-asks after each creature.
                     hasPickedTarget = true
                     // Remember *which* creature was just declared, so that if the server follows up with
@@ -379,7 +379,7 @@ class GameBoardViewModel
         }
 
         /**
-         * **The single pass seam** (§14.1). Both the player's own pass and any future auto-pass arrive
+         * **The single pass seam**. Both the player's own pass and any future auto-pass arrive
          * here, and this is the only [GameClient.passPriority] call in the feature.
          */
         private fun sendPass() {
@@ -411,7 +411,7 @@ class GameBoardViewModel
         }
 
         /**
-         * Open or close the peek-and-expand hand (§3.2).
+         * Open or close the peek-and-expand hand.
          *
          * View state only: it decides how much of the player's own hand is drawn over the board, and
          * sends nothing.
@@ -421,7 +421,7 @@ class GameBoardViewModel
         }
 
         /**
-         * Show or hide the floating controls (§16.3).
+         * Show or hide the floating controls.
          *
          * View state only. What it must **never** hide is that the server is waiting on the player — see
          * [GameBoardUiState.areControlsVisible]; the priority banner belongs to the board, not to the
@@ -432,7 +432,7 @@ class GameBoardViewModel
         }
 
         /**
-         * Raise a card and show its detail (§5.1 / §11.1), or close the detail when [objectId] is null
+         * Raise a card and show its detail, or close the detail when [objectId] is null
          * or is the card already raised. Sends nothing: inspecting is not acting.
          */
         fun selectCard(objectId: String?) {
@@ -450,7 +450,7 @@ class GameBoardViewModel
         private var detailFaceNames: Pair<String, String?>? = null
 
         /**
-         * Look up [objectId]'s catalog entry to decide whether the manual flip control (story 0077)
+         * Look up [objectId]'s catalog entry to decide whether the manual flip control
          * should appear at all, and what to call its back face.
          *
          * Seeds [GameBoardUiState.detailFace] immediately with `canFlip = false` and the card's own live
@@ -460,7 +460,7 @@ class GameBoardViewModel
          *
          * Looked up by the card's **front**-face name: the bundled catalog only ever stores a DFC under
          * its front face's name, and a transformed permanent's live `name` is the *back* face's name and
-         * would never match a row. `GameCard.transformed` (story 0076) says whether that substitution is
+         * would never match a row. `GameCard.transformed` says whether that substitution is
          * needed at all; `alternateName` (a catalog fact, not a face signal — see its own KDoc) supplies
          * the other face's name when it is.
          */
@@ -481,7 +481,7 @@ class GameBoardViewModel
         }
 
         /**
-         * Toggle the tapped card's detail between its front and back art (story 0077). A no-op when
+         * Toggle the tapped card's detail between its front and back art. A no-op when
          * nothing is selected or [CardDetailFaceUi.canFlip] is false — the control is hidden in that case
          * regardless, so this is a defensive no-op, not the normal gate.
          */

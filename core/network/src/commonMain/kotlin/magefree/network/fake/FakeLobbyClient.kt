@@ -7,7 +7,7 @@ import magefree.model.RoomUser
 import magefree.network.LobbyClient
 
 /**
- * A scriptable [LobbyClient] test double (story 0028) for hermetic `LobbyRepository` tests — no bridge,
+ * A scriptable [LobbyClient] test double for hermetic `LobbyRepository` tests — no bridge,
  * no `:protocol`. Each fetch returns its configured list, or throws [error] when one is set (to drive
  * the repository's error-as-state path). The result lists and [error] are mutable so a single instance
  * can be reconfigured between a load and a refresh within one test.

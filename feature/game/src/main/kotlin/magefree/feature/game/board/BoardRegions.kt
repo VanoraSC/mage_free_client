@@ -29,8 +29,8 @@ import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
 
 /*
- * The board's regions (story 0055), each with a **defined empty state** — the board is never guaranteed
- * to arrive populated (requirements §1.2): the first snapshot after joining legitimately has an empty
+ * The board's regions, each with a **defined empty state** — the board is never guaranteed
+ * to arrive populated: the first snapshot after joining legitimately has an empty
  * hand, and the stack, combat and revealed zones are routinely empty.
  */
 
@@ -47,7 +47,7 @@ internal val StackStripHeight: Dp = 56.dp
 internal val HandPeekHeight: Dp = 64.dp
 
 /**
- * A seat's compact vitals bar (requirements §4.3): life prominent, zone counts small, in a strip whose
+ * A seat's compact vitals bar: life prominent, zone counts small, in a strip whose
  * position never moves however full the battlefield gets.
  *
  * Empty state: a seat that has not arrived yet renders [NO_SEAT_LABEL] rather than a bar of zeroes,
@@ -200,21 +200,21 @@ internal fun BattlefieldBand(
 }
 
 /**
- * **The portrait re-shape of requirements §4.1's side panel.**
+ * **The portrait re-shape of requirements the side panel.**
  *
- * §4.1 put the stack and phase indicator in a vertical panel down one edge, and said why: on a *short
- * landscape* screen that was the only way to keep both battlefields full-height. Portrait (§16.1)
+ * An earlier layout put the stack and phase indicator in a vertical panel down one edge, and said why: on a *short
+ * landscape* screen that was the only way to keep both battlefields full-height. Portrait
  * inverts the scarcity — width is now the plentiful axis and height the scarce one — so an edge panel
  * would tax **both** battlefields' width permanently, for a region that is empty most of the game.
  *
  * So the stack, the turn/phase readout and the explicit priority banner share one **horizontal band
- * between the two battlefields**. That is where a physical table puts the stack, which §4.1 wanted and
+ * between the two battlefields**. That is where a physical table puts the stack, which a vertical side panel wanted and
  * could not afford; it costs a slice of the scarce axis exactly once instead of taxing the plentiful
  * one twice; and it puts the priority statement on the centre line, where the eye already is.
  *
  * **Fixed height, always.** [StatusRailHeight] does not depend on what is in the rail, and the stack
  * strip inside it has its own fixed [StackStripHeight]. The stack is empty in the common case and fills
- * abruptly (verified live), and §4.1's surviving requirement is that filling it must **not reflow the
+ * abruptly (verified live), and the surviving requirement is that filling it must **not reflow the
  * battlefields**. Reserving the space unconditionally is what guarantees that; the empty strip carries
  * [EMPTY_STACK] rather than collapsing.
  */
@@ -275,7 +275,7 @@ private fun TurnLine(
 }
 
 /**
- * Priority, stated in words (requirements §4.2). Driven by `viewerHasPriority` alone, so it is right in
+ * Priority, stated in words. Driven by `viewerHasPriority` alone, so it is right in
  * the state a card highlight cannot express: holding priority with nothing playable.
  */
 @Composable
@@ -311,7 +311,7 @@ private fun PriorityBanner(priority: PriorityUi) {
  *
  * The caption says [STACK_AS_PUSHED] whenever the stack has anything in it, because it is **not**
  * authoritative between pushes: the server does not push the opponent a snapshot when a cast is
- * cancelled (requirements §17.4, verified by card id), so an object here can be one its caster has
+ * cancelled (verified by card id), so an object here can be one its caster has
  * already rewound.
  */
 @Composable
@@ -346,7 +346,7 @@ private fun StackStrip(
 }
 
 /**
- * The hand's **peek** edge (requirements §3.2): a slim strip of card backs and a count, which expands
+ * The hand's **peek** edge: a slim strip of card backs and a count, which expands
  * over the board on tap.
  *
  * Empty state: [EMPTY_HAND]. This is not an edge case — the very first snapshot after joining
@@ -395,7 +395,7 @@ internal fun HandPeek(
 
 /**
  * The expanded hand, drawn **over** the board rather than pushing it around — which is what lets the
- * battlefields keep their height in portrait, where height is the scarce axis (§16.1).
+ * battlefields keep their height in portrait, where height is the scarce axis.
  */
 @Composable
 internal fun ExpandedHand(
@@ -450,7 +450,7 @@ internal fun ExpandedHand(
 
 /**
  * The notice strip: the server's outstanding question (rendered for comprehension, **never**
- * answerable — that is story 0056), its latest narration, any sticky error, the exile summary, and the
+ * answerable), its latest narration, any sticky error, the exile summary, and the
  * end-of-game line.
  *
  * Empty state: [NO_NOTICES] — the ordinary state of a quiet board.

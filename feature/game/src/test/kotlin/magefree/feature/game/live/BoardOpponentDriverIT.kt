@@ -31,9 +31,9 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Story 0055 — the **on-device driver**: the second client of the two-client harness.
+ * The **on-device driver**: the second client of the two-client harness.
  *
- * The board this story builds is read-only, so it cannot drive a game. This is the thing that does:
+ * The board this builds is read-only, so it cannot drive a game. This is the thing that does:
  * a real app-side session (the production [KtorBridgeClient] + [TableClients] + [GameClients] stack,
  * assembled exactly as `NetworkModule` assembles it) that hosts a two-**human** table, waits for the
  * app on the emulator to take the other seat, starts the match, and then plays and narrates its own
@@ -61,11 +61,11 @@ import java.util.concurrent.CopyOnWriteArrayList
  * opening hands, the who-goes-first choice, and the mulligan question — which is exactly the material
  * the board's seats, vitals, hand, turn, prompt and **priority-in-both-directions** are drawn from —
  * and no further. Turn advance and a populated battlefield need a client that can answer, which is
- * story 0056.
  *
- * ### What a real run produced (2026-08-13, `emulator-5554` + `docker-bridge-1`)
+ *
+ * ### What a real run produces (`emulator-5554` + `docker-bridge-1`)
  * ```
- * [driver] table 'story0055_board' created
+ * [driver] table 'it_board' created
  * [driver] WAITING FOR THE APP to join from the lobby…
  * [driver] driver seated as it_ae10e9b9 (second)
  * [driver] both seats filled: [Player/Human, it_ae10e9b9/Human]
@@ -84,7 +84,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * **Two things a run cannot show here, and why.**
  * 1. **A moving game.** The mulligan block above. Battlefields, the stack filling and clearing, and
- *    turn/phase advance are unreachable until 0056 can answer.
+ *    turn/phase advance are unreachable until a prompt can be answered.
  * 2. **Card art.** Not the board's doing: this emulator has **no external egress**
  *    (`nc 10.0.2.2 8080` answers the bridge; `nc <external host> 80` answers nothing), so every art
  *    request fails and the design-system placeholder renders — which is the correct degradation, and
@@ -92,7 +92,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  *    *second*, independent problem is waiting behind it: Scryfall answers **HTTP 400
  *    `generic_user_agent`** to OkHttp's default `User-Agent` and 200 to a descriptive one, and
  *    `CardImageLoader` sets none — so art would still not load even with egress. Both are recorded in
- *    the story report; neither is inside this story's guardrails to fix.
+ *    this report; neither is here's guardrails to fix.
  *
  * **Seat order is load-bearing here** — see the comment on the deferred `joinTable` below.
  */
@@ -159,7 +159,7 @@ class BoardOpponentDriverIT {
                     .getOrThrow()
                 say("driver seated as $username (second)")
 
-                // The server reports readiness itself (story 0040) — nothing here invents it.
+                // The server reports readiness itself — nothing here invents it.
                 awaitTable(tableStates, "the table to become ready to start", APP_JOIN_TIMEOUT_MS) {
                     it?.isReadyToStart == true
                 }
@@ -374,7 +374,7 @@ class BoardOpponentDriverIT {
         Deck(
             id = DeckId("board-driver-forests"),
             name = "board_driver_forests",
-            author = "story-0055",
+            author = "board-driver-it",
             main = listOf(DeckEntry(cardName = "Forest", setCode = "M21", collectorNumber = "272", quantity = 60)),
         )
 
@@ -382,7 +382,7 @@ class BoardOpponentDriverIT {
         const val BRIDGE_URL_ENV = "BRIDGE_URL"
 
         /** The name the app looks for in the lobby. */
-        const val TABLE_NAME = "story0055_board"
+        const val TABLE_NAME = "it_board"
 
         const val DUEL = "Two Player Duel"
 

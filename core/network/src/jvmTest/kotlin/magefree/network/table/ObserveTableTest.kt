@@ -26,12 +26,12 @@ import org.junit.Test
 import magefree.protocol.MatchStarting as MatchStartingMessage
 
 /**
- * Hermetic Turbine coverage of [DefaultTableClient.observeTable]: it seeds current state, folds the 0036
+ * Hermetic Turbine coverage of [DefaultTableClient.observeTable]: it seeds current state, folds the table
  * events pushed through the [FakeBridgeClient]'s server-push side-channel into successive [TableState]s
- * (join → seat update → construct → match-starting), and re-emits the held state on a 0023 resume (a
+ * (join → seat update → construct → match-starting), and re-emits the held state on a resume (a
  * return to [ConnectionState.Connected]) so a reconnect does not strand the seat. No socket.
  *
- * Story 0040 adds the other half: the **seat read**. `observeTable` issues a `GetTable` on open, on each
+ * The other half is the **seat read**. `observeTable` issues a `GetTable` on open, on each
  * table-lifecycle push for this table, and after a resume — and on nothing else, so an observed room
  * never polls in the background. Those tests script `TableDetail` replies through the same fake's
  * request/response seam.
@@ -97,7 +97,7 @@ class ObserveTableTest {
         )
 
     /**
-     * A table whose match is already under way (story 0069) — the shape a late-opening client's very
+     * A table whose match is already under way — the shape a late-opening client's very
      * first `GetTable` read sees. Carries [activeGameId] the way `TableView.getGames()` does; carries no
      * `MatchStarting`, because that push already fired for whichever client caught the live transition.
      */
@@ -127,7 +127,7 @@ class ObserveTableTest {
     @Test
     fun observeTableReadsTheTableOnOpenSoSeatsAppearWithNoPushAtAll() =
         runTest {
-            // The regression this story exists for: with *no* server push of any kind, the room must
+            // The regression this exists for: with *no* server push of any kind, the room must
             // still learn its seats — because XMage never pushes them.
             val reads = Reads(listOf(waitingDetail()))
             val (client, _) = clientOver(reads)
@@ -152,7 +152,7 @@ class ObserveTableTest {
     @Test
     fun aClientThatOpensAnAlreadyStartedTableLearnsTheGameIdFromTheOpenTimeReadAlone() =
         runTest {
-            // Story 0069's defect, reproduced: this client never receives MatchStarting at all — it
+            // the defect, reproduced: this client never receives MatchStarting at all — it
             // opens the room *after* the game already started (back from the lobby, or a relaunch), so
             // the one-shot push already fired for someone else. A test built only on the MatchStarting
             // path would pass against the unfixed code; this one does not touch that path at all.
@@ -328,7 +328,7 @@ class ObserveTableTest {
                 connection.value = ConnectionState.Connected
                 testScheduler.runCurrent()
 
-                // The held state is re-emitted first (the 0037 non-destructive re-sync)...
+                // The held state is re-emitted first (the non-destructive re-sync)...
                 assertFalse(awaitItem().isReadyToStart)
                 // ...then the fresh read lands, so a seat filled while the socket was down shows up.
                 assertTrue(awaitItem().isReadyToStart)
@@ -434,7 +434,7 @@ class ObserveTableTest {
                 val constructing = awaitItem()
                 assertEquals(TablePhase.Constructing, constructing.phase)
 
-                // Simulate a drop and a 0023 resume; step through Reconnecting so the StateFlow does not
+                // Simulate a drop and a resume; step through Reconnecting so the StateFlow does not
                 // conflate the intermediate away, then return to Connected.
                 connection.value = ConnectionState.Reconnecting
                 scheduler.runCurrent()

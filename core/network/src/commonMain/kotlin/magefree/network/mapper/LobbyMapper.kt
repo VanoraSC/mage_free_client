@@ -12,7 +12,7 @@ import magefree.protocol.TableStateCode
 import magefree.protocol.TableSummary
 
 /**
- * The lobby half of `:core:network`'s mapper boundary (story 0028): the single place the wire
+ * The lobby half of `:core:network`'s mapper boundary: the single place the wire
  * `:protocol` lobby summaries ([TableSummary]/[RoomUserSummary]/[GameTypeSummary]) are translated into
  * pure `:core:model` types. Nothing above `:core:network` sees a `:protocol` shape — the `LobbyClient`
  * interface and the repository speak only `:core:model`. Pure and deterministic, so it is unit-testable

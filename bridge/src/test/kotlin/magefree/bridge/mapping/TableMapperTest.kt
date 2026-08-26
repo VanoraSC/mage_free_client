@@ -22,7 +22,7 @@ import java.util.Date
  *
  * `mage.view.TableView`'s only constructor takes a `mage.game.Table` — a heavy game object that is
  * **not on the bridge classpath** (only `mage-common` is) and impractical to build in-memory — so the
- * raw view cannot be constructed here (unlike 0006's field-constructor `ChatMessage`). All of the
+ * raw view cannot be constructed here (unlike the field-constructor `ChatMessage`). All of the
  * mapping *logic* therefore lives in the pure [TableMapper.build] over already-extracted getter values,
  * and this test asserts that logic directly: the [TableState]→[TableStateCode] and
  * [SkillLevel]→[SkillLevelCode] translations (exhaustively), seat filled/total counting, and

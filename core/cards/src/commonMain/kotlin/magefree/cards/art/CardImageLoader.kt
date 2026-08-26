@@ -34,7 +34,7 @@ interface ArtWarmer {
 }
 
 /**
- * The on-demand card-art loader (story 0031). Callers pass a [CardArtRequest] (identity), never a URL;
+ * The on-demand card-art loader. Callers pass a [CardArtRequest] (identity), never a URL;
  * [CardArtFetcher] resolves the URL candidates via [XMageImageSource] and fetches the first one that
  * answers, while Coil provides the memory+disk cache, request de-duplication, and cancellation. Every
  * cache key — memory and disk — is the request's *primary* URL, whichever candidate served the bytes.
@@ -47,21 +47,21 @@ interface ArtWarmer {
  *
  * It observes [CardArtCachePolicyRepository]; on a **downgrade** (PERSISTENT → SESSION_ONLY) it clears
  * the existing disk cache before swapping in the memory-only loader. The current loader is exposed as
- * a [StateFlow] so 0032's `AsyncImage` always binds to the policy-correct instance.
+ * a [StateFlow] so the `AsyncImage` always binds to the policy-correct instance.
  *
  * ### Identifying the client
  * The default HTTP client sends a descriptive `User-Agent` ([CardArtUserAgent]). Scryfall rejects
- * generic client defaults with HTTP 400, so this is load-bearing, not courtesy (story 0056).
+ * generic client defaults with HTTP 400, so this is load-bearing, not courtesy.
  *
  * ### Offline / placeholder
- * A cache miss with no network yields an [ErrorResult] (never a crash); 0032 renders the design-system
- * placeholder, and the card's text stays available from the bundled catalog (0030).
+ * A cache miss with no network yields an [ErrorResult] (never a crash); card-browse renders the design-system
+ * placeholder, and the card's text stays available from the bundled catalog.
  */
 class CardImageLoader(
     /**
      * Coil's own context type. On Android it is a `typealias` for `android.content.Context`, so this
      * is the same object as before and nothing about the shipping behaviour changes — but the type
-     * is multiplatform, which is what lets this class leave `androidMain` (story 0082).
+     * is multiplatform, which is what lets this class leave `androidMain`.
      */
     private val context: PlatformContext,
     private val source: XMageImageSource,
@@ -82,8 +82,8 @@ class CardImageLoader(
     /**
      * The `User-Agent` the default client sends. **Load-bearing, not courtesy** — Scryfall answers
      * HTTP 400 to a generic agent and every art surface in the app degrades to its placeholder
-     * (story 0056). Supplied rather than defaulted so there is no way to construct a loader that
-     * quietly sends nothing; story 0082 moved it off `PackageManager`.
+     *. Supplied rather than defaulted so there is no way to construct a loader that
+     * quietly sends nothing.
      */
     userAgent: String = CardArtUserAgent.value(null),
     /**
@@ -98,7 +98,7 @@ class CardImageLoader(
             KtorNetworkFetcherFactory(httpClient = { httpClient })
         } else {
             // Not a bare KtorNetworkFetcherFactory(): its client would send the engine's own generic agent,
-            // which Scryfall refuses with HTTP 400 (story 0056). The lambda is evaluated lazily by
+            // which Scryfall refuses with HTTP 400. The lambda is evaluated lazily by
             // Coil, so the client is still built on first use.
             KtorNetworkFetcherFactory(httpClient = { defaultArtHttpClient(userAgent) })
         }
@@ -167,7 +167,7 @@ class CardImageLoader(
         }
     }
 
-    /** An [ImageRequest] for [request] with stable memory/disk cache keys — for 0032's `AsyncImage`. */
+    /** An [ImageRequest] for [request] with stable memory/disk cache keys — for the `AsyncImage`. */
     fun buildRequest(request: CardArtRequest): ImageRequest {
         val key = cacheKey(request)
         return ImageRequest
@@ -189,7 +189,7 @@ class CardImageLoader(
                     // The request is handed to Coil as a CardArtRequest (not a URL) and stays one all
                     // the way to CardArtFetcher, which resolves it and walks the candidate URLs with a
                     // stable cache key. A Mapper here would flatten it to a single URL and there would
-                    // be no fallback (story 0043, defect B).
+                    // be no fallback.
                     add(CardArtKeyer(source))
                     add(CardArtFetcher.Factory(source, networkFetcherFactory))
                     add(networkFetcherFactory)

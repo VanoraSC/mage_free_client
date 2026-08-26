@@ -10,7 +10,7 @@ import org.koin.dsl.module
 
 /**
  * Koin wiring for `:feature:cards` (was Hilt's `CardsFeatureModule`). Binds the feature-local
- * [ArtCacheController] to its production implementation, which delegates to story 0031's
+ * [ArtCacheController] to its production implementation, which delegates to the
  * already-provided policy repository + download manager, and declares the feature's ViewModels.
  *
  * [magefree.cards.CardCatalog] comes from `:core:cards`, so nothing more is needed here.

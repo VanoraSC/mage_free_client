@@ -33,7 +33,7 @@ import java.util.UUID
  * ([module], which uses the real [XMageUpstreamSession]) to a running XMage server, and observes
  * `CONNECTING` → `CONNECTED`, then tears down cleanly.
  *
- * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring 0003's `ConnectAuthenticateIT`);
+ * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring the `ConnectAuthenticateIT`);
  * otherwise JUnit reports it *skipped*, keeping `./scripts/dev gradle check` hermetic. The gate var
  * only signals intent — the connection target itself comes from `XMAGE_UPSTREAM` (default
  * `xmage-server:17171`), consistent with the pinned-server posture (the app never sends host/port).

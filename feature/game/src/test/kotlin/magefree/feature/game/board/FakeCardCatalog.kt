@@ -12,7 +12,7 @@ import magefree.cards.model.Rarity
 import magefree.cards.model.TypeLine
 
 /**
- * A scriptable in-memory [CardCatalog] for [GameBoardViewModel]'s story 0077 flip-detection tests — no
+ * A scriptable in-memory [CardCatalog] for [GameBoardViewModel]'s flip-detection tests - no
  * SQLite, no device. Only [cardByName] (via the interface's default, over [cardsByName]) is exercised;
  * the rest exist to satisfy the interface with harmless empty answers.
  */

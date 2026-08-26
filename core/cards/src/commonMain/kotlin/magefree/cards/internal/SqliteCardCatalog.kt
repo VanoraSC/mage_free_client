@@ -27,7 +27,7 @@ import magefree.cards.model.TypeLine
  * The impl is deliberately framework-thin (raw SQL over [SQLiteConnection]) so the same code runs on
  * device, on the JVM, and under a Robolectric unit test against a fixture database.
  *
- * **Story 0082 ported this off `android.database.sqlite`** onto `androidx.sqlite`'s driver API,
+ * **This runs on `androidx.sqlite`'s driver API**, not `android.database.sqlite`,
  * which is multiplatform. Every SQL string here is byte-identical to the pre-port version on
  * purpose: the catalog is an immutable bundled asset, so the same queries must return the same rows,
  * and that is checkable by equality rather than by argument. The differences are mechanical —

@@ -16,7 +16,7 @@ import coil3.toUri
  * answers a non-2xx (a [HttpException]) or yields nothing. That is what makes the
  * `include_variations=true` alternative real rather than documented-but-dead: promo and variation
  * printings that 404 on the localized path are served by it instead of rendering a placeholder
- * forever (story 0043, defect B).
+ * forever.
  *
  * ### Cache-key stability
  * The delegate network fetcher keys the disk cache on `options.diskCacheKey ?: url`. Every candidate
@@ -52,7 +52,7 @@ internal class CardArtFetcher(
         }
 
         // Every candidate missed: surface the last miss so Coil produces its ErrorResult and the UI
-        // degrades to the design-system placeholder (0031/0032), exactly as before.
+        // degrades to the design-system placeholder, exactly as before.
         lastMiss?.let { throw it }
         return null
     }

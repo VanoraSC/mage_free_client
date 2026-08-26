@@ -28,7 +28,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Pins the atomicity of builder deck mutations across the catalog suspension (story 0042, defect A).
+ * Pins the atomicity of builder deck mutations across the catalog suspension.
  *
  * `addCard` has to look the card up in the catalog before it can mutate the deck, and that lookup
  * suspends. The fake catalog here makes the lookup take (virtual) time on purpose, so two taps land in

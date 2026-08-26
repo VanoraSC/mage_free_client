@@ -24,11 +24,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hermetic coverage of story 0037's two relay seams, driven through [SessionRelay.run] with no socket:
+ * Hermetic coverage of the two relay seams, driven through [SessionRelay.run] with no socket:
  *
- * - **(a) Correlation** — a 0036 [TableActionResult]/[TableCreated] carrying a `requestId` that matches an
+ * - **(a) Correlation** — a [TableActionResult]/[TableCreated] carrying a `requestId` that matches an
  *   outstanding [PendingRequests] waiter is routed to that waiter (not emitted as a `SessionEvent`).
- * - **(b) Push side-channel** — a spontaneous 0036 [TableUpdated] event (no correlation, not a lifecycle
+ * - **(b) Push side-channel** — a spontaneous table [TableUpdated] event (no correlation, not a lifecycle
  *   frame) is forwarded to `featurePush` rather than dropped, and still never reaches the session-event
  *   stream.
  */
@@ -115,7 +115,7 @@ class TableRelaySeamsTest {
     @Test
     fun aTableDetailAndATableNotFoundAreCorrelatedToTheirWaiters() =
         runTest {
-            // Story 0040's targeted read rides the same correlation seam: without registering these two
+            // the targeted read rides the same correlation seam: without registering these two
             // reply types the app's `refreshTable` would hang until timeout and the room would never
             // learn its seats — so this pins the registration, not just the transport.
             val pending = PendingRequests()

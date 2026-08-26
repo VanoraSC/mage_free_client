@@ -45,7 +45,7 @@ import io.ktor.client.plugins.websocket.WebSockets as ClientWebSockets
 import io.ktor.server.websocket.WebSockets as ServerWebSockets
 
 /**
- * Story 0050 defect B: **a network excursion must not leak an upstream session.**
+ * **a network excursion must not leak an upstream session.**
  *
  * When a phone's radio goes away there is no FIN — the bridge's socket simply stops producing bytes,
  * for ever. Nothing in the bridge used to notice: Ktor's server pinger is disabled by default, the

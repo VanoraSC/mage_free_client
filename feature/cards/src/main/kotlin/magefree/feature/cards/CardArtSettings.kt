@@ -16,7 +16,7 @@ import magefree.cards.art.PrefetchScope
 import magefree.cards.art.PrefetchStatus
 
 /**
- * The narrow art-cache surface the settings ViewModel drives, wrapping story 0031's
+ * The narrow art-cache surface the settings ViewModel drives, wrapping the
  * [CardArtCachePolicyRepository] (Persistent/SessionOnly) and [ArtDownloadManager] (opt-in bulk
  * pre-download). Kept as a feature-local interface so the ViewModel is unit-testable against a fake —
  * :core:cards is consumed read-only and its concrete classes need Android/Coil to construct.
@@ -38,7 +38,7 @@ interface ArtCacheController {
     fun cancelPrefetch()
 }
 
-/** Production [ArtCacheController] delegating to 0031's policy repository + download manager. */
+/** Production [ArtCacheController] delegating to the policy repository + download manager. */
 class DefaultArtCacheController
     constructor(
         private val policyRepository: CardArtCachePolicyRepository,
@@ -50,7 +50,7 @@ class DefaultArtCacheController
         override suspend fun setPolicy(policy: CardArtCachePolicy) = policyRepository.setPolicy(policy)
 
         // No size argument: the manager's default warms every size the UI displays. Pinning one size
-        // here is what left the browse grid blank offline after a completed download (0043, defect A).
+        // here is what left the browse grid blank offline after a completed download (defect A).
         override fun startPrefetch(scope: PrefetchScope) = downloadManager.start(scope)
 
         override fun cancelPrefetch() = downloadManager.cancel()
@@ -58,7 +58,7 @@ class DefaultArtCacheController
 
 /**
  * Immutable UI state for the lightweight art cache/download affordance (not a full settings screen —
- * EPIC-17). Surfaces the current [policy] and the [prefetch] progress.
+ * Surfaces the current [policy] and the [prefetch] progress.
  */
 data class CardArtSettingsUiState(
     val policy: CardArtCachePolicy = CardArtCachePolicy.DEFAULT,
@@ -69,10 +69,10 @@ data class CardArtSettingsUiState(
 }
 
 /**
- * MVVM ViewModel for the art cache-policy + bulk pre-download affordance (story 0032). Observes 0031's
+ * MVVM ViewModel for the art cache-policy + bulk pre-download affordance. Observes the
  * policy + prefetch progress via [ArtCacheController] and hoists the mutations. Deliberately minimal:
  * the cache toggle and an opt-in "download all art" with progress/cancel — the full settings screen
- * is EPIC-17.
+ * lives in settings.
  */
 
 class CardArtSettingsViewModel

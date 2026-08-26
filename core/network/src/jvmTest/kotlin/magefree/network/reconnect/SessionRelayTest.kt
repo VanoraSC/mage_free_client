@@ -19,7 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Hermetic coverage of the story-0024 frame-level relay — the `Resume` vs `Login` decision, the
+ * Hermetic coverage of the  frame-level relay — the `Resume` vs `Login` decision, the
  * `SessionResumable` handle capture / resume-ack → `Connected`, and the `ResumeRejected` → `Login`
  * fallback — with no live socket: a scripted list of `:protocol` [ServerMessage]s is fed through
  * [SessionRelay.run] while every sent [ClientMessage] is captured for assertion.
@@ -91,7 +91,7 @@ class SessionRelayTest {
 
             // A held handle → Resume (no re-auth). While the ack is awaited the relay surfaces
             // Restoring (socket back, re-attaching the parked session), then the ack turns it into
-            // Connected (recovery is over) — story 0025's distinct restore signal.
+            // Connected (recovery is over) — the distinct restore signal.
             assertEquals(listOf<ClientMessage>(Resume("resume-123")), result.sent)
             assertEquals(2, result.events.size)
             assertEquals(SessionEvent.Restoring, result.events.first())

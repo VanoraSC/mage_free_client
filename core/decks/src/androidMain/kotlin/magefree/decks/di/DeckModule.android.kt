@@ -8,11 +8,11 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 
 /**
- * The Android edge of [deckDefinitions] (story 0083): where the deck database file lives, which
+ * The Android edge of [deckDefinitions]: where the deck database file lives, which
  * SQLite implementation opens it, and which dispatcher blocking IO runs on. This is the `deckModule`
  * `:app` lists in `appModules`.
  *
- * **The path is `getDatabasePath(NAME)`, and that is the whole data-safety story.** The pre-port
+ * **The path is `getDatabasePath(NAME)`, and that is the whole of the data-safety guarantee.** The pre-port
  * builder took the bare name `decks.db` and let Room resolve it to `/data/data/<pkg>/databases/`.
  * Room's multiplatform builder takes an absolute path instead, so resolving the same name through
  * the same API the old one used internally is what makes an upgrade over an existing deck library
@@ -20,7 +20,7 @@ import org.koin.core.module.Module
  *
  * [AndroidSQLiteDriver] is the platform's own SQLite — the same engine the pre-port `SQLiteDatabase`
  * open helper used, so the APK gains no native library and query behaviour is unchanged. It is the
- * driver `:core:cards` passes for the card catalog (story 0082); one SQLite story for the repo.
+ * driver `:core:cards` passes for the card catalog; one SQLite driver for the repo.
  */
 val deckModule: Module =
     deckDefinitions(

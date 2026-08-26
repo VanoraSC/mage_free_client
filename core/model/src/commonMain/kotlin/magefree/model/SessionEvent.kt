@@ -6,7 +6,7 @@ package magefree.model
  * This is the domain-side output of `:core:network`'s mapper: every `:protocol` `SessionStatus`
  * (and the local handshake result) is translated into one of these before it leaves the network
  * module. Each event carries its corresponding [connectionState] so a caller can drive a
- * `StateFlow<ConnectionState>` (or the story-0010 status surface) without re-deriving it.
+ * `StateFlow<ConnectionState>` (or the  status surface) without re-deriving it.
  *
  * [VersionUnsupported] is intentionally its own event — a client/server version mismatch is a
  * first-class outcome, never folded into a generic error.
@@ -34,7 +34,7 @@ sealed interface SessionEvent {
 
     /**
      * The socket has reconnected and the parked session is being re-attached: a `Resume` was sent and
-     * its ack is awaited (story 0023/0024). Emitted by the relay in the window between [Reconnecting]
+     * its ack is awaited. Emitted by the relay in the window between [Reconnecting]
      * (still reaching the bridge) and [Connected] (resume acked), so the UI can show a distinct
      * "restoring your session" indicator. Never terminal.
      */

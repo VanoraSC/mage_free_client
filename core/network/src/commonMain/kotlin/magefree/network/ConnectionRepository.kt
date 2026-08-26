@@ -22,10 +22,10 @@ import magefree.model.ServerTarget
 import magefree.model.SessionEvent
 
 /**
- * The app-level owner of the connection lifecycle. It wraps the raw [BridgeClient] (story 0016) into
+ * The app-level owner of the connection lifecycle. It wraps the raw [BridgeClient] into
  * a single source of truth for connection state: at most one active session at a time, its mapped
  * [magefree.model.SessionEvent]s reduced to a [StateFlow] of [ConnectionState] that the shell's
- * status surface (story 0010's seam) and every future connect screen observe consistently.
+ * status surface (the seam) and every future connect screen observe consistently.
  *
  * ### Lifecycle
  * [connect] / [retry] publish a [Command] into [command]; [signOut] clears it. A single
@@ -81,7 +81,7 @@ class ConnectionRepository
                 )
 
         /**
-         * The detail-carrying source of truth (story 0019). Reduces [sessionEvents] to a
+         * The detail-carrying source of truth. Reduces [sessionEvents] to a
          * [ConnectionStatus] — the **same** categorical reduction as [connectionState] but preserving
          * each failure's diagnostic (auth message, `server=… bridge=…` version detail, a transport
          * [ConnectionError]) so the sign-in UI can render distinct, detailed surfaces. Emits
@@ -97,7 +97,7 @@ class ConnectionRepository
                 )
 
         /**
-         * The single source of truth for connection state (story 0017; story 0010's status-bar
+         * The single source of truth for connection state (the status-bar
          * dependency via `ConnectionStatusSourceImpl`). Its type and observable behaviour are
          * **unchanged** — the same one-per-[SessionEvent] reduction to [ConnectionState], now taken
          * from the shared [sessionEvents] so it and [connectionStatus] stay consistent over one
@@ -136,12 +136,12 @@ class ConnectionRepository
          * Every caller of this is a user leaving on purpose (the sign-in surfaces' Cancel / Back /
          * re-authenticate), so it routes to [BridgeClient.signOut] — the bridge disconnects the upstream
          * XMage session immediately instead of parking it for the resume TTL, and the username is free
-         * again at once (story 0046).
+         * again at once.
          *
          * The *other* direction is not a method here: a drop or a lifecycle pause never calls this. It
          * ends the session by cancelling the shared collection (this class shares `sessionEvents`
          * `WhileSubscribed`), which closes the socket without a `Logout` and leaves the bridge holding
-         * the session for a reconnect to resume — stories 0023/0024, deliberately untouched.
+         * the session for a reconnect to resume.
          */
         suspend fun signOut() {
             command.value = null

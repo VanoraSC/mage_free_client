@@ -14,12 +14,12 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import java.util.UUID
 
 /**
- * Live end-to-end proof of the read-only lobby relay (story 0027): connect a real [XMageSession] to
+ * Live end-to-end proof of the read-only lobby relay: connect a real [XMageSession] to
  * the reference server and browse the real main room through the same code path the bridge uses —
  * `XMageSession.tables()`/`roomUsers()`/`gameTypes()` → [LobbyRelay] → the per-view mappers →
  * app-schema summaries.
  *
- * The reference server (story 0022) starts with **no open tables**, so browsing tables must yield a
+ * The reference server starts with **no open tables**, so browsing tables must yield a
  * successful, well-formed **empty** list (never an error) — this proves the empty/no-error contract the
  * hermetic tests cannot. `gameTypes` must be **non-empty** (the server always offers its formats),
  * which also exercises the [GameTypeMapper.map] getter-forwarding shim against real `GameTypeView`s
@@ -28,7 +28,7 @@ import java.util.UUID
  * legitimately empty here — the full `RoomUsersView`→`RoomUserSummary` path is covered hermetically by
  * `RoomUserMapperTest` with real in-memory fixtures).
  *
- * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring 0003's `ConnectAuthenticateIT`);
+ * **Env-gated:** enabled only when `XMAGE_SERVER` is set (mirroring the `ConnectAuthenticateIT`);
  * otherwise JUnit reports it *skipped*, keeping `./scripts/dev gradle check` hermetic.
  *
  * ```

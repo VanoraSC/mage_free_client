@@ -33,7 +33,7 @@ import org.junit.Test
 import java.util.Collections
 
 /**
- * "Download all art" must warm **every size the UI actually asks for** (story 0043, defect A).
+ * "Download all art" must warm **every size the UI actually asks for**.
  *
  * The Coil cache key is the resolved URL and `applySize` appends `version=small` for SMALL, so SMALL
  * and LARGE are separate cache entries: warming only one leaves the other's surface blank offline.

@@ -12,7 +12,7 @@ import org.koin.dsl.module
 /**
  * Koin bindings for the connection-status surface (was Hilt's `ConnectionModule`).
  *
- * Story 0017 (EPIC-04) flips [ConnectionStatusSource] from story 0010's stub to the real,
+ * Binds [ConnectionStatusSource] to the real,
  * repository-backed [ConnectionStatusSourceImpl] — the single seam swap that makes the shell's
  * status bar reflect the live bridge session. The `ConnectionStatusViewModel` and
  * `ConnectionStatusBar` are untouched; `StubConnectionStatusSource` remains for previews/tests.

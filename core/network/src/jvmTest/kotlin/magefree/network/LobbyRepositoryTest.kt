@@ -24,7 +24,7 @@ import org.junit.Test
 
 /**
  * Turbine coverage of [LobbyRepository]'s observable, refreshable snapshot over a [FakeLobbyClient]
- * (story 0028): load→loaded, refresh (Refreshing over prior data), an empty-but-valid load, the
+ *: load→loaded, refresh (Refreshing over prior data), an empty-but-valid load, the
  * error-as-state path (never thrown), and disconnected→idle gating. No bridge, no `:protocol`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -194,7 +194,7 @@ class LobbyRepositoryTest {
         }
 
     /**
-     * The refresh/disconnect interleaving (story 0044): the socket drops **while a refresh is running**,
+     * The refresh/disconnect interleaving: the socket drops **while a refresh is running**,
      * not before it starts. The drop is raised from inside the last fetch, so the connection collector
      * runs (unconfined resumes it inline in the `value =` assignment) at the one moment the refresh is
      * mid-flight — the window in which the repository used to hold no usable handle on the in-flight job
@@ -235,7 +235,7 @@ class LobbyRepositoryTest {
         }
 
     /**
-     * Story 0050 defect C. Reaching [ConnectionState.Connected] must populate the lobby by itself. The
+     * Reaching [ConnectionState.Connected] must populate the lobby by itself. The
      * screen has no auto-refresh loop and there is no server push for the table list, so if the
      * repository does not fetch on the connected edge the only thing that ever fills the lobby is a
      * user pulling to refresh — which is how the smoke saw `Connected` on the strip beside the lobby's
@@ -262,8 +262,8 @@ class LobbyRepositoryTest {
         }
 
     /**
-     * Story 0050 defect C, the recovery direction: a transport drop resets the lobby to idle (as it
-     * must), and 0023/0024's resume brings the session back to [ConnectionState.Connected] with no user
+     * A transport drop resets the lobby to idle (as it
+     * must), and the resume brings the session back to [ConnectionState.Connected] with no user
      * action at all. The subscription has to come back with it.
      */
     @Test

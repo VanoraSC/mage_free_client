@@ -13,7 +13,7 @@ import magefree.protocol.WatchingGame
 import java.util.UUID
 
 /*
- * The per-callback mappers for the **non-prompt** in-game pushes (story 0051) — the game-side siblings
+ * The per-callback mappers for the **non-prompt** in-game pushes — the game-side siblings
  * of `magefree.bridge.mapping.table.*`. Each is pure and deterministic, takes the callback's already
  * decompressed payload plus the callback's own object id (which *is* the game id for every game
  * callback: see `mage.server.game.GameSessionWatcher`/`GameSessionPlayer`, which pass `game.getId()`),

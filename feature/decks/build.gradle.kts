@@ -9,7 +9,7 @@ android {
 
     testOptions {
         unitTests {
-            // Story 0049: the add-cards typing test renders the real composable under Robolectric, so
+            // the add-cards typing test renders the real composable under Robolectric, so
             // the hermetic gate needs Android resources (the design-system theme) on the JVM.
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
@@ -18,12 +18,12 @@ android {
 }
 
 dependencies {
-    // The offline deck library/legality/import-export (0033/0034), the offline card catalog +
-    // on-demand art loader/prefetch (0030/0031), and the design system (theme + 0014 card components).
+    // The offline deck library/legality/import-export, the offline card catalog +
+    // on-demand art loader/prefetch, and the design system (theme + card components).
     implementation(project(":core:decks"))
     implementation(project(":core:cards"))
     implementation(project(":core:designsystem"))
-    // Story 0035 reuses 0032's search ViewModel, card-art renderer, inspection surface, and the art
+    // Reuses the search ViewModel, card-art renderer, inspection surface, and the art
     // cache-policy controller/sheet rather than re-implementing card search/rendering.
     implementation(project(":feature:cards"))
 
@@ -44,7 +44,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
 
-    // Story 0049: JVM-side Compose UI testing for the builder's own search field, so both surfaces are
+    // JVM-side Compose UI testing for the builder's own search field, so both surfaces are
     // covered by the hermetic gate rather than only on a device. Scoped to the **debug** unit-test
     // variant because `createComposeRule` needs the host `ComponentActivity` that
     // `compose-ui-test-manifest` contributes as a `debugImplementation`; the Compose BOM is applied to

@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.flowOf
 
 /**
  * Observes device network reachability so the reconnect loop can wake a waiting back-off the instant
- * connectivity returns instead of sleeping out the full delay (story 0024).
+ * connectivity returns instead of sleeping out the full delay.
  *
  * [isOnline] is a hot `Flow<Boolean>` — `true` when a usable network is available, `false` when lost.
  * The Android implementation ([AndroidConnectivityObserver]) is backed by

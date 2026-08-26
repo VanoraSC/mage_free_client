@@ -12,7 +12,7 @@ import java.util.UUID
  * End-to-end connect + authenticate against a real XMage server.
  *
  * **Env-gated:** runs only when `XMAGE_SERVER` (host:port) is set — otherwise JUnit reports it
- * *skipped*, keeping `./scripts/dev gradle check` hermetic. Against the story-0022 reference server
+ * *skipped*, keeping `./scripts/dev gradle check` hermetic. Against the  reference server
  * (`authenticationActivated="false"`), any username connects without registration.
  *
  * It proves the full path: build a [mage.remote.Connection], drive `SessionImpl.connectStart`,

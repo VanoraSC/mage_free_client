@@ -53,14 +53,14 @@ val HOST_SEAT_TYPES: List<SeatPlayerType> =
     listOf(SeatPlayerType.Human, SeatPlayerType.ComputerMonteCarlo, SeatPlayerType.ComputerMad)
 
 /**
- * The editable create-table form, one-to-one with the subset of 0037's [CreateTableOptions] a host tunes.
+ * The editable create-table form, one-to-one with the subset of the [CreateTableOptions] a host tunes.
  * Defaults are sensible for a casual two-player duel; [toOptions] projects it onto the client options.
  *
  * @property name the table's display name.
  * @property gameType the game/format label (a [HOST_GAME_TYPES] entry).
  * @property deckType the deck/construction label (a [HOST_DECK_TYPES] entry).
  * @property opponents the **non-host** seats, in order, each either a human to wait for or an AI to seat
- *   (story 0041). The host always takes the first seat, so the table's seat count is this plus one.
+ *. The host always takes the first seat, so the table's seat count is this plus one.
  * @property rated whether the match is rated.
  * @property freeMulligans the number of free mulligans allowed.
  * @property winsNeeded wins to take the match (best-of-N ⇒ this is ⌈N/2⌉).
@@ -96,7 +96,7 @@ data class HostTableForm(
     /** The full seat list the table is created with: the host's human seat, then the [opponents]. */
     val seatTypes: List<SeatPlayerType> get() = listOf(SeatPlayerType.Human) + opponents
 
-    /** Project the form onto 0037's app-schema [CreateTableOptions] (host seat + the configured [opponents]). */
+    /** Project the form onto the app-schema [CreateTableOptions] (host seat + the configured [opponents]). */
     fun toOptions(): CreateTableOptions =
         CreateTableOptions(
             name = name.trim(),
@@ -153,17 +153,17 @@ data class HostTableUiState(
     /**
      * The create action is enabled only for a valid form with a picked, legal deck, and no sequence in
      * flight. The deck gate is not cosmetic: hosting *seats* the host, and a seat without a deck is
-     * exactly the half-finished table story 0041 fixes.
+     * exactly the half-finished table seating prevents.
      */
     val canCreate: Boolean get() = form.isValid && isSelectedLegal && !isSubmitting
 }
 
 /**
- * MVVM ViewModel for hosting a table (story 0038, completed by 0041).
+ * MVVM ViewModel for hosting a table.
  *
  * **The defect it fixes.** Hosting used to stop at `createTable`: the host held no seat, submitted no
  * deck, and the AI players it configured were never occupied — so the table could never reach the
- * server's ready state and the match could never start (0039's live coverage proves a freshly created
+ * server's ready state and the match could never start (the live coverage proves a freshly created
  * table has `seatsFilled = 0`; the server does not seat its creator).
  *
  * **The sequence**, mirroring `NewTableDialog.btnOKActionPerformed` upstream:
@@ -181,10 +181,10 @@ data class HostTableUiState(
  *
  * **The AI's deck.** An AI seat must submit a deck at join like any other, and this client has no deck
  * *generator*. Rather than invent an unplayable stub the server would reject, an AI seat is seated with
- * **the host's own chosen deck** — already picked, already legality-checked, and guaranteed valid for the
+ * **The host's own chosen deck** — already picked, already legality-checked, and guaranteed valid for the
  * table's format. It is the least surprising option (you get a mirror match against the AI) and it is
  * honest about the capability: choosing a *different* deck per AI seat needs a per-seat deck picker, which
- * is deliberately not in this story's scope.
+ * is deliberately not here's scope.
  *
  * The deck pick and its legality check are entirely offline ([DeckRepository] + [DeckLegality]); only the
  * create/join/remove calls touch the network.
@@ -365,7 +365,7 @@ class HostTableViewModel
         /**
          * Surface why the sequence stopped.
          *
-         * A [SessionGoneFailure] is reported honestly (story 0050 defect A): the server was never asked,
+         * A [SessionGoneFailure] is reported honestly: the server was never asked,
          * because there is no session left to ask through — so repeating the bridge's wording for a
          * refusal ("the server declined to create the table", which is what the smoke saw after XMage had
          * expired an idle session) would send the host off hunting a problem with their table options.
@@ -410,7 +410,7 @@ class HostTableViewModel
             const val MAX_FREE_MULLIGANS = 3
             const val MAX_WINS = 5
 
-            /** What the host is told when the action failed because the session is gone (story 0050). */
+            /** What the host is told when the action failed because the session is gone. */
             const val SIGNED_OUT_MESSAGE = "You're no longer signed in to the server. Sign in again to host a table."
         }
     }

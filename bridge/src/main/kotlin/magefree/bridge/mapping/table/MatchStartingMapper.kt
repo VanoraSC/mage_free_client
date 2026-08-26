@@ -5,7 +5,7 @@ import magefree.protocol.MatchStarting
 
 /**
  * Maps an upstream `START_GAME` callback's [mage.view.TableClientMessage] to the app-schema
- * [MatchStarting] event — the game-start signal and the **boundary to Epic 11** (no in-game state is
+ * [MatchStarting] event — the game-start signal and the **boundary to the game layer** (no in-game state is
  * carried). One of the per-callback table-lifecycle mappers making up the **single coupling surface**.
  * Pure and deterministic.
  *

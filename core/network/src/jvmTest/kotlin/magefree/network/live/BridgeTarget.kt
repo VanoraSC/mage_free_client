@@ -4,7 +4,7 @@ import magefree.model.ServerTarget
 
 /**
  * The live bridge these tests drive, resolved from the [ENV_VAR] environment variable — the app-side
- * mirror of `:bridge`'s `XMageServerTarget`/`XMAGE_SERVER` gate (story 0045).
+ * mirror of `:bridge`'s `XMageServerTarget`/`XMAGE_SERVER` gate.
  *
  * The whole point of the gate is that `:core:network` needs **only a URL** to reach a bridge: the module
  * speaks pure WebSocket + JSON (`:protocol`) and has no `mage.*`/`:bridge` dependency, and adding one to
