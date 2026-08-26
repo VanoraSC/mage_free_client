@@ -536,6 +536,15 @@ issue (see [Issue tracking](#issue-tracking)).
 targeting arrows, the vitals overlay, the zone browser, token treatment. That is the point: this epic
 makes the data exist so those epics can be about design rather than about plumbing.
 
+## Housekeeping
+
+Cross-cutting work that changes no behaviour. Not part of an epic; scheduled whenever it stops
+costing less than it saves.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0092 ([#150](https://github.com/VanoraSC/mage_free_client/issues/150)) | Source documentation says what the code does | — | Strips story numbers, epic and plan-section pointers, dated attributions and self-narration out of every KDoc and comment — 886 story references across 266 of the repository's 417 Kotlin files — and writes the rule into `AGENTS.md` so it does not grow back. Keeps the rationale, which is the valuable half; a cleanup that leaves KDoc restating the signature would do more damage than the story numbers ever did. |
+
 ## Known issues (accepted, not scheduled)
 
 Deliberately logged rather than fixed. Each is bounded, self-healing, and has no user-visible effect;
