@@ -498,6 +498,44 @@ GitHub issue (see [Issue tracking](#issue-tracking)).
 **EPIC-23 does not wait for this.** Its work is bridge-side (already JVM) plus `:protocol` data
 classes (already clean), and several of its items improve the current UI on their own.
 
+## EPIC-23 — Game Information We Do Not Yet Map
+
+Six fields the server sends on every snapshot and the bridge drops on the floor. See
+[`../ui-modernization-plan.md`](../ui-modernization-plan.md) §7.4, §7.5, §7.13, §7.14, §7.15.
+
+**It runs before what needs it, and it does not wait for anything.** The board epics — EPIC-19
+(motion and presentation), EPIC-13 (targeting and combat), EPIC-11 (zone browser, stack, vitals) —
+all render data that has to exist first. The work here is bridge-side (already JVM) plus `:protocol`
+data classes (already clean), so it never depended on EPIC-18.
+
+**Every story is the same shape, and it is the cheapest shape there is:** a correct upstream field,
+threaded through unchanged. Story 0076's `transformed` and story 0058's `cardTypes` are the
+precedent — no computation, no interpretation, no rules logic in the client. The server already
+decided; the bridge just stopped listening.
+
+**No story here renders anything**, so none carries an eyes-on checklist. What each one carries
+instead is a **live check against the reference XMage server** (story 0022's `xmage-server`
+service): a fixture proves the mapper reads a field, only a live game proves the server populates it
+on the path we read. Where a case cannot be reached live without a contrived deck, the PR says so
+rather than passing a fixture off as live coverage.
+
+They touch the same two files (`GameMessages.kt`, `GameViewMapper.kt`), so **land them in order** —
+the dependencies below are about merge conflicts, not about compilation. Each is tracked by a GitHub
+issue (see [Issue tracking](#issue-tracking)).
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0086 ([#140](https://github.com/VanoraSC/mage_free_client/issues/140)) | Spell and ability targets on the wire | — | `CardView.targets` → `GameCardView.targets`. The one piece of genuinely new data the stack needs, and what §3.1's targeting arrows draw. Unmapped in `:protocol` *and* in `GameState` today, so no rendering work can reach it. Upstream de-duplicates through a `LinkedHashSet` and resolves through `game.getObject`, so a target that is itself a spell arrives the same way a permanent does — one flat id list. |
+| 0087 ([#141](https://github.com/VanoraSC/mage_free_client/issues/141)) | Attachments in both directions | 0086 | `PermanentView.attachments`, `attachedToPermanent`, `attachedControllerDiffers`. The bridge maps only `attachedTo`, so a host cannot know what it carries and every permanent would have to scan the battlefield to find out. `attachedControllerDiffers` is §7.4's *"real and easily-missed board state"* — your Aura on their creature. Also the input §7.4's piling rule needs: a permanent carrying an attachment never piles. |
+| 0088 ([#142](https://github.com/VanoraSC/mage_free_client/issues/142)) | Player counters and designations | 0087 | `PlayerView.counters`, `monarch`, `initiative`, `designationNames`. **Poison is a win condition and the app cannot see it.** Counters reuse the existing `GameCounterView` rather than inventing a second counter shape, and the kind stays a string because the set is open. |
+| 0089 ([#143](https://github.com/VanoraSC/mage_free_client/issues/143)) | Command objects: emblems, commanders, dungeons, planes | 0088 | `PlayerView.commandList`, dropped entirely today. A polymorphic list of four upstream view types behind one `CommandObjectView` interface that already carries everything needed — id, name, rules, and a printing to resolve art by. Modelled as one flat type plus a kind code with `CardTypeCode`'s tolerant serializer, because they differ in what they *are*, not in what the app reads. |
+| 0090 ([#144](https://github.com/VanoraSC/mage_free_client/issues/144)) | Zone contents: graveyard and exile cards, not just counts | 0089 | `PlayerView.graveyard` / `exile` are `CardsView`; the bridge takes `.size` and discards the cards, which makes §7.13's zone browser unimplementable. Keeps the counts, preserves upstream ordering, and **measures the snapshot size delta** — §10 says measure real payloads before deciding anything about deltas, and a late-game graveyard is the largest thing this adds. |
+| 0091 ([#145](https://github.com/VanoraSC/mage_free_client/issues/145)) | Token and copy identity | 0090 | `CardView.isToken` and `mageObjectType`. A token and a card look identical and behave differently, and §7.4's piling rule depends on telling them apart. Both fields, because `mageObjectType` answers copy-versus-original off the same read. |
+
+**What this epic deliberately does not do.** Every "out of scope" here is a rendering surface —
+targeting arrows, the vitals overlay, the zone browser, token treatment. That is the point: this epic
+makes the data exist so those epics can be about design rather than about plumbing.
+
 ## Known issues (accepted, not scheduled)
 
 Deliberately logged rather than fixed. Each is bounded, self-healing, and has no user-visible effect;
