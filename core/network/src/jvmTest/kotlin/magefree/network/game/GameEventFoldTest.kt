@@ -401,6 +401,63 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun aStackEntrysTargetsSurviveFoldingAndResolveAgainstTheSameSnapshot() {
+        // Story 0086: `targets` is upstream's own de-duplicated, stably ordered id list for what a
+        // spell or ability on the stack is pointing at. The fold carries it unchanged -- the ids name
+        // objects in this same snapshot (here: a permanent on the battlefield and the spell below it
+        // on the stack), and joining them is the renderer's job, not the fold's.
+        val bear =
+            GamePermanentView(
+                card = GameCardView(id = "perm-1", name = "Grizzly Bears", creature = true),
+                controlledByViewer = false,
+            )
+        val bolt = GameCardView(id = "s-1", name = "Lightning Bolt", targets = listOf("perm-1"))
+        val counterspell = GameCardView(id = "s-2", name = "Counterspell", targets = listOf("s-1"))
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 1,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(playerId = "p-1", name = "pete", viewer = true),
+                                    GamePlayerView(playerId = "p-2", name = "Computer", human = false, battlefield = listOf(bear)),
+                                ),
+                            stack = listOf(bolt, counterspell),
+                        ),
+                ),
+            )!!
+
+        assertEquals(listOf("perm-1"), folded.stack.single { it.name == "Lightning Bolt" }.targets)
+        assertEquals(
+            "a target that is itself a stack entry is a plain id like any other",
+            listOf("s-1"),
+            folded.stack.single { it.name == "Counterspell" }.targets,
+        )
+        // Both ids resolve inside the very snapshot that carried them.
+        assertTrue(folded.stack.any { it.id == "s-1" })
+        assertTrue(folded.players.flatMap { it.battlefield }.any { it.card.id == "perm-1" })
+    }
+
+    @Test
+    fun aCardThatTargetsNothingCarriesAnEmptyTargetList() {
+        // Most cards are not targeting stack objects: upstream leaves `targets` null for a hand card
+        // or an ordinary permanent, the bridge maps that to empty, and nothing downstream invents one.
+        val folded = GameEventFold.fold(seed, GameStarted(gameId = GAME, state = view(hand = hand(1))))!!
+
+        assertTrue(
+            folded.hand
+                .single()
+                .targets
+                .isEmpty(),
+        )
+    }
+
+    @Test
     fun aCardCarriesWhatItCurrentlyIsAndTheCountersOnIt() {
         // Story 0058. Creature-ness is game state: the same Mountain is a land in one snapshot and a
         // 0/3 creature in the next, and only the server can say which. The fold carries all three

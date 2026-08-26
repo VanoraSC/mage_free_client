@@ -395,6 +395,26 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `a stack entry's targets round-trip in the order the server sent them`() {
+        // Story 0086. Upstream de-duplicates through a LinkedHashSet precisely so the order is stable
+        // across snapshots, so the wire must not turn the list into a set or sort it.
+        val bolt = GameCardView(id = "s-1", name = "Lightning Bolt", targets = listOf("perm-9", "p-2"))
+
+        val round = json.decodeFromString<GameCardView>(json.encodeToString(bolt))
+
+        assertEquals(listOf("perm-9", "p-2"), round.targets)
+    }
+
+    @Test
+    fun `a card frame from a bridge older than story 0086 decodes with no targets`() {
+        // Additive-only, per ProtocolVersion: a payload written before the field still decodes, and its
+        // absence means "this is not pointing at anything" -- which for most cards is simply true.
+        val decoded = json.decodeFromString<GameCardView>("""{"id":"c-3","name":"Forest"}""")
+
+        assertTrue(decoded.targets.isEmpty())
+    }
+
+    @Test
     fun `a card type this build has never heard of decodes to UNKNOWN instead of throwing`() {
         // The list form of the forward-compat promise: upstream keeps adding card types (BATTLE and
         // DUNGEON are recent), and `ignoreUnknownKeys` does not cover an unknown *value* inside a list.

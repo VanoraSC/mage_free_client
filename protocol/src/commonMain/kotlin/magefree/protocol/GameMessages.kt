@@ -790,7 +790,15 @@ public data class GamePlayerView(
  *   by `PermanentView` via its `super()` call. `false` for anything that is not a permanent, and for an
  *   untransformed permanent — only `true` once the permanent has actually flipped to its back face.
  *   This, not [alternateName], is the signal for which face's art to request.
+ * @property targets what this object is pointing at, from upstream `CardView.getTargets()` (story
+ *   0086) — the ids of every chosen target of a spell or ability on the stack, de-duplicated and in
+ *   upstream's own stable order. **Ids into the same snapshot**, resolvable against any object in it:
+ *   a battlefield permanent, a player, or **another entry on the [GameStateView.stack]**, because
+ *   upstream resolves them through `game.getObject(uuid)` and puts them in one flat list with no
+ *   per-kind branching. Empty for anything not targeting — a hand card, an ordinary permanent, an
+ *   untargeted spell — because upstream only calls `addTargets` while building a stack object.
  *
+
  *   **Found live three times over (Pete, 2026-08-16 through 2026-08-22)** before these two fields were
  *   traced fully against upstream source: a transformed permanent stuck showing front art, a hand card
  *   showing its other face's art, and an untransformed permanent showing back-face art with no flip
@@ -814,6 +822,7 @@ public data class GameCardView(
     val counters: List<GameCounterView> = emptyList(),
     val alternateName: String? = null,
     val transformed: Boolean = false,
+    val targets: List<String> = emptyList(),
 )
 
 /**
