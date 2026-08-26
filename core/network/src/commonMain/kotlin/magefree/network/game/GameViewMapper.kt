@@ -186,6 +186,10 @@ internal object GameViewMapper {
             hasLeft = hasLeft,
             manaPool = manaPool.toManaPool(),
             battlefield = battlefield.map { it.toPermanent() },
+            counters = counters.map { GameCounter(name = it.name, count = it.count) },
+            isMonarch = monarch,
+            hasInitiative = initiative,
+            designationNames = designationNames,
         )
 
     private fun GameCardView.toCard(): GameCard =

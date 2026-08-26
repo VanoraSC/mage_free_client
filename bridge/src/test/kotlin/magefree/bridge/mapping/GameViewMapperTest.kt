@@ -409,6 +409,68 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `a player carries the counters on it, poison included`() {
+        // Poison at ten is a loss, so this is win-condition state rather than decoration. Looked up by
+        // name, never by index: upstream builds the list from `getCountersAsCopy()`, and
+        // `mage.counters.Counters` extends HashMap -- the order that arrives means nothing.
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players = listOf(GameViews.player(playerId = alice, counters = listOf("poison" to 3, "energy" to 2))),
+            )
+
+        val counters =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .counters
+                .associate { it.name to it.count }
+
+        assertEquals(mapOf("poison" to 3, "energy" to 2), counters)
+    }
+
+    @Test
+    fun `monarch, initiative and designations are carried per player`() {
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players =
+                    listOf(
+                        GameViews.player(
+                            playerId = alice,
+                            monarch = true,
+                            initiative = true,
+                            designationNames = listOf("City's Blessing"),
+                        ),
+                        GameViews.player(playerId = computer, name = "Computer", controlled = false),
+                    ),
+            )
+
+        val mapped = GameViewMapper.map(view).players
+
+        assertTrue(mapped[0].monarch)
+        assertTrue(mapped[0].initiative)
+        assertEquals(listOf("City's Blessing"), mapped[0].designationNames)
+        assertFalse(mapped[1].monarch, "the crown belongs to exactly one seat")
+        assertFalse(mapped[1].initiative)
+        assertTrue(mapped[1].designationNames.isEmpty())
+    }
+
+    @Test
+    fun `a player with no counters or designations maps to empty lists, never a crash`() {
+        // The serialization constructor leaves both null, standing in for a sparse upstream view.
+        val view = GameViews.game(myPlayerId = alice, players = listOf(GameViews.player(playerId = alice)))
+
+        val player = GameViewMapper.map(view).players.single()
+
+        assertTrue(player.counters.isEmpty())
+        assertTrue(player.designationNames.isEmpty())
+        assertFalse(player.monarch)
+        assertFalse(player.initiative)
+    }
+
+    @Test
     fun `every upstream phase and step maps to a distinct code`() {
         TurnPhase.entries.forEach { phase ->
             val mapped = GameViewMapper.map(GameViews.game(phase = phase)).phase

@@ -62,14 +62,28 @@ val designationNames: List<String> = emptyList(),
 
 ```kotlin
 // :bridge — GameViewMapper.mapPlayer
-counters = player.counters.orEmpty().filterNotNull().map { GameCounterView(it.name.orEmpty(), it.count) },
+counters =
+    player.counters.orEmpty().filterNotNull().map { counter ->
+        GameCounterView(name = counter.name.orEmpty(), count = counter.count)
+    },
 monarch = player.isMonarch,
-initiative = player.hasInitiative,
+initiative = player.isInitiative,
 designationNames = player.designationNames.orEmpty().filterNotNull(),
 ```
 
-Accessor names are illustrative — **read `PlayerView.java` and use what is actually there.** The
-existing card-counter mapping in `GameViewMapper` is the shape to copy for the counter list.
+The accessor is `isInitiative()`, not `hasInitiative()`.
+
+**Counter order is meaningless, and the KDoc has to say so.** `PlayerView` builds the list from
+`player.getCountersAsCopy().values()`, and `mage.counters.Counters` extends `HashMap` — so unlike the
+zone lists, which come from `LinkedHashMap`s, this arrives in hash order. Consumers look a counter up
+by name; nothing indexes into it.
+
+**`designationNames` can only ever carry City's Blessing** (verification standard 5). `PlayerView`
+reads `player.getDesignations()`, and the only production caller of `Player.addDesignation` anywhere
+in XMage is `AscendAbility`. The Monarch, Initiative and Speed designations are registered through
+`GameState.addDesignation` — they are game-level, not per-player — so they never appear in this list
+however the game goes. That is precisely why `monarch` and `initiative` are separate flags, and it is
+worth writing down: a consumer looking for `"The Monarch"` in `designationNames` would wait forever.
 
 **Reachability (standard 2).** `PlayerView`'s constructor populates `counters` from the player's own
 counters, and `monarch` / `initiative` / `designationNames` from game state, on every snapshot for
@@ -83,27 +97,61 @@ confirms the path rather than the fixture.
    the next reader knows why this is not cosmetic.
 3. Map them in `mapPlayer`.
 4. Extend `GameViews.kt` so a fixture player can carry counters, the two flags and designations.
-5. Regenerate goldens with `UPDATE_GOLDEN=1`; read the diff.
+5. Carry the same four through `:core:network`'s `GamePlayer` and its mapper.
+6. No golden to regenerate: the only committed golden is `chat_talk.json`.
 
 ## 7. Testing & verification
 
-- **Proven failing first (standard 1):** the mapper test asserting a poison counter reaches
-  `GamePlayerView` must fail against a mapper that drops `counters`, then pass.
-- **Unit:** `GameViewMapperTest` — a player with poison 3 and energy 2 maps both, in order; a player
-  with `counters == null` maps to `emptyList()`; the two booleans and the designation list round-trip.
-- **Live:** against the reference server, put a poison counter on a player and assert it arrives.
-  Monarch is the cheapest of the three flags to reach live; if initiative or a designation cannot be
-  produced without a contrived deck, say so in the PR rather than asserting a fixture and calling it
-  live coverage.
+- **Proven failing first (standard 1):** two `:bridge` mapper tests and the `:core:network` fold test
+  each fail against a mapper that drops the fields. So does the live test, proven once per field:
+
+  | Break | Live failure |
+  |---|---|
+  | `counters = emptyList()` | "no snapshot ever carried a poison counter" |
+  | `monarch = false` | the loop exhausts its cap with `monarch=false` |
+  | `initiative = false` | the loop exhausts its cap with `initiative=false` |
+
+- **Unit (`:bridge`):** a player carries poison and energy, looked up by name; the two flags and the
+  designation list are per-seat, so the opponent gets neither crown; a sparse view with `counters` and
+  `designationNames` null maps to empty lists rather than throwing.
+- **Unit (`:protocol`):** all four round-trip, and a frame from an older bridge decodes with no
+  counters and neither flag set.
+- **Unit (`:core:network`):** the same four survive the fold, and the opponent's seat carries none of
+  them.
+- **Live:** `GameRelayIT` plays a deck in which **every cost is generic**, so no colour of mana is
+  ever required and a mis-chosen colour cannot stall a payment:
+  - `Mox Poison` (`{0}`) — tapping it for mana gives its controller two poison counters. Cheapest
+    poison in the game, and it needs no combat at all.
+  - `Dungeoneer's Pack` (`{3}`, then `{2}`, `{T}`, sacrifice) — takes the initiative.
+  - `Throne of the High City` (a land; `{4}`, `{T}`, sacrifice) — makes you the monarch.
+
+  The opponent seat holds sixty basic lands, so it never attacks, blocks or casts anything: every
+  state change in the game is one the test caused.
+
+  Two prompts needed answers the other live loops do not: a `ChooseAbilityPrompt` (the `Throne` has a
+  mana ability *and* the crown ability, so an object id alone does not say which is wanted), and
+  "you still have mana in your mana pool… pass anyway?", answered **yes** — answering no sends
+  `PASS_PRIORITY_CANCEL_ALL_ACTIONS` and the server asks again, which is an unbounded loop rather
+  than a failure.
+
+  **Poison arrives two at a time, and more than once.** The Mox is tapped again on any turn its mana
+  is needed, so the assertion is that the count is a positive multiple of two rather than exactly two.
+- **Not covered live: `designationNames`.** City's Blessing is the only value it can ever hold, and
+  that needs Ascend plus ten permanents. The live test asserts the *opposite* instead — that no seat
+  carries a designation even while one is the monarch and has the initiative — which is the claim a
+  consumer would otherwise get wrong.
 - **Eyes-on:** none. Nothing renders yet — §7.15 is EPIC-11.
 
 ## 8. Acceptance criteria
 
-- [ ] All four fields exist on `GamePlayerView`, default safely, and are documented.
-- [ ] Counters reuse `GameCounterView` rather than introducing a second counter type.
-- [ ] The mapper test was proven failing before passing.
-- [ ] A live poison counter arrives end-to-end; whatever could not be reached live is named.
-- [ ] `./gradlew check` passes; goldens updated deliberately.
+- [x] All four fields exist on `GamePlayerView`, default safely, and are documented.
+- [x] Counters reuse `GameCounterView` rather than introducing a second counter type.
+- [x] The mapper tests were proven failing before passing, and the live test once per field.
+- [x] A live poison counter, crown and initiative all arrive end-to-end; `designationNames` is named
+      as not reachable live, with the upstream reason.
+- [x] The fields reach the app: `GameState`'s `GamePlayer` carries them.
+- [x] `./gradlew check` and `:bridge:check` pass (the latter with `XMAGE_SERVER` set); no golden
+      needed regenerating.
 
 ## 9. References
 

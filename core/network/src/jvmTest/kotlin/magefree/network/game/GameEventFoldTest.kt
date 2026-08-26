@@ -495,6 +495,49 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun playerCountersTheCrownAndDesignationsSurviveFolding() {
+        // Poison at ten is a loss, so this is win-condition state the fold must not drop. Counters are
+        // read by name: the order upstream sends is its own hash-map order and means nothing.
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 5,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(
+                                        playerId = "p-1",
+                                        name = "pete",
+                                        viewer = true,
+                                        counters = listOf(GameCounterView("poison", 9), GameCounterView("energy", 4)),
+                                        monarch = true,
+                                        initiative = true,
+                                        designationNames = listOf("City's Blessing"),
+                                    ),
+                                    GamePlayerView(playerId = "p-2", name = "Computer", human = false),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val viewer = folded.viewer!!
+        assertEquals(mapOf("poison" to 9, "energy" to 4), viewer.counters.associate { it.name to it.count })
+        assertTrue(viewer.isMonarch)
+        assertTrue(viewer.hasInitiative)
+        assertEquals(listOf("City's Blessing"), viewer.designationNames)
+
+        val opponent = folded.players.single { !it.isViewer }
+        assertTrue(opponent.counters.isEmpty())
+        assertFalse(opponent.isMonarch)
+        assertFalse(opponent.hasInitiative)
+        assertTrue(opponent.designationNames.isEmpty())
+    }
+
+    @Test
     fun anUnattachedPermanentFoldsWithNoAttachmentState() {
         val folded =
             GameEventFold.fold(

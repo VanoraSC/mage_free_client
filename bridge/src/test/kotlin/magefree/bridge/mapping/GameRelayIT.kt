@@ -14,6 +14,8 @@ import mage.remote.SessionImpl
 import magefree.bridge.xmage.BridgeMageClient
 import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageServerTarget
+import magefree.protocol.AskPrompt
+import magefree.protocol.ChooseAbilityPrompt
 import magefree.protocol.ChooseChoicePrompt
 import magefree.protocol.CreateTableOptions
 import magefree.protocol.DeckList
@@ -22,6 +24,7 @@ import magefree.protocol.GameCardView
 import magefree.protocol.GameInformed
 import magefree.protocol.GameOver
 import magefree.protocol.GamePermanentView
+import magefree.protocol.GamePlayerView
 import magefree.protocol.GamePrompt
 import magefree.protocol.GamePrompted
 import magefree.protocol.GameStarted
@@ -71,12 +74,18 @@ import java.util.UUID
  * keeps the prompt stream small — no spells, so no modes, no costs and no combat — which is what lets
  * the auto-responder below be a few lines rather than a rules engine.
  *
- * **Two more scenarios live here**, sharing this class's harness (connect, seat, start, pump,
+ * **Three more scenarios live here**, sharing this class's harness (connect, seat, start, pump,
  * teardown) rather than copying it — only the deck and the play loop differ:
- * - story 0086, with [BURN_DECK]: actually *casts* something, the one way to get a targeted spell onto
- *   a real stack and read `CardView.getTargets()` back off the snapshot the server pushes;
- * - story 0087, with [AURA_DECK]: puts an Aura on a creature each player controls, which is the only
- *   way to see `attachedControllerDiffers` be true.
+ * - [BURN_DECK] casts a targeted spell, the only way to get real targets onto a real stack and read
+ *   `CardView.getTargets()` back off a pushed snapshot;
+ * - [AURA_DECK] puts an Aura on a land each player controls, which is the only way to see
+ *   `attachedControllerDiffers` be true;
+ * - [PLAYER_STATE_DECK] produces poison counters, the crown and the initiative.
+ *
+ * **Each of the three arranges everything it asserts.** Where a scenario needs the opponent to have a
+ * permanent, that permanent is a land, because a deck of sixty basics plays one every turn whatever
+ * else it does. Waiting on the AI to cast a creature makes the assertion depend on an AI decision,
+ * which is how a live test becomes a flaky one.
  *
  * **A failed run can leave a table behind on a long-lived server**, and `LobbyRelayIT` — which
  * asserts the reference room has no open tables — is where that shows up, not here. [teardown] is
@@ -157,30 +166,60 @@ class GameRelayIT {
         const val MAX_ANSWERS_TO_CAST = 400
 
         /**
-         * Story 0087's deck: mono-green, so every cost is payable from one basic. `Rancor` (`EMA`
-         * #180, `{G}`) enchants **any** creature — upstream's `TargetCreaturePermanent`, not "a
-         * creature you control" — which is what makes the differing-controller case reachable at all.
-         * `Grizzly Bears` (`8ED` #256, `{1}{G}`) is the creature to enchant.
+         * The deck for the attachment scenario. `Sea's Claim` (`9ED` #97) costs `{U}` and takes
+         * upstream's `TargetLandPermanent` — **any** land, not "a land you control" — which is what
+         * makes an Aura on a permanent the opponent controls reachable.
+         *
+         * A **land** is the host rather than a creature because the opponent always has one: it plays
+         * a land every turn from sixty basics, whatever else it decides to do. Enchanting a creature
+         * would have meant waiting for the AI to cast one, which is its choice, not this test's.
          */
         val AURA_DECK =
             DeckList(
-                name = "it_rancor",
+                name = "it_seasclaim",
                 author = "game-relay-it",
                 cards =
                     listOf(
-                        DeckListCard(cardName = "Forest", setCode = "M21", collectorNumber = "272", amount = 24),
-                        DeckListCard(cardName = "Grizzly Bears", setCode = "8ED", collectorNumber = "256", amount = 20),
-                        DeckListCard(cardName = "Rancor", setCode = "EMA", collectorNumber = "180", amount = 16),
+                        DeckListCard(cardName = "Island", setCode = "M21", collectorNumber = "263", amount = 40),
+                        DeckListCard(cardName = "Sea's Claim", setCode = "9ED", collectorNumber = "97", amount = 20),
                     ),
                 sideboard = emptyList(),
             )
 
-        const val RANCOR = "Rancor"
-        const val BEARS = "Grizzly Bears"
+        const val SEAS_CLAIM = "Sea's Claim"
+        const val ISLAND = "Island"
         const val FOREST = "Forest"
 
-        /** Story 0087 needs several turns of real play, not one; the 0051 loop's 180s is too tight. */
+        /** The attachment scenario needs several turns of real play; the 0051 loop's 180s is tight. */
         const val AURA_PLAY_TIMEOUT_MS = 240_000L
+
+        /**
+         * The deck for the per-player-state scenario. Every cost in it is **generic**, so no mana of
+         * any particular colour is ever required and a mis-chosen colour cannot stall a payment:
+         * - `Mox Poison` (`MB2` #608) costs `{0}`; tapping it for mana gives its controller two poison
+         *   counters, which is the cheapest poison in the game and needs no combat.
+         * - `Dungeoneer's Pack` (`CLB` #312) costs `{3}`; `{2}`, `{T}`, sacrifice takes the initiative.
+         * - `Throne of the High City` (`CN2` #80) is a land; `{4}`, `{T}`, sacrifice makes you the
+         *   monarch.
+         */
+        val PLAYER_STATE_DECK =
+            DeckList(
+                name = "it_vitals",
+                author = "game-relay-it",
+                cards =
+                    listOf(
+                        DeckListCard(cardName = "Forest", setCode = "M21", collectorNumber = "272", amount = 20),
+                        DeckListCard(cardName = "Mox Poison", setCode = "MB2", collectorNumber = "608", amount = 12),
+                        DeckListCard(cardName = "Throne of the High City", setCode = "CN2", collectorNumber = "80", amount = 12),
+                        DeckListCard(cardName = "Dungeoneer's Pack", setCode = "CLB", collectorNumber = "312", amount = 16),
+                    ),
+                sideboard = emptyList(),
+            )
+
+        const val MOX = "Mox Poison"
+        const val THRONE = "Throne of the High City"
+        const val PACK = "Dungeoneer's Pack"
+        const val POISON = "poison"
     }
 
     @Test
@@ -478,19 +517,24 @@ class GameRelayIT {
     }
 
     /**
-     * **Story 0087's live check.** A crafted `PermanentView` can be given any combination of
-     * attachment fields, so a fixture proves only that the mapper reads them. This proves the *server*
-     * fills them, in a real game, on the path the bridge reads — and it covers the case §7.4 calls the
-     * easily-missed one: **your Aura on their creature**, which no single-player fixture can produce.
+     * Attachments in a real game, in both directions, on a permanent we control and on one the
+     * opponent controls. A crafted `PermanentView` can be given any combination of attachment fields,
+     * so a fixture proves only that the mapper reads them; this proves the server fills them on the
+     * path the bridge reads, and it reaches the case no single-player fixture can produce — **your
+     * Aura on their permanent**.
      *
      * **Both directions are asserted against each other.** For every attachment found, the host named
-     * by `attachedTo` must list it back in `attachments`. That invariant is the cheapest possible check
-     * that the two fields were read off the same snapshot rather than drifting apart, and in the
+     * by `attachedTo` must list it back in `attachments`. That invariant is the cheapest check that the
+     * two fields were read off the same snapshot rather than drifting apart, and in the
      * differing-controller case it holds *across* two players' battlefields — the Aura sits on ours,
-     * the creature on theirs.
+     * the host on theirs.
+     *
+     * The opponent seat holds [DECK], sixty basic lands: it plays a land every turn and does nothing
+     * else, so the permanent this test enchants is always there and no assertion depends on an AI
+     * decision.
      */
     @Test
-    fun `a live aura is carried in both directions, on our creature and on theirs (story 0087)`() =
+    fun `a live aura is carried in both directions, on our permanent and on theirs`() =
         runBlocking {
             val username = uniqueUsername()
             val client = BridgeMageClient()
@@ -511,7 +555,7 @@ class GameRelayIT {
                 assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
                 tableId = UUID.fromString((created as TableCreated).table.tableId)
 
-                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, AURA_DECK))
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, DECK))
                 assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, AURA_DECK))
 
                 val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
@@ -528,35 +572,35 @@ class GameRelayIT {
                 val observed = playUntilBothAuraCasesSeen(session, gameId, events)
 
                 val ours =
-                    requireNotNull(observed.ownCreature) {
-                        "never saw a Rancor on our own creature; answered=${observed.answered} " +
+                    requireNotNull(observed.ownPermanent) {
+                        "never saw a Sea's Claim on a land we control; answered=${observed.answered} " +
                             "callbacks=${callbackSummary()} last=${observed.last}"
                     }
-                assertTrue(ours.aura.attachedToPermanent, "the host is a creature, so upstream must say the host is a permanent")
-                assertFalse(ours.aura.attachedControllerDiffers, "we control both the Aura and the creature")
+                assertTrue(ours.aura.attachedToPermanent, "the host is a land, so upstream must say the host is a permanent")
+                assertFalse(ours.aura.attachedControllerDiffers, "we control both the Aura and the land")
                 assertEquals(ours.host.card.id, ours.aura.attachedTo)
                 assertTrue(
                     ours.aura.card.id in ours.host.attachments,
                     "the host must list the Aura back: attachedTo=${ours.aura.attachedTo} attachments=${ours.host.attachments}",
                 )
-                assertTrue(ours.hostControlledByViewer, "our own creature should sit on our own battlefield")
+                assertTrue(ours.hostControlledByViewer, "our own land sits on our own battlefield")
 
                 val theirs =
-                    requireNotNull(observed.opponentCreature) {
-                        "never saw a Rancor on the opponent's creature — the case this story exists for; " +
+                    requireNotNull(observed.opponentPermanent) {
+                        "never saw a Sea's Claim on a land the opponent controls; " +
                             "answered=${observed.answered} callbacks=${callbackSummary()} last=${observed.last}"
                     }
                 assertTrue(theirs.aura.attachedToPermanent)
-                assertTrue(theirs.aura.attachedControllerDiffers, "our Aura on their creature is exactly what this flag is for")
+                assertTrue(theirs.aura.attachedControllerDiffers, "our Aura on their permanent is exactly what this flag is for")
                 assertEquals(theirs.host.card.id, theirs.aura.attachedTo)
                 assertTrue(
                     theirs.aura.card.id in theirs.host.attachments,
                     "the round trip must hold across two battlefields too: attachments=${theirs.host.attachments}",
                 )
-                assertFalse(theirs.hostControlledByViewer, "the host is the opponent's creature, on the opponent's battlefield")
+                assertFalse(theirs.hostControlledByViewer, "the host is the opponent's land, on the opponent's battlefield")
 
                 println(
-                    "GameRelayIT[0087]: ourAura=${ours.aura.card.id}->${ours.aura.attachedTo} differs=false; " +
+                    "GameRelayIT[aura]: ourAura=${ours.aura.card.id}->${ours.aura.attachedTo} differs=false; " +
                         "theirAura=${theirs.aura.card.id}->${theirs.aura.attachedTo} differs=true; " +
                         "answered=${observed.answered} callbacks=${callbackSummary()}",
                 )
@@ -576,25 +620,24 @@ class GameRelayIT {
 
     /** What the 0087 loop saw. */
     private class AuraObserved {
-        var ownCreature: Attachment? = null
-        var opponentCreature: Attachment? = null
+        var ownPermanent: Attachment? = null
+        var opponentPermanent: Attachment? = null
         var last: GameStateView? = null
         var answered: Int = 0
     }
 
     /**
-     * Plays green until a `Rancor` sits on **our** creature and another sits on **theirs**.
+     * Plays until a `Sea's Claim` sits on a land **we** control and another sits on a land **they**
+     * control.
      *
-     * Like the 0086 loop, every decision comes from the server's own `canPlayObjects` — cast what it
-     * says is castable, play the land it says is playable, otherwise pass — so a slow draw costs a turn
-     * rather than the run, and a refused reply cannot become an unbounded prompt loop. The one addition
-     * is that action is confined to **our own precombat main phase**: outside it a `GAME_SELECT` is a
-     * combat declaration, and answering one with an object id would declare an attacker or a blocker
-     * rather than cast anything.
+     * Every decision comes from the server's own `canPlayObjects` — cast what it says is castable, play
+     * the land it says is playable, otherwise pass — so a slow draw costs a turn rather than the run,
+     * and a refused reply cannot become an unbounded prompt loop. Action is confined to our own
+     * precombat main phase: outside it a `GAME_SELECT` is a combat declaration, and answering one with
+     * an object id would declare an attacker or a blocker rather than cast anything.
      *
-     * The opponent's creature is the one thing here that is not ours to arrange. It is also not a coin
-     * flip: the AI holds the same 20-creature deck and plays a Bear on essentially every turn it can,
-     * and the loop simply keeps passing until one is there.
+     * Nothing here waits on the opponent to decide anything. It holds sixty basic lands, so it has a
+     * land on the battlefield from its first turn onwards and never does anything else.
      */
     private suspend fun playUntilBothAuraCasesSeen(
         session: SessionImpl,
@@ -612,10 +655,10 @@ class GameRelayIT {
 
             stateOf(event)?.let { state ->
                 observed.last = state
-                attachmentOf(state, differingController = false)?.let { observed.ownCreature = it }
-                attachmentOf(state, differingController = true)?.let { observed.opponentCreature = it }
+                attachmentOf(state, differingController = false)?.let { observed.ownPermanent = it }
+                attachmentOf(state, differingController = true)?.let { observed.opponentPermanent = it }
             }
-            if (observed.ownCreature != null && observed.opponentCreature != null) break
+            if (observed.ownPermanent != null && observed.opponentPermanent != null) break
             if (event is GameOver) break
             if (event !is GamePrompted) continue
 
@@ -638,23 +681,21 @@ class GameRelayIT {
             when {
                 prompt is SelectPrompt && ourMainPhase -> {
                     tappedForThisPayment.clear()
-                    val forest = state.hand.firstOrNull { it.name == FOREST && it.id in playable }
-                    val bears = state.hand.firstOrNull { it.name == BEARS && it.id in playable }
-                    val rancor = state.hand.firstOrNull { it.name == RANCOR && it.id in playable }
-                    val ourBareCreature = ourBoard.firstOrNull { it.card.creature && it.attachments.isEmpty() }
-                    val theirCreature = theirBoard.firstOrNull { it.card.creature }
+                    val island = state.hand.firstOrNull { it.name == ISLAND && it.id in playable }
+                    val aura = state.hand.firstOrNull { it.name == SEAS_CLAIM && it.id in playable }
+                    val ourBareLand = ourBoard.firstOrNull { it.card.name == ISLAND && it.attachments.isEmpty() }
+                    val theirLand = theirBoard.firstOrNull { it.attachments.isEmpty() }
                     when {
-                        forest != null -> sendUuid(session, gameId, forest.id)
-                        ourBoard.none { it.card.creature } && bears != null -> sendUuid(session, gameId, bears.id)
-                        rancor != null && observed.ownCreature == null && ourBareCreature != null -> {
-                            pendingTarget = ourBareCreature.card.id
-                            sendUuid(session, gameId, rancor.id)
+                        island != null -> sendUuid(session, gameId, island.id)
+                        aura != null && observed.ownPermanent == null && ourBareLand != null -> {
+                            pendingTarget = ourBareLand.card.id
+                            sendUuid(session, gameId, aura.id)
                         }
-                        rancor != null && observed.opponentCreature == null && theirCreature != null -> {
-                            pendingTarget = theirCreature.card.id
-                            sendUuid(session, gameId, rancor.id)
+                        aura != null && observed.opponentPermanent == null && theirLand != null -> {
+                            pendingTarget = theirLand.card.id
+                            sendUuid(session, gameId, aura.id)
                         }
-                        else -> withContext(Dispatchers.IO) { GameRelay.sendPlayerBoolean(session, gameId, false) }
+                        else -> pass(session, gameId)
                     }
                 }
                 prompt is TargetPrompt && pendingTarget != null && pendingTarget in prompt.targetIds -> {
@@ -666,7 +707,7 @@ class GameRelayIT {
                     // snapshot to have caught up: sending the same land twice is a refused reply, and
                     // a refused reply is re-asked immediately.
                     val land =
-                        ourBoard.firstOrNull { it.card.name == FOREST && !it.tapped && it.card.id !in tappedForThisPayment }
+                        ourBoard.firstOrNull { it.card.name == ISLAND && !it.tapped && it.card.id !in tappedForThisPayment }
                     if (land != null) {
                         tappedForThisPayment += land.card.id
                         sendUuid(session, gameId, land.card.id)
@@ -680,7 +721,7 @@ class GameRelayIT {
             if (observed.answered > MAX_ANSWERS_TO_CAST) {
                 throw AssertionError(
                     "answered $MAX_ANSWERS_TO_CAST prompts without seeing both aura cases. " +
-                        "own=${observed.ownCreature != null} opponent=${observed.opponentCreature != null} " +
+                        "own=${observed.ownPermanent != null} opponent=${observed.opponentPermanent != null} " +
                         "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
                 )
             }
@@ -714,6 +755,258 @@ class GameRelayIT {
         val (hostOwner, host) = everything.firstOrNull { (_, permanent) -> permanent.card.id == aura.attachedTo } ?: return null
         return Attachment(aura = aura, host = host, hostControlledByViewer = hostOwner.viewer)
     }
+
+    /**
+     * Per-player state that decides games without ever being on the battlefield: a **poison counter**,
+     * the **crown**, and the **initiative**, each produced by a real game against the reference server
+     * and read back off the snapshot the bridge maps.
+     *
+     * A crafted `PlayerView` can be given any of these, so the hermetic tests prove only that the
+     * mapper reads them. This proves the server fills them on the path the bridge reads.
+     *
+     * The opponent seat holds [DECK] — sixty basic lands, no creatures and no spells — so it never
+     * attacks, never blocks and never interacts. Every state change in this game is one this test
+     * caused, which is what lets the assertions be about specific values rather than about whatever a
+     * game happened to produce.
+     *
+     * `designationNames` is **not** covered here. The only designation a player can ever hold is
+     * City's Blessing, which needs Ascend and ten permanents; the Monarch and Initiative designations
+     * are registered on the game state, not on the player, so they never appear in that list however
+     * the game goes.
+     */
+    @Test
+    fun `live poison counters, the crown and the initiative all reach the snapshot`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(session, roomId, options(name = "it_vit_$username"))
+                    }
+                assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, PLAYER_STATE_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+
+                events.awaitOfType<GameStarted>(GAME_INIT_TIMEOUT_MS, "a GAME_INIT push")
+
+                val observed = playUntilPoisonCrownAndInitiative(session, gameId, events)
+
+                val poisoned =
+                    requireNotNull(observed.poisoned) {
+                        "no snapshot ever carried a poison counter; answered=${observed.answered} " +
+                            "callbacks=${callbackSummary()} last=${observed.last}"
+                    }
+                // Each tap of the Mox adds two, and it is tapped again on any turn its mana is needed,
+                // so the count is a multiple of two rather than exactly two.
+                val poison = poisoned.counters.single { it.name == POISON }.count
+                assertTrue(poison >= 2 && poison % 2 == 0, "poison arrives two at a time, got ${poisoned.counters}")
+                assertTrue(poisoned.viewer, "the Mox poisons its own controller, which is us")
+
+                val monarch =
+                    requireNotNull(observed.monarch) {
+                        "never became the monarch; answered=${observed.answered} callbacks=${callbackSummary()}"
+                    }
+                assertTrue(monarch.monarch)
+                assertTrue(monarch.viewer, "we are the seat that took the crown")
+
+                val initiative =
+                    requireNotNull(observed.initiative) {
+                        "never took the initiative; answered=${observed.answered} callbacks=${callbackSummary()}"
+                    }
+                assertTrue(initiative.initiative)
+                assertTrue(initiative.viewer)
+
+                val last = observed.last!!
+                assertTrue(
+                    last.players.none { it.designationNames.isNotEmpty() },
+                    "the Monarch and Initiative designations live on the game state, never on a player: ${last.players}",
+                )
+
+                println(
+                    "GameRelayIT[0088]: poison=${poisoned.counters} monarch=${monarch.name} " +
+                        "initiative=${initiative.name} answered=${observed.answered} callbacks=${callbackSummary()}",
+                )
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /** The seats, at the moment each piece of per-player state first appeared. */
+    private class PlayerStateObserved {
+        var poisoned: GamePlayerView? = null
+        var monarch: GamePlayerView? = null
+        var initiative: GamePlayerView? = null
+        var last: GameStateView? = null
+        var answered: Int = 0
+    }
+
+    /**
+     * Plays a land, taps `Mox Poison` for the poison, and sacrifices a `Dungeoneer's Pack` and a
+     * `Throne of the High City` for the initiative and the crown.
+     *
+     * Every decision comes from the server's own `canPlayObjects`: play or activate what it says is
+     * available, otherwise pass. Action is confined to our own precombat main phase, where a
+     * `GAME_SELECT` means "you have priority" rather than "declare attackers".
+     *
+     * Two prompts need answers this test's other loops do not:
+     * - a `ChooseAbilityPrompt`, because the `Throne` has both a mana ability and the crown ability, and
+     *   the object id alone does not say which is wanted;
+     * - the "you still have mana in your mana pool… pass anyway?" question, answered **yes**. Answering
+     *   no sends `PASS_PRIORITY_CANCEL_ALL_ACTIONS` and the server immediately asks again, which is an
+     *   unbounded loop rather than a failure.
+     */
+    private suspend fun playUntilPoisonCrownAndInitiative(
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+    ): PlayerStateObserved {
+        val observed = PlayerStateObserved()
+        val deadline = System.currentTimeMillis() + AURA_PLAY_TIMEOUT_MS
+        val tappedForThisPayment = mutableSetOf<String>()
+
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                observed.last = state
+                state.players.firstOrNull { it.counters.any { counter -> counter.name == POISON } }?.let { observed.poisoned = it }
+                state.players.firstOrNull { it.monarch }?.let { observed.monarch = it }
+                state.players.firstOrNull { it.initiative }?.let { observed.initiative = it }
+            }
+            if (observed.poisoned != null && observed.monarch != null && observed.initiative != null) break
+            if (event is GameOver) break
+            if (event !is GamePrompted) continue
+
+            val state = event.state
+            val prompt = event.prompt
+            val playable = state.playable.map { it.objectId }.toSet()
+            val ourBoard =
+                state.players
+                    .singleOrNull { it.viewer }
+                    ?.battlefield
+                    .orEmpty()
+            val ourMainPhase =
+                state.viewerHasPriority &&
+                    state.viewerPlayerId != null &&
+                    state.viewerPlayerId == state.activePlayerId &&
+                    state.phase == TurnPhaseCode.PRECOMBAT_MAIN &&
+                    state.step == PhaseStepCode.PRECOMBAT_MAIN
+
+            when {
+                prompt is SelectPrompt && ourMainPhase -> {
+                    tappedForThisPayment.clear()
+                    val next = nextPlayerStateAction(state, ourBoard, playable, observed)
+                    if (next != null) sendUuid(session, gameId, next) else pass(session, gameId)
+                }
+                prompt is ChooseAbilityPrompt -> {
+                    val wanted =
+                        prompt.choices.firstOrNull { it.text.contains("monarch", ignoreCase = true) }
+                            ?: prompt.choices.firstOrNull { it.text.contains("initiative", ignoreCase = true) }
+                            ?: prompt.choices.firstOrNull()
+                    if (wanted != null) sendUuid(session, gameId, wanted.abilityId) else pass(session, gameId)
+                }
+                prompt is AskPrompt && prompt.message.contains("mana pool", ignoreCase = true) ->
+                    withContext(Dispatchers.IO) { GameRelay.sendPlayerBoolean(session, gameId, true) }
+                prompt is PlayManaPrompt -> {
+                    val source = manaSource(ourBoard, tappedForThisPayment, needPoison = observed.poisoned == null)
+                    if (source != null) {
+                        tappedForThisPayment += source
+                        sendUuid(session, gameId, source)
+                    } else {
+                        pass(session, gameId)
+                    }
+                }
+                else -> answer(session, gameId, prompt)
+            }
+            observed.answered++
+            if (observed.answered > MAX_ANSWERS_TO_CAST) {
+                throw AssertionError(
+                    "answered $MAX_ANSWERS_TO_CAST prompts without seeing all three. poison=${observed.poisoned != null} " +
+                        "monarch=${observed.monarch != null} initiative=${observed.initiative != null} " +
+                        "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
+                )
+            }
+        }
+        return observed
+    }
+
+    /**
+     * The object to play or activate next, or `null` to pass. Ordered so each objective is reached as
+     * early as the server allows: land first (more mana), then the free `Mox`, then the `Pack` and the
+     * `Throne` — casting each from hand before there is one on the battlefield to activate.
+     */
+    private fun nextPlayerStateAction(
+        state: GameStateView,
+        ourBoard: List<GamePermanentView>,
+        playable: Set<String>,
+        observed: PlayerStateObserved,
+    ): String? {
+        fun inHand(name: String) = state.hand.firstOrNull { it.name == name && it.id in playable }
+
+        fun onBoard(name: String) = ourBoard.firstOrNull { it.card.name == name && it.card.id in playable && !it.tapped }
+
+        val landDrop = inHand(THRONE)?.takeIf { ourBoard.none { permanent -> permanent.card.name == THRONE } } ?: inHand(FOREST)
+        return when {
+            landDrop != null -> landDrop.id
+            inHand(MOX) != null && ourBoard.none { it.card.name == MOX } -> inHand(MOX)!!.id
+            observed.initiative == null && onBoard(PACK) != null -> onBoard(PACK)!!.card.id
+            observed.initiative == null && inHand(PACK) != null && ourBoard.none { it.card.name == PACK } -> inHand(PACK)!!.id
+            observed.monarch == null && onBoard(THRONE) != null -> onBoard(THRONE)!!.card.id
+            else -> null
+        }
+    }
+
+    /**
+     * What to tap for one point of the outstanding cost. `Mox Poison` goes first while poison is still
+     * missing, because tapping it is what produces the counters; after that any untapped land will do,
+     * with the `Throne` left alone so it can pay its own `{T}` cost later.
+     */
+    private fun manaSource(
+        ourBoard: List<GamePermanentView>,
+        alreadyTapped: Set<String>,
+        needPoison: Boolean,
+    ): String? {
+        val available = ourBoard.filter { !it.tapped && it.card.id !in alreadyTapped }
+        val mox = available.firstOrNull { it.card.name == MOX }
+        val forest = available.firstOrNull { it.card.name == FOREST }
+        val throne = available.firstOrNull { it.card.name == THRONE }
+        return when {
+            needPoison && mox != null -> mox.card.id
+            forest != null -> forest.card.id
+            mox != null -> mox.card.id
+            else -> throne?.card?.id
+        }
+    }
+
+    /** Passes priority / declines the outstanding question. */
+    private suspend fun pass(
+        session: SessionImpl,
+        gameId: UUID,
+    ) = withContext(Dispatchers.IO) { GameRelay.sendPlayerBoolean(session, gameId, false) }
 
     /** Sends [id] as the reply to the outstanding prompt, on [Dispatchers.IO] like every other reply. */
     private suspend fun sendUuid(

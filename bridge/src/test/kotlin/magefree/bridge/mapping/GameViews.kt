@@ -267,6 +267,10 @@ internal object GameViews {
         hasLeft: Boolean = false,
         manaPool: ManaPoolView = manaPool(),
         battlefield: List<PermanentView> = emptyList(),
+        counters: List<Pair<String, Int>>? = null,
+        monarch: Boolean = false,
+        initiative: Boolean = false,
+        designationNames: List<String>? = null,
     ): PlayerView =
         allocate(PlayerView::class.java).apply {
             set("playerId", playerId)
@@ -285,6 +289,15 @@ internal object GameViews {
             set("hasLeft", hasLeft)
             set("manaPool", manaPool)
             set("battlefield", battlefield.associateByTo(LinkedHashMap()) { it.id })
+            // Built through upstream's own `CounterView(Counter)` constructor, exactly as
+            // the card counters above are — real production code on the bridge's classpath, so
+            // `getName()`/`getCount()` are the getters the mapper actually reads.
+            if (counters != null) {
+                set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
+            }
+            set("monarch", monarch)
+            set("initiative", initiative)
+            if (designationNames != null) set("designationNames", designationNames)
         }
 
     /** A `CombatGroupView` — who is attacking whom, and what is blocking. */
