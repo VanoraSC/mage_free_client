@@ -112,6 +112,15 @@ on branches off `main`.
 - **Immutability:** `val` over `var`; `data class`; persistent/immutable collections in
   state.
 - **Naming & style:** follow the official Kotlin style guide; ktlint/detekt clean.
+- **Documentation states current behaviour.** KDoc and comments say what the code does and why it
+  must be that way, in the present tense, as if it had always been so. **No story or epic numbers,
+  no plan-section pointers (`§7.4`), no dated attributions ("found live, 2026-08-16"), and no
+  narration about how the code came to be.** Git and the story documents already hold that, and a
+  second copy in the source rots — a sentence like "those are stories 0004–0006" describes a future
+  that has since happened, and nothing rechecks it. Keep the rationale, which is the valuable half:
+  "`orEmpty()` is load-bearing because upstream only allocates the list here" is a current fact
+  about the code and must survive. Referring to a project-wide engineering rule by name
+  ("verification standard 2, reachability") is fine — that is a live cross-reference, not history.
 - **Accessibility:** content descriptions on interactive elements; min 48dp touch targets;
   respect dynamic type. This is a requirement, not a nice-to-have.
 - **No secrets in the repo.** No hard-coded server credentials or tokens.
