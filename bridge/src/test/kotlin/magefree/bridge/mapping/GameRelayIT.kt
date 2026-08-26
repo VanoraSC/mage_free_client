@@ -886,6 +886,13 @@ class GameRelayIT {
         val observed = PlayerStateObserved()
         val deadline = System.currentTimeMillis() + AURA_PLAY_TIMEOUT_MS
         val tappedForThisPayment = mutableSetOf<String>()
+        // An object whose cost could not be paid this turn. Without this the loop cancels the payment,
+        // gets priority back with the game in exactly the state it was in, picks the same object
+        // again, and never advances -- the "refused reply, re-asked" loop that every loop here exists
+        // to avoid. Cleared on the next turn, when a fresh untapped board can pay.
+        val unaffordableThisTurn = mutableSetOf<String>()
+        var turnOfBlockedSet = -1
+        var pendingActivation: String? = null
 
         while (System.currentTimeMillis() < deadline) {
             val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
@@ -916,10 +923,16 @@ class GameRelayIT {
                     state.phase == TurnPhaseCode.PRECOMBAT_MAIN &&
                     state.step == PhaseStepCode.PRECOMBAT_MAIN
 
+            if (state.turn != turnOfBlockedSet) {
+                unaffordableThisTurn.clear()
+                turnOfBlockedSet = state.turn
+            }
+
             when {
                 prompt is SelectPrompt && ourMainPhase -> {
                     tappedForThisPayment.clear()
-                    val next = nextPlayerStateAction(state, ourBoard, playable, observed)
+                    val next = nextPlayerStateAction(state, ourBoard, playable, observed, unaffordableThisTurn)
+                    pendingActivation = next
                     if (next != null) sendUuid(session, gameId, next) else pass(session, gameId)
                 }
                 prompt is ChooseAbilityPrompt -> {
@@ -937,6 +950,10 @@ class GameRelayIT {
                         tappedForThisPayment += source
                         sendUuid(session, gameId, source)
                     } else {
+                        // Nothing left to tap. Cancel, and do not offer this object again until the
+                        // lands untap, or the very next select prompt picks it straight back.
+                        pendingActivation?.let { unaffordableThisTurn += it }
+                        pendingActivation = null
                         pass(session, gameId)
                     }
                 }
@@ -958,16 +975,25 @@ class GameRelayIT {
      * The object to play or activate next, or `null` to pass. Ordered so each objective is reached as
      * early as the server allows: land first (more mana), then the free `Mox`, then the `Pack` and the
      * `Throne` — casting each from hand before there is one on the battlefield to activate.
+     *
+     * [unaffordable] holds what a payment could not be funded for this turn. The server lists an
+     * activated ability in `canPlayObjects` on the strength of the mana it *could* produce, which
+     * counts sources this loop declines to tap — so "playable" is not on its own a guarantee that this
+     * loop can pay, and an object that failed once must not be offered again until the lands untap.
      */
     private fun nextPlayerStateAction(
         state: GameStateView,
         ourBoard: List<GamePermanentView>,
         playable: Set<String>,
         observed: PlayerStateObserved,
+        unaffordable: Set<String>,
     ): String? {
-        fun inHand(name: String) = state.hand.firstOrNull { it.name == name && it.id in playable }
+        fun inHand(name: String) = state.hand.firstOrNull { it.name == name && it.id in playable && it.id !in unaffordable }
 
-        fun onBoard(name: String) = ourBoard.firstOrNull { it.card.name == name && it.card.id in playable && !it.tapped }
+        fun onBoard(name: String) =
+            ourBoard.firstOrNull {
+                it.card.name == name && it.card.id in playable && !it.tapped && it.card.id !in unaffordable
+            }
 
         val landDrop = inHand(THRONE)?.takeIf { ourBoard.none { permanent -> permanent.card.name == THRONE } } ?: inHand(FOREST)
         return when {
