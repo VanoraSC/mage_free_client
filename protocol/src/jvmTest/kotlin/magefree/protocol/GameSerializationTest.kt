@@ -450,6 +450,37 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `a player's counters, crown and designations round-trip`() {
+        val player =
+            GamePlayerView(
+                playerId = "pl-1",
+                name = "alice",
+                counters = listOf(GameCounterView("poison", 3), GameCounterView("energy", 2)),
+                monarch = true,
+                initiative = true,
+                designationNames = listOf("City's Blessing"),
+            )
+
+        val round = json.decodeFromString<GamePlayerView>(json.encodeToString(player))
+
+        assertEquals(mapOf("poison" to 3, "energy" to 2), round.counters.associate { it.name to it.count })
+        assertTrue(round.monarch)
+        assertTrue(round.initiative)
+        assertEquals(listOf("City's Blessing"), round.designationNames)
+    }
+
+    @Test
+    fun `a player frame without counters decodes with none, and with neither crown`() {
+        // Absence is "the bridge said nothing", which for a boolean win-condition flag must be false.
+        val decoded = json.decodeFromString<GamePlayerView>("""{"playerId":"pl-1","name":"alice"}""")
+
+        assertTrue(decoded.counters.isEmpty())
+        assertFalse(decoded.monarch)
+        assertFalse(decoded.initiative)
+        assertTrue(decoded.designationNames.isEmpty())
+    }
+
+    @Test
     fun `a card type this build has never heard of decodes to UNKNOWN instead of throwing`() {
         // The list form of the forward-compat promise: upstream keeps adding card types (BATTLE and
         // DUNGEON are recent), and `ignoreUnknownKeys` does not cover an unknown *value* inside a list.

@@ -148,6 +148,16 @@ data class GameState(
  * @property hasLeft whether the player has conceded/left.
  * @property manaPool the player's floating mana.
  * @property battlefield the permanents this player controls.
+ * @property counters the counters on the **player** — poison, energy, experience — in the same
+ *   `{name, count}` shape [GameCounter] uses for cards. Ten poison counters is a loss, so this is
+ *   win-condition state. Look counters up by [GameCounter.name]: the order is the server's hash-map
+ *   order and means nothing.
+ * @property isMonarch whether this player is the monarch (draws each end step; lost to whoever deals
+ *   them combat damage).
+ * @property hasInitiative whether this player has the initiative.
+ * @property designationNames the player's own designations. In practice this is City's Blessing or
+ *   nothing: the Monarch and Initiative designations are game-level upstream, never per-player, which
+ *   is why [isMonarch] and [hasInitiative] are separate flags.
  */
 data class GamePlayer(
     val playerId: String,
@@ -166,6 +176,10 @@ data class GamePlayer(
     val hasLeft: Boolean = false,
     val manaPool: ManaPool = ManaPool(),
     val battlefield: List<GamePermanent> = emptyList(),
+    val counters: List<GameCounter> = emptyList(),
+    val isMonarch: Boolean = false,
+    val hasInitiative: Boolean = false,
+    val designationNames: List<String> = emptyList(),
 )
 
 /**

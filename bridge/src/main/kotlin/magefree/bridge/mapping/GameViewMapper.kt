@@ -84,7 +84,20 @@ public object GameViewMapper {
         )
     }
 
-    /** Maps one `PlayerView` — the seat, its counts, and the two flags the app gates turn/priority on. */
+    /**
+     * Maps one `PlayerView` — the seat, its counts, and the two flags the app gates turn/priority on.
+     *
+     * **Per-player state that decides games without being on the battlefield.** `PlayerView`'s
+     * constructor fills all four on every snapshot, for every seat, because all of it is public:
+     * - `counters` from `player.getCountersAsCopy().values()` into `CounterView{name, count}`. Ten
+     *   poison counters is a loss. `mage.counters.Counters` extends `HashMap`, so the order that
+     *   arrives is hash order and carries no meaning — consumers look counters up by name.
+     * - `monarch` / `initiative` from `player.getId().equals(game.getMonarchId() / getInitiativeId())`.
+     * - `designationNames` from `player.getDesignations()`. That list holds City's Blessing and
+     *   nothing else in practice: the only production caller of `Player.addDesignation` in XMage is
+     *   `AscendAbility`, while the Monarch, Initiative and Speed designations are registered on the
+     *   game state instead. The two flags above are the only way to read those.
+     */
     private fun mapPlayer(player: PlayerView): GamePlayerView =
         GamePlayerView(
             playerId = player.playerId?.toString().orEmpty(),
@@ -117,6 +130,13 @@ public object GameViewMapper {
                     .orEmpty()
                     .values
                     .map(::mapPermanent),
+            counters =
+                player.counters.orEmpty().filterNotNull().map { counter ->
+                    GameCounterView(name = counter.name.orEmpty(), count = counter.count)
+                },
+            monarch = player.isMonarch,
+            initiative = player.isInitiative,
+            designationNames = player.designationNames.orEmpty().filterNotNull(),
         )
 
     /**

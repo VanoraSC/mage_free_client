@@ -738,6 +738,27 @@ public data class GameStateView(
  * @property active true when it is this player's turn (upstream `isActive()`).
  * @property hasPriority true when this player currently holds priority (upstream `hasPriority()`).
  * @property battlefield the permanents this player controls (upstream `getBattlefield()`).
+ * @property counters the counters on the **player**, from upstream `getCounters()` — the same
+ *   `{name, count}` shape [GameCounterView] carries for cards. Ten poison counters is a loss, so this
+ *   is win-condition state; energy and experience are resources a player spends. The kind is a string
+ *   because the set is open and grows with every release.
+ *
+ *   Order is not meaningful. Upstream builds the list from `player.getCountersAsCopy()`, and
+ *   `mage.counters.Counters` extends `HashMap`, so this arrives in hash order — unlike the zone lists,
+ *   which come from `LinkedHashMap`s. Look a counter up by [GameCounterView.name]; never index into it.
+ * @property monarch true when this player is the monarch (upstream `isMonarch()`, itself
+ *   `player.getId().equals(game.getMonarchId())`). The monarch draws a card each end step and loses
+ *   the crown to whoever deals them combat damage.
+ * @property initiative true when this player has the initiative (upstream `isInitiative()`, the same
+ *   id comparison against `game.getInitiativeId()`).
+ * @property designationNames the player's own designations, by name (upstream
+ *   `getDesignationNames()`).
+ *
+ *   In practice this carries City's Blessing or nothing. `PlayerView` reads
+ *   `player.getDesignations()`, and the only production caller of `Player.addDesignation` in XMage is
+ *   `AscendAbility`. The Monarch, Initiative and Speed designations go through
+ *   `GameState.addDesignation` — they are game-level, not per-player — which is why [monarch] and
+ *   [initiative] are separate flags rather than entries in this list. "The Monarch" never appears here.
  */
 @Serializable
 public data class GamePlayerView(
@@ -757,6 +778,10 @@ public data class GamePlayerView(
     val hasLeft: Boolean = false,
     val manaPool: GameManaPoolView = GameManaPoolView(),
     val battlefield: List<GamePermanentView> = emptyList(),
+    val counters: List<GameCounterView> = emptyList(),
+    val monarch: Boolean = false,
+    val initiative: Boolean = false,
+    val designationNames: List<String> = emptyList(),
 )
 
 /**
