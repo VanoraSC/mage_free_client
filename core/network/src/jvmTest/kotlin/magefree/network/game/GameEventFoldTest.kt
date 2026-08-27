@@ -5,10 +5,12 @@ import magefree.protocol.CardTypeCode
 import magefree.protocol.ChooseAbilityPrompt
 import magefree.protocol.ChooseChoicePrompt
 import magefree.protocol.ChoosePilePrompt
+import magefree.protocol.CommandObjectKind
 import magefree.protocol.GameAbilityChoice
 import magefree.protocol.GameCardView
 import magefree.protocol.GameChoiceOption
 import magefree.protocol.GameCombatGroupView
+import magefree.protocol.GameCommandObjectView
 import magefree.protocol.GameCounterView
 import magefree.protocol.GameError
 import magefree.protocol.GameInformed
@@ -535,6 +537,102 @@ class GameEventFoldTest {
         assertFalse(opponent.isMonarch)
         assertFalse(opponent.hasInitiative)
         assertTrue(opponent.designationNames.isEmpty())
+    }
+
+    @Test
+    fun aCommandZoneSurvivesFoldingWithItsKinds() {
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 6,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(
+                                        playerId = "p-1",
+                                        name = "pete",
+                                        viewer = true,
+                                        commandList =
+                                            listOf(
+                                                GameCommandObjectView(
+                                                    id = "cmd-1",
+                                                    name = "Atraxa, Praetors' Voice",
+                                                    kind = CommandObjectKind.COMMANDER,
+                                                    setCode = "C16",
+                                                    collectorNumber = "28",
+                                                ),
+                                                GameCommandObjectView(
+                                                    id = "cmd-2",
+                                                    name = "Emblem Elspeth",
+                                                    kind = CommandObjectKind.EMBLEM,
+                                                    rules = listOf("Creatures you control get +1/+1."),
+                                                ),
+                                            ),
+                                    ),
+                                    GamePlayerView(playerId = "p-2", name = "Computer", human = false),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val command = folded.viewer!!.commandList
+        assertEquals(
+            listOf(magefree.network.game.CommandObjectKind.Commander, magefree.network.game.CommandObjectKind.Emblem),
+            command.map { it.kind },
+        )
+        assertEquals("28", command[0].collectorNumber)
+        assertEquals(listOf("Creatures you control get +1/+1."), command[1].rules)
+        assertNull("a dungeon or an emblem not printed on a card has no number", command[1].collectorNumber)
+        assertTrue(
+            folded.players
+                .single { !it.isViewer }
+                .commandList
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun aCommandObjectKindThisBuildDoesNotKnowFoldsToUnknown() {
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 1,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(
+                                        playerId = "p-1",
+                                        name = "pete",
+                                        viewer = true,
+                                        commandList = listOf(GameCommandObjectView(id = "cmd-1", name = "Something New")),
+                                    ),
+                                ),
+                        ),
+                ),
+            )!!
+
+        assertEquals(
+            magefree.network.game.CommandObjectKind.Unknown,
+            folded.viewer!!
+                .commandList
+                .single()
+                .kind,
+        )
+        assertEquals(
+            "Something New",
+            folded.viewer!!
+                .commandList
+                .single()
+                .name,
+        )
     }
 
     @Test

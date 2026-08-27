@@ -17,6 +17,7 @@ import magefree.bridge.xmage.XMageServerTarget
 import magefree.protocol.AskPrompt
 import magefree.protocol.ChooseAbilityPrompt
 import magefree.protocol.ChooseChoicePrompt
+import magefree.protocol.CommandObjectKind
 import magefree.protocol.CreateTableOptions
 import magefree.protocol.DeckList
 import magefree.protocol.DeckListCard
@@ -189,18 +190,22 @@ class GameRelayIT {
         const val SEAS_CLAIM = "Sea's Claim"
         const val ISLAND = "Island"
         const val FOREST = "Forest"
+        const val PLAINS = "Plains"
 
         /** The attachment scenario needs several turns of real play; the loop's 180s is tight. */
         const val AURA_PLAY_TIMEOUT_MS = 240_000L
 
         /**
-         * The deck for the per-player-state scenario. Every cost in it is **generic**, so no mana of
-         * any particular colour is ever required and a mis-chosen colour cannot stall a payment:
+         * The deck for the per-player-state scenario. Mono-white, and every objective is reached by
+         * *playing* a card rather than by activating one:
          * - `Mox Poison` (`MB2` #608) costs `{0}`; tapping it for mana gives its controller two poison
          *   counters, which is the cheapest poison in the game and needs no combat.
+         * - `Palace Sentinels` (`CN2` #19) costs `{3}{W}` and makes you the monarch **when it enters**.
          * - `Dungeoneer's Pack` (`CLB` #312) costs `{3}`; `{2}`, `{T}`, sacrifice takes the initiative.
-         * - `Throne of the High City` (`CN2` #80) is a land; `{4}`, `{T}`, sacrifice makes you the
-         *   monarch.
+         *
+         * A monarch source that triggers on entry is what makes this reliable. Activating one instead
+         * costs a second payment out of an already-tapped board, and an activation the loop starts and
+         * cannot fund is the shape of every hang this class has had.
          */
         val PLAYER_STATE_DECK =
             DeckList(
@@ -208,16 +213,35 @@ class GameRelayIT {
                 author = "game-relay-it",
                 cards =
                     listOf(
-                        DeckListCard(cardName = "Forest", setCode = "M21", collectorNumber = "272", amount = 20),
-                        DeckListCard(cardName = "Mox Poison", setCode = "MB2", collectorNumber = "608", amount = 12),
-                        DeckListCard(cardName = "Throne of the High City", setCode = "CN2", collectorNumber = "80", amount = 12),
-                        DeckListCard(cardName = "Dungeoneer's Pack", setCode = "CLB", collectorNumber = "312", amount = 16),
+                        DeckListCard(cardName = "Plains", setCode = "M21", collectorNumber = "260", amount = 26),
+                        DeckListCard(cardName = "Mox Poison", setCode = "MB2", collectorNumber = "608", amount = 10),
+                        DeckListCard(cardName = "Palace Sentinels", setCode = "CN2", collectorNumber = "19", amount = 12),
+                        DeckListCard(cardName = "Dungeoneer's Pack", setCode = "CLB", collectorNumber = "312", amount = 12),
                     ),
                 sideboard = emptyList(),
             )
 
+        /**
+         * A commander game needs no play at all: a commander sits in the command zone from the first
+         * snapshot. `Freeform Unlimited Commander` is the variant that makes it cheap — its deck
+         * validator's `validate()` returns `true` unconditionally and its minimum deck size is zero, so
+         * the sideboard's single legendary creature becomes the commander without a hundred-card
+         * singleton list to satisfy.
+         */
+        const val COMMANDER_GAME_TYPE = "Freeform Unlimited Commander"
+        const val COMMANDER_DECK_TYPE = "Variant Magic - Freeform Unlimited Commander"
+        const val COMMANDER_NAME = "Atraxa, Praetors' Voice"
+
+        val COMMANDER_DECK =
+            DeckList(
+                name = "it_commander",
+                author = "game-relay-it",
+                cards = listOf(DeckListCard(cardName = "Forest", setCode = "M21", collectorNumber = "272", amount = 60)),
+                sideboard = listOf(DeckListCard(cardName = COMMANDER_NAME, setCode = "C16", collectorNumber = "28", amount = 1)),
+            )
+
         const val MOX = "Mox Poison"
-        const val THRONE = "Throne of the High City"
+        const val SENTINELS = "Palace Sentinels"
         const val PACK = "Dungeoneer's Pack"
         const val POISON = "poison"
     }
@@ -815,7 +839,7 @@ class GameRelayIT {
                 val poisoned =
                     requireNotNull(observed.poisoned) {
                         "no snapshot ever carried a poison counter; answered=${observed.answered} " +
-                            "callbacks=${callbackSummary()} last=${observed.last}"
+                            "callbacks=${callbackSummary()} ${observed.describeOurBoard()}"
                     }
                 // Each tap of the Mox adds two, and it is tapped again on any turn its mana is needed,
                 // so the count is a multiple of two rather than exactly two.
@@ -854,6 +878,124 @@ class GameRelayIT {
             }
         }
 
+    /**
+     * The command zone in a real game. A crafted `PlayerView` can be given any `CommandObjectView`,
+     * so the hermetic tests prove only that the mapper reads the four implementations; this proves the
+     * server fills `commandList` on the path the bridge reads, and that the branch on the concrete
+     * type produces the right kind for a real `CommanderView`.
+     *
+     * **It needs no play whatsoever.** A commander is in the command zone from the first snapshot, so
+     * this starts the game and reads.
+     *
+     * **What this does not reach live, and why.** Only the commander kind. An emblem needs a
+     * planeswalker's ultimate — many turns of loyalty, and an AI decision at that. A dungeon needs a
+     * venture card and two turns of setup. A plane needs a Planechase game type. All three are covered
+     * hermetically against real upstream view types; none is covered here, and that is stated rather
+     * than papered over.
+     */
+    @Test
+    fun `a live commander game fills the command zone for both seats`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(
+                            session,
+                            roomId,
+                            options(name = "it_cmd_$username", gameType = COMMANDER_GAME_TYPE, deckType = COMMANDER_DECK_TYPE),
+                        )
+                    }
+                assertTrue(created is TableCreated, "the real server should accept a commander table; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, COMMANDER_DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, COMMANDER_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+
+                val observed = awaitCommandZone(session, gameId, events)
+
+                val state =
+                    requireNotNull(observed) {
+                        "no snapshot ever carried a command object; callbacks=${callbackSummary()}"
+                    }
+                val everyCommandObject = state.players.flatMap { it.commandList }
+                assertEquals(
+                    2,
+                    everyCommandObject.size,
+                    "each seat gets its own commander, filtered by controller: $everyCommandObject",
+                )
+                assertTrue(
+                    everyCommandObject.all { it.kind == CommandObjectKind.COMMANDER },
+                    "a commander game's command zone holds commanders: $everyCommandObject",
+                )
+                assertTrue(
+                    everyCommandObject.all { it.name == COMMANDER_NAME },
+                    "both decks name the same commander: ${everyCommandObject.map { it.name }}",
+                )
+                assertEquals(
+                    listOf("C16", "C16"),
+                    everyCommandObject.map { it.setCode },
+                    "a commander extends CardView, so it carries the printing the deck named",
+                )
+                assertEquals(listOf("28", "28"), everyCommandObject.map { it.collectorNumber })
+                assertTrue(
+                    everyCommandObject.all { it.rules.isNotEmpty() },
+                    "the interface's rules text is what a vitals overlay would render: $everyCommandObject",
+                )
+
+                println(
+                    "GameRelayIT[command]: ${everyCommandObject.map { "${it.kind}:${it.name} ${it.setCode}#${it.collectorNumber}" }} " +
+                        "callbacks=${callbackSummary()}",
+                )
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /**
+     * Consumes pushes until one carries a command object, answering any prompt with the least
+     * interesting legal reply so a mulligan question cannot stall the game before the assertion.
+     */
+    private suspend fun awaitCommandZone(
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+    ): GameStateView? {
+        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                if (state.players.any { it.commandList.isNotEmpty() }) return state
+            }
+            if (event is GameOver) break
+            if (event is GamePrompted) answer(session, gameId, event.prompt)
+        }
+        return null
+    }
+
     /** The seats, at the moment each piece of per-player state first appeared. */
     private class PlayerStateObserved {
         var poisoned: GamePlayerView? = null
@@ -861,19 +1003,30 @@ class GameRelayIT {
         var initiative: GamePlayerView? = null
         var last: GameStateView? = null
         var answered: Int = 0
+
+        /**
+         * What our own board and hand looked like when the loop gave up. "Never saw poison" has two
+         * very different causes — the source was never cast, or it was cast and never tapped — and the
+         * message has to say which, or the next reader is guessing the way the last one did.
+         */
+        fun describeOurBoard(): String {
+            val viewer = last?.players?.singleOrNull { it.viewer } ?: return "no viewer seat in the last snapshot"
+            val board = viewer.battlefield.map { "${it.card.name}${if (it.tapped) "(T)" else ""}" }
+            return "turn=${last?.turn} board=$board hand=${last?.hand?.map { it.name }} counters=${viewer.counters}"
+        }
     }
 
     /**
-     * Plays a land, taps `Mox Poison` for the poison, and sacrifices a `Dungeoneer's Pack` and a
-     * `Throne of the High City` for the initiative and the crown.
+     * Plays a land, taps `Mox Poison` for the poison, casts a `Palace Sentinels` for the crown, and
+     * sacrifices a `Dungeoneer's Pack` for the initiative.
      *
      * Every decision comes from the server's own `canPlayObjects`: play or activate what it says is
      * available, otherwise pass. Action is confined to our own precombat main phase, where a
      * `GAME_SELECT` means "you have priority" rather than "declare attackers".
      *
      * Two prompts need answers this test's other loops do not:
-     * - a `ChooseAbilityPrompt`, because the `Throne` has both a mana ability and the crown ability, and
-     *   the object id alone does not say which is wanted;
+     * - a `ChooseAbilityPrompt`, for a permanent whose object id alone does not say which of its
+     *   abilities is wanted;
      * - the "you still have mana in your mana pool… pass anyway?" question, answered **yes**. Answering
      *   no sends `PASS_PRIORITY_CANCEL_ALL_ACTIONS` and the server immediately asks again, which is an
      *   unbounded loop rather than a failure.
@@ -995,21 +1148,31 @@ class GameRelayIT {
                 it.card.name == name && it.card.id in playable && !it.tapped && it.card.id !in unaffordable
             }
 
-        val landDrop = inHand(THRONE)?.takeIf { ourBoard.none { permanent -> permanent.card.name == THRONE } } ?: inHand(FOREST)
+        // The Mox comes down before anything else, including the land drop. It costs {0}, so it
+        // competes with nothing -- and poison only arrives when a payment taps it, so it has to be on
+        // the battlefield before the first payment. A run that cast it a few turns in ended with the
+        // Mox untapped and no counters at all: by then the board had enough lands and Treasures that
+        // the server never asked again.
         return when {
-            landDrop != null -> landDrop.id
             inHand(MOX) != null && ourBoard.none { it.card.name == MOX } -> inHand(MOX)!!.id
+            // Then a land every turn: it is what everything else waits on, so a turn that skips the
+            // drop costs every later turn a mana.
+            inHand(PLAINS) != null -> inHand(PLAINS)!!.id
+            // Sentinels is cast for the crown, and then kept being cast while poison is missing. The
+            // Mox only poisons its controller when something taps it for mana, and on a board with
+            // enough lands the server stops asking who pays: across one failing run of 54 turns there
+            // were nine mana prompts in total, all of them before the Mox was down. A spell that must
+            // be paid for is the forcing function.
+            (observed.monarch == null || observed.poisoned == null) && inHand(SENTINELS) != null -> inHand(SENTINELS)!!.id
             observed.initiative == null && onBoard(PACK) != null -> onBoard(PACK)!!.card.id
             observed.initiative == null && inHand(PACK) != null && ourBoard.none { it.card.name == PACK } -> inHand(PACK)!!.id
-            observed.monarch == null && onBoard(THRONE) != null -> onBoard(THRONE)!!.card.id
             else -> null
         }
     }
 
     /**
      * What to tap for one point of the outstanding cost. `Mox Poison` goes first while poison is still
-     * missing, because tapping it is what produces the counters; after that any untapped land will do,
-     * with the `Throne` left alone so it can pay its own `{T}` cost later.
+     * missing, because tapping it is what produces the counters; after that any untapped land will do.
      */
     private fun manaSource(
         ourBoard: List<GamePermanentView>,
@@ -1018,13 +1181,11 @@ class GameRelayIT {
     ): String? {
         val available = ourBoard.filter { !it.tapped && it.card.id !in alreadyTapped }
         val mox = available.firstOrNull { it.card.name == MOX }
-        val forest = available.firstOrNull { it.card.name == FOREST }
-        val throne = available.firstOrNull { it.card.name == THRONE }
+        val land = available.firstOrNull { it.card.name == PLAINS }
         return when {
             needPoison && mox != null -> mox.card.id
-            forest != null -> forest.card.id
-            mox != null -> mox.card.id
-            else -> throne?.card?.id
+            land != null -> land.card.id
+            else -> mox?.card?.id
         }
     }
 
@@ -1193,11 +1354,15 @@ class GameRelayIT {
     }
 
     /** The [CreateTableOptions] the real server accepts — see `TableRelayIT`'s KDoc for why each value. */
-    private fun options(name: String): CreateTableOptions =
+    private fun options(
+        name: String,
+        gameType: String = GAME_TYPE,
+        deckType: String = DECK_TYPE,
+    ): CreateTableOptions =
         CreateTableOptions(
             name = name,
-            gameType = GAME_TYPE,
-            deckType = DECK_TYPE,
+            gameType = gameType,
+            deckType = deckType,
             players = listOf(SeatPlayerTypeCode.HUMAN, SeatPlayerTypeCode.COMPUTER_MAD),
             rated = false,
             winsNeeded = 1,

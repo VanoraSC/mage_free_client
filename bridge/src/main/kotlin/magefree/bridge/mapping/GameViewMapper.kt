@@ -7,13 +7,20 @@ import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.CardsView
 import mage.view.CombatGroupView
+import mage.view.CommandObjectView
+import mage.view.CommanderView
+import mage.view.DungeonView
+import mage.view.EmblemView
 import mage.view.GameView
 import mage.view.PermanentView
+import mage.view.PlaneView
 import mage.view.PlayerView
 import mage.view.StackAbilityView
 import magefree.protocol.CardTypeCode
+import magefree.protocol.CommandObjectKind
 import magefree.protocol.GameCardView
 import magefree.protocol.GameCombatGroupView
+import magefree.protocol.GameCommandObjectView
 import magefree.protocol.GameCounterView
 import magefree.protocol.GameManaPoolView
 import magefree.protocol.GamePermanentView
@@ -137,6 +144,58 @@ public object GameViewMapper {
             monarch = player.isMonarch,
             initiative = player.isInitiative,
             designationNames = player.designationNames.orEmpty().filterNotNull(),
+            commandList =
+                player.commandObjectList
+                    .orEmpty()
+                    .filterNotNull()
+                    .map(::mapCommandObject),
+        )
+
+    /**
+     * Maps one `CommandObjectView` — an emblem, a commander, a dungeon or a plane.
+     *
+     * **The concrete type is only visible here, so this is where the branch belongs.**
+     * `CommandObjectView` declares `getId`, `getName`, `getRules`, `getExpansionSetCode`,
+     * `getImageFileName` and `getImageNumber`, and nothing that says which kind it is — the kind is the
+     * implementing class. A fifth implementation falls through to [CommandObjectKind.UNKNOWN] with
+     * every interface field intact rather than being dropped.
+     *
+     * **The accessor is `getCommandObjectList()`**, not `getCommandList()` â the field is named for the
+     * list, the getter for what is in it.
+     *
+     * **`getCardNumber()` is not on the interface**, which is why the collector number is read in the
+     * same branch:
+     * - `CommanderView` extends `CardView`, so it has the card's own number.
+     * - `EmblemView` declares one of its own, filled only for an `EmblemOfCard` and left `""`
+     *   otherwise — hence blank means "no printing", not an empty number.
+     * - `DungeonView` and `PlaneView` have no card number at all.
+     *
+     * **Reachability (verification standard 2).** `PlayerView`'s constructor walks
+     * `game.getState().getCommand()` on every snapshot and appends each emblem, the active dungeon,
+     * every commander — each filtered to the controlling player — and the current plane, which it adds
+     * **unconditionally**, because planes are universal. A plane therefore appears on every seat's
+     * list and belongs to none of them.
+     */
+    private fun mapCommandObject(command: CommandObjectView): GameCommandObjectView =
+        GameCommandObjectView(
+            id = command.id?.toString().orEmpty(),
+            name = command.name.orEmpty(),
+            kind =
+                when (command) {
+                    is EmblemView -> CommandObjectKind.EMBLEM
+                    is CommanderView -> CommandObjectKind.COMMANDER
+                    is DungeonView -> CommandObjectKind.DUNGEON
+                    is PlaneView -> CommandObjectKind.PLANE
+                    else -> CommandObjectKind.UNKNOWN
+                },
+            setCode = command.expansionSetCode.orNullIfBlank(),
+            collectorNumber =
+                when (command) {
+                    is CommanderView -> command.cardNumber.orNullIfBlank()
+                    is EmblemView -> command.cardNumber.orNullIfBlank()
+                    else -> null
+                },
+            rules = command.rules.orEmpty().filterNotNull(),
         )
 
     /**

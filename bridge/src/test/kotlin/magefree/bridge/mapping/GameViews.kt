@@ -13,11 +13,16 @@ import mage.view.AbilityView
 import mage.view.CardView
 import mage.view.CardsView
 import mage.view.CombatGroupView
+import mage.view.CommandObjectView
+import mage.view.CommanderView
 import mage.view.CounterView
+import mage.view.DungeonView
+import mage.view.EmblemView
 import mage.view.ExileView
 import mage.view.GameView
 import mage.view.ManaPoolView
 import mage.view.PermanentView
+import mage.view.PlaneView
 import mage.view.PlayerView
 import mage.view.RevealedView
 import mage.view.StackAbilityView
@@ -271,6 +276,7 @@ internal object GameViews {
         monarch: Boolean = false,
         initiative: Boolean = false,
         designationNames: List<String>? = null,
+        commandList: List<CommandObjectView>? = null,
     ): PlayerView =
         allocate(PlayerView::class.java).apply {
             set("playerId", playerId)
@@ -298,6 +304,73 @@ internal object GameViews {
             set("monarch", monarch)
             set("initiative", initiative)
             if (designationNames != null) set("designationNames", designationNames)
+            if (commandList != null) set("commandList", commandList)
+        }
+
+    /**
+     * An `EmblemView`. `cardNumber` is `""` unless the emblem was printed on a card, exactly as
+     * upstream leaves it — only an `EmblemOfCard` fills it.
+     */
+    fun emblem(
+        id: UUID = UUID.randomUUID(),
+        name: String = "Emblem Jace, Unraveler of Secrets",
+        setCode: String = "SOI",
+        cardNumber: String = "",
+        rules: List<String> = listOf("Whenever an opponent casts a spell, exile it."),
+    ): EmblemView =
+        allocate(EmblemView::class.java).apply {
+            set("id", id)
+            set("name", name)
+            set("expansionSetCode", setCode)
+            set("cardNumber", cardNumber)
+            set("rules", rules)
+        }
+
+    /**
+     * A `CommanderView`. It is the one command object that is also a `CardView`, so its printing is
+     * the card's own `expansionSetCode` / `cardNumber`.
+     */
+    fun commander(
+        id: UUID = UUID.randomUUID(),
+        name: String = "Atraxa, Praetors' Voice",
+        setCode: String = "C16",
+        cardNumber: String = "28",
+        rules: List<String> = listOf("Flying, vigilance, deathtouch, lifelink"),
+    ): CommanderView =
+        allocate(CommanderView::class.java).apply {
+            set("id", id)
+            set("name", name)
+            set("expansionSetCode", setCode)
+            set("cardNumber", cardNumber)
+            set("rules", rules)
+        }
+
+    /** A `DungeonView` — no card number exists on it at all. */
+    fun dungeon(
+        id: UUID = UUID.randomUUID(),
+        name: String = "Tomb of Annihilation",
+        setCode: String = "AFR",
+        rules: List<String> = listOf("Trap! Lose 1 life."),
+    ): DungeonView =
+        allocate(DungeonView::class.java).apply {
+            set("id", id)
+            set("name", name)
+            set("expansionSetCode", setCode)
+            set("rules", rules)
+        }
+
+    /** A `PlaneView` — universal, so upstream puts the same one on every seat's command list. */
+    fun plane(
+        id: UUID = UUID.randomUUID(),
+        name: String = "Academy at Tolaria West",
+        setCode: String = "PCA",
+        rules: List<String> = listOf("When you planeswalk away from Academy at Tolaria West, …"),
+    ): PlaneView =
+        allocate(PlaneView::class.java).apply {
+            set("id", id)
+            set("name", name)
+            set("expansionSetCode", setCode)
+            set("rules", rules)
         }
 
     /** A `CombatGroupView` — who is attacking whom, and what is blocking. */

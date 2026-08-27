@@ -4,9 +4,12 @@ import mage.constants.CardType
 import mage.constants.PhaseStep
 import mage.constants.SubType
 import mage.constants.TurnPhase
+import mage.players.PlayableObjectStats
 import mage.view.CardView
+import mage.view.CommandObjectView
 import mage.view.GameView
 import magefree.protocol.CardTypeCode
+import magefree.protocol.CommandObjectKind
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.TurnPhaseCode
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -471,6 +474,131 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `a player's command zone carries all four upstream kinds`() {
+        val emblem = GameViews.emblem()
+        val commander = GameViews.commander()
+        val dungeon = GameViews.dungeon()
+        val plane = GameViews.plane()
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players =
+                    listOf(
+                        GameViews.player(playerId = alice, commandList = listOf(emblem, commander, dungeon, plane)),
+                    ),
+            )
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .commandList
+
+        assertEquals(
+            listOf(CommandObjectKind.EMBLEM, CommandObjectKind.COMMANDER, CommandObjectKind.DUNGEON, CommandObjectKind.PLANE),
+            mapped.map { it.kind },
+            "the kind is read off the concrete view type, which only the mapper sees",
+        )
+        assertEquals(listOf(emblem.id, commander.id, dungeon.id, plane.id).map { it.toString() }, mapped.map { it.id })
+        assertEquals("Emblem Jace, Unraveler of Secrets", mapped[0].name)
+        assertEquals(listOf("Whenever an opponent casts a spell, exile it."), mapped[0].rules)
+    }
+
+    @Test
+    fun `only the kinds that have a card number carry one`() {
+        // `getCardNumber()` is not on `CommandObjectView`. A commander has one because it extends
+        // CardView; an emblem has one only when it was printed on a card; a dungeon and a plane have
+        // no card number at all, and a blank one is "the server said nothing" rather than "".
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players =
+                    listOf(
+                        GameViews.player(
+                            playerId = alice,
+                            commandList = listOf(GameViews.emblem(), GameViews.commander(), GameViews.dungeon(), GameViews.plane()),
+                        ),
+                    ),
+            )
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .commandList
+
+        assertNull(mapped[0].collectorNumber, "an emblem not printed on a card has a blank number upstream")
+        assertEquals("28", mapped[1].collectorNumber)
+        assertEquals("C16", mapped[1].setCode)
+        assertNull(mapped[2].collectorNumber)
+        assertNull(mapped[3].collectorNumber)
+        assertEquals("AFR", mapped[2].setCode, "a dungeon still names a set even with no number")
+    }
+
+    @Test
+    fun `an emblem printed on a card keeps its number`() {
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players =
+                    listOf(
+                        GameViews.player(playerId = alice, commandList = listOf(GameViews.emblem(setCode = "WAR", cardNumber = "207"))),
+                    ),
+            )
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .commandList
+                .single()
+
+        assertEquals("WAR", mapped.setCode)
+        assertEquals("207", mapped.collectorNumber)
+    }
+
+    @Test
+    fun `a command object implementation the mapper does not know keeps its fields`() {
+        // The branch is on the concrete type, so a fifth implementation would fall through it. It must
+        // arrive as UNKNOWN with everything the interface exposes intact -- never dropped.
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players = listOf(GameViews.player(playerId = alice, commandList = listOf(UnknownCommandObject))),
+            )
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .commandList
+                .single()
+
+        assertEquals(CommandObjectKind.UNKNOWN, mapped.kind)
+        assertEquals("Something New", mapped.name)
+        assertEquals(listOf("It does a thing."), mapped.rules)
+        assertEquals("XYZ", mapped.setCode)
+    }
+
+    @Test
+    fun `a player with an empty command zone maps to an empty list, never a crash`() {
+        val view = GameViews.game(myPlayerId = alice, players = listOf(GameViews.player(playerId = alice)))
+
+        assertTrue(
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .commandList
+                .isEmpty(),
+        )
+    }
+
+    @Test
     fun `every upstream phase and step maps to a distinct code`() {
         TurnPhase.entries.forEach { phase ->
             val mapped = GameViewMapper.map(GameViews.game(phase = phase)).phase
@@ -899,5 +1027,40 @@ class GameViewMapperTest {
             field.isAccessible = true
             field.set(this, null)
         }
+    }
+
+    /**
+     * A `CommandObjectView` that is none of upstream's four implementations — what a fifth would look
+     * like to the mapper's `when`. Written by hand rather than allocated reflectively, because the
+     * point is a type the branch has never seen.
+     */
+    private object UnknownCommandObject : CommandObjectView {
+        private val objectId: UUID = UUID.randomUUID()
+
+        override fun getExpansionSetCode(): String = "XYZ"
+
+        override fun getName(): String = "Something New"
+
+        override fun getId(): UUID = objectId
+
+        override fun getImageFileName(): String = ""
+
+        override fun getImageNumber(): Int = 0
+
+        override fun getRules(): List<String> = listOf("It does a thing.")
+
+        override fun isPlayable(): Boolean = false
+
+        override fun setPlayableStats(playableStats: PlayableObjectStats) = Unit
+
+        override fun getPlayableStats(): PlayableObjectStats = PlayableObjectStats()
+
+        override fun isChoosable(): Boolean = false
+
+        override fun setChoosable(isChoosable: Boolean) = Unit
+
+        override fun isSelected(): Boolean = false
+
+        override fun setSelected(isSelected: Boolean) = Unit
     }
 }
