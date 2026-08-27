@@ -1,6 +1,7 @@
 package magefree.bridge.mapping
 
 import mage.constants.CardType
+import mage.constants.MageObjectType
 import mage.constants.PhaseStep
 import mage.constants.SubType
 import mage.constants.SuperType
@@ -110,6 +111,8 @@ internal object GameViews {
         alternateName: String? = null,
         transformed: Boolean = false,
         targets: List<UUID>? = null,
+        token: Boolean = false,
+        objectType: MageObjectType = MageObjectType.NULL,
     ): CardView =
         allocate(CardView::class.java).apply {
             set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
@@ -129,6 +132,8 @@ internal object GameViews {
             set("alternateName", alternateName)
             set("transformed", transformed)
             if (targets != null) set("targets", targets)
+            set("isToken", token)
+            set("mageObjectType", objectType)
         }
 
     /**
@@ -160,6 +165,8 @@ internal object GameViews {
         sourceCard: CardView? = card(),
         rules: List<String> = listOf("Whenever another creature enters, you gain 1 life."),
         targets: List<UUID>? = null,
+        token: Boolean = false,
+        objectType: MageObjectType = MageObjectType.NULL,
     ): StackAbilityView =
         allocate(StackAbilityView::class.java).apply {
             set("id", UUID.randomUUID())
@@ -170,6 +177,8 @@ internal object GameViews {
             // `StackAbilityView.updateTargets` (via `addTargets`, or `overrideTargets` for a mode whose
             // effects target only through a TargetPointer). Left null unless a test asks for it.
             if (targets != null) set("targets", targets)
+            set("isToken", token)
+            set("mageObjectType", objectType)
         }
 
     /**
@@ -234,6 +243,8 @@ internal object GameViews {
         set("manaCostRightStr", emptyList<String>())
         set("faceDown", card.isFaceDown)
         set("alternateName", card.alternateName)
+        set("isToken", card.isToken)
+        set("mageObjectType", card.mageObjectType)
     }
 
     /** A `ManaPoolView` with the given floating mana. */

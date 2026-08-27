@@ -33,6 +33,7 @@ import magefree.protocol.GameStateUpdated
 import magefree.protocol.GameStateView
 import magefree.protocol.GetAmountPrompt
 import magefree.protocol.GetMultiAmountPrompt
+import magefree.protocol.MageObjectTypeCode
 import magefree.protocol.MatchStarting
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.PlayManaPrompt
@@ -262,6 +263,25 @@ class GameRelayIT {
             )
 
         const val TOME_SCOUR = "Tome Scour"
+
+        /**
+         * The deck for the token scenario. `Raise the Alarm` (`M20` #34) costs `{1}{W}` and creates two
+         * 1/1 Soldier tokens with **no target**, so a real token is on the battlefield on turn two
+         * without anything else having to be there first.
+         */
+        val TOKEN_DECK =
+            DeckList(
+                name = "it_tokens",
+                author = "game-relay-it",
+                cards =
+                    listOf(
+                        DeckListCard(cardName = "Plains", setCode = "M21", collectorNumber = "260", amount = 30),
+                        DeckListCard(cardName = "Raise the Alarm", setCode = "M20", collectorNumber = "34", amount = 30),
+                    ),
+                sideboard = emptyList(),
+            )
+
+        const val RAISE_THE_ALARM = "Raise the Alarm"
 
         const val MOX = "Mox Poison"
         const val SENTINELS = "Palace Sentinels"
@@ -1189,6 +1209,157 @@ class GameRelayIT {
             if (answered > MAX_ANSWERS_TO_CAST) {
                 throw AssertionError(
                     "answered $MAX_ANSWERS_TO_CAST prompts without filling both graveyards. " +
+                        "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
+                )
+            }
+        }
+        return null
+    }
+
+    /**
+     * A real token on a real battlefield, next to a real card. A crafted `CardView` can be given
+     * `isToken` and any `mageObjectType`, so a fixture proves only that the mapper reads them; this
+     * proves the server sets them, and that the two agree on a token permanent.
+     *
+     * The land played the same game is the control: it must arrive **not** a token, with
+     * `objectType = PERMANENT`. A flag that is true for everything is no more useful than one that is
+     * false for everything, and only the pair shows the difference.
+     */
+    @Test
+    fun `a live token says it is one, and the land beside it does not`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(session, roomId, options(name = "it_tok_$username"))
+                    }
+                assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, TOKEN_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+                events.awaitOfType<GameStarted>(GAME_INIT_TIMEOUT_MS, "a GAME_INIT push")
+
+                val state =
+                    requireNotNull(makeATokenAndALand(session, gameId, events)) {
+                        "no snapshot ever carried a token beside a land; callbacks=${callbackSummary()}"
+                    }
+
+                val board = state.players.single { it.viewer }.battlefield
+                val token = board.first { it.card.token }
+                val land = board.first { !it.card.token }
+
+                assertEquals(MageObjectTypeCode.TOKEN, token.card.objectType)
+                // The server names it "Soldier Token", not "Soldier" — its own name for the object,
+                // threaded through unchanged rather than tidied up here.
+                assertEquals("Soldier Token", token.card.name)
+                assertEquals(
+                    MageObjectTypeCode.PERMANENT,
+                    land.card.objectType,
+                    "the control: an ordinary permanent is not a token and says so",
+                )
+                assertEquals(PLAINS, land.card.name)
+
+                println(
+                    "GameRelayIT[token]: ${board.map { "${it.card.name}(token=${it.card.token},${it.card.objectType})" }} " +
+                        "callbacks=${callbackSummary()}",
+                )
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /**
+     * Plays lands and casts `Raise the Alarm`, returning the first snapshot in which our battlefield
+     * holds both a token and something that is not one.
+     */
+    private suspend fun makeATokenAndALand(
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+    ): GameStateView? {
+        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
+        val tappedForThisPayment = mutableSetOf<String>()
+        var answered = 0
+
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                val board =
+                    state.players
+                        .firstOrNull { it.viewer }
+                        ?.battlefield
+                        .orEmpty()
+                if (board.any { it.card.token } && board.any { !it.card.token }) return state
+            }
+            if (event is GameOver) break
+            if (event !is GamePrompted) continue
+
+            val state = event.state
+            val prompt = event.prompt
+            val playable = state.playable.map { it.objectId }.toSet()
+            val ourBoard =
+                state.players
+                    .singleOrNull { it.viewer }
+                    ?.battlefield
+                    .orEmpty()
+            val ourMainPhase =
+                state.viewerHasPriority &&
+                    state.viewerPlayerId != null &&
+                    state.viewerPlayerId == state.activePlayerId &&
+                    state.phase == TurnPhaseCode.PRECOMBAT_MAIN &&
+                    state.step == PhaseStepCode.PRECOMBAT_MAIN
+
+            when {
+                prompt is SelectPrompt && ourMainPhase -> {
+                    tappedForThisPayment.clear()
+                    val plains = state.hand.firstOrNull { it.name == PLAINS && it.id in playable }
+                    val alarm = state.hand.firstOrNull { it.name == RAISE_THE_ALARM && it.id in playable }
+                    when {
+                        plains != null -> sendUuid(session, gameId, plains.id)
+                        alarm != null -> sendUuid(session, gameId, alarm.id)
+                        else -> pass(session, gameId)
+                    }
+                }
+                prompt is PlayManaPrompt -> {
+                    val land = ourBoard.firstOrNull { it.card.name == PLAINS && !it.tapped && it.card.id !in tappedForThisPayment }
+                    if (land != null) {
+                        tappedForThisPayment += land.card.id
+                        sendUuid(session, gameId, land.card.id)
+                    } else {
+                        pass(session, gameId)
+                    }
+                }
+                else -> answer(session, gameId, prompt)
+            }
+            answered++
+            if (answered > MAX_ANSWERS_TO_CAST) {
+                throw AssertionError(
+                    "answered $MAX_ANSWERS_TO_CAST prompts without making a token. " +
                         "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
                 )
             }

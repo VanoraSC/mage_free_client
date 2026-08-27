@@ -680,6 +680,63 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun tokenIdentityAndObjectTypeSurviveFolding() {
+        val token =
+            GamePermanentView(
+                card =
+                    GameCardView(
+                        id = "perm-1",
+                        name = "Soldier",
+                        creature = true,
+                        token = true,
+                        objectType = magefree.protocol.MageObjectTypeCode.TOKEN,
+                    ),
+                controlledByViewer = true,
+            )
+        val land =
+            GamePermanentView(
+                card = GameCardView(id = "perm-2", name = "Plains", objectType = magefree.protocol.MageObjectTypeCode.PERMANENT),
+                controlledByViewer = true,
+            )
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 3,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(
+                                        playerId = "p-1",
+                                        name = "pete",
+                                        viewer = true,
+                                        battlefield = listOf(token, land),
+                                    ),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val board = folded.viewer!!.battlefield
+        assertTrue("a token permanent must stay flagged as one", board[0].card.isToken)
+        assertEquals(MageObjectType.Token, board[0].card.objectType)
+        assertFalse(board[1].card.isToken)
+        assertEquals(MageObjectType.Permanent, board[1].card.objectType)
+    }
+
+    @Test
+    fun aCardWithNoObjectTypeFoldsToUnknownAndIsNotAToken() {
+        val folded = GameEventFold.fold(seed, GameStarted(gameId = GAME, state = view(hand = hand(1))))!!
+
+        val card = folded.hand.single()
+        assertFalse(card.isToken)
+        assertEquals(MageObjectType.Unknown, card.objectType)
+    }
+
+    @Test
     fun anUnattachedPermanentFoldsWithNoAttachmentState() {
         val folded =
             GameEventFold.fold(

@@ -31,6 +31,7 @@ import magefree.protocol.TurnPhaseCode
 import magefree.protocol.UnknownGamePrompt
 import magefree.protocol.CommandObjectKind as CommandObjectKindCode
 import magefree.protocol.GamePrompt as GamePromptMessage
+import magefree.protocol.MageObjectTypeCode as MageObjectTypeCodeWire
 
 /**
  * The single boundary where the wire game shapes become the app-schema ones (and the
@@ -241,7 +242,27 @@ internal object GameViewMapper {
             // through unchanged: these are ids into this same snapshot, and resolving one to the
             // object it names belongs to whatever draws the arrow.
             targets = targets,
+            isToken = token,
+            objectType = objectType.toObjectType(),
         )
+
+    private fun MageObjectTypeCodeWire.toObjectType(): MageObjectType =
+        when (this) {
+            MageObjectTypeCodeWire.ABILITY_STACK_FROM_CARD -> MageObjectType.AbilityOnStackFromCard
+            MageObjectTypeCodeWire.ABILITY_STACK_FROM_TOKEN -> MageObjectType.AbilityOnStackFromToken
+            MageObjectTypeCodeWire.CARD -> MageObjectType.Card
+            MageObjectTypeCodeWire.COPY_CARD -> MageObjectType.CopyCard
+            MageObjectTypeCodeWire.TOKEN -> MageObjectType.Token
+            MageObjectTypeCodeWire.SPELL -> MageObjectType.Spell
+            MageObjectTypeCodeWire.PERMANENT -> MageObjectType.Permanent
+            MageObjectTypeCodeWire.DUNGEON -> MageObjectType.Dungeon
+            MageObjectTypeCodeWire.EMBLEM -> MageObjectType.Emblem
+            MageObjectTypeCodeWire.COMMANDER -> MageObjectType.Commander
+            MageObjectTypeCodeWire.DESIGNATION -> MageObjectType.Designation
+            MageObjectTypeCodeWire.PLANE -> MageObjectType.Plane
+            MageObjectTypeCodeWire.NULL -> MageObjectType.Null
+            MageObjectTypeCodeWire.UNKNOWN -> MageObjectType.Unknown
+        }
 
     private fun GamePermanentView.toPermanent(): GamePermanent =
         GamePermanent(

@@ -1,6 +1,7 @@
 package magefree.bridge.mapping
 
 import mage.constants.CardType
+import mage.constants.MageObjectType
 import mage.constants.PhaseStep
 import mage.constants.TurnPhase
 import mage.view.AbilityView
@@ -28,6 +29,7 @@ import magefree.protocol.GamePlayableObject
 import magefree.protocol.GamePlayerView
 import magefree.protocol.GameStateView
 import magefree.protocol.GameZoneView
+import magefree.protocol.MageObjectTypeCode
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.TurnPhaseCode
 import java.util.UUID
@@ -418,7 +420,39 @@ public object GameViewMapper {
                     .orEmpty()
                     .filterNotNull()
                     .map(UUID::toString),
+            // `isToken` is set only for a `PermanentToken`; `mageObjectType` is set on every object
+            // the server builds, and answers the neighbouring question — a copy of a card versus the
+            // card itself — that the boolean cannot.
+            token = card.isToken,
+            objectType = objectTypeOf(card.mageObjectType),
         )
+
+    /**
+     * Maps `MageObjectType` to its app-schema code. Exhaustive on purpose: a type added upstream
+     * becomes a **compile** error here — the one place the two sets meet — rather than an object
+     * quietly arriving as `UNKNOWN`.
+     *
+     * `NULL` is upstream's own default and is carried as itself. It means "the server set no type",
+     * which is a different answer from `UNKNOWN`, "this build did not recognise what arrived", and
+     * collapsing the two would throw that distinction away.
+     */
+    private fun objectTypeOf(type: MageObjectType?): MageObjectTypeCode =
+        when (type) {
+            MageObjectType.ABILITY_STACK_FROM_CARD -> MageObjectTypeCode.ABILITY_STACK_FROM_CARD
+            MageObjectType.ABILITY_STACK_FROM_TOKEN -> MageObjectTypeCode.ABILITY_STACK_FROM_TOKEN
+            MageObjectType.CARD -> MageObjectTypeCode.CARD
+            MageObjectType.COPY_CARD -> MageObjectTypeCode.COPY_CARD
+            MageObjectType.TOKEN -> MageObjectTypeCode.TOKEN
+            MageObjectType.SPELL -> MageObjectTypeCode.SPELL
+            MageObjectType.PERMANENT -> MageObjectTypeCode.PERMANENT
+            MageObjectType.DUNGEON -> MageObjectTypeCode.DUNGEON
+            MageObjectType.EMBLEM -> MageObjectTypeCode.EMBLEM
+            MageObjectType.COMMANDER -> MageObjectTypeCode.COMMANDER
+            MageObjectType.DESIGNATION -> MageObjectTypeCode.DESIGNATION
+            MageObjectType.PLANE -> MageObjectTypeCode.PLANE
+            MageObjectType.NULL -> MageObjectTypeCode.NULL
+            null -> MageObjectTypeCode.UNKNOWN
+        }
 
     /** The nested source `CardView` for an `AbilityView`/`StackAbilityView`, `null` for anything else. */
     private fun sourceCardOf(card: CardView): CardView? =
