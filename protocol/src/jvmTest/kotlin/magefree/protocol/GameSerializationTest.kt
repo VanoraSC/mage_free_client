@@ -481,6 +481,58 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `a command zone round-trips with each kind`() {
+        val player =
+            GamePlayerView(
+                playerId = "pl-1",
+                name = "alice",
+                commandList =
+                    listOf(
+                        GameCommandObjectView(id = "cmd-1", name = "Emblem", kind = CommandObjectKind.EMBLEM, rules = listOf("…")),
+                        GameCommandObjectView(
+                            id = "cmd-2",
+                            name = "Atraxa, Praetors' Voice",
+                            kind = CommandObjectKind.COMMANDER,
+                            setCode = "C16",
+                            collectorNumber = "28",
+                        ),
+                    ),
+            )
+
+        val round = json.decodeFromString<GamePlayerView>(json.encodeToString(player))
+
+        assertEquals(listOf(CommandObjectKind.EMBLEM, CommandObjectKind.COMMANDER), round.commandList.map { it.kind })
+        assertEquals("28", round.commandList[1].collectorNumber)
+        assertNull(round.commandList[0].collectorNumber)
+    }
+
+    @Test
+    fun `a command object kind this build has never heard of decodes to UNKNOWN instead of throwing`() {
+        // The same forward-compatibility promise CardTypeCode makes: upstream adds command-object
+        // kinds, and one this build does not know must cost a single value, not the whole snapshot.
+        val frame = """{"id":"cmd-9","name":"Something New","kind":"SAGA_OF_THE_FUTURE"}"""
+
+        val decoded = json.decodeFromString<GameCommandObjectView>(frame)
+
+        assertEquals(CommandObjectKind.UNKNOWN, decoded.kind)
+        assertEquals("Something New", decoded.name)
+    }
+
+    @Test
+    fun `command object kinds encode as their own names`() {
+        val encoded = json.encodeToString(GameCommandObjectView(id = "c", name = "n", kind = CommandObjectKind.DUNGEON))
+
+        assertTrue(encoded.contains("\"kind\":\"DUNGEON\""), encoded)
+    }
+
+    @Test
+    fun `a player frame from a bridge that sends no command zone decodes with an empty one`() {
+        val decoded = json.decodeFromString<GamePlayerView>("""{"playerId":"pl-1","name":"alice"}""")
+
+        assertTrue(decoded.commandList.isEmpty())
+    }
+
+    @Test
     fun `a card type this build has never heard of decodes to UNKNOWN instead of throwing`() {
         // The list form of the forward-compat promise: upstream keeps adding card types (BATTLE and
         // DUNGEON are recent), and `ignoreUnknownKeys` does not cover an unknown *value* inside a list.

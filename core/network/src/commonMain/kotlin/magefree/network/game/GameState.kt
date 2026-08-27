@@ -158,6 +158,9 @@ data class GameState(
  * @property designationNames the player's own designations. In practice this is City's Blessing or
  *   nothing: the Monarch and Initiative designations are game-level upstream, never per-player, which
  *   is why [isMonarch] and [hasInitiative] are separate flags.
+ * @property commandList this player's command zone — emblems, commanders, the active dungeon and the
+ *   current plane. A **plane appears on every seat's list**, because planes are universal; the other
+ *   three are the player's own.
  */
 data class GamePlayer(
     val playerId: String,
@@ -180,7 +183,44 @@ data class GamePlayer(
     val isMonarch: Boolean = false,
     val hasInitiative: Boolean = false,
     val designationNames: List<String> = emptyList(),
+    val commandList: List<GameCommandObject> = emptyList(),
 )
+
+/**
+ * One object in a player's command zone — an emblem, a commander, a dungeon or a plane.
+ *
+ * These belong to a player rather than to a pile of cards, which is why they live on [GamePlayer] and
+ * not in a zone. One flat type with a [kind] rather than four: the four upstream implementations
+ * differ in what they are, not in what a client reads off them.
+ *
+ * @property collectorNumber `null` for a dungeon and a plane, which have no card number at all. Only
+ *   an emblem printed on a card, and a commander, carry one.
+ * @property rules the object's rules text as the server rendered it.
+ */
+data class GameCommandObject(
+    val id: String,
+    val name: String,
+    val kind: CommandObjectKind = CommandObjectKind.Unknown,
+    val setCode: String? = null,
+    val collectorNumber: String? = null,
+    val rules: List<String> = emptyList(),
+)
+
+/**
+ * What kind of command object a [GameCommandObject] is.
+ *
+ * [Unknown] covers a kind this build does not know: upstream adds command-object kinds, and one it
+ * has never heard of costs a single value rather than the whole snapshot.
+ */
+enum class CommandObjectKind {
+    Emblem,
+    Commander,
+    Dungeon,
+
+    /** Universal: the same plane appears on every seat's command list, owned by none of them. */
+    Plane,
+    Unknown,
+}
 
 /**
  * A card as the server rendered it — the app-schema projection of `mage.view.CardView`. Deliberately

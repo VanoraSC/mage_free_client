@@ -9,6 +9,7 @@ import magefree.protocol.GameAbilityChoice
 import magefree.protocol.GameCardView
 import magefree.protocol.GameChoiceOption
 import magefree.protocol.GameCombatGroupView
+import magefree.protocol.GameCommandObjectView
 import magefree.protocol.GameManaPoolView
 import magefree.protocol.GameMultiAmountEntry
 import magefree.protocol.GamePermanentView
@@ -28,6 +29,7 @@ import magefree.protocol.SelectPrompt
 import magefree.protocol.TargetPrompt
 import magefree.protocol.TurnPhaseCode
 import magefree.protocol.UnknownGamePrompt
+import magefree.protocol.CommandObjectKind as CommandObjectKindCode
 import magefree.protocol.GamePrompt as GamePromptMessage
 
 /**
@@ -190,7 +192,27 @@ internal object GameViewMapper {
             isMonarch = monarch,
             hasInitiative = initiative,
             designationNames = designationNames,
+            commandList = commandList.map { it.toCommandObject() },
         )
+
+    private fun GameCommandObjectView.toCommandObject(): GameCommandObject =
+        GameCommandObject(
+            id = id,
+            name = name,
+            kind = kind.toCommandObjectKind(),
+            setCode = setCode,
+            collectorNumber = collectorNumber,
+            rules = rules,
+        )
+
+    private fun CommandObjectKindCode.toCommandObjectKind(): CommandObjectKind =
+        when (this) {
+            CommandObjectKindCode.EMBLEM -> CommandObjectKind.Emblem
+            CommandObjectKindCode.COMMANDER -> CommandObjectKind.Commander
+            CommandObjectKindCode.DUNGEON -> CommandObjectKind.Dungeon
+            CommandObjectKindCode.PLANE -> CommandObjectKind.Plane
+            CommandObjectKindCode.UNKNOWN -> CommandObjectKind.Unknown
+        }
 
     private fun GameCardView.toCard(): GameCard =
         GameCard(

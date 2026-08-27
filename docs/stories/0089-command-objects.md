@@ -25,11 +25,18 @@ four concrete types (verified in `PlayerView.java`):
 | `PlaneView` | the current plane |
 | `CommanderView` | each of the player's commanders |
 
-`CommandObjectView` is the common interface: `getId`, `getName`, `getRules`, `getExpansionSetCode`,
-`getCardNumber`, `getImageFileName`, `getImageNumber`, `getUsesVariousArt`, `isPlayable`,
-`setPlayableStats`. **Everything the app needs is on the interface** — id, name, rules text, and a
-printing to resolve art by, which is the same `(setCode, collectorNumber)` pair story 0030's catalog
-already keys on.
+`CommandObjectView` is the common interface, and its surface is **narrower than this story first
+assumed**. Read against `CommandObjectView.java` and `SelectableObjectView.java`, it declares exactly:
+`getExpansionSetCode`, `getName`, `getId`, `getImageFileName`, `getImageNumber`, `getRules`, plus the
+selection/playability methods it inherits.
+
+**There is no `getCardNumber()` on it.** Only `EmblemView` declares one of its own (filled solely for
+an `EmblemOfCard`, `""` otherwise), and `CommanderView`, which gets it by extending `CardView`.
+`DungeonView` and `PlaneView` have no card number at all. So the collector number cannot be read off
+the interface — it has to come from the same branch that decides the kind.
+
+**The accessor is `getCommandObjectList()`**, not `getCommandList()`: the field is named for the list,
+the getter for what is in it.
 
 **`MageObjectType` already names the kinds.** `mage.view.MageObjectType` has `EMBLEM`, `COMMANDER`,
 `DUNGEON` and `PLANE` among its constants, so the discriminator does not have to be invented — it can
@@ -43,6 +50,7 @@ entries in some pseudo-zone would put them in the wrong surface.
 
 **In scope**
 - A `GameCommandObjectView` in `:protocol` carrying the interface's fields plus a kind discriminator.
+- The same list on `:core:network`'s `GamePlayer`, so it reaches the app rather than stopping at the wire.
 - `GamePlayerView.commandList: List<GameCommandObjectView>`.
 - `GameViewMapper` mapping all four concrete types through the interface.
 
@@ -106,28 +114,44 @@ emblems need a planeswalker ultimate. Name in the PR what was reached live and w
    `CardTypeCode`.
 3. Add `commandList` to `GamePlayerView`.
 4. Map it in `GameViewMapper.mapPlayer`, branching on the concrete type for the kind only.
-5. Extend `GameViews.kt` with a command-object fixture; regenerate goldens and read the diff.
+5. Extend `GameViews.kt` with a fixture per concrete type.
+6. Carry the same list through `:core:network`'s `GamePlayer` and its mapper.
+7. No golden to regenerate: the only committed golden is `chat_talk.json`.
 
 ## 7. Testing & verification
 
-- **Proven failing first (standard 1):** the mapper test asserting an emblem's rules text arrives
-  must fail against a mapper that drops `commandList`, then pass.
-- **Unit:** `GameViewMapperTest` — an `EmblemView` maps to `kind = EMBLEM` with its rules; a
-  `CommanderView` maps to `kind = COMMANDER` with its printing; a player with an empty command list
-  maps to `emptyList()`. Plus a decode test: an unknown `kind` string decodes to `UNKNOWN` rather
-  than throwing — the tolerance claim, asserted rather than assumed.
-- **Live:** a Commander game against the reference server, asserting both commanders arrive with
-  names and printings. If an emblem cannot be produced without a contrived deck, say so.
+- **Proven failing first (standard 1):** four `:bridge` mapper tests and two `:core:network` fold
+  tests each fail against a mapper that drops `commandList`, then pass.
+- **Unit (`:bridge`):** all four upstream implementations map to their own kind, in order, with ids;
+  only the commander and a card-printed emblem carry a collector number, while a dungeon and a plane
+  carry a set code and no number; a `CommandObjectView` implementation the branch has never seen maps
+  to `UNKNOWN` with every interface field intact; an empty command zone maps to `emptyList()`.
+- **Unit (`:protocol`):** the list round-trips with its kinds, an unknown kind string decodes to
+  `UNKNOWN` rather than throwing, kinds encode as their own names, and a frame from a bridge that
+  sends no command zone decodes with an empty one.
+- **Unit (`:core:network`):** the kinds and printings survive the fold, and an absent kind folds to
+  `Unknown`.
+- **Live:** a `Freeform Unlimited Commander` game against the reference server. That variant is what
+  makes it cheap: its deck validator's `validate()` returns `true` unconditionally and its minimum
+  deck size is zero, so a single legendary creature in the sideboard becomes the commander with no
+  hundred-card singleton list to satisfy. **The scenario needs no play at all** — a commander is in
+  the command zone from the first snapshot.
+- **Not reached live, and named rather than papered over:** the emblem, dungeon and plane kinds. An
+  emblem needs a planeswalker's ultimate, which is many turns and an AI decision; a dungeon needs a
+  venture card and two turns of setup; a plane needs a Planechase game type. All three are covered
+  hermetically against the real upstream view types.
 - **Eyes-on:** none.
 
 ## 8. Acceptance criteria
 
-- [ ] `GameCommandObjectView` and `CommandObjectKind` exist, with a tolerant serializer proven by test.
-- [ ] `GamePlayerView.commandList` is populated for all four upstream types.
-- [ ] An unrecognised `CommandObjectView` implementation maps to `UNKNOWN` and keeps its fields.
-- [ ] The mapper test was proven failing before passing.
-- [ ] Live coverage against a Commander game; whatever could not be reached live is named.
-- [ ] `./gradlew check` passes; goldens updated deliberately.
+- [x] `GameCommandObjectView` and `CommandObjectKind` exist, with a tolerant serializer proven by test.
+- [x] `GamePlayerView.commandList` is populated for all four upstream types.
+- [x] An unrecognised `CommandObjectView` implementation maps to `UNKNOWN` and keeps its fields.
+- [x] The mapper tests were proven failing before passing.
+- [x] Live coverage of the commander kind; the other three are named, with the reason each was not
+      reachable.
+- [x] The fields reach the app: `GameState`'s `GamePlayer` carries them.
+- [x] `./gradlew check` and `:bridge:check` pass; no golden needed regenerating.
 
 ## 9. References
 

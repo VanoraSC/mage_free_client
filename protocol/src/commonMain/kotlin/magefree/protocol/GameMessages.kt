@@ -759,6 +759,10 @@ public data class GameStateView(
  *   `AscendAbility`. The Monarch, Initiative and Speed designations go through
  *   `GameState.addDesignation` — they are game-level, not per-player — which is why [monarch] and
  *   [initiative] are separate flags rather than entries in this list. "The Monarch" never appears here.
+ * @property commandList this player's command zone (upstream `getCommandList()`) — emblems,
+ *   commanders, the active dungeon, and the current plane. A **plane appears on every seat's list**:
+ *   upstream adds it unconditionally because planes are universal, so it is not owned by the player
+ *   carrying it. The other three are filtered by controller.
  */
 @Serializable
 public data class GamePlayerView(
@@ -782,6 +786,7 @@ public data class GamePlayerView(
     val monarch: Boolean = false,
     val initiative: Boolean = false,
     val designationNames: List<String> = emptyList(),
+    val commandList: List<GameCommandObjectView> = emptyList(),
 )
 
 /**
@@ -849,6 +854,82 @@ public data class GameCardView(
     val transformed: Boolean = false,
     val targets: List<String> = emptyList(),
 )
+
+/**
+ * One object in a player's command zone, projected from `mage.view.CommandObjectView` — an emblem, a
+ * commander, a dungeon or a plane.
+ *
+ * **These belong to a player, not to a pile of cards.** They are carried on [GamePlayerView] rather
+ * than as cards in a pseudo-zone, because a zone browser is for looking through piles and these are
+ * not one.
+ *
+ * **One flat type with a [kind] code, not four wire shapes.** The four upstream implementations
+ * differ in what they *are*, not in what a client reads off them: `CommandObjectView` declares
+ * `getId`, `getName`, `getRules`, `getExpansionSetCode`, `getImageFileName` and `getImageNumber`, and
+ * that is the whole payload. Four shapes to distinguish four values of one enum would buy nothing and
+ * cost the additive-compatibility promise.
+ *
+ * @property collectorNumber `null` for a dungeon and a plane, which have no card number **at all**:
+ *   `getCardNumber()` is not on `CommandObjectView`. Only `EmblemView` declares one (and fills it
+ *   only for an emblem printed on a card), and `CommanderView`, which extends `CardView`.
+ * @property rules the object's rules text as upstream rendered it — an emblem's granted ability, a
+ *   dungeon's rooms, a plane's static and chaos abilities.
+ */
+@Serializable
+public data class GameCommandObjectView(
+    val id: String,
+    val name: String,
+    val kind: CommandObjectKind = CommandObjectKind.UNKNOWN,
+    val setCode: String? = null,
+    val collectorNumber: String? = null,
+    val rules: List<String> = emptyList(),
+)
+
+/**
+ * What kind of command object a [GameCommandObjectView] is.
+ *
+ * **Unknown values decode to [UNKNOWN] rather than throwing** (see [Serializer]), for the same reason
+ * [CardTypeCode] tolerates them: upstream adds command-object kinds, and a newer bridge sending one
+ * this build has never heard of must cost one enum value rather than the whole snapshot.
+ */
+@Serializable(with = CommandObjectKind.Serializer::class)
+public enum class CommandObjectKind {
+    /** A `mage.view.EmblemView` — an emblem the player controls. */
+    EMBLEM,
+
+    /** A `mage.view.CommanderView` — one of the player's commanders. */
+    COMMANDER,
+
+    /** A `mage.view.DungeonView` — the player's active dungeon. */
+    DUNGEON,
+
+    /**
+     * A `mage.view.PlaneView` — the current plane. Planes are universal: upstream adds the plane to
+     * **every** player's command list, so a plane here is not owned by the seat carrying it.
+     */
+    PLANE,
+
+    /** A kind this build does not know — either upstream added one, or the server sent nothing usable. */
+    UNKNOWN,
+    ;
+
+    internal object Serializer : KSerializer<CommandObjectKind> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("magefree.protocol.CommandObjectKind", PrimitiveKind.STRING)
+
+        override fun serialize(
+            encoder: Encoder,
+            value: CommandObjectKind,
+        ) {
+            encoder.encodeString(value.name)
+        }
+
+        override fun deserialize(decoder: Decoder): CommandObjectKind {
+            val raw = decoder.decodeString()
+            return entries.firstOrNull { it.name == raw } ?: UNKNOWN
+        }
+    }
+}
 
 /**
  * One counter on a card or permanent, projected from `mage.view.CounterView` — which is exactly
