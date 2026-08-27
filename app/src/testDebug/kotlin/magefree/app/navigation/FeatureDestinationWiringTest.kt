@@ -69,7 +69,7 @@ class FeatureDestinationWiringTest {
                     // A stand-in only so the graph can be built without Hilt; that the *production*
                     // default is `:feature:connect`'s ConnectFlow is asserted by the constant-pool
                     // guard in FeatureWiringGuardTest.
-                    connectFlow = { onConnected -> Button(onClick = onConnected) { Text("stand-in") } },
+                    connectFlow = { onConnected, _ -> Button(onClick = onConnected) { Text("stand-in") } },
                 )
             }
         }
@@ -124,6 +124,12 @@ class FeatureDestinationWiringTest {
                 ShellRoute::class to "the tabbed browsing shell — without it a signed-in user has nowhere to go",
                 GameRoute::class to "the immersive game surface",
                 CatalogRoute::class to "the design-system component catalog",
+                DecksRoute::class to
+                    ":feature:decks reached without a session — deckbuilding is fully offline, so it is " +
+                    "mounted here as well as in the shell",
+                CardsRoute::class to
+                    ":feature:cards reached without a session — the library's \"Browse cards\" action " +
+                    "goes here, and without it that action is dead from the offline entry",
             ),
         )
     }

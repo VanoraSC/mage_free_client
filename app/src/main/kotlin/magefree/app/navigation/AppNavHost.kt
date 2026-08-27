@@ -13,6 +13,8 @@ import magefree.app.connection.ui.ConnectionStatusBar
 import magefree.app.game.GameRoute
 import magefree.app.game.ImmersiveGameScreen
 import magefree.feature.connect.ConnectFlow
+import magefree.feature.cards.CardsRoute as CardsFeatureRoute
+import magefree.feature.decks.DecksRoute as DecksLibraryRoute
 
 /**
  * Type-safe route for the tabbed browsing shell — the [AppShell] with its bottom-bar / rail chrome
@@ -78,8 +80,25 @@ data object ConnectRoute
  *   never the first-connect affordance, and it is never the dead control it was without it (when
  *   the app launched straight into the shell with no session and Retry had nothing to retry).
  *
+ * ## Deckbuilding without a session
+ *
+ * Deck storage, format legality and the card catalog are all on the device, and nothing in
+ * `:feature:decks` or `:feature:cards` reads a session — only art fetching touches the network. So
+ * [DecksRoute] and [CardsRoute] are mounted **here** as well as in the shell, chrome-free like
+ * [GameRoute], and the server-list screen offers a way in. Back returns to the server list, because
+ * the connect destination stays on the stack.
+ *
+ * This is a second mount point, not a relaxation of the entry policy above: the shell still requires a
+ * live session. Letting the shell in without one would make the lobby, tables and the connection strip
+ * reachable in a state where none of them can work.
+ *
  * @param connectFlow the connect destination's content, hoisted so the shell's navigation tests can
- *   drive the graph without a Hilt graph; production uses the default, the real `ConnectFlow`.
+ *   drive the graph without a DI container; production uses the default, the real `ConnectFlow`. It
+ *   raises `onConnected` on a successful sign-in and `onOpenDecks` from the server list's offline
+ *   entry.
+ * @param decksScreen the offline deck library's content, and @param cardsScreen the card browser's.
+ *   Hoisted for the same reason [connectFlow] is: both resolve their ViewModels through the DI
+ *   container, and the navigation guards drive this graph without one. Production uses the defaults.
  * @param onSignOut deliberate session teardown, invoked before navigating back to [ConnectRoute].
  *   Hoisted (default no-op) for the same reason; `AppRoot` supplies the repository-backed one.
  */
@@ -88,9 +107,13 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
-    connectFlow: @Composable (onConnected: () -> Unit) -> Unit = { onConnected ->
-        ConnectFlow(onConnected = onConnected)
+    connectFlow: @Composable (onConnected: () -> Unit, onOpenDecks: () -> Unit) -> Unit = { onConnected, onOpenDecks ->
+        ConnectFlow(onConnected = onConnected, onOpenDecks = onOpenDecks)
     },
+    decksScreen: @Composable (onBrowseCards: () -> Unit) -> Unit = { onBrowseCards ->
+        DecksLibraryRoute(onBrowseCards = onBrowseCards)
+    },
+    cardsScreen: @Composable (onBack: () -> Unit) -> Unit = { onBack -> CardsFeatureRoute(onBack = onBack) },
     onSignOut: () -> Unit = {},
 ) {
     NavHost(
@@ -99,14 +122,26 @@ fun AppNavHost(
         modifier = modifier,
     ) {
         composable<ConnectRoute> {
-            connectFlow {
-                // Sign-in succeeded: hand off to the shell and drop the connect flow from the back
-                // stack, so Back from Home exits rather than returning to sign-in over a live session.
-                navController.navigate(ShellRoute) {
-                    popUpTo(ConnectRoute) { inclusive = true }
-                    launchSingleTop = true
-                }
-            }
+            connectFlow(
+                {
+                    // Sign-in succeeded: hand off to the shell and drop the connect flow from the back
+                    // stack, so Back from Home exits rather than returning to sign-in over a live session.
+                    navController.navigate(ShellRoute) {
+                        popUpTo(ConnectRoute) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                {
+                    // Offline decks: navigate without popping, so Back returns to the server list.
+                    navController.navigate(DecksRoute) { launchSingleTop = true }
+                },
+            )
+        }
+        composable<DecksRoute> {
+            decksScreen { navController.navigate(CardsRoute) }
+        }
+        composable<CardsRoute> {
+            cardsScreen { navController.popBackStack() }
         }
         composable<ShellRoute> {
             AppShell(

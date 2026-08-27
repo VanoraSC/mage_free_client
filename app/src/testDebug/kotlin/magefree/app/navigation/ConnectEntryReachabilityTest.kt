@@ -1,6 +1,7 @@
 package magefree.app.navigation
 
 import android.app.Application
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.remember
@@ -81,9 +82,20 @@ class ConnectEntryReachabilityTest {
                     navController = controller,
                     connectionStatusBar = {},
                     onSignOut = { signOutCount++ },
-                    connectFlow = { onConnected ->
-                        Button(onClick = onConnected) { Text(CONNECT_STAND_IN_LABEL) }
+                    connectFlow = { onConnected, onOpenDecks ->
+                        // A Column, not two bare Buttons: without a layout they draw on top of each
+                        // other at the same origin and a click lands on whichever is painted last.
+                        Column {
+                            Button(onClick = onConnected) { Text(CONNECT_STAND_IN_LABEL) }
+                            Button(onClick = onOpenDecks) { Text(DECKS_STAND_IN_LABEL) }
+                        }
                     },
+                    // Both offline destinations resolve ViewModels through the DI container, which this
+                    // graph test deliberately runs without; the markers stand in for their content.
+                    decksScreen = { onBrowseCards ->
+                        Button(onClick = onBrowseCards) { Text(DECKS_LIBRARY_STAND_IN_LABEL) }
+                    },
+                    cardsScreen = { Text(CARDS_STAND_IN_LABEL) },
                 )
             }
         }
@@ -141,8 +153,44 @@ class ConnectEntryReachabilityTest {
         assertTrue("the signed-out shell must not stay on the back stack", !isOnBackStack(ShellRoute))
     }
 
+    @Test
+    fun decksAreReachableFromTheConnectDestinationWithNoSession() {
+        // Deckbuilding is fully offline, so it must be usable before there is a session at all. This
+        // asserts the graph half — that the entry the connect destination raises actually lands on a
+        // mounted destination. That the server list renders the control is `:feature:connect`'s test.
+        launchColdWithNoSession()
+
+        composeTestRule.onNodeWithText(DECKS_STAND_IN_LABEL).performClick()
+
+        assertTrue("the offline decks entry must land on DecksRoute", currentRouteIs(DecksRoute::class))
+        assertTrue(
+            "connect must stay on the back stack, so Back returns to the server list",
+            isOnBackStack(ConnectRoute),
+        )
+    }
+
+    @Test
+    fun reachingDecksWithoutASessionDoesNotEnterTheShell() {
+        // The entry policy is untouched by the second mount point: the shell is still only ever
+        // entered with a live session, so none of its chrome may appear on this path.
+        launchColdWithNoSession()
+
+        composeTestRule.onNodeWithText(DECKS_STAND_IN_LABEL).performClick()
+
+        assertTrue("reaching decks must not enter the shell", !isOnBackStack(ShellRoute))
+        composeTestRule.onNodeWithText(HOME_TITLE).assertDoesNotExist()
+        shellTab(TopLevelDestination.HOME).assertDoesNotExist()
+    }
+
     private companion object {
         /** Marker rendered by the Hilt-free stand-in for `ConnectFlow`. */
         const val CONNECT_STAND_IN_LABEL = "connect-flow-stand-in"
+
+        /** The stand-in's offline-decks entry, standing for the server list's own control. */
+        const val DECKS_STAND_IN_LABEL = "offline-decks-stand-in"
+
+        /** Markers for the offline destinations' own content. */
+        const val DECKS_LIBRARY_STAND_IN_LABEL = "offline-decks-library-stand-in"
+        const val CARDS_STAND_IN_LABEL = "offline-cards-stand-in"
     }
 }
