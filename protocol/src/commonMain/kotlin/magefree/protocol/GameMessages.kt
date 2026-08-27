@@ -832,6 +832,18 @@ public data class GamePlayerView(
  *   by `PermanentView` via its `super()` call. `false` for anything that is not a permanent, and for an
  *   untransformed permanent — only `true` once the permanent has actually flipped to its back face.
  *   This, not [alternateName], is the signal for which face's art to request.
+ * @property token upstream `CardView.isToken()` — true for a **token permanent** and nothing else.
+ *   A token and a card look identical at a glance and behave differently: a token that leaves the
+ *   battlefield ceases to exist, and a token never piles with a real card of the same name.
+ * @property objectType upstream `CardView.getMageObjectType()`, the server's own answer to what kind
+ *   of object this is. It is **broader than [token]**: `TOKEN` is set on any token object, while
+ *   [token] is set only for a `PermanentToken`, so the two agree on the battlefield and can differ
+ *   elsewhere. It also answers the neighbouring question [token] cannot — a copy of a card versus the
+ *   card itself.
+ *
+ *   [MageObjectTypeCode.NULL] is upstream's own default, meaning the server set no type on this
+ *   object. It is a real value, distinct from [MageObjectTypeCode.UNKNOWN], which means this build did
+ *   not recognise what the server sent.
  * @property targets what this object is pointing at, from upstream `CardView.getTargets()`
  * — the ids of every chosen target of a spell or ability on the stack, de-duplicated and in
  *   upstream's own stable order. **Ids into the same snapshot**, resolvable against any object in it:
@@ -865,7 +877,60 @@ public data class GameCardView(
     val alternateName: String? = null,
     val transformed: Boolean = false,
     val targets: List<String> = emptyList(),
+    val token: Boolean = false,
+    val objectType: MageObjectTypeCode = MageObjectTypeCode.UNKNOWN,
 )
+
+/**
+ * What kind of object the server says a [GameCardView] is (`mage.constants.MageObjectType`).
+ *
+ * The set below is upstream's at `mage-common-1.4.60`. **Unknown values decode to [UNKNOWN] rather
+ * than throwing** (see [Serializer]), the same forward-compatibility promise [CardTypeCode] makes: a
+ * newer bridge sending a type this build has never heard of must cost one enum value, not the whole
+ * snapshot.
+ *
+ * [NULL] and [UNKNOWN] are different answers. [NULL] is upstream's own default — the server set no
+ * type on this object. [UNKNOWN] is this build failing to recognise what the server sent.
+ */
+@Serializable(with = MageObjectTypeCode.Serializer::class)
+public enum class MageObjectTypeCode {
+    ABILITY_STACK_FROM_CARD,
+    ABILITY_STACK_FROM_TOKEN,
+    CARD,
+    COPY_CARD,
+    TOKEN,
+    SPELL,
+    PERMANENT,
+    DUNGEON,
+    EMBLEM,
+    COMMANDER,
+    DESIGNATION,
+    PLANE,
+
+    /** Upstream's own default: the server set no object type on this object. */
+    NULL,
+
+    /** A type this build does not know — either upstream added one, or the server sent nothing usable. */
+    UNKNOWN,
+    ;
+
+    internal object Serializer : KSerializer<MageObjectTypeCode> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("magefree.protocol.MageObjectTypeCode", PrimitiveKind.STRING)
+
+        override fun serialize(
+            encoder: Encoder,
+            value: MageObjectTypeCode,
+        ) {
+            encoder.encodeString(value.name)
+        }
+
+        override fun deserialize(decoder: Decoder): MageObjectTypeCode {
+            val raw = decoder.decodeString()
+            return entries.firstOrNull { it.name == raw } ?: UNKNOWN
+        }
+    }
+}
 
 /**
  * One object in a player's command zone, projected from `mage.view.CommandObjectView` — an emblem, a

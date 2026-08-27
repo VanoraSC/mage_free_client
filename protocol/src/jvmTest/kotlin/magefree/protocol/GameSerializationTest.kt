@@ -565,6 +565,51 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `token identity and object type round-trip`() {
+        val token = GameCardView(id = "t-1", name = "Soldier", token = true, objectType = MageObjectTypeCode.TOKEN)
+
+        val round = json.decodeFromString<GameCardView>(json.encodeToString(token))
+
+        assertTrue(round.token)
+        assertEquals(MageObjectTypeCode.TOKEN, round.objectType)
+    }
+
+    @Test
+    fun `an object type this build has never heard of decodes to UNKNOWN instead of throwing`() {
+        val frame = """{"id":"c-1","name":"Thing","objectType":"SAGA_CHAPTER"}"""
+
+        val decoded = json.decodeFromString<GameCardView>(frame)
+
+        assertEquals(MageObjectTypeCode.UNKNOWN, decoded.objectType)
+        assertEquals("Thing", decoded.name)
+    }
+
+    @Test
+    fun `NULL is a value the server sends, and survives as itself`() {
+        // Upstream's own default means "no type set". UNKNOWN means this build did not recognise what
+        // arrived. Collapsing them would lose the difference.
+        val frame = """{"id":"c-1","name":"Thing","objectType":"NULL"}"""
+
+        assertEquals(MageObjectTypeCode.NULL, json.decodeFromString<GameCardView>(frame).objectType)
+    }
+
+    @Test
+    fun `object types encode as their upstream names`() {
+        val encoded = json.encodeToString(GameCardView(id = "c", name = "n", objectType = MageObjectTypeCode.COPY_CARD))
+
+        assertTrue(encoded.contains("\"objectType\":\"COPY_CARD\""), encoded)
+    }
+
+    @Test
+    fun `a card frame from a bridge that sends no token identity decodes as not a token`() {
+        // Absence must never read as "this is a token": the two behave differently on the battlefield.
+        val decoded = json.decodeFromString<GameCardView>("""{"id":"c-3","name":"Forest"}""")
+
+        assertFalse(decoded.token)
+        assertEquals(MageObjectTypeCode.UNKNOWN, decoded.objectType)
+    }
+
+    @Test
     fun `a card type this build has never heard of decodes to UNKNOWN instead of throwing`() {
         // The list form of the forward-compat promise: upstream keeps adding card types (BATTLE and
         // DUNGEON are recent), and `ignoreUnknownKeys` does not cover an unknown *value* inside a list.

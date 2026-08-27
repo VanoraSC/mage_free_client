@@ -35,6 +35,8 @@ Two fields now is cheaper than a second story later, and the plan names both.
 **In scope**
 - `GameCardView.token: Boolean` and `GameCardView.objectType: MageObjectTypeCode`.
 - `GameViewMapper.mapCard` reading both.
+- The same pair on `:core:network`'s `GameCard`, so they reach the app rather than stopping at the
+  wire.
 
 **Out of scope**
 - Rendering a token differently (§7.5, EPIC-19) and the piling rule (§7.4).
@@ -53,10 +55,23 @@ val token: Boolean = false,
 val objectType: MageObjectTypeCode = MageObjectTypeCode.UNKNOWN,
 ```
 
-`MageObjectTypeCode` mirrors `mage.view.MageObjectType`'s constants and **uses the tolerant
+`MageObjectTypeCode` mirrors `mage.constants.MageObjectType`'s constants and **uses the tolerant
 serializer pattern** already established by `CardTypeCode`: an unrecognised value decodes to
 `UNKNOWN` rather than throwing, because upstream adds object types and a newer bridge must cost one
 enum value rather than the whole snapshot. Copy the existing serializer; do not write a second one.
+
+**There are thirteen constants, not the handful this story first listed**, and `DESIGNATION` is among
+them: `ABILITY_STACK_FROM_CARD`, `ABILITY_STACK_FROM_TOKEN`, `CARD`, `COPY_CARD`, `TOKEN`, `SPELL`,
+`PERMANENT`, `DUNGEON`, `EMBLEM`, `COMMANDER`, `DESIGNATION`, `PLANE`, `NULL`.
+
+**`NULL` is a real value and is carried as itself.** It is upstream's own default — `CardView`
+declares `mageObjectType = MageObjectType.NULL` — and means "the server set no type on this object".
+`UNKNOWN` means "this build did not recognise what arrived". Collapsing the two would throw away the
+difference between a server that said nothing and a server that said something new.
+
+**`token` and `objectType` are related but not equivalent, and the KDoc says so.** `isToken` is set
+only for a `PermanentToken`; `mageObjectType = TOKEN` is set on any token object. They agree on the
+battlefield and can differ elsewhere.
 
 **Name the protocol field `token`, not `isToken`.** `GameCardView`'s existing booleans are
 `faceDown`, `creature`, `transformed` — no `is` prefix. Consistency inside the wire type beats
@@ -74,27 +89,44 @@ confirms a real token arrives with both fields set.
 2. Add `MageObjectTypeCode` with the tolerant serializer, and the two fields on `GameCardView`.
 3. Map both in `mapCard`.
 4. Extend `GameViews.kt` so a fixture card can be a token or a copy.
-5. Regenerate goldens with `UPDATE_GOLDEN=1`; read the diff.
+5. Carry both through `:core:network`'s `GameCard` and its mapper.
+6. No golden to regenerate: the only committed golden is `chat_talk.json`.
 
 ## 7. Testing & verification
 
-- **Proven failing first (standard 1):** the mapper test asserting a token permanent arrives with
-  `token = true` must fail against a mapper that drops the field, then pass.
-- **Unit:** `GameViewMapperTest` — a token maps to `token = true, objectType = TOKEN`; an ordinary
-  battlefield permanent to `token = false, objectType = PERMANENT`; a copy to `COPY_CARD`. Plus a
-  decode test that an unknown `objectType` string decodes to `UNKNOWN` rather than throwing.
-- **Live:** against the reference server, create a token and assert it arrives with `token = true`.
-  A token-making card is the cheapest live case in this epic — there is no excuse for a fixture-only
-  claim here.
+- **Proven failing first (standard 1):** four `:bridge` mapper tests and the `:core:network` fold test
+  each fail against a mapper that drops the fields. So does the live test — with `token` hardcoded
+  false it never finds a token on the board.
+- **Unit (`:bridge`):** a token permanent maps to `token = true, objectType = TOKEN` and the land
+  beside it to `false, PERMANENT`; a copy of a card is distinguishable from the card itself, which is
+  the question `token` cannot answer; **every** upstream `MageObjectType` has a code of its own, so a
+  type added upstream is a compile error at the one place the two sets meet; an object with no type
+  set carries upstream's own `NULL`.
+- **Unit (`:protocol`):** both fields round-trip, an unknown `objectType` string decodes to `UNKNOWN`
+  rather than throwing, `NULL` survives as itself, types encode as their upstream names, and a frame
+  from a bridge that sends neither field decodes as **not** a token.
+- **Unit (`:core:network`):** both survive the fold, and a card with no object type folds to
+  `Unknown` and not a token.
+- **Live:** `Raise the Alarm` (`{1}{W}`, two 1/1 Soldier tokens, no target) puts a real token on the
+  battlefield on turn two. The land played the same game is the control: a flag that is true for
+  everything is no more useful than one that is false for everything, so the test asserts the pair.
+
+  ```
+  GameRelayIT[token]: [Plains(token=false,PERMANENT), Plains(token=false,PERMANENT),
+                       Soldier Token(token=true,TOKEN), Soldier Token(token=true,TOKEN)]
+  ```
+
 - **Eyes-on:** none. Nothing renders differently yet.
 
 ## 8. Acceptance criteria
 
-- [ ] `GameCardView.token` and `objectType` exist, default safely, and are documented.
-- [ ] `MageObjectTypeCode` decodes an unknown value to `UNKNOWN`, proven by test.
-- [ ] The mapper test was proven failing before passing.
-- [ ] A live token arrives with both fields set correctly.
-- [ ] `./gradlew check` passes; goldens updated deliberately.
+- [x] `GameCardView.token` and `objectType` exist, default safely, and are documented.
+- [x] `MageObjectTypeCode` decodes an unknown value to `UNKNOWN`, proven by test, and keeps `NULL`
+      distinct from it.
+- [x] The mapper tests were proven failing before passing, the live one included.
+- [x] A live token arrives with both fields set correctly, alongside a non-token control.
+- [x] The fields reach the app: `GameState`'s `GameCard` carries them.
+- [x] `./gradlew check` and `:bridge:check` pass; no golden needed regenerating.
 
 ## 9. References
 

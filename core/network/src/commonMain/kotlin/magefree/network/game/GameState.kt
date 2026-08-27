@@ -254,6 +254,11 @@ enum class CommandObjectKind {
  * @property transformed upstream `CardView.isTransformed()` — the live "is this permanent
  *   currently showing its back face" fact. `false` for anything that is not a permanent, and for an
  *   untransformed permanent. This is the signal for which face's art to request, never [alternateName].
+ * @property isToken whether this is a token permanent. A token and a card look identical and behave
+ *   differently: a token that leaves the battlefield ceases to exist, and never piles with a real
+ *   card of the same name.
+ * @property objectType the server's own answer to what kind of object this is — broader than
+ *   [isToken], and the only way to tell a copy of a card from the card itself.
  * @property targets what this object is pointing at, from upstream `CardView.getTargets()`
  *   — the ids of every chosen target of a spell or ability on the stack, de-duplicated and in
  *   upstream's own stable order. **Ids into the same [GameState]**: a battlefield permanent, a player,
@@ -279,7 +284,32 @@ data class GameCard(
     val alternateName: String? = null,
     val transformed: Boolean = false,
     val targets: List<String> = emptyList(),
+    val isToken: Boolean = false,
+    val objectType: MageObjectType = MageObjectType.Unknown,
 )
+
+/**
+ * What kind of object the server says a [GameCard] is.
+ *
+ * [Null] is the server's own "no type set"; [Unknown] is this build not recognising what it sent.
+ * They are different answers and are kept apart.
+ */
+enum class MageObjectType {
+    AbilityOnStackFromCard,
+    AbilityOnStackFromToken,
+    Card,
+    CopyCard,
+    Token,
+    Spell,
+    Permanent,
+    Dungeon,
+    Emblem,
+    Commander,
+    Designation,
+    Plane,
+    Null,
+    Unknown,
+}
 
 /**
  * One counter on a card or permanent — the app-schema projection of `mage.view.CounterView`, which is

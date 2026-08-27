@@ -1,6 +1,7 @@
 package magefree.bridge.mapping
 
 import mage.constants.CardType
+import mage.constants.MageObjectType
 import mage.constants.PhaseStep
 import mage.constants.SubType
 import mage.constants.TurnPhase
@@ -11,6 +12,7 @@ import mage.view.GameView
 import mage.view.PlayerView
 import magefree.protocol.CardTypeCode
 import magefree.protocol.CommandObjectKind
+import magefree.protocol.MageObjectTypeCode
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.TurnPhaseCode
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -656,6 +658,70 @@ class GameViewMapperTest {
         assertTrue(mapped.exile.isEmpty())
         assertEquals(0, mapped.graveyardCount)
         assertEquals(0, mapped.exileCount)
+    }
+
+    @Test
+    fun `a token says so, and an ordinary permanent does not`() {
+        val token =
+            GameViews.permanent(
+                card =
+                    GameViews.card(
+                        name = "Soldier",
+                        cardTypes = listOf(CardType.CREATURE),
+                        superTypes = emptyList(),
+                        subTypes = listOf(SubType.SOLDIER),
+                        token = true,
+                        objectType = MageObjectType.TOKEN,
+                    ),
+            )
+        val land = GameViews.permanent(card = GameViews.card(name = "Forest", objectType = MageObjectType.PERMANENT))
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players = listOf(GameViews.player(playerId = alice, battlefield = listOf(token, land))),
+            )
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .battlefield
+
+        assertTrue(mapped[0].card.token, "a token permanent must say it is one — it ceases to exist off the battlefield")
+        assertEquals(MageObjectTypeCode.TOKEN, mapped[0].card.objectType)
+        assertFalse(mapped[1].card.token)
+        assertEquals(MageObjectTypeCode.PERMANENT, mapped[1].card.objectType)
+    }
+
+    @Test
+    fun `a copy of a card is distinguishable from the card itself`() {
+        // The question `token` cannot answer. Both are cards, neither is a token, and only
+        // `mageObjectType` separates them.
+        val copy = GameViews.card(name = "Grizzly Bears", objectType = MageObjectType.COPY_CARD)
+        val original = GameViews.card(name = "Grizzly Bears", objectType = MageObjectType.CARD)
+
+        assertEquals(MageObjectTypeCode.COPY_CARD, GameViewMapper.mapCard(copy).objectType)
+        assertEquals(MageObjectTypeCode.CARD, GameViewMapper.mapCard(original).objectType)
+        assertFalse(GameViewMapper.mapCard(copy).token)
+    }
+
+    @Test
+    fun `every upstream object type has a code of its own`() {
+        // The guard on the one place upstream's set and ours meet. A type added upstream fails here,
+        // naming itself, rather than quietly arriving as UNKNOWN.
+        MageObjectType.values().forEach { upstream ->
+            val mapped = GameViewMapper.mapCard(GameViews.card(objectType = upstream)).objectType
+
+            assertEquals(upstream.name, mapped.name, "upstream's $upstream has no code of its own")
+        }
+    }
+
+    @Test
+    fun `an object with no type set carries upstream's own NULL, not UNKNOWN`() {
+        // NULL is upstream's default and a real answer: "the server set no type". UNKNOWN means this
+        // build did not recognise what arrived. Collapsing the two would lose that distinction.
+        assertEquals(MageObjectTypeCode.NULL, GameViewMapper.mapCard(GameViews.card()).objectType)
     }
 
     @Test
