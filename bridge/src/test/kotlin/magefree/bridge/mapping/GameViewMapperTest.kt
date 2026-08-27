@@ -8,6 +8,7 @@ import mage.players.PlayableObjectStats
 import mage.view.CardView
 import mage.view.CommandObjectView
 import mage.view.GameView
+import mage.view.PlayerView
 import magefree.protocol.CardTypeCode
 import magefree.protocol.CommandObjectKind
 import magefree.protocol.PhaseStepCode
@@ -599,6 +600,65 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `a player carries the cards in its graveyard and exile, not only how many`() {
+        val bolt = GameViews.card(name = "Lightning Bolt", cardTypes = listOf(CardType.INSTANT), superTypes = emptyList())
+        val forest = GameViews.card(name = "Forest")
+        val bear = GameViews.card(name = "Grizzly Bears", cardTypes = listOf(CardType.CREATURE), superTypes = emptyList())
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players =
+                    listOf(
+                        GameViews.player(
+                            playerId = alice,
+                            graveyard = GameViews.cardsView(listOf(bolt, forest)),
+                            exile = GameViews.cardsView(listOf(bear)),
+                        ),
+                    ),
+            )
+
+        val mapped = GameViewMapper.map(view).players.single()
+
+        assertEquals(
+            listOf("Lightning Bolt", "Forest"),
+            mapped.graveyard.map { it.name },
+            "CardsView is a LinkedHashMap, so the server's order is the pile's order and nothing sorts it",
+        )
+        assertEquals(listOf("Grizzly Bears"), mapped.exile.map { it.name })
+    }
+
+    @Test
+    fun `the counts stay, and agree with the lists`() {
+        // Both are kept: a collapsed vitals row wants the number without the cards. They are derived
+        // from the same upstream CardsView, so a disagreement would mean the mapper read two things.
+        val graveyard = GameViews.cardsView(List(4) { GameViews.card(name = "Forest") })
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players = listOf(GameViews.player(playerId = alice, graveyard = graveyard, exile = GameViews.cardsView(emptyList()))),
+            )
+
+        val mapped = GameViewMapper.map(view).players.single()
+
+        assertEquals(4, mapped.graveyardCount)
+        assertEquals(mapped.graveyard.size, mapped.graveyardCount)
+        assertEquals(0, mapped.exileCount)
+        assertEquals(mapped.exile.size, mapped.exileCount)
+    }
+
+    @Test
+    fun `a sparse view with no graveyard or exile maps to empty lists and zero counts`() {
+        val view = GameViews.game(myPlayerId = alice, players = listOf(GameViews.player(playerId = alice).nullOutZones()))
+
+        val mapped = GameViewMapper.map(view).players.single()
+
+        assertTrue(mapped.graveyard.isEmpty())
+        assertTrue(mapped.exile.isEmpty())
+        assertEquals(0, mapped.graveyardCount)
+        assertEquals(0, mapped.exileCount)
+    }
+
+    @Test
     fun `every upstream phase and step maps to a distinct code`() {
         TurnPhase.entries.forEach { phase ->
             val mapped = GameViewMapper.map(GameViews.game(phase = phase)).phase
@@ -1012,6 +1072,20 @@ class GameViewMapperTest {
             field.set(this, null)
         }
     }
+
+    /**
+     * Nulls a `PlayerView`'s graveyard and exile. A real view never has them null — both are `final`
+     * fields initialised inline — but the serialization constructor these fixtures use does, which is
+     * the sparse-view case the mapper has to survive.
+     */
+    private fun PlayerView.nullOutZones(): PlayerView =
+        apply {
+            listOf("graveyard", "exile").forEach { name ->
+                val field = PlayerView::class.java.getDeclaredField(name)
+                field.isAccessible = true
+                field.set(this, null)
+            }
+        }
 
     /** Nulls `CardView.counters`, which is upstream's state for "this object has no counters at all". */
     private fun CardView.nullOutCounters() {

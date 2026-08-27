@@ -174,3 +174,12 @@ Open:
 
 7. How much of `GameView` does a phone actually need per frame, and how do we diff/delta it
    to keep payloads small on mobile data?
+
+   **Measured, on a live snapshot from the reference server** (`GameRelayIT`, which prints these
+   numbers on every run): a two-player snapshot early in a game is **3.4–4.0 KB** of JSON. Carrying
+   the cards in both graveyards rather than only their counts costs **1322 bytes for six cards — about
+   220 bytes per card**, stable across runs. A thirty-card late-game graveyard would therefore add
+   roughly 6.5 KB to every snapshot, and a snapshot goes out on every state change.
+
+   That is the input this question was waiting on. It is not, on its own, an argument for a delta
+   scheme: the answer depends on how often state changes in a real match, which is not measured yet.

@@ -37,6 +37,7 @@ import magefree.protocol.MatchStarting
 import magefree.protocol.PhaseStepCode
 import magefree.protocol.PlayManaPrompt
 import magefree.protocol.PlayXManaPrompt
+import magefree.protocol.ProtocolJson
 import magefree.protocol.SeatPlayerTypeCode
 import magefree.protocol.SelectPrompt
 import magefree.protocol.ServerMessage
@@ -239,6 +240,28 @@ class GameRelayIT {
                 cards = listOf(DeckListCard(cardName = "Forest", setCode = "M21", collectorNumber = "272", amount = 60)),
                 sideboard = listOf(DeckListCard(cardName = COMMANDER_NAME, setCode = "C16", collectorNumber = "28", amount = 1)),
             )
+
+        /**
+         * The deck for the zone-contents scenario. `Tome Scour` (`M10` #76) costs `{U}` and mills the
+         * target player five cards — one card that fills **both** graveyards at once, on turn one: the
+         * opponent's with the five it milled, ours with the Tome Scour itself once it resolves.
+         *
+         * It targets a *player*, so nothing has to be on the battlefield first, and the opponent's
+         * graveyard cannot depend on what the AI chooses to do.
+         */
+        val MILL_DECK =
+            DeckList(
+                name = "it_mill",
+                author = "game-relay-it",
+                cards =
+                    listOf(
+                        DeckListCard(cardName = "Island", setCode = "M21", collectorNumber = "263", amount = 30),
+                        DeckListCard(cardName = "Tome Scour", setCode = "M10", collectorNumber = "76", amount = 30),
+                    ),
+                sideboard = emptyList(),
+            )
+
+        const val TOME_SCOUR = "Tome Scour"
 
         const val MOX = "Mox Poison"
         const val SENTINELS = "Palace Sentinels"
@@ -992,6 +1015,183 @@ class GameRelayIT {
             }
             if (event is GameOver) break
             if (event is GamePrompted) answer(session, gameId, event.prompt)
+        }
+        return null
+    }
+
+    /**
+     * Graveyards in a real game, on **both** seats — the case a single-player fixture cannot produce,
+     * and the one that matters, because a graveyard is public information and the board shows the
+     * opponent's too.
+     *
+     * It also **measures** what carrying the cards costs. A snapshot goes out on every state change, so
+     * the size of one is a real design input rather than a curiosity: the test serializes the live
+     * snapshot with the zones as they arrived, then again with them emptied — the same state as before
+     * the cards were carried — and prints both, so the delta is measured on real data rather than
+     * estimated from a card count.
+     */
+    @Test
+    fun `a live graveyard arrives for both seats, and the snapshot cost is measured`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(session, roomId, options(name = "it_mill_$username"))
+                    }
+                assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, MILL_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+
+                val started = events.awaitOfType<GameStarted>(GAME_INIT_TIMEOUT_MS, "a GAME_INIT push")
+                val opponentId =
+                    started.state.players
+                        .single { it.name == AI_SEAT_NAME }
+                        .playerId
+
+                val state =
+                    requireNotNull(millBothGraveyards(session, gameId, events, opponentId)) {
+                        "no snapshot ever carried a graveyard on both seats; callbacks=${callbackSummary()}"
+                    }
+
+                val ours = state.players.single { it.viewer }
+                val theirs = state.players.single { !it.viewer }
+                assertTrue(ours.graveyard.isNotEmpty(), "the Tome Scour goes to our own graveyard when it resolves")
+                assertTrue(
+                    ours.graveyard.any { it.name == TOME_SCOUR },
+                    "our graveyard should hold the spell we cast, got ${ours.graveyard.map { it.name }}",
+                )
+                assertTrue(
+                    theirs.graveyard.size >= 5,
+                    "milling five puts five cards in the opponent's graveyard, got ${theirs.graveyard.size}",
+                )
+                assertEquals(
+                    ours.graveyardCount,
+                    ours.graveyard.size,
+                    "the count and the list are the same data measured",
+                )
+                assertEquals(theirs.graveyardCount, theirs.graveyard.size)
+                assertTrue(
+                    theirs.graveyard.all { it.name.isNotBlank() },
+                    "an opponent's graveyard is public, so the cards arrive named: ${theirs.graveyard}",
+                )
+
+                val withZones = ProtocolJson.json.encodeToString(state).length
+                val withoutZones =
+                    ProtocolJson.json
+                        .encodeToString(
+                            state.copy(players = state.players.map { it.copy(graveyard = emptyList(), exile = emptyList()) }),
+                        ).length
+                println(
+                    "GameRelayIT[zones]: ourGraveyard=${ours.graveyard.size} theirGraveyard=${theirs.graveyard.size} " +
+                        "snapshotBytes=$withZones withoutZoneCards=$withoutZones delta=${withZones - withoutZones} " +
+                        "callbacks=${callbackSummary()}",
+                )
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /**
+     * Casts `Tome Scour` at the opponent and returns the first snapshot in which **both** seats have a
+     * non-empty graveyard. Decisions come from the server's own `canPlayObjects`, and action is
+     * confined to our own precombat main phase.
+     */
+    private suspend fun millBothGraveyards(
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+        opponentId: String,
+    ): GameStateView? {
+        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
+        val tappedForThisPayment = mutableSetOf<String>()
+        var castSent = false
+        var answered = 0
+
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                if (state.players.size == 2 && state.players.all { it.graveyard.isNotEmpty() }) return state
+            }
+            if (event is GameOver) break
+            if (event !is GamePrompted) continue
+
+            val state = event.state
+            val prompt = event.prompt
+            val playable = state.playable.map { it.objectId }.toSet()
+            val ourBoard =
+                state.players
+                    .singleOrNull { it.viewer }
+                    ?.battlefield
+                    .orEmpty()
+            val ourMainPhase =
+                state.viewerHasPriority &&
+                    state.viewerPlayerId != null &&
+                    state.viewerPlayerId == state.activePlayerId &&
+                    state.phase == TurnPhaseCode.PRECOMBAT_MAIN &&
+                    state.step == PhaseStepCode.PRECOMBAT_MAIN
+
+            when {
+                prompt is SelectPrompt && ourMainPhase -> {
+                    tappedForThisPayment.clear()
+                    val island = state.hand.firstOrNull { it.name == ISLAND && it.id in playable }
+                    val scour = state.hand.firstOrNull { it.name == TOME_SCOUR && it.id in playable }
+                    when {
+                        island != null -> sendUuid(session, gameId, island.id)
+                        scour != null -> {
+                            castSent = true
+                            sendUuid(session, gameId, scour.id)
+                        }
+                        else -> pass(session, gameId)
+                    }
+                }
+                prompt is TargetPrompt && castSent && opponentId in prompt.targetIds -> {
+                    sendUuid(session, gameId, opponentId)
+                    castSent = false
+                }
+                prompt is PlayManaPrompt -> {
+                    val land = ourBoard.firstOrNull { it.card.name == ISLAND && !it.tapped && it.card.id !in tappedForThisPayment }
+                    if (land != null) {
+                        tappedForThisPayment += land.card.id
+                        sendUuid(session, gameId, land.card.id)
+                    } else {
+                        pass(session, gameId)
+                    }
+                }
+                else -> answer(session, gameId, prompt)
+            }
+            answered++
+            if (answered > MAX_ANSWERS_TO_CAST) {
+                throw AssertionError(
+                    "answered $MAX_ANSWERS_TO_CAST prompts without filling both graveyards. " +
+                        "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
+                )
+            }
         }
         return null
     }

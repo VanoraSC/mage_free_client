@@ -759,6 +759,16 @@ public data class GameStateView(
  *   `AscendAbility`. The Monarch, Initiative and Speed designations go through
  *   `GameState.addDesignation` — they are game-level, not per-player — which is why [monarch] and
  *   [initiative] are separate flags rather than entries in this list. "The Monarch" never appears here.
+ * @property graveyard the cards in this player's graveyard, in upstream's order — `CardsView` is a
+ *   `LinkedHashMap`, so the order the server built it in is the order the pile is in, and nothing
+ *   downstream sorts it. A graveyard is public information, so it arrives for every seat.
+ * @property exile the cards **this player owns** that are in exile. Owner, not controller: upstream
+ *   walks every exile zone in the game and keeps the cards whose `getOwnerId()` is this player, so a
+ *   card of yours that an opponent exiled is on your list. [GameStateView.exile] is the other half —
+ *   the same cards grouped by the zone they sit in, which is what names a "Plots" or "Rebound" pile.
+ * @property graveyardCount / @property exileCount the sizes of those two lists. Kept alongside them
+ *   because a collapsed vitals row wants the number without the cards, and because dropping them
+ *   would be a breaking change for a consumer that only ever wanted a count.
  * @property commandList this player's command zone (upstream `getCommandList()`) — emblems,
  *   commanders, the active dungeon, and the current plane. A **plane appears on every seat's list**:
  *   upstream adds it unconditionally because planes are universal, so it is not owned by the player
@@ -787,6 +797,8 @@ public data class GamePlayerView(
     val initiative: Boolean = false,
     val designationNames: List<String> = emptyList(),
     val commandList: List<GameCommandObjectView> = emptyList(),
+    val graveyard: List<GameCardView> = emptyList(),
+    val exile: List<GameCardView> = emptyList(),
 )
 
 /**

@@ -193,6 +193,8 @@ internal object GameViewMapper {
             hasInitiative = initiative,
             designationNames = designationNames,
             commandList = commandList.map { it.toCommandObject() },
+            graveyard = graveyard.map { it.toCard() },
+            exile = exile.map { it.toCard() },
         )
 
     private fun GameCommandObjectView.toCommandObject(): GameCommandObject =
