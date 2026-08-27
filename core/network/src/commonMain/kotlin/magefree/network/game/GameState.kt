@@ -161,6 +161,11 @@ data class GameState(
  * @property commandList this player's command zone — emblems, commanders, the active dungeon and the
  *   current plane. A **plane appears on every seat's list**, because planes are universal; the other
  *   three are the player's own.
+ * @property graveyard the cards in this player's graveyard, in the server's order. A graveyard has a
+ *   meaningful order and the client is not the place to decide what it is, so nothing sorts this.
+ * @property exile the cards this player **owns** that are in exile — owner, not controller, so a card
+ *   of yours an opponent exiled is here. [GameState.exile] is the same cards grouped by the pile they
+ *   sit in, which is what carries a zone's name.
  */
 data class GamePlayer(
     val playerId: String,
@@ -184,6 +189,8 @@ data class GamePlayer(
     val hasInitiative: Boolean = false,
     val designationNames: List<String> = emptyList(),
     val commandList: List<GameCommandObject> = emptyList(),
+    val graveyard: List<GameCard> = emptyList(),
+    val exile: List<GameCard> = emptyList(),
 )
 
 /**

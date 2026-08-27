@@ -636,6 +636,50 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun aPlayersGraveyardAndExileSurviveFoldingWithTheirCounts() {
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 9,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(
+                                        playerId = "p-1",
+                                        name = "pete",
+                                        viewer = true,
+                                        graveyardCount = 2,
+                                        exileCount = 1,
+                                        graveyard =
+                                            listOf(
+                                                GameCardView(id = "g-1", name = "Lightning Bolt"),
+                                                GameCardView(id = "g-2", name = "Forest"),
+                                            ),
+                                        exile = listOf(GameCardView(id = "x-1", name = "Grizzly Bears")),
+                                    ),
+                                    GamePlayerView(playerId = "p-2", name = "Computer", human = false),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val viewer = folded.viewer!!
+        assertEquals(listOf("Lightning Bolt", "Forest"), viewer.graveyard.map { it.name })
+        assertEquals(listOf("Grizzly Bears"), viewer.exile.map { it.name })
+        assertEquals("the count and the list are the same data measured", 2, viewer.graveyardCount)
+        assertEquals(viewer.graveyard.size, viewer.graveyardCount)
+        assertEquals(viewer.exile.size, viewer.exileCount)
+
+        val opponent = folded.players.single { !it.isViewer }
+        assertTrue(opponent.graveyard.isEmpty())
+        assertTrue(opponent.exile.isEmpty())
+    }
+
+    @Test
     fun anUnattachedPermanentFoldsWithNoAttachmentState() {
         val folded =
             GameEventFold.fold(

@@ -533,6 +533,38 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `a player's graveyard and exile round-trip in order, alongside their counts`() {
+        val player =
+            GamePlayerView(
+                playerId = "pl-1",
+                name = "alice",
+                graveyardCount = 2,
+                exileCount = 1,
+                graveyard = listOf(GameCardView(id = "g-1", name = "Bolt"), GameCardView(id = "g-2", name = "Forest")),
+                exile = listOf(GameCardView(id = "x-1", name = "Bear")),
+            )
+
+        val round = json.decodeFromString<GamePlayerView>(json.encodeToString(player))
+
+        assertEquals(listOf("Bolt", "Forest"), round.graveyard.map { it.name })
+        assertEquals(listOf("Bear"), round.exile.map { it.name })
+        assertEquals(2, round.graveyardCount)
+        assertEquals(1, round.exileCount)
+    }
+
+    @Test
+    fun `a player frame that carries only counts decodes with empty zone lists`() {
+        // The additive shape: an older bridge sends the counts and nothing else, and the lists default
+        // to empty rather than the decode failing.
+        val decoded =
+            json.decodeFromString<GamePlayerView>("""{"playerId":"pl-1","name":"alice","graveyardCount":7,"exileCount":2}""")
+
+        assertEquals(7, decoded.graveyardCount)
+        assertTrue(decoded.graveyard.isEmpty())
+        assertTrue(decoded.exile.isEmpty())
+    }
+
+    @Test
     fun `a card type this build has never heard of decodes to UNKNOWN instead of throwing`() {
         // The list form of the forward-compat promise: upstream keeps adding card types (BATTLE and
         // DUNGEON are recent), and `ignoreUnknownKeys` does not cover an unknown *value* inside a list.

@@ -104,6 +104,16 @@ public object GameViewMapper {
      *   nothing else in practice: the only production caller of `Player.addDesignation` in XMage is
      *   `AscendAbility`, while the Monarch, Initiative and Speed designations are registered on the
      *   game state instead. The two flags above are the only way to read those.
+     *
+     * **The graveyard and exile carry cards, and the counts stay alongside them.** Both are `CardsView`
+     * upstream — a `LinkedHashMap`, so the order the server built is the order of the pile, and nothing
+     * here sorts it. The counts are the same data measured, kept because a collapsed vitals row wants
+     * the number without the cards.
+     *
+     * `exile` is filtered by **owner**, not controller: `PlayerView`'s constructor walks every
+     * `ExileZone` in the game and keeps the cards whose `getOwnerId()` is this player, so a card of
+     * yours that an opponent exiled is on your list. `GameView.getExile()` is the other half, grouping
+     * the same cards by the pile they sit in, which is what carries a zone's name.
      */
     private fun mapPlayer(player: PlayerView): GamePlayerView =
         GamePlayerView(
@@ -149,6 +159,8 @@ public object GameViewMapper {
                     .orEmpty()
                     .filterNotNull()
                     .map(::mapCommandObject),
+            graveyard = mapCards(player.graveyard),
+            exile = mapCards(player.exile),
         )
 
     /**
