@@ -6,6 +6,15 @@ plugins {
 
 android {
     namespace = "magefree.feature.tables"
+
+    testOptions {
+        unitTests {
+            // The room test renders the real composable under Robolectric, so the hermetic gate needs
+            // Android resources (the design-system theme) on the JVM.
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -41,6 +50,15 @@ dependencies {
     // naming wire messages, so `:protocol` is on the **test** classpath only: production code in this
     // module still never sees a wire type (`:core:network` keeps `:protocol` as `implementation`).
     testImplementation(project(":protocol"))
+
+    // JVM-side Compose UI testing for the table room, so a surface that should not exist — or one that
+    // renders and does nothing — is caught by the hermetic gate rather than only on a device. Scoped to
+    // the **debug** unit-test variant because `createComposeRule` needs the host `ComponentActivity`
+    // that `compose-ui-test-manifest` contributes as a `debugImplementation`; the Compose BOM is
+    // applied to `implementation`/`androidTestImplementation` only, so this classpath pins it.
+    testDebugImplementation(platform(libs.compose.bom))
+    testDebugImplementation(libs.compose.ui.test.junit4)
+    testDebugImplementation(libs.robolectric)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.compose.ui.test.junit4)

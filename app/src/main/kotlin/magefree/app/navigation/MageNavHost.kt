@@ -241,7 +241,6 @@ fun MageNavHost(
                         role = runCatching { TableRole.valueOf(route.role) }.getOrDefault(TableRole.Spectator),
                     ),
                 onExit = { navController.popBackStack() },
-                onBuildDeck = { navigateToTab(DecksRoute) },
                 viewModel = roomViewModel,
             )
         }

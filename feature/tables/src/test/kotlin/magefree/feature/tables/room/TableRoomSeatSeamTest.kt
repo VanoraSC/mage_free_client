@@ -9,7 +9,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import magefree.feature.tables.FakeDeckRepository
 import magefree.feature.tables.TableRole
 import magefree.model.ConnectionState
 import magefree.network.fake.FakeBridgeClient
@@ -148,7 +147,7 @@ class TableRoomSeatSeamTest {
     private fun room(bridge: Bridge): Pair<TableRoomViewModel, FakeBridgeClient> {
         val socket = FakeBridgeClient(responder = bridge::reply)
         val client = TableClients.overBridge(socket, MutableStateFlow(ConnectionState.Connected))
-        return TableRoomViewModel(client, FakeDeckRepository()) to socket
+        return TableRoomViewModel(client) to socket
     }
 
     /**

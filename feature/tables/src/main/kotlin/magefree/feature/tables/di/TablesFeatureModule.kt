@@ -19,5 +19,5 @@ val tablesFeatureModule =
     module {
         viewModel { HostTableViewModel(tableClient = get(), deckRepository = get(), deckLegality = get()) }
         viewModel { JoinTableViewModel(tableClient = get(), deckRepository = get(), deckLegality = get()) }
-        viewModel { TableRoomViewModel(tableClient = get(), deckRepository = get()) }
+        viewModel { TableRoomViewModel(tableClient = get()) }
     }
