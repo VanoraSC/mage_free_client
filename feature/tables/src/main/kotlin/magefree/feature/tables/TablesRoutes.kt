@@ -120,7 +120,6 @@ fun JoinTableRoute(
 fun TableRoomRoute(
     args: RoomArgs,
     onExit: () -> Unit,
-    onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TableRoomViewModel = koinViewModel(),
 ) {
@@ -141,8 +140,6 @@ fun TableRoomRoute(
         onStart = viewModel::startMatch,
         onRemove = viewModel::removeTable,
         onLeave = viewModel::leaveTable,
-        onSubmitDeck = viewModel::submitDeck,
-        onBuildDeck = onBuildDeck,
         modifier = modifier,
     )
 }

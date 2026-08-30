@@ -554,6 +554,7 @@ costing less than it saves.
 | Story | Title | Depends on | What it delivers |
 |-------|-------|------------|------------------|
 | 0092 ([#150](https://github.com/VanoraSC/mage_free_client/issues/150)) | Source documentation says what the code does | — | Strips story numbers, epic and plan-section pointers, dated attributions and self-narration out of every KDoc and comment — 886 story references across 266 of the repository's 417 Kotlin files — and writes the rule into `AGENTS.md` so it does not grow back. Keeps the rationale, which is the valuable half; a cleanup that leaves KDoc restating the signature would do more damage than the story numbers ever did. |
+| 0094 ([#159](https://github.com/VanoraSC/mage_free_client/issues/159)) | The table room's deck picker | — | Removes the deck picker from the table room. The deck is bound when the seat is taken (`joinTable` loads it, validates it and seats the player with it), and upstream's `submitDeck`/`updateDeck` return early unless the table is `SIDEBOARDING` or `CONSTRUCTING` — which a duel's room never is. So the picker was a control the server discarded. `TableClient` keeps both verbs for sideboarding. |
 
 ## Known issues (accepted, not scheduled)
 

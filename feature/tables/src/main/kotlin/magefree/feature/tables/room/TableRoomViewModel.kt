@@ -11,10 +11,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import magefree.decks.DeckRepository
-import magefree.decks.model.Deck
-import magefree.decks.model.DeckId
-import magefree.decks.model.DeckSummary
 import magefree.feature.tables.TableRole
 import magefree.network.table.MatchStarting
 import magefree.network.table.Seat
@@ -25,13 +21,14 @@ import magefree.network.table.TableState
 
 /**
  * Immutable UI state for the table room. It wraps the [TableClient.observeTable] fold ([table]) with the
- * viewer's [role] and the small deck [library] the player may submit/update from. The room deliberately
- * stops at match-start: [isMatchStarting] is the terminal game hand-off marker.
+ * viewer's [role]. The room deliberately stops at match-start: [isMatchStarting] is the terminal game
+ * hand-off marker.
+ *
+ * There is no deck here. The deck is bound when the seat is taken, and the server accepts a later
+ * submission only while the table is sideboarding or constructing — which this room never sees.
  *
  * @property table the latest observed [TableState] (seats / server state / phase / match-start signal).
  * @property role the viewer's [TableRole], deciding the action set.
- * @property library the saved decks a seated viewer — [TableRole.Host] or [TableRole.Player] — can
- *   submit/update from (offline).
  * @property isLoading no state has folded in yet (still on the seed).
  * @property actionError a server decline / failure detail from an action, else `null`.
  * @property closed the seat was given up / the table removed — the route should pop.
@@ -39,7 +36,6 @@ import magefree.network.table.TableState
 data class TableRoomUiState(
     val table: TableState,
     val role: TableRole,
-    val library: List<DeckSummary> = emptyList(),
     val isLoading: Boolean = true,
     val actionError: String? = null,
     val closed: Boolean = false,
@@ -78,31 +74,22 @@ data class TableRoomUiState(
     /** True when the host's start control is shown (host role, before match-start). */
     val showHostActions: Boolean get() = role == TableRole.Host && !isMatchStarting
 
-    /**
-     * True when the **seat** controls (submit / update deck) are shown — for a [TableRole.Host] as well
-     * as a [TableRole.Player], before match-start.
-     *
-     * a host *occupies a seat* (its own join is the last step of the create sequence), so it
-     * has a deck to submit and update exactly like anyone else. Gating this on `role == Player` alone —
-     * the previous rule — left a host with no way to change its deck from the room at all. Only a
-     * [TableRole.Spectator], who holds no seat, is excluded.
-     */
-    val showSeatActions: Boolean get() = role != TableRole.Spectator && !isMatchStarting
+    /** True when the viewer holds a seat and the match has not started — a host as much as a player. */
+    val isSeated: Boolean get() = role != TableRole.Spectator && !isMatchStarting
 }
 
 /**
  * MVVM ViewModel for the table room. It collects [TableClient.observeTable] seeded from the
  * create/join/watch entry, folding each pushed [TableState] into [TableRoomUiState], and hoists the
- * role-appropriate actions: host [startMatch]/[removeTable]; player [leaveTable]; and
- * [submitDeck]/[updateDeck] for **either** seated role, since a host occupies a seat too.
- * It renders a terminal "match starting" state on [MatchStarting] (the game hand-off) and never wires
- * gameplay. Deck loads for submit/update are offline; only the table verbs touch the network.
+ * role-appropriate actions: host [startMatch]/[removeTable]; player [leaveTable]. It renders a
+ * terminal "match starting" state on [MatchStarting] (the game hand-off) and never wires gameplay.
+ *
+ * It has no deck concern: the deck is bound when the seat is taken.
  */
 
 class TableRoomViewModel
     constructor(
         private val tableClient: TableClient,
-        private val deckRepository: DeckRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(TableRoomUiState(table = TableState(tableId = ""), role = TableRole.Spectator))
 
@@ -140,15 +127,6 @@ class TableRoomViewModel
                 .observeTable(tableId, seed)
                 .onEach { state -> _uiState.value = _uiState.value.copy(table = state, isLoading = false) }
                 .launchIn(viewModelScope)
-
-            // Anyone holding a seat — a host as much as a player — may submit/update from
-            // the offline library. Only a spectator, who has no seat, has nothing to submit.
-            if (role != TableRole.Spectator) {
-                deckRepository
-                    .observeLibrary()
-                    .onEach { decks -> _uiState.value = _uiState.value.copy(library = decks) }
-                    .launchIn(viewModelScope)
-            }
         }
 
         /** Host: start the match (gated to [TableRoomUiState.canStart]). */
@@ -167,24 +145,9 @@ class TableRoomViewModel
             runAction(closeOnSuccess = true) { tableClient.leaveTable(tableId) }
         }
 
-        /** Seated viewer (host or player): submit (bind) the picked deck for the seat during construction. */
-        fun submitDeck(id: DeckId) = submitLoadedDeck(id) { deck -> tableClient.submitDeck(tableId, deck) }
-
-        /** Seated viewer (host or player): update the in-progress deck for the seat (a save before submit). */
-        fun updateDeck(id: DeckId) = submitLoadedDeck(id) { deck -> tableClient.updateDeck(tableId, deck) }
-
-        private inline fun submitLoadedDeck(
-            id: DeckId,
-            crossinline block: suspend (Deck) -> Result<Unit>,
-        ) {
-            viewModelScope.launch {
-                val deck = deckRepository.load(id) ?: return@launch
-                block(deck).fold(
-                    onSuccess = { _uiState.value = _uiState.value.copy(actionError = null) },
-                    onFailure = { error -> _uiState.value = _uiState.value.copy(actionError = error.message ?: "Action failed.") },
-                )
-            }
-        }
+        // No submit/update here. `TableClient` still offers both, and sideboarding will need them, but
+        // the server accepts them only while a table is sideboarding or constructing — so wiring them
+        // to this screen would be a call it discards.
 
         private inline fun runAction(
             closeOnSuccess: Boolean = false,

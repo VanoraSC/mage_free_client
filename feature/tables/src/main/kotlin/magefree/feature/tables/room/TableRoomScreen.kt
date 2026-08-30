@@ -21,7 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
-import magefree.decks.model.DeckId
 import magefree.designsystem.component.LoadingState
 import magefree.designsystem.component.MageListRow
 import magefree.designsystem.component.MagePrimaryButton
@@ -31,7 +30,6 @@ import magefree.designsystem.component.MageTextButton
 import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Spacing
-import magefree.feature.tables.DeckPicker
 import magefree.feature.tables.TableRole
 import magefree.network.table.Seat
 import magefree.network.table.SeatPlayerType
@@ -48,8 +46,8 @@ const val MATCH_STARTING_LABEL: String = "Match starting…"
 /**
  * Stateless table room. Renders the table's **actual** seats (who sits where, of what kind, which slots
  * are open) and the server's own table state, the format/options summary, and
- * the role-appropriate actions (host start/remove; player leave; deck submit/update for **either** seated
- * role, since a host occupies a seat too; spectator read-only). On
+ * the role-appropriate actions (host start/remove; player leave; spectator read-only). The deck is
+ * bound when the seat is taken, so the room has no deck surface. On
  * the match-start signal it shows the terminal [MATCH_STARTING_LABEL] hand-off state — no gameplay. Every
  * event is hoisted; the composable performs no I/O.
  */
@@ -60,8 +58,6 @@ fun TableRoomScreen(
     onStart: () -> Unit,
     onRemove: () -> Unit,
     onLeave: () -> Unit,
-    onSubmitDeck: (DeckId) -> Unit,
-    onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -87,8 +83,6 @@ fun TableRoomScreen(
                     onStart = onStart,
                     onRemove = onRemove,
                     onLeave = onLeave,
-                    onSubmitDeck = onSubmitDeck,
-                    onBuildDeck = onBuildDeck,
                     modifier = content,
                 )
         }
@@ -128,8 +122,6 @@ private fun RoomContent(
     onStart: () -> Unit,
     onRemove: () -> Unit,
     onLeave: () -> Unit,
-    onSubmitDeck: (DeckId) -> Unit,
-    onBuildDeck: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -169,16 +161,10 @@ private fun RoomContent(
             Text(text = uiState.actionError, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
 
-        // A host holds a seat too, so the deck surface is offered to either seated role.
-        if (uiState.showSeatActions) {
-            MageSectionHeader(text = "Submit your deck")
-            DeckPicker(
-                decks = uiState.library,
-                selectedId = null,
-                onSelect = onSubmitDeck,
-                onBuildDeck = onBuildDeck,
-            )
-        }
+        // No deck surface here. The deck is bound when the seat is taken — upstream's `joinTable`
+        // loads it, validates it against the table's format and seats the player with it — and
+        // `submitDeck`/`updateDeck` return early unless the table is in SIDEBOARDING or CONSTRUCTING,
+        // which this room never is. A picker here would be a control the server discards.
 
         // Role-appropriate actions.
         when (uiState.role) {
@@ -266,8 +252,6 @@ private fun previewScreen(uiState: TableRoomUiState) {
             onStart = {},
             onRemove = {},
             onLeave = {},
-            onSubmitDeck = {},
-            onBuildDeck = {},
         )
     }
 }

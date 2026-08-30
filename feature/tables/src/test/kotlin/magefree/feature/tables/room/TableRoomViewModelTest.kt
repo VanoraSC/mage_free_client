@@ -7,7 +7,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import magefree.feature.tables.FakeDeckRepository
 import magefree.feature.tables.TableRole
 import magefree.network.fake.FakeTableClient
 import magefree.network.table.MatchStarting
@@ -48,10 +47,7 @@ class TableRoomViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(
-        client: FakeTableClient = FakeTableClient(),
-        repo: FakeDeckRepository = FakeDeckRepository(),
-    ) = TableRoomViewModel(client, repo)
+    private fun viewModel(client: FakeTableClient = FakeTableClient()) = TableRoomViewModel(client)
 
     private fun seed() = TableState(tableId = "t-1", optionsSummary = "Two Player Duel")
 
@@ -195,7 +191,7 @@ class TableRoomViewModelTest {
             assertEquals("g-1", state.matchStarting?.gameId)
             // No host/player actions past the hand-off.
             assertFalse(state.showHostActions)
-            assertFalse(state.showSeatActions)
+            assertFalse(state.isSeated)
             assertFalse(state.canStart)
         }
 
@@ -209,49 +205,36 @@ class TableRoomViewModelTest {
             assertTrue(client.calls.contains("watch:t-1"))
             val state = vm.uiState.value
             assertFalse(state.showHostActions)
-            assertFalse(state.showSeatActions)
+            assertFalse(state.isSeated)
         }
 
     @Test
-    fun playerCanSubmitADeck() =
+    fun theRoomNeverSubmitsADeck() =
         runTest {
-            val deck = magefree.decks.model.Deck(id = magefree.decks.model.DeckId("deck-1"), name = "Aggro")
+            // The deck is bound when the seat is taken, and upstream accepts a later submission only
+            // while a table is sideboarding or constructing — which this room never sees. So the room
+            // must reach the network for table verbs and nothing else: a `submit:` or `update:` call
+            // from here would be one the server discards.
             val client = FakeTableClient()
-            val vm = viewModel(client, FakeDeckRepository(listOf(deck)))
+            val vm = viewModel(client)
             vm.observe("t-1", seed(), TableRole.Player)
 
-            vm.submitDeck(magefree.decks.model.DeckId("deck-1"))
-            assertEquals(listOf("submit:t-1"), client.calls)
+            vm.startMatch()
+            vm.leaveTable()
+
+            assertTrue(
+                "the room must not submit or update a deck, got ${client.calls}",
+                client.calls.none { it.startsWith("submit:") || it.startsWith("update:") },
+            )
         }
 
     @Test
-    fun hostCanSubmitAndUpdateADeckBecauseAHostHoldsASeat() =
-        runTest {
-            // the host's own join is the last step of the create sequence, so it occupies a
-            // seat and has a deck to change. The room used to gate the deck surface on `role == Player`,
-            // leaving a host with no way to submit or update at all.
-            val deck = magefree.decks.model.Deck(id = magefree.decks.model.DeckId("deck-1"), name = "Aggro")
-            val client = FakeTableClient()
-            val vm = viewModel(client, FakeDeckRepository(listOf(deck)))
-            vm.observe("t-1", seed(), TableRole.Host)
-
-            val state = vm.uiState.value
-            assertTrue(state.showSeatActions)
-            // The offline library is observed for a host as well, or the picker would have nothing to show.
-            assertEquals(listOf("Aggro"), state.library.map { it.name })
-
-            vm.submitDeck(magefree.decks.model.DeckId("deck-1"))
-            vm.updateDeck(magefree.decks.model.DeckId("deck-1"))
-            assertEquals(listOf("submit:t-1", "update:t-1"), client.calls)
-        }
-
-    @Test
-    fun aSeatedPlayerAlsoSeesTheDeckSurface() =
+    fun aSeatedPlayerIsSeatedAndIsNotAHost() =
         runTest {
             val vm = viewModel()
             vm.observe("t-1", seed(), TableRole.Player)
 
-            assertTrue(vm.uiState.value.showSeatActions)
+            assertTrue(vm.uiState.value.isSeated)
             assertFalse(vm.uiState.value.showHostActions)
         }
 }
