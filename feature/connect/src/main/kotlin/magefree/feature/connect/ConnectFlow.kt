@@ -26,6 +26,7 @@ import org.koin.androidx.compose.koinViewModel
 fun ConnectFlow(
     onConnected: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenDecks: () -> Unit = {},
 ) {
     var selectedServer by rememberSaveable(stateSaver = ServerTargetSaver) {
         mutableStateOf<ServerTarget?>(null)
@@ -35,6 +36,7 @@ fun ConnectFlow(
     if (server == null) {
         ServerListRoute(
             onSelectServer = { selectedServer = it },
+            onOpenDecks = onOpenDecks,
             modifier = modifier,
         )
     } else {
@@ -52,6 +54,7 @@ fun ConnectFlow(
 fun ServerListRoute(
     onSelectServer: (ServerTarget) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenDecks: () -> Unit = {},
     viewModel: ServerListViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -59,6 +62,7 @@ fun ServerListRoute(
         uiState = uiState,
         onSelectServer = onSelectServer,
         onAddServer = viewModel::openAddServer,
+        onOpenDecks = onOpenDecks,
         onEditServer = viewModel::openEditServer,
         onRemoveServer = viewModel::removeServer,
         onEditorNameChange = viewModel::updateEditorName,

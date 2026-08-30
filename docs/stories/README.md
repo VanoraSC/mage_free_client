@@ -536,6 +536,16 @@ issue (see [Issue tracking](#issue-tracking)).
 targeting arrows, the vitals overlay, the zone browser, token treatment. That is the point: this epic
 makes the data exist so those epics can be about design rather than about plumbing.
 
+## EPIC-25 — Deckbuilding
+
+The pre-sign-in mount first, because it is a change to where a finished feature is reachable from
+rather than a change to the feature. The builder rebuild (§7.18's measured gaps — the deck and search
+as one screen, a search result that knows what the deck already holds) is later work in the same epic.
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0093 ([#157](https://github.com/VanoraSC/mage_free_client/issues/157)) | Deckbuilding before sign-in | — | `DecksRoute` and `CardsRoute` mounted in the **root** graph, chrome-free, with an entry on the server-list screen. Deckbuilding is already fully offline — Room-backed storage, a bundled `formats.json`, a bundled `cards.sqlite`, nothing reading a session — so what made it feel server-dependent was only where it was mounted. A second mount point, not a relaxation of the shell's entry policy. |
+
 ## Housekeeping
 
 Cross-cutting work that changes no behaviour. Not part of an epic; scheduled whenever it stops

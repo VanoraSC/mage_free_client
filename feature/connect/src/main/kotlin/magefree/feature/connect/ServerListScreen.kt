@@ -38,6 +38,12 @@ import magefree.model.ServerTarget
 const val ADD_SERVER_LABEL: String = "Add server"
 
 /**
+ * The offline-deckbuilding entry. Deck storage, format legality and the card catalog are all on the
+ * device, so this needs no server and no session — it is offered on the first screen a launch shows.
+ */
+const val OPEN_DECKS_LABEL: String = "Decks & cards"
+
+/**
  * Stateless server list / add-server screen. Lists the persisted [ServerTarget]s as tappable
  * [MageListRow]s (design system), shows the design system's loading / empty surfaces, and anchors the
  * primary [ADD_SERVER_LABEL] action at the bottom for thumb reach. The add/edit form is a
@@ -51,6 +57,7 @@ fun ServerListScreen(
     uiState: ServerListUiState,
     onSelectServer: (ServerTarget) -> Unit,
     onAddServer: () -> Unit,
+    onOpenDecks: () -> Unit,
     onEditServer: (ServerTarget) -> Unit,
     onRemoveServer: (ServerTarget) -> Unit,
     onEditorNameChange: (String) -> Unit,
@@ -65,15 +72,24 @@ fun ServerListScreen(
         modifier = modifier,
         topBar = { MageTopAppBar(title = "Servers") },
         bottomBar = {
-            MagePrimaryButton(
-                text = ADD_SERVER_LABEL,
-                onClick = onAddServer,
-                icon = Icons.Filled.Add,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(Spacing.medium),
-            )
+            Column(
+                modifier = Modifier.padding(Spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(Spacing.small),
+            ) {
+                MagePrimaryButton(
+                    text = ADD_SERVER_LABEL,
+                    onClick = onAddServer,
+                    icon = Icons.Filled.Add,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // Deckbuilding works with no server at all, so it is reachable before anything is
+                // configured — including on a first launch, where there is no server to sign in to.
+                MageTextButton(
+                    text = OPEN_DECKS_LABEL,
+                    onClick = onOpenDecks,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
@@ -216,6 +232,7 @@ private fun ServerListPopulatedPreview() {
                 ),
             onSelectServer = {},
             onAddServer = {},
+            onOpenDecks = {},
             onEditServer = {},
             onRemoveServer = {},
             onEditorNameChange = {},
@@ -236,6 +253,7 @@ private fun ServerListEmptyPreview() {
             uiState = ServerListUiState(isLoading = false, servers = emptyList()),
             onSelectServer = {},
             onAddServer = {},
+            onOpenDecks = {},
             onEditServer = {},
             onRemoveServer = {},
             onEditorNameChange = {},
@@ -261,6 +279,7 @@ private fun ServerEditorPreview() {
                 ),
             onSelectServer = {},
             onAddServer = {},
+            onOpenDecks = {},
             onEditServer = {},
             onRemoveServer = {},
             onEditorNameChange = {},
