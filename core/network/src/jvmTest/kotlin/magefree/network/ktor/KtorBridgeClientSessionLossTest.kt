@@ -126,7 +126,7 @@ class KtorBridgeClientSessionLossTest {
                 withTimeout(SETTLE_TIMEOUT_MS) { resumed.await() }
 
                 assertTrue(
-                    "0023/0024 must survive this: a bare drop reconnects and presents the held " +
+                    "the reconnect must survive this: a bare drop reconnects and presents the held " +
                         "resume handle instead of re-authenticating; the bridge saw ${bridge.log}",
                     bridge.log.containsAll(listOf(HELLO, LOGIN, CLOSED, HELLO, RESUME)),
                 )
@@ -259,7 +259,7 @@ class KtorBridgeClientSessionLossTest {
     private companion object {
         const val USERNAME = "pete"
         const val BRIDGE_VERSION = "test-bridge"
-        const val RESUME_ID = "resume-0050"
+        const val RESUME_ID = "resume-session-loss"
 
         /** The bridge's own wording for a session the upstream server has dropped (`SessionRegistry`). */
         const val UPSTREAM_LOST = "your session ended on the server; sign in again"

@@ -6,7 +6,7 @@
 #   ./scripts/dev gradle <args>    # e.g. ./scripts/dev gradle :bridge:check
 #   ./scripts/dev mvn <args>       # maven inside the build container
 #   ./scripts/dev build <service>  # e.g. ./scripts/dev build bridge      (rebuild an image)
-#   ./scripts/dev up <service>     # e.g. ./scripts/dev up xmage-server   (added in story 0022)
+#   ./scripts/dev up <service>     # e.g. ./scripts/dev up xmage-server
 #   ./scripts/dev down
 #   ./scripts/dev sh               # interactive shell in the build container
 set -euo pipefail
@@ -28,7 +28,7 @@ cmd="${1:-}"
 shift || true
 
 # Forward opt-in env vars into the one-off container. XMAGE_SERVER gates the live integration test
-# (story 0003's ConnectAuthenticateIT): without this pass-through the documented command
+# (ConnectAuthenticateIT): without this pass-through the documented command
 # `XMAGE_SERVER=xmage-server:17171 ./scripts/dev gradle :bridge:test ...` would silently *skip* the
 # test inside the container. `compose run` does not inherit the host env otherwise.
 RUN_ENV=()

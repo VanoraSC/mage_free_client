@@ -338,7 +338,7 @@ class ObserveGameTest {
                 connection.value = ConnectionState.Connected
                 testScheduler.runCurrent()
 
-                assertEquals("the resume re-emits the held state first (0037's non-destructive re-sync)", 1, awaitItem().turn)
+                assertEquals("the resume re-emits the held state first (a non-destructive re-sync)", 1, awaitItem().turn)
                 val afterReconnect = awaitItem()
                 assertEquals("and then the read lands, with no push in between", 9, afterReconnect.turn)
                 assertEquals(5, afterReconnect.hand.size)

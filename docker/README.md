@@ -17,7 +17,7 @@ run in Docker containers. The Android `:app` build stays on the host. Full desig
 ./scripts/dev up xmage-server
 ./scripts/dev down
 
-# Start the bridge itself against that server (story 0045). Publishes /v1/session on localhost:8080.
+# Start the bridge itself against that server. Publishes /v1/session on localhost:8080.
 ./scripts/dev up bridge
 curl http://localhost:8080/health          # {"status":"ok","service":"mage-bridge"}
 
@@ -31,25 +31,25 @@ curl http://localhost:8080/health          # {"status":"ok","service":"mage-brid
 ```
 
 Bridge integration tests reach the server over the compose network at **`XMAGE_SERVER=xmage-server:17171`**
-(verified end-to-end: story 0003's `ConnectAuthenticateIT` completes the full XMage connect/auth
+(verified end-to-end: `ConnectAuthenticateIT` completes the full XMage connect/auth
 handshake from the build container). It is also published to the host on `localhost:17171`.
 
 ## Images
 - **`mage-free-client/build`** — JDK 17 + Maven + `git`; a cached layer builds `magefree/mage` at a
-  pinned commit and bakes `org.mage:mage-common:1.4.60` into `/root/.m2` (story 0021). Used for all
+  pinned commit and bakes `org.mage:mage-common:1.4.60` into `/root/.m2`. Used for all
   JVM/bridge builds.
 - **`mage-free-client/xmage-server`** — a multi-stage image that full-reactor-builds XMage, assembles
   the server distribution, and runs `mage.server.Main` on 17171 with `authenticationActivated=false`
-  (story 0022). Launched with `--add-opens` for the JBoss-serialization handshake — required on JDK 17
+  Launched with `--add-opens` for the JBoss-serialization handshake — required on JDK 17
   (see the server `Dockerfile`); the `:bridge` test task mirrors the same flags.
-- **`mage-free-client/bridge`** — the runnable bridge (story 0045): a build stage on the `build` image
+- **`mage-free-client/bridge`** — the runnable bridge: a build stage on the `build` image
   assembles `:bridge:installDist`, and an `eclipse-temurin:17-jre` runtime carries the distribution.
   Upstream is `XMAGE_UPSTREAM=xmage-server:17171`; the port comes from `BRIDGE_PORT` (8080). Its
   `JAVA_OPTS` carry the **same** `--add-opens` set as the server image and the `:bridge` test task —
   keep all three in sync. The build context is the repo root, filtered by
   `bridge/Dockerfile.dockerignore`.
 
-The app-side live integration tests (`:core:network`, story 0045) run **on the host** and take only a
+The app-side live integration tests in `:core:network` run **on the host** and take only a
 URL: `BRIDGE_URL=localhost:8080`. Unset, they skip.
 
 ## Notes

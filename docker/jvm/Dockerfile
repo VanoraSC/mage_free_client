@@ -7,9 +7,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# --- Upstream mage layer (story 0021) ---
+# --- Upstream mage layer ---
 # Build and install org.mage:mage-common (the XMage client session library) into the image's
-# local Maven repo, so the bridge (story 0003) can resolve it via mavenLocal(). Pinned to the
+# local Maven repo, so the bridge can resolve it via mavenLocal(). Pinned to the
 # commit our local ../mage reference is on (pom version 1.4.60). Only Mage.Common and its reactor
 # dependencies are built (-pl Mage.Common -am), so the huge card database (Mage.Sets) is skipped.
 # The Java-1.8-era upstream builds cleanly on JDK 17 (verified). Cached as its own layer.

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Story 0024: the reconnect loop's ConnectivityObserver reads network reachability via
-  ConnectivityManager, which requires ACCESS_NETWORK_STATE. Declared here (the module that uses it) so
-  it merges into any app that consumes :core:network.
+  The reconnect loop's ConnectivityObserver reads network reachability via ConnectivityManager, which
+  requires ACCESS_NETWORK_STATE. Declared here — the module that uses it — so it merges into any app
+  that consumes :core:network.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 

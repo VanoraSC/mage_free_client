@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Story 0047 — debug-only cleartext allowance.
+  Debug-only cleartext allowance.
 
   `KtorBridgeClient` builds `ws://host:port/...` for a ServerTarget with `secure = false`, and the
   reference bridge is plain WebSocket (the emulator reaches the host bridge at 10.0.2.2:8080). The app
-  targets SDK 36, where cleartext traffic is denied by default, so on a device that connect fails with
-  "CLEARTEXT communication to 10.0.2.2 not permitted by network security policy" — the connect flow
-  would be mounted and reachable and *still* never produce a Connected state.
+  targets SDK 36, where cleartext traffic is denied by default, so without this a device connect fails
+  with "CLEARTEXT communication to 10.0.2.2 not permitted by network security policy" — the connect
+  flow is mounted and reachable and *still* never produces a Connected state.
 
-  Nothing below the UI could catch this: story 0045 proved the client live from a JVM integration test,
-  which has no Android network security policy at all.
+  Nothing below the UI catches this: a JVM integration test proving the client live against a real
+  bridge has no Android network security policy at all.
 
   Scoped to the **debug** variant deliberately: release keeps the platform default, so a shipped build
-  still requires `wss`. Whether release should ship a narrower `networkSecurityConfig` (rather than
-  requiring TLS outright) is a separate decision, not this story's.
+  still requires `wss`. Whether release should ship a narrower `networkSecurityConfig` rather than
+  requiring TLS outright is an open decision.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">

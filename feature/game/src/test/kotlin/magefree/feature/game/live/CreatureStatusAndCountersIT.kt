@@ -534,7 +534,7 @@ class CreatureStatusAndCountersIT {
     /** the deck — see the class docs, and `docs/live-test-decklists.md` §5. */
     private val deck =
         Deck(
-            id = DeckId("board-0058-animate"),
+            id = DeckId("board-animate"),
             name = "board_0058_animate",
             author = "creature-status-it",
             main =
