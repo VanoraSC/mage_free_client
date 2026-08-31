@@ -138,6 +138,10 @@ fun ComponentCatalog(modifier: Modifier = Modifier) {
             )
         }
 
+        CatalogSection(title = "Board tokens") {
+            BoardTokenGallery()
+        }
+
         CatalogSection(title = "Card tile") {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.medium)) {
                 CardTile(
