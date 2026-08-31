@@ -23,11 +23,11 @@ services:
     volumes:
       - ..:/workspace
       - gradle-cache:/root/.gradle
-      # No /root/.m2 volume: mage-common is baked into the image there (story 0021), and a volume
+      # No /root/.m2 volume: mage-common is baked into the image there, and a volume
       # mount would shadow it. Gradle's own deps cache in gradle-cache.
     working_dir: /workspace
 
-  # Reference XMage server (story 0022): Mage.Server on 17171 with auth disabled. The build
+  # Reference XMage server: Mage.Server on 17171 with auth disabled. The build
   # service reaches it at xmage-server:17171; bridge integration tests use XMAGE_SERVER for it.
   xmage-server:
     build:
@@ -40,7 +40,7 @@ services:
       - "17171:17171"
     # Startup loads the card database (~1–2 min); readiness is a TCP connect to 17171.
 
-  # The bridge itself, running (story 0045). The reference server above proves the *bridge's* half of
+  # The bridge itself, running. The reference server above proves the *bridge's* half of
   # the protocol; this service is what lets the **app's** half — `:core:network`'s KtorBridgeClient —
   # be driven against something real. Its `/v1/session` WebSocket is published on the host at
   # ws://localhost:8080, which is what BRIDGE_URL points at for the app-side live tests (they run on

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Reference XMage server (story 0022) — the server the bridge's integration tests connect to.
-# Built on the jvm build image (warm Maven cache from story 0021) so only the additional server
+# Reference XMage server — the server the bridge's integration tests connect to.
+# Built on the jvm build image (warm Maven cache) so only the additional server
 # modules + the card database (Mage.Sets) are compiled. Pinned to the same upstream commit.
 FROM mage-free-client/build:latest AS build
 ARG MAGE_REPO=https://github.com/magefree/mage

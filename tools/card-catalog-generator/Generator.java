@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Card catalog generator for story 0030 (mage_free_client).
+ * Card catalog generator for mage_free_client.
  *
  * This is the ONLY place in the project that touches XMage's {@code mage.*} types. It runs inside
  * the container build image (which has {@code Mage.Sets} + {@code CardRepository} on the classpath),

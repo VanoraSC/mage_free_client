@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Story 0048 — on-device smoke for the mage-free client.
+# On-device smoke for the mage-free client.
 #
 # Drives the **real debug APK** on a connected emulator/device against the **real bridge** and a real
 # XMage server, through the playable path a user actually walks:
@@ -8,7 +8,7 @@
 #   2. lobby, populated from the live server                       (:feature:lobby)
 #   3. decks WITH THE DEVICE OFFLINE: create, search, add, legality(:feature:decks + :core:cards)
 #   4. host a table -> seats fill -> start -> match starting       (:feature:tables)
-#   5. sign out -> back to the Servers screen                      (0046 + 0047)
+#   5. sign out -> back to the Servers screen                      (entry policy + eviction)
 #
 # It asserts on-screen content at every step and fails loudly and specifically: what it expected, what
 # was actually on screen, plus a screenshot and the raw UI dump of the failing moment.
@@ -181,7 +181,7 @@ shot() {
 # uiautomator's dump is the accessibility tree, which is what Compose publishes its semantics into.
 # Nodes are located by **visible text**, never by content description: Material3's NavigationBarItem
 # and the lobby's icon-only actions publish no contentDescription on their merged node, so a
-# description-based lookup matches nothing (story 0048 §3a).
+# description-based lookup matches nothing.
 # ---------------------------------------------------------------------------------------------------
 
 refresh_ui() {
@@ -279,7 +279,7 @@ has_text() { refresh_ui || return 1; [ -n "$(bounds_of_text "$1")" ]; }
 # Tap the *lowest* node with this text. The four primary-navigation tabs repeat the labels the Home
 # hub uses for its secondary entries ("Decks", "Settings", …), and the tab is always the bottom one.
 # Matched by position and text rather than by the icon's content description, which Material3 does not
-# publish on the merged NavigationBarItem node (story 0048 §3a).
+# publish on the merged NavigationBarItem node.
 tap_tab() {
   local label="$1"
   refresh_ui || fail "a readable UI dump before selecting the $label tab"
@@ -364,7 +364,7 @@ ime_shown() {
     grep -o 'mInputShown=[a-z]*' | head -1 | grep -q 'true'
 }
 
-# Dismiss the soft keyboard before tapping anything bottom-anchored (story 0048 §3a): the sign-in and
+# Dismiss the soft keyboard before tapping anything bottom-anchored: the sign-in and
 # server screens do NOT resize for the IME, so a bottom button keeps reporting bounds that are behind
 # the keyboard, and the tap lands on the IME instead — no UI change, no logs, no bridge contact, and a
 # very convincing false "dead button".
@@ -496,14 +496,14 @@ pass "clean install of $PACKAGE"
 # ---------------------------------------------------------------------------------------------------
 # Step 1 — cold launch -> sign in.
 #
-# The entry policy (story 0047): a launch with no session lands on the connect flow, chrome-free.
+# The entry policy: a launch with no session lands on the connect flow, chrome-free.
 # ---------------------------------------------------------------------------------------------------
 
 step 1 "sign-in"
 adbx shell am start -W -n "$ACTIVITY" >/dev/null 2>&1
 sleep 3
 
-wait_for '^Servers$' 30 "the chrome-free Servers screen on cold launch (story 0047's entry policy)"
+wait_for '^Servers$' 30 "the chrome-free Servers screen on cold launch (the entry policy)"
 if screen_has '^(Home|Decks|Profile|Settings)$'; then
   fail "sign-in to render WITHOUT the shell's tab chrome, but a top-level tab is visible"
 fi
@@ -727,8 +727,8 @@ shot "match-starting"
 # ---------------------------------------------------------------------------------------------------
 # Step 5 — sign out.
 #
-# 0047's entry policy says sign-out returns to a place sign-in is reachable from; 0046 says it is a
-# deliberate exit, so the bridge should *evict* the session rather than park it for resume.
+# The entry policy says sign-out returns to a place sign-in is reachable from, and it is a
+# deliberate exit, so the bridge evicts the session rather than parking it for resume.
 # ---------------------------------------------------------------------------------------------------
 
 step 5 "sign-out"
@@ -744,7 +744,7 @@ check "$BRIDGE_HOST" "the saved server survives sign-out, so signing back in is 
 pass "sign-out returned to the Servers screen"
 shot "signed-out"
 note "check the bridge for the matching teardown:  docker logs docker-bridge-1 --tail 20"
-note "story 0046 expects 'Evicted session …' for a deliberate sign-out, not 'Parked session …'"
+note "a deliberate sign-out must log 'Evicted session …', not 'Parked session …'"
 
 # ---------------------------------------------------------------------------------------------------
 # Summary

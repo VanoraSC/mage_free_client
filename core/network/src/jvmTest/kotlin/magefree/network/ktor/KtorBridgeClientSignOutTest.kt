@@ -91,7 +91,7 @@ class KtorBridgeClientSignOutTest {
 
                 assertEquals(
                     "a socket close *without* a Logout is what tells the bridge to park the session " +
-                        "(0023) so a reconnect can resume it (0024); the bridge saw ${bridge.log}",
+                        "so a reconnect can resume it; the bridge saw ${bridge.log}",
                     listOf(HELLO, LOGIN, CLOSED),
                     bridge.log,
                 )
@@ -259,7 +259,7 @@ class KtorBridgeClientSignOutTest {
     private companion object {
         const val USERNAME = "pete"
         const val BRIDGE_VERSION = "test-bridge"
-        const val RESUME_ID = "resume-0046"
+        const val RESUME_ID = "resume-sign-out"
 
         const val HELLO = "hello"
         const val LOGIN = "login"

@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
-# Runnable bridge service (story 0045) — the Ktor app from `:bridge`, pointed at the reference
+# Runnable bridge service — the Ktor app from `:bridge`, pointed at the reference
 # XMage server, so the **app's** networking stack (`:core:network`'s KtorBridgeClient) has something
-# real to talk to. Until now `:bridge` was only ever *built* and *tested* in a container; nothing ran it.
+# real to talk to.
 #
 # Layered like `server/Dockerfile`: a build stage on the shared build image (whose /root/.m2 already
-# carries org.mage:mage-common from story 0021 — the bridge resolves it via mavenLocal()), then a thin
+# carries org.mage:mage-common — the bridge resolves it via mavenLocal()), then a thin
 # eclipse-temurin JRE runtime carrying only the assembled distribution.
 #
 # The build context is the **repo root** (see docker-compose.yml), so the COPYs below are repo-relative.

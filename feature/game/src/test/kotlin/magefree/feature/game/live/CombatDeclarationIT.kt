@@ -217,8 +217,8 @@ class CombatDeclarationIT {
             sawAttackerDeclaration,
         )
         assertTrue(
-            "the board offered a declaration while `playable` was empty and still had creatures to tap — this is the " +
-                "defect 0061 fixes, so a run that never saw it has proved nothing",
+            "the board offered a declaration while `playable` was empty and still had creatures to tap — this is " +
+                "the defect this covers, so a run that never saw it has proved nothing",
             declaredWhilePlayableEmpty,
         )
         assertTrue(

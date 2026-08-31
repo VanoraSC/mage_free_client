@@ -1,4 +1,4 @@
-# Card catalog generator (story 0030). Emits the normalized cards.sqlite bundle consumed by
+# Card catalog generator. Emits the normalized cards.sqlite bundle consumed by
 # :core:cards. Reproducible: it is assembled entirely from two committed images —
 #   - mage-free-client/build        (docker/jvm/Dockerfile)     -> JDK 17 + javac + java
 #   - mage-free-client/xmage-server (docker/server/Dockerfile)  -> the full XMage runtime classpath
@@ -21,7 +21,7 @@ ARG MAGE_REPO=https://github.com/magefree/mage
 ARG MAGE_REF=e0fe4b6f6a
 ENV MAGE_REF=${MAGE_REF}
 
-# Story 0033: XMage keeps the per-format legality definitions (legal sets, banned/restricted lists,
+# XMage keeps the per-format legality definitions (legal sets, banned/restricted lists,
 # constraints) in mage.deck.* subclasses of Constructed that are NOT in the pinned org.mage:* jars —
 # they live only in upstream source. Ephemerally, blob-less sparse-clone JUST that source path at the
 # pinned ref (the same magefree/mage repo + ref the jvm/server images build from), so the format data
@@ -42,7 +42,7 @@ COPY FormatGenerator.java /gen/FormatGenerator.java
 RUN javac -cp "/xmage-lib/*" -d /gen /gen/Generator.java /gen/FormatGenerator.java /gen/formats/*.java
 
 WORKDIR /work
-# Default entrypoint (story 0030): CardScanner writes a throwaway H2 db under ./db; the SQLite catalog
-# bundle goes to the mounted /out. The story-0033 legality bundle is produced by overriding the
+# Default entrypoint: CardScanner writes a throwaway H2 db under ./db; the SQLite catalog
+# bundle goes to the mounted /out. The format-legality bundle is produced by overriding the
 # entrypoint to run FormatGenerator instead (see README.md) — it shares this one image.
 ENTRYPOINT ["sh", "-c", "java -cp \"/xmage-lib/*:/gen\" Generator /out/cards.sqlite \"$MAGE_REF\""]

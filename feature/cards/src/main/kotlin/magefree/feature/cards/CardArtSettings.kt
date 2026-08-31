@@ -28,7 +28,7 @@ interface ArtCacheController {
     /** Live progress of the bulk pre-download. */
     val prefetchProgress: StateFlow<PrefetchProgress>
 
-    /** Persist a new cache policy (a downgrade to SessionOnly clears the disk cache — see 0031). */
+    /** Persist a new cache policy (a downgrade to SessionOnly clears the disk cache). */
     suspend fun setPolicy(policy: CardArtCachePolicy)
 
     /** Start the opt-in bulk pre-download for [scope] (no-op if one is already running). */
