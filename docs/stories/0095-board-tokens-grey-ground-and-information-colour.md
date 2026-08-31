@@ -51,6 +51,12 @@ that it shortens rather than removes, "because removing it removes the informati
 - Motion tokens: the four durations above, an easing set, and a single **motion scale** the
   reduce-motion setting drives.
 - A catalog entry rendering the scales side by side, because a value ramp is only checkable by eye.
+- The story references the previous documentation pass missed: 44 of them across the build and
+  container config — `libs.versions.toml`, four Dockerfiles, `docker-compose.yml`, two
+  `AndroidManifest.xml`, `proguard-rules.pro` and `smoke-on-device.sh`. That pass scoped its search to
+  Kotlin, so the rule was written into `AGENTS.md` and then left unenforced everywhere else. This is
+  the token story only because it is small and the rule is the same one; the acceptance check here is
+  extension-agnostic so the shape cannot be missed a third time.
 
 **Out of scope**
 - Any change to `MagePalette`, `MageTheme`, or any existing screen. If an old screen changes
@@ -111,6 +117,8 @@ by hand.
 - [ ] Adjacent greys are provably separable by value; each signal colour provably contrasts.
 - [ ] One motion scale drives every duration.
 - [ ] `MagePalette`/`MageTheme` and every existing screen are untouched.
+- [ ] No story, epic or plan-section reference survives in any non-document file, checked without
+      filtering by extension.
 - [ ] `./gradlew check` passes and the catalog renders the new scales.
 
 ## 9. References
