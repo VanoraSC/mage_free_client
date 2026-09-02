@@ -142,6 +142,10 @@ fun ComponentCatalog(modifier: Modifier = Modifier) {
             BoardTokenGallery()
         }
 
+        CatalogSection(title = "Board card tier") {
+            BoardCardGallery()
+        }
+
         CatalogSection(title = "Card tile") {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.medium)) {
                 CardTile(
