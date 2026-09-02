@@ -590,7 +590,7 @@ class BoardPlaysAGameIT {
      */
     private val deck =
         Deck(
-            id = DeckId("board-0057-bolt"),
+            id = DeckId("board-bolt"),
             name = "board_0057_bolt",
             author = "board-play-it",
             main =

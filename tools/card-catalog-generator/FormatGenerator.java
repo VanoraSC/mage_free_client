@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Format-legality generator for story 0033 (mage_free_client), a sibling of {@link Generator}.
+ * Format-legality generator for mage_free_client, a sibling of {@link Generator}.
  *
  * Like the card-catalog generator, this is a container-only tool that touches XMage's {@code mage.*}
  * types and emits an app-schema, offline data bundle — here a small {@code formats.json} consumed by

@@ -51,6 +51,6 @@ After the handshake, `Ping` → `Pong` (echoing `nonce`/`requestId`); any unknow
 
 ## Extending the contract
 
-Downstream stories (0005+) **extend** the sealed `ClientMessage`/`ServerMessage` hierarchies with
+Downstream work **extends** the sealed `ClientMessage`/`ServerMessage` hierarchies with
 new `@Serializable` subtypes — they do not fork or duplicate this module. Keep changes additive
 within a major; a breaking change is a deliberate, project-wide new-major decision.

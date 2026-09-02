@@ -142,13 +142,13 @@ story is checked against.
   **`java.*` in `commonMain` is not caught by the build, so a reviewer is the guard.** While every
   target is JVM-family (`androidTarget()` + `jvm()`), Kotlin disables the shared-source-set metadata
   compilation, so `commonMain` is only ever compiled with the JDK on the classpath and a `java.*`
-  import resolves silently. There are none today (story 0084 removed the last of them); keep it that
+  import resolves silently. There are none today; keep it that
   way. The Stable replacements, none of which need an opt-in on the pinned Kotlin: `kotlin.uuid.Uuid`,
   `kotlin.time.Clock`, `kotlin.concurrent.Volatile`, `kotlin.coroutines.cancellation.CancellationException`,
   `okio.IOException` (a typealias **to** `java.io.IOException` on the JVM), the no-arg
   `lowercase()`/`uppercase()`, and — for the `java.util.concurrent` types — an `expect class` with an
   `actual typealias` per target, which keeps the identical JDK class rather than trading it for a lock.
-  `docs/stories/0084-core-network-to-kmp.md` §4 has the full table and the rejected alternatives.
+  The KMP port story document has the full table and the rejected alternatives.
   **Check an API's stability in the docs for the pinned version before assuming it needs an opt-in** —
   `Uuid` and `Clock` are Stable as of 2.4 and 2.3.
   `:protocol` and `:core:model` hold this today and must keep holding it — they are the two modules

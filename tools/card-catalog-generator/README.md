@@ -1,4 +1,4 @@
-# Card catalog generator (story 0030)
+# Card catalog generator
 
 Generates the bundled, on-device XMage card catalog — `core/cards/src/main/assets/cards.sqlite` —
 from XMage's own card pool. This is the **only** place in the repo that touches XMage's `mage.*`
@@ -24,7 +24,7 @@ Android build never runs this — it just packages the committed `cards.sqlite`.
 
    Normalization (card + printing) avoids repeating identical rules/type text across every reprint.
    All printings are kept — per-printing set + collector number + rarity are the identity downstream
-   uses for artwork (0031), deck references, and legality (Epic 9). Indexes: `card(name)`,
+   uses for artwork, deck references, and legality. Indexes: `card(name)`,
    `card(card_types)`, `card(mana_value)`, `printing(set_code, collector_number)`, `printing(card_id)`.
 
 ## Pinned version
@@ -53,7 +53,7 @@ Output: `core/cards/src/main/assets/cards.sqlite`. At `1.4.60` this is **~14 MB*
 91,536 printings**. The generator prints the counts; the same numbers are recorded in the bundle's
 `meta` table.
 
-## Format-legality bundle (story 0033)
+## Format-legality bundle
 
 The same image also produces `core/decks/src/main/assets/formats.json` — the bundled per-format
 legality data the offline `DeckLegality` checker in `:core:decks` reads. `FormatGenerator.java`

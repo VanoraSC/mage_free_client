@@ -159,7 +159,7 @@ class GameEventFoldTest {
         val asked = prompted(AskPrompt("Mulligan?"))
         val informed = GameEventFold.fold(asked, GameInformed(gameId = GAME, message = "Turn 1"))!!
 
-        assertEquals("0051 models the snapshot as optional here", asked.turn, informed.turn)
+        assertEquals("the snapshot is optional here", asked.turn, informed.turn)
         assertEquals(GameMessage(text = "Turn 1", isPersonal = false), informed.lastMessage)
         assertEquals(asked.prompt, informed.prompt)
     }

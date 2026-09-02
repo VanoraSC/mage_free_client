@@ -382,7 +382,7 @@ class GameSerializationTest {
     }
 
     @Test
-    fun `a card frame from an older bridge decodes with the 0058 fields defaulted`() {
+    fun `a card frame from an older bridge decodes with the creature-status fields defaulted`() {
         // Additive-only: the fields added by this must have defaults, so a payload written before
         // them still decodes rather than throwing.
         val frame = """{"id":"c-3","name":"Forest"}"""

@@ -9,14 +9,14 @@ junit-platform = "1.14.4"
 ktlint = "13.1.0"
 
 # XMage client session library (bridge-only; resolved from mavenLocal, baked into the build image).
-# Pulls org.mage:mage transitively. Must NEVER reach an Android module. See story 0003.
+# Pulls org.mage:mage transitively. Must NEVER reach an Android module.
 mage = "1.4.60"
 
-# Android / Compose / DI (story 0007)
+# Android / Compose / DI
 agp = "8.13.2"
 ksp = "2.3.10"
-# Story 0081 (EPIC-18): Koin replaces Hilt, which is Dagger-based, Android-component-generating and
-# has no multiplatform story — the one genuine blocker to a second target. 4.1.0 is the current
+# Koin rather than Hilt: Hilt is Dagger-based, Android-component-generating, and has no multiplatform
+# story — the one genuine blocker to a second target. 4.1.0 is the current
 # stable across koin-core / koin-android / koin-androidx-compose, resolved and built against the
 # pinned Kotlin 2.4.10 and Compose BOM 2025.09.01. Coordinates come from the BOM below; only this
 # version is pinned.
@@ -32,20 +32,20 @@ androidx-navigation = "2.9.8"
 androidx-concurrent-futures = "1.2.0"
 androidx-datastore = "1.1.7"
 turbine = "1.2.0"
-# Story 0030: JVM-side Android SQLite for :core:cards catalog tests (no device needed).
+# JVM-side Android SQLite for :core:cards catalog tests (no device needed).
 robolectric = "4.14.1"
-# Story 0031: Compose-native image pipeline (memory+disk cache, de-dup) backing the card-art loader.
+# Compose-native image pipeline (memory+disk cache, de-dup) backing the card-art loader.
 coil = "3.1.0"
-# Story 0056: the OkHttp generation `coil-network-okhttp` brings in transitively — pinned explicitly
+# The OkHttp generation `coil-network-okhttp` brings in transitively — pinned explicitly
 # so the test-only MockWebServer matches the client under test exactly.
 okhttp = "4.12.0"
-# Story 0082: okio backs the multiplatform bundled-asset boundary. Already on the classpath via
-# Coil and DataStore at this version; declared explicitly because :core:cards now uses it directly.
+# okio backs the multiplatform bundled-asset boundary. Already on the classpath via Coil and DataStore
+# at this version; declared explicitly because :core:cards uses it directly.
 okio = "3.10.2"
-# Story 0033: on-device deck library persistence (queryable relational store, Robolectric-testable).
+# On-device deck library persistence (queryable relational store, Robolectric-testable).
 room = "2.7.1"
-# Story 0082: the multiplatform SQLite driver API behind the bundled card catalog. 2.5.0 is the
-# version Room 2.7.1 already resolves, so this pins what is on the classpath rather than adding one.
+# The multiplatform SQLite driver API behind the bundled card catalog. 2.5.0 is the version Room 2.7.1
+# already resolves, so this pins what is on the classpath rather than adding one.
 androidx-sqlite = "2.5.0"
 
 [libraries]
@@ -58,7 +58,7 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
-# Story 0082: Ktor's own engine, used by the card-art client. Pure Kotlin and multiplatform, so
+# Ktor's own engine, used by the card-art client. Pure Kotlin and multiplatform, so
 # :core:cards carries no engine that would have to be swapped for a second target.
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
@@ -73,12 +73,12 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 # XMage client session library — :bridge only (see [versions].mage).
 mage-common = { module = "org.mage:mage-common", version.ref = "mage" }
 
-# Android / Compose / DI (story 0007)
+# Android / Compose / DI
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core-ktx" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-compose" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidx-lifecycle" }
-# Story 0024: ProcessLifecycleOwner for the whole-app foreground/background reconnect hook.
+# ProcessLifecycleOwner for the whole-app foreground/background reconnect hook.
 androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
@@ -94,7 +94,7 @@ compose-material-icons-core = { module = "androidx.compose.material:material-ico
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "androidx-navigation" }
 androidx-navigation-testing = { module = "androidx.navigation:navigation-testing", version.ref = "androidx-navigation" }
 
-# Story 0081: Koin. BOM-managed like Compose, so the artifacts carry no per-lib version.
+# Koin. BOM-managed like Compose, so the artifacts carry no per-lib version.
 # - `koin-core`      the graph itself; multiplatform, and the only one a `:core:*` module needs.
 # - `koin-android`   `androidContext()` + the Android `viewModel { }` binding; Android modules only.
 # - `koin-compose`   `koinViewModel()` / `koinInject()` inside Composables.
@@ -110,7 +110,7 @@ androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", vers
 androidx-concurrent-futures = { module = "androidx.concurrent:concurrent-futures", version.ref = "androidx-concurrent-futures" }
 androidx-sqlite = { module = "androidx.sqlite:sqlite", version.ref = "androidx-sqlite" }
 androidx-sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "androidx-sqlite" }
-# Story 0085: SQLite for the jvm() target. `sqlite-framework` wraps the *platform's* SQLite, which a
+# SQLite for the jvm() target. `sqlite-framework` wraps the *platform's* SQLite, which a
 # JVM host does not have — `sqlite-bundled` carries its own native library, so the JVM tests open the
 # same databases the Android target does without the host providing anything.
 androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "androidx-sqlite" }
@@ -122,35 +122,35 @@ kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", v
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
-# Story 0031: card-artwork loader/cache. `coil-core` = the ImageLoader (memory+disk cache, request
+# Card-artwork loader/cache. `coil-core` = the ImageLoader (memory+disk cache, request
 # de-dup); `coil-network-okhttp` = the HTTP fetcher that resolves the URL from XMageImageSource and
-# writes bytes to the disk cache. `coil-compose` (the AsyncImage surface) is pinned here for 0032's
-# inspection UI to consume; :core:cards itself is not a Compose module and only wires the loader.
+# writes bytes to the disk cache. `coil-compose` (the AsyncImage surface) is pinned here for the
+# card-inspection UI to consume; :core:cards itself is not a Compose module and only wires the loader.
 coil-core = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
-# Story 0082: the multiplatform network fetcher. Same pinned Coil 3.1.0 — the engine becomes a
+# The multiplatform network fetcher. Same pinned Coil 3.1.0 — the engine becomes a
 # platform choice (OkHttp on Android) instead of the fetcher itself being OkHttp-shaped.
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 
-# Story 0056: test-only HTTP server used to inspect the *actual* outgoing art request (its headers),
+# Test-only HTTP server used to inspect the *actual* outgoing art request (its headers),
 # rather than trusting that the loader was configured correctly. Pinned to the same OkHttp version
 # `coil-network-okhttp:3.1.0` resolves (`com.squareup.okhttp3:okhttp:4.12.0`), so the mock server and
 # the client under test are the same generation.
 okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "okhttp" }
 
-# Story 0033: Room-backed offline deck library. Story 0083: `room-runtime` is Room's multiplatform
-# artifact — it resolves to `room-runtime-android` for the Android target and `room-runtime-jvm` for
-# the JVM one, and carries the coroutines/Flow query support `room-ktx` used to add. The compiler
-# runs through KSP, which :core:decks applies explicitly since story 0081 removed Hilt, and per
-# target (`kspAndroid`/`kspJvm`) since 0083.
+# Room-backed offline deck library. `room-runtime` is Room's multiplatform artifact — it resolves to
+# `room-runtime-android` for the Android target and `room-runtime-jvm` for the JVM one, and carries the
+# coroutines/Flow query support `room-ktx` used to provide. The compiler runs through KSP, which
+# :core:decks applies explicitly (there is no Hilt plugin to bring it in), and per target
+# (`kspAndroid`/`kspJvm`).
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-# Story 0080 (EPIC-18): the multiplatform plugin behind `magefree.kmp.library`. Same pinned Kotlin
+# The multiplatform plugin behind `magefree.kmp.library`. Same pinned Kotlin
 # version as every other Kotlin plugin here — KMP is a plugin choice, not a version bump.
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
