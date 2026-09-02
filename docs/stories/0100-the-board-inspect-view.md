@@ -60,6 +60,19 @@ rather than picking its own colours.
 
 **It renders a presentation model and computes nothing**, the same rule as every other component here.
 
+**The zoomed card is the Board tier itself, at a readable size.** Not a second rendering of the same
+permanent: `BoardInspectState.asBoardCard()` hands the state straight to `BoardCard`, so what the
+player sees zoomed is literally what they were looking at, counters, badges and attachment stack
+included. Anything else would let the two drift, and the panel's whole job is to explain marks that
+are actually on the card.
+
+**Two additive changes to 0096's model, rather than a parallel one.** `BoardAttachment` gained
+`controlledByOther` (upstream's `attachedControllerDiffers`) and `BoardBadge` gained a long `label`
+beside its `shortLabel`. Both default or derive, both leave the Board tier's rendering unchanged, and
+the alternative — an inspect-only attachment type duplicating three fields — would have been two
+models of one thing that could disagree. `CounterCircle` and `BadgeSquare` became `internal` for the
+same reason: the panel draws the board's own circle, not a lookalike that can drift from it.
+
 ## 6. Implementation steps
 
 1. Define the presentation model: the card, its attachments, its counters, its badges, its
@@ -81,12 +94,12 @@ rather than picking its own colours.
 
 ## 8. Acceptance criteria
 
-- [ ] A board inspect view exists, with the card and a side panel that does not cover it.
-- [ ] Attachments, counters, badges and modifications are all listed.
-- [ ] An attachment controlled by someone else is distinguishable.
-- [ ] Counters are shown in the same colours the board is using for them.
-- [ ] `FullCardView` and every screen using it are untouched.
-- [ ] `./gradlew check` passes and the catalog renders the view.
+- [x] A board inspect view exists, with the card and a side panel that does not cover it.
+- [x] Attachments, counters, badges and modifications are all listed.
+- [x] An attachment controlled by someone else is distinguishable.
+- [x] Counters are shown in the same colours the board is using for them.
+- [x] `FullCardView` and every screen using it are untouched.
+- [x] `./gradlew check` passes and the catalog renders the view.
 
 ## 9. References
 

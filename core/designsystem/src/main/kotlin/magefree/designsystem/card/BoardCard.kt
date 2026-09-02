@@ -56,11 +56,17 @@ data class BoardCounter(
  * of what it is attached to: improvise and convoke tap artifacts and creatures to help pay a cost, and
  * an equipped Sword tapped that way is still equipping. A stack that drew every attachment upright
  * would be misreporting the board.
+ *
+ * [controlledByOther] is upstream's `attachedControllerDiffers` — your Aura on their creature, or
+ * theirs on yours. It is real board state and easily missed, so it is carried here; the Board tier
+ * does not draw it, because at that size there is nowhere to say it without saying it badly. The
+ * inspect view is where it is shown.
  */
 data class BoardAttachment(
     val name: String,
     val manaCost: String? = null,
     val tapped: Boolean = false,
+    val controlledByOther: Boolean = false,
 )
 
 /**
@@ -75,27 +81,30 @@ data class BoardAttachment(
  */
 enum class BoardBadge(
     val shortLabel: String,
+    val label: String,
 ) {
-    Flying("FLY"),
-    Defender("DEF"),
-    Deathtouch("DTH"),
-    Lifelink("LL"),
-    DoubleStrike("DS"),
-    FirstStrike("FS"),
-    Trample("TR"),
-    Hexproof("HEX"),
-    Indestructible("IND"),
-    Vigilance("VIG"),
-    Reach("RCH"),
-    Infect("INF"),
-    Crew("CRW"),
-    ClassLevel("CLS"),
-    HasTargets("TGT"),
-    CostX("X"),
-    HasRestrictions("!"),
-    Commander("CMD"),
-    Ringbearer("RNG"),
-    Unknown("?"),
+    Flying("FLY", "Flying"),
+    Defender("DEF", "Defender"),
+    Deathtouch("DTH", "Deathtouch"),
+    Lifelink("LL", "Lifelink"),
+    DoubleStrike("DS", "Double strike"),
+    FirstStrike("FS", "First strike"),
+    Trample("TR", "Trample"),
+
+    /** Upstream sends **shroud** under this icon too, told apart only by the server's own hint. */
+    Hexproof("HEX", "Hexproof"),
+    Indestructible("IND", "Indestructible"),
+    Vigilance("VIG", "Vigilance"),
+    Reach("RCH", "Reach"),
+    Infect("INF", "Infect"),
+    Crew("CRW", "Crew"),
+    ClassLevel("CLS", "Class level"),
+    HasTargets("TGT", "Has targets"),
+    CostX("X", "Announced X"),
+    HasRestrictions("!", "Restricted"),
+    Commander("CMD", "Commander"),
+    Ringbearer("RNG", "Ring-bearer"),
+    Unknown("?", "Unrecognised"),
 }
 
 /**
@@ -440,7 +449,7 @@ private fun HostCard(
  * colour can never produce an unreadable number.
  */
 @Composable
-private fun CounterCircle(
+internal fun CounterCircle(
     counter: BoardCounter,
     palette: CounterPalette,
 ) {
@@ -481,7 +490,7 @@ private fun CounterCircle(
 
 /** A keyword badge. Placeholder art: a small square carrying the keyword's short form. */
 @Composable
-private fun BadgeSquare(badge: BoardBadge) {
+internal fun BadgeSquare(badge: BoardBadge) {
     Box(
         modifier =
             Modifier
