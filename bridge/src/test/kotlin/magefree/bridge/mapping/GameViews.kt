@@ -1,5 +1,6 @@
 package magefree.bridge.mapping
 
+import mage.abilities.icon.CardIcon
 import mage.constants.CardType
 import mage.constants.MageObjectType
 import mage.constants.PhaseStep
@@ -113,6 +114,7 @@ internal object GameViews {
         targets: List<UUID>? = null,
         token: Boolean = false,
         objectType: MageObjectType = MageObjectType.NULL,
+        icons: List<CardIcon> = emptyList(),
     ): CardView =
         allocate(CardView::class.java).apply {
             set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
@@ -134,6 +136,7 @@ internal object GameViews {
             if (targets != null) set("targets", targets)
             set("isToken", token)
             set("mageObjectType", objectType)
+            set("cardIcons", icons)
         }
 
     /**
@@ -167,6 +170,7 @@ internal object GameViews {
         targets: List<UUID>? = null,
         token: Boolean = false,
         objectType: MageObjectType = MageObjectType.NULL,
+        icons: List<CardIcon> = emptyList(),
     ): StackAbilityView =
         allocate(StackAbilityView::class.java).apply {
             set("id", UUID.randomUUID())
@@ -179,6 +183,7 @@ internal object GameViews {
             if (targets != null) set("targets", targets)
             set("isToken", token)
             set("mageObjectType", objectType)
+            set("cardIcons", icons)
         }
 
     /**
@@ -245,6 +250,10 @@ internal object GameViews {
         set("alternateName", card.alternateName)
         set("isToken", card.isToken)
         set("mageObjectType", card.mageObjectType)
+        // The battlefield is where icons actually live: upstream generates the ability set from
+        // `permanent.getAbilities(game)`, so a permanent fixture that dropped them here could not
+        // reproduce the case this field exists for.
+        set("cardIcons", card.cardIcons)
     }
 
     /** A `ManaPoolView` with the given floating mana. */

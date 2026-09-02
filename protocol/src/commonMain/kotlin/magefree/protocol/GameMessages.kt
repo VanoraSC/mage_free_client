@@ -851,6 +851,18 @@ public data class GamePlayerView(
  *   upstream resolves them through `game.getObject(uuid)` and puts them in one flat list with no
  *   per-kind branching. Empty for anything not targeting — a hand card, an ordinary permanent, an
  *   untargeted spell — because upstream only calls `addTargets` while building a stack object.
+ * @property icons what the **server** says is notable about this object, from upstream
+ *   `CardView.getCardIcons()` — the keyword abilities it currently has, whether it is face down, an
+ *   announced X, that it carries restrictions, and so on.
+ *
+ *   **Server-computed, and that is the entire point.** Upstream builds these in
+ *   `generateCardIconsForPermanent` from `permanent.getAbilities(game)` — the *game-aware* abilities,
+ *   after layers, so a creature granted flying until end of turn carries the flying icon exactly as a
+ *   printed flier does, and one that has lost it carries none. The only other way to answer "does this
+ *   have flying right now" is to parse rules text in the client, which would make the client a rules
+ *   engine. It is not one, and this field is why it does not have to be.
+ *
+ *   Empty for anything upstream generated no icons for. See [GameCardIconView].
  *
 
  *   before these two fields were
@@ -879,7 +891,118 @@ public data class GameCardView(
     val targets: List<String> = emptyList(),
     val token: Boolean = false,
     val objectType: MageObjectTypeCode = MageObjectTypeCode.UNKNOWN,
+    val icons: List<GameCardIconView> = emptyList(),
 )
+
+/**
+ * One icon the server attached to a [GameCardView], projected from `mage.abilities.icon.CardIcon`.
+ *
+ * **Three fields, because that is the whole interface.** `CardIcon` declares `getIconType()`,
+ * `getText()` and `getHint()` and nothing else that carries information. Its `canBeCombined()` and
+ * `getCombinedInfo()` are *presentation* helpers for upstream's own Swing client — how to render two
+ * of the same icon side by side is a decision the board makes for itself, so they do not cross.
+ *
+ * @property type which icon this is. Tolerant: an icon a newer server adds decodes to
+ *   [CardIconTypeCode.UNKNOWN] rather than throwing.
+ * @property hint upstream's `getHint()` — the human-readable label, and **the field that carries the
+ *   meaning** when [type] does not. Upstream reuses one type for several abilities: shroud and
+ *   hexproof both arrive as [CardIconTypeCode.ABILITY_HEXPROOF], distinguished only by a hint of
+ *   `"Shroud"` or `"Hexproof"`. Anything reading this as the ability's name must read the hint.
+ *
+ *   Upstream describes it as popup text and allows HTML and mana symbols in it, so a restriction icon
+ *   arrives as several reasons joined by `<br>`. It is carried through exactly as sent; deciding what
+ *   to do with the markup belongs to whatever displays it.
+ * @property text upstream's `getText()` — the short string drawn *over* the icon rather than beside
+ *   it, and empty for most of them. It is where a value lives: an announced X arrives as
+ *   [CardIconTypeCode.OTHER_COST_X] with text `"x=3"` and hint `"Announced X = 3"`, and a class level
+ *   carries its level here. Upstream's own `canBeCombined()` is `getText().isEmpty()`, which says the
+ *   same thing from the other side: an icon with text is about *this* object specifically.
+ */
+@Serializable
+public data class GameCardIconView(
+    val type: CardIconTypeCode = CardIconTypeCode.UNKNOWN,
+    val hint: String = "",
+    val text: String = "",
+)
+
+/**
+ * Which icon the server attached (`mage.abilities.icon.CardIconType`).
+ *
+ * The set below is upstream's own, transcribed constant for constant. **Unknown values decode to
+ * [UNKNOWN] rather than throwing** (see [Serializer]), the same promise [CardTypeCode] and
+ * [MageObjectTypeCode] make.
+ *
+ * **This is not the evergreen keyword set, and it is not meant to be.** Upstream ships icons for
+ * fourteen abilities; menace, ward, haste, flash, protection and prowess have none. What arrives is
+ * what upstream decided to draw, and nothing here invents the rest — a client that manufactured a
+ * "menace" icon would be answering a rules question the server never answered.
+ *
+ * [SYSTEM_COMBINED] and [SYSTEM_DEBUG] are upstream's own inner usage — the first is produced by its
+ * client when collapsing repeated icons, the second by a test render dialog. Neither is expected from
+ * the server; they are transcribed because the enum mirrors upstream rather than a guess at which of
+ * its values travel.
+ */
+@Serializable(with = CardIconTypeCode.Serializer::class)
+public enum class CardIconTypeCode {
+    /** How many copies of a card in a pile are playable — upstream's only non-ability icon of its kind. */
+    PLAYABLE_COUNT,
+
+    ABILITY_FLYING,
+    ABILITY_DEFENDER,
+    ABILITY_DEATHTOUCH,
+    ABILITY_LIFELINK,
+    ABILITY_DOUBLE_STRIKE,
+    ABILITY_FIRST_STRIKE,
+    ABILITY_CREW,
+    ABILITY_TRAMPLE,
+
+    /** Also carries **shroud**, distinguished only by [GameCardIconView.hint]. */
+    ABILITY_HEXPROOF,
+    ABILITY_INFECT,
+    ABILITY_INDESTRUCTIBLE,
+    ABILITY_VIGILANCE,
+    ABILITY_CLASS_LEVEL,
+    ABILITY_REACH,
+
+    OTHER_FACEDOWN,
+
+    /** An announced X; the value is in [GameCardIconView.text]. */
+    OTHER_COST_X,
+
+    /** The object cannot attack or block, or is otherwise restricted; the reasons are in the hint. */
+    OTHER_HAS_RESTRICTIONS,
+    OTHER_HAS_TARGETS,
+
+    RINGBEARER,
+    COMMANDER,
+
+    /** Upstream client inner usage; not expected from the server. */
+    SYSTEM_COMBINED,
+
+    /** Upstream test-render usage; not expected from the server. */
+    SYSTEM_DEBUG,
+
+    /** An icon this build does not know — either upstream added one, or the server sent nothing usable. */
+    UNKNOWN,
+    ;
+
+    internal object Serializer : KSerializer<CardIconTypeCode> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("magefree.protocol.CardIconTypeCode", PrimitiveKind.STRING)
+
+        override fun serialize(
+            encoder: Encoder,
+            value: CardIconTypeCode,
+        ) {
+            encoder.encodeString(value.name)
+        }
+
+        override fun deserialize(decoder: Decoder): CardIconTypeCode {
+            val raw = decoder.decodeString()
+            return entries.firstOrNull { it.name == raw } ?: UNKNOWN
+        }
+    }
+}
 
 /**
  * What kind of object the server says a [GameCardView] is (`mage.constants.MageObjectType`).

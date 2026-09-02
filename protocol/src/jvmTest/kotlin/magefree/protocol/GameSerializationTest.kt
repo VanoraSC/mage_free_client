@@ -641,6 +641,70 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `card icons round-trip with the text and hint that carry their meaning`() {
+        // Both fields matter and for different reasons: the hint is what an ability icon is *called*
+        // (upstream sends shroud and hexproof as the same type, distinguished by hint alone), and the
+        // text is where a value lives. Dropping either leaves an icon that cannot be read.
+        val card =
+            GameCardView(
+                id = "c-7",
+                name = "Wall of Air",
+                icons =
+                    listOf(
+                        GameCardIconView(type = CardIconTypeCode.ABILITY_FLYING, hint = "Flying"),
+                        GameCardIconView(type = CardIconTypeCode.OTHER_COST_X, hint = "Announced X = 3", text = "x=3"),
+                    ),
+            )
+
+        val round = json.decodeFromString<GameCardView>(json.encodeToString(card))
+
+        assertEquals(2, round.icons.size)
+        assertEquals(CardIconTypeCode.ABILITY_FLYING, round.icons[0].type)
+        assertEquals("Flying", round.icons[0].hint)
+        assertEquals("Announced X = 3", round.icons[1].hint)
+        assertEquals("x=3", round.icons[1].text)
+    }
+
+    @Test
+    fun `shroud and hexproof arrive as one type told apart by the hint`() {
+        // Upstream's own doing: CardIconImpl.ABILITY_SHROUD is built on CardIconType.ABILITY_HEXPROOF.
+        // Anything reading the ability's name off the type would report a shrouded creature as hexproof.
+        val shroud = GameCardIconView(type = CardIconTypeCode.ABILITY_HEXPROOF, hint = "Shroud")
+
+        val round = json.decodeFromString<GameCardIconView>(json.encodeToString(shroud))
+
+        assertEquals(CardIconTypeCode.ABILITY_HEXPROOF, round.type)
+        assertEquals("Shroud", round.hint)
+    }
+
+    @Test
+    fun `an icon type this build has never heard of decodes to UNKNOWN instead of throwing`() {
+        // One icon upstream added must cost one enum value, never the whole snapshot.
+        val frame = """{"id":"c-8","name":"Thing","icons":[{"type":"ABILITY_MENACE","hint":"Menace"}]}"""
+
+        val decoded = json.decodeFromString<GameCardView>(frame)
+
+        assertEquals(CardIconTypeCode.UNKNOWN, decoded.icons.single().type)
+        assertEquals("Menace", decoded.icons.single().hint)
+    }
+
+    @Test
+    fun `icon types encode as their upstream names`() {
+        val encoded = json.encodeToString(GameCardIconView(type = CardIconTypeCode.ABILITY_DOUBLE_STRIKE))
+
+        assertTrue(encoded.contains("\"type\":\"ABILITY_DOUBLE_STRIKE\""), encoded)
+    }
+
+    @Test
+    fun `a card frame from a bridge that sends no icons decodes as having none`() {
+        // Absence is "the server generated no icons for this object", which is the ordinary case for a
+        // land or a vanilla creature — not a gap to fill in with anything the client works out.
+        val decoded = json.decodeFromString<GameCardView>("""{"id":"c-9","name":"Forest"}""")
+
+        assertTrue(decoded.icons.isEmpty())
+    }
+
+    @Test
     fun `the prompt set names its reply shape for every subtype`() {
         // A guard on the contract this exists to make honest: each prompt must be answerable.
         // (The mapping itself is documented per subtype; here we assert the set has not silently grown

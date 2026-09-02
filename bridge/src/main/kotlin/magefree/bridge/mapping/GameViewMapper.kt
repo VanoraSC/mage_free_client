@@ -1,5 +1,6 @@
 package magefree.bridge.mapping
 
+import mage.abilities.icon.CardIconType
 import mage.constants.CardType
 import mage.constants.MageObjectType
 import mage.constants.PhaseStep
@@ -17,8 +18,10 @@ import mage.view.PermanentView
 import mage.view.PlaneView
 import mage.view.PlayerView
 import mage.view.StackAbilityView
+import magefree.protocol.CardIconTypeCode
 import magefree.protocol.CardTypeCode
 import magefree.protocol.CommandObjectKind
+import magefree.protocol.GameCardIconView
 import magefree.protocol.GameCardView
 import magefree.protocol.GameCombatGroupView
 import magefree.protocol.GameCommandObjectView
@@ -425,6 +428,27 @@ public object GameViewMapper {
             // card itself — that the boolean cannot.
             token = card.isToken,
             objectType = objectTypeOf(card.mageObjectType),
+            // What the server says is notable about this object — the keyword abilities it has *now*,
+            // after layers, plus face-down, announced X, restrictions and targets. Upstream builds these
+            // from `permanent.getAbilities(game)`, so this is the only correct answer to "does it have
+            // flying"; the client deriving it from rules text would be the client becoming a rules
+            // engine. `canBeCombined`/`getCombinedInfo` are upstream's own Swing presentation helpers
+            // and stay behind — how to draw two of the same icon is the board's decision.
+            //
+            // `orEmpty()` is load-bearing despite upstream initialising the list inline: its own copy
+            // constructor guards with `if (cardView.cardIcons != null)`, so null is a state upstream
+            // expects to meet.
+            icons =
+                card.cardIcons
+                    .orEmpty()
+                    .filterNotNull()
+                    .map { icon ->
+                        GameCardIconView(
+                            type = iconTypeOf(icon.iconType),
+                            hint = icon.hint.orEmpty(),
+                            text = icon.text.orEmpty(),
+                        )
+                    },
         )
 
     /**
@@ -476,6 +500,41 @@ public object GameViewMapper {
 
     /** The collector number to resolve art by — see [mapCard]'s KDoc on the "No art" defect. */
     private fun collectorNumber(card: CardView): String? = (sourceCardOf(card) ?: card).cardNumber.orNullIfBlank()
+
+    /**
+     * Maps `CardIconType` to its app-schema code. Exhaustive for the same reason [typeOf] is: an icon
+     * upstream adds becomes a compile error here rather than an ability that silently stops being shown.
+     *
+     * `SYSTEM_COMBINED` and `SYSTEM_DEBUG` are upstream's own client-side inner usage and are not
+     * expected to arrive, but they are real values of the enum being mapped, so they are mapped —
+     * inventing a reason to drop them would be the mapper deciding what the server may say.
+     */
+    private fun iconTypeOf(type: CardIconType): CardIconTypeCode =
+        when (type) {
+            CardIconType.PLAYABLE_COUNT -> CardIconTypeCode.PLAYABLE_COUNT
+            CardIconType.ABILITY_FLYING -> CardIconTypeCode.ABILITY_FLYING
+            CardIconType.ABILITY_DEFENDER -> CardIconTypeCode.ABILITY_DEFENDER
+            CardIconType.ABILITY_DEATHTOUCH -> CardIconTypeCode.ABILITY_DEATHTOUCH
+            CardIconType.ABILITY_LIFELINK -> CardIconTypeCode.ABILITY_LIFELINK
+            CardIconType.ABILITY_DOUBLE_STRIKE -> CardIconTypeCode.ABILITY_DOUBLE_STRIKE
+            CardIconType.ABILITY_FIRST_STRIKE -> CardIconTypeCode.ABILITY_FIRST_STRIKE
+            CardIconType.ABILITY_CREW -> CardIconTypeCode.ABILITY_CREW
+            CardIconType.ABILITY_TRAMPLE -> CardIconTypeCode.ABILITY_TRAMPLE
+            CardIconType.ABILITY_HEXPROOF -> CardIconTypeCode.ABILITY_HEXPROOF
+            CardIconType.ABILITY_INFECT -> CardIconTypeCode.ABILITY_INFECT
+            CardIconType.ABILITY_INDESTRUCTIBLE -> CardIconTypeCode.ABILITY_INDESTRUCTIBLE
+            CardIconType.ABILITY_VIGILANCE -> CardIconTypeCode.ABILITY_VIGILANCE
+            CardIconType.ABILITY_CLASS_LEVEL -> CardIconTypeCode.ABILITY_CLASS_LEVEL
+            CardIconType.ABILITY_REACH -> CardIconTypeCode.ABILITY_REACH
+            CardIconType.OTHER_FACEDOWN -> CardIconTypeCode.OTHER_FACEDOWN
+            CardIconType.OTHER_COST_X -> CardIconTypeCode.OTHER_COST_X
+            CardIconType.OTHER_HAS_RESTRICTIONS -> CardIconTypeCode.OTHER_HAS_RESTRICTIONS
+            CardIconType.OTHER_HAS_TARGETS -> CardIconTypeCode.OTHER_HAS_TARGETS
+            CardIconType.RINGBEARER -> CardIconTypeCode.RINGBEARER
+            CardIconType.COMMANDER -> CardIconTypeCode.COMMANDER
+            CardIconType.SYSTEM_COMBINED -> CardIconTypeCode.SYSTEM_COMBINED
+            CardIconType.SYSTEM_DEBUG -> CardIconTypeCode.SYSTEM_DEBUG
+        }
 
     /**
      * Maps `CardType` to its app-schema code. Exhaustive on purpose: a card type added upstream becomes
