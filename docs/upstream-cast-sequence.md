@@ -123,8 +123,10 @@ It is also skipped entirely when the spell cares about the colour of mana spent
 (`caresAboutManaColor`, `:1774`, referencing magefree/mage#9070).
 
 **Consequence for us:** there is **no proposed payment on the wire and no upstream code that computes
-one.** If the cast flow is to open with a filled-in default, the bridge or the client has to derive
-it. That is a design decision Phase 2 must take explicitly rather than inherit.
+one.** This is the finding that ended the declared-intent model: offering an editable default meant
+computing a payment ourselves, which is client-side rules work. Plan §7.6 was rewritten on 2026-09-02
+to follow the server's own flow instead, and no default is proposed — the player taps what they want
+to spend, one prompt at a time, exactly as the server asks.
 
 ### 2.4 Special mana payment is one-way within a cast
 
@@ -198,30 +200,61 @@ low-friction land tapping, and it is a blunt per-user toggle rather than a per-d
 
 ---
 
-## 3. What this means for 2b and 2c
+## 3. What the server lets you cancel
 
-Written as findings, not as a design — the design is 2b's and 2c's to make.
+Since the design is now to follow the server's own flow (plan §7.6, decided 2026-09-02), this is the
+feature rather than a detail. Each prompt in a cast differs, and the differences are not guessable.
 
-1. **The prompt sequence is long and strictly ordered**, and the order is not the order a player
-   thinks in. X before targets; mana before sacrifices. An intent that records a player's decisions
-   in UI order must be replayed in engine order.
-2. **`PlayXManaPrompt` is dead.** Whatever handles X must handle `GetAmountPrompt`. Worth deciding
+| Prompt | Cancellable? | Mechanism |
+|---|---|---|
+| Optional/additional cost (`AskPrompt`) | **Not a cancel** | It is a yes/no. Declining continues the cast without the cost. |
+| Modes (`ChooseChoicePrompt`) | **Yes** | `Modes.choose` treats a null choice as *"user press cancel/stop in choose dialog"* and returns `isSelectedValid(...)`, which is false when too few modes were taken (`Mage/src/main/java/mage/abilities/Modes.java:406`–`409`). |
+| **X** (`GetAmountPrompt`) | **No** | `announceX` loops `while (canRespond())`, `continue`s on a null or out-of-range integer, and breaks only on a valid one (`HumanPlayer.java:1720`–`1736`). Once asked, it must be answered. |
+| Targets (`TargetPrompt`) | **Usually** | `canCancel` is `this instanceof ActivatedAbility && controller.isHuman()` (`AbilityImpl.java:420`), which sets `target.setRequired(false)` (`Targets.java:115`) — so it arrives as `required = false`. **But** a free cast sets `setRequired(true)` first (`Targets.java:112`), so Suspend and similar cannot be cancelled at targeting. |
+| Mana (`PlayManaPrompt`) | **Always** | A boolean response cancels, returning `false` and aborting the payment loop (`HumanPlayer.java:1653`). |
+| Ability picker (`ChooseAbilityPrompt`) | **Effectively** | A response naming no ability activates nothing (`HumanPlayer.java:2369`–`2373`). |
+
+**The UI consequence.** A cancel affordance belongs on exactly the prompts above that accept one.
+Offering it on an X prompt would be a control the server discards — the same defect as the table
+room's deck picker — and the player would be stuck in a loop they were told they could leave.
+
+**The non-obvious one is X.** It is the only step of a cast that, once reached, cannot be backed out
+of. A player who announces a spell with X and changes their mind must pick a value, let the cast
+continue to the mana prompts, and cancel there instead.
+
+## 4. What this means for the cast flow
+
+**The design changed because of §2.3.** Plan §7.6 originally called for a declared intent assembled
+locally and played back by the bridge, whose step 3 showed *"the server's proposed solution for the
+remainder"* as the default payment. There is no such proposal and no upstream code that computes one,
+so that model required us to compute a payment ourselves — client-side rules work of exactly the kind
+this project refuses elsewhere. **On 2026-09-02 the model was replaced: the client follows the
+server's own sequence and offers cancellation exactly where the server accepts it.**
+
+What follows from the trace, under that decision:
+
+1. **The prompt types already exist.** `AskPrompt`, `ChooseAbilityPrompt`, `GetAmountPrompt`,
+   `TargetPrompt` and `PlayManaPrompt` all cross `:protocol` today and the reply path is built. The
+   remaining work is a surface, not a wire format — which is why the phase is much smaller than it
+   was.
+2. **`PlayXManaPrompt` is dead.** Whatever handles X handles `GetAmountPrompt`. Worth deciding
    separately whether to keep the type on the wire as documentation of a callback upstream still
    declares, or drop it.
-3. **A proposed payment must be computed by us or not offered.** §7.6 asks for an editable default;
-   nothing upstream provides one. This is the largest single piece of work the phase implies, and it
-   is the one place the client comes closest to re-deriving rules — so whatever computes it should be
-   in the bridge, where it can be tested against a real server, rather than in the UI.
-4. **Special mana payment ordering is a hard constraint on the intent contract**, and it has an
-   upstream error message attached, which means it is reachable and worth a test.
-5. **Bail-out is not free**, so 2b's bail-out path has a defined and testable end state: tapped
-   permanents stay tapped and floating mana stays floating.
-6. **Every one of these is observable from a live game**, which is what makes 2b testable headlessly
-   against the reference server rather than only against fixtures.
+3. **Cancellation is per-prompt and not uniform** (§3). Mana always; targets usually; modes yes; X
+   never. The affordance has to follow the table, not a general rule.
+4. **X is the one point of no return.** Once asked it must be answered, so a player changing their
+   mind about an X spell has to continue to the mana prompts and cancel there. Worth saying in the UI
+   rather than discovering.
+5. **Special mana payment is one-way** (§2.4), and upstream's own remedy is "cancel and recast". The
+   UI should keep convoke and improvise available only while they are still usable.
+6. **Cancelling is mostly clean** (§2.5), with two rare exceptions that are worth a test rather than a
+   design.
+7. **Everything here is observable from a live game**, so the flow can be verified against the
+   reference server the same way every other correctness result in this project was.
 
 ---
 
-## 4. What was not traced
+## 5. What was not traced
 
 Named so nobody assumes it was covered:
 

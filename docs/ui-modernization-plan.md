@@ -580,68 +580,63 @@ Only **Full** loads full-resolution art, which matters for memory and for the fi
 
 These are *rendering sizes* and have nothing to do with Magic tokens — see §7.11 for those.
 
-### 7.6 The cast flow — a declared intent, played back by the bridge
+### 7.6 The cast flow — the server's own sequence, rendered well
 
-The largest piece of new work, and the mechanism that makes §3.1's cost ordering and §7.8's trigger
-ordering possible.
+**Decided 2026-09-02, replacing the declared-intent model.** The client follows the conversation the
+server actually has, and offers cancellation exactly where the server accepts it. The earlier design
+— assemble a complete intent locally and have the bridge play it back as a batch — is not being
+built. What follows is the current design; the reasoning that ended the old one is kept because it is
+the reason this one is shaped as it is.
 
-**The problem.** The server asks for a cast as an ordered sequence of separate questions — announce
-the spell, then special actions, then modes, then targets, then mana — each a discrete prompt with
-its own round trip. Rendering that faithfully produces a chain of dialogs, which R§6.4
-forbids and the current client does.
+**Why the old model was dropped.** Its step 3 read *"the server's proposed solution for the remainder
+is shown as the default mana payment"*, and the upstream trace
+([`upstream-cast-sequence.md`](upstream-cast-sequence.md) §2.3) established that **no such proposal
+exists**. `ManaUtil.tryToAutoPay` narrows the abilities of a permanent the player has already chosen;
+nothing anywhere looks at the battlefield and suggests a payment. Building the intent model therefore
+meant computing a payment ourselves — client-side rules work of exactly the kind this project refuses
+elsewhere — and then defending a local model of a cast against a server that had never agreed to it.
+Following the server is less clever and much harder to get wrong.
 
-**The model.** The client assembles a **complete declared intent** locally — this spell, these
-modes, these targets, these creatures tapped for convoke, these cards exiled for delve, these lands
-tapped for these colours — and the server's prompt sequence is then answered **as a batch**. The
-player experiences one continuous act with a single Confirm; the server receives exactly the
-conversation it expects.
+**The model.** The server asks an ordered sequence of questions — additional costs, X, modes, targets,
+then one prompt per mana source. The client renders **each prompt as it arrives**, on the board,
+using the components Phase 1 built. There is no local assembly, no batch, and no Confirm, because
+each answer is submitted when the player gives it.
 
-**Where it lives: `:bridge`.** The prompt grammar is XMage-specific and order-dependent, so keeping
-the intent player in the bridge preserves the rule that nothing above `:core:network` knows the
-server's shapes ([`architecture.md`](architecture.md)) — the app submits an intent and receives
-results. The bridge can also be tested headlessly against a real server, which is how every other
-correctness result in this project was obtained, and the UI stays declarative. New protocol surface:
-a `CastIntent` message and its result, spanning `:protocol`, `:bridge` and `:feature:game`.
+**What the client is still responsible for.** Rendering a prompt well is not rendering it faithfully:
+a prompt that says "Pay {1}{R}" is still shown as the board highlighting what can pay it, not as a
+dialog. The freedom the old model wanted — a surface arranged for the player — survives; what it
+loses is the pretence that the whole cast is one local edit.
 
-**The safety rule:**
+**The safety rule is unchanged and now nearly free:**
 
 > The client may change the **form** of the conversation. It may never invent the **content** of an
 > answer.
 
-Re-ordering questions, merging them into one surface, and asking a result-shaped question where the
-server asked a process-shaped one are all safe — the player still supplies every real decision.
-Guessing an answer the player did not give would be the worst class of bug this project could
-ship: a wrong action submitted to a live game.
+Every answer is now a direct response to a question the server just asked, so there is nothing to
+guess and nothing to reconcile.
 
-Concretely: **on any prompt the declared intent does not unambiguously answer, the bridge stops,
-rewinds if it can, and hands that prompt to the client.** It never guesses and never partially
-commits in silence. This will happen for real — an opponent's static cost increase, a target that
-became illegal, an unanticipated replacement-effect choice, an optional trigger mid-cast.
+**Cancellation is whatever the server allows, and no more.** The trace establishes it precisely
+(`upstream-cast-sequence.md` §3):
 
-**Costs are proposed by the server, not computed by us.** Cost-modifying effects mean local
-arithmetic can be wrong, and R§6.5 establishes that the server proposes the solution.
-So:
+- **Mana payment can always be cancelled**, at every prompt, and cancelling rolls the cast back.
+- **Targets can be cancelled** for an activated ability cast by a human — the server marks the prompt
+  `required = false` — but **not** for a free cast such as Suspend.
+- **Modes can be cancelled**, which aborts the cast when too few modes have been chosen.
+- **X cannot be cancelled.** Once asked, the player must answer; the server loops until a valid value
+  arrives.
+- **An optional cost is a yes/no, not a cancel.** Declining it continues the cast without it.
 
-1. Player picks the spell.
-2. Player chooses additional costs first — delve exiles, convoke creatures — with pending costs
-   highlighted on the objects they consume.
-3. The **server's proposed solution for the remainder** is shown as the default mana payment; the
-   player accepts it or edits it by tapping lands (§7.7).
-4. Targets and modes are chosen on the board.
-5. One **Confirm** submits the intent. This is always an explicit act — a fully-paid cost does not
-   fire the cast on its own (§7.7 rule 5), and the mana about to be spent is shown alongside it.
+The UI shows a cancel affordance on exactly the prompts that accept one. Offering it anywhere else
+would be a control the server discards, which is the same defect as the table room's deck picker.
 
-Everything before step 5 is local and freely editable, so **Cancel before Confirm costs nothing and
-touches no server state.** After Confirm, cascading rewind (R§16.5, R§17.1) applies.
+**What cancelling actually costs** is in the trace's §2.5, and it is mostly free: lands tapped during
+payment are untapped again by the rollback. Two exceptions are recorded there — mana floated *before*
+the cast began stays floating, and a mana source that reports itself as not undoable may prevent the
+rollback entirely. Both are rare and both are things to test rather than design around.
 
-**Two things must be settled before this is built:**
-
-- **The real prompt sequence in upstream `HumanPlayer`** for a cast carrying additional costs — the
-  full path, not just `activateSpecialAction` which R§18.2 covers. The server and reference client
-  are correct and available; read them rather than infer.
-- **Disconnect mid-playback.** The bridge becomes briefly stateful per cast, which interacts with
-  0074 (resync restores the outstanding prompt). A drop between "intent submitted" and "cast
-  complete" must land the player somewhere well-defined and truthful.
+**Where it lives.** No new bridge statefulness and no `CastIntent`: the prompt types already cross
+`:protocol`, and the reply path already exists. This is a `:feature:game` surface over shapes
+`:core:network` already carries, which is why the phase is now much smaller than it was.
 
 ### 7.7 Tapping lands — prompt only when the choice is real
 
@@ -654,24 +649,32 @@ touches no server state.** After Confirm, cascading rewind (R§16.5, R§17.1) ap
 3. **Mid-cast, only mana abilities are offered.** Non-mana abilities cannot be activated while
    casting, so they do not appear. Creeping Tar Pit mid-cast is therefore case 1, not case 2 — it
    produces mana with no prompt. This rule removes most of the remaining prompts.
-4. **Tapping a tapped land untaps it.** Tap to pay, tap again to take it back.
-5. **Meeting the cost never fires the cast.** When the last required mana is supplied the player is
-   *prompted to finish the cast*, with the mana being spent shown. Completion is always an explicit
-   act.
-
-Rules 4 and 5 follow from §7.6: while the intent is being assembled nothing has been submitted, so
-adding and removing lands is a local edit. That is also why misfires during payment need no Undo —
-the correction is another tap.
-
-Rule 5 is load-bearing rather than a formality. If the cast fired the instant the cost were met, the
-player could never adjust *which* mana paid for it — and which mana was spent is not always
-cosmetic. Deceit is the motivating case. An auto-firing cast also removes the last chance to back
-out of a misfired spell before it becomes server state.
 
 This is a **filtering** problem, not an invention problem. Every option shown comes from what the
 server reports as legal, and rule 3 narrows that to what is legal *here*. Which case a given land
 falls into is derived from the server's reported abilities, never from a hardcoded notion of what
 lands do.
+
+Upstream does some of this already: `HumanPlayer` suppresses the ability picker for a land whose
+first ability is a mana ability when the user option `useFirstManaAbility` is set, and
+`ManaUtil.tryToAutoPay` narrows a chosen permanent's abilities when one fits the unpaid cost exactly
+(`upstream-cast-sequence.md` §2.3, §2.6). The client's job is to do the same filtering per decision
+rather than per user preference.
+
+**Two rules were retired on 2026-09-02, with the declared-intent model (§7.6).** They are recorded
+here because they were load-bearing for that design and their loss is a real cost, not an oversight:
+
+- *"Tapping a tapped land untaps it."* Under the server's own flow each tap is submitted as it is
+  made, so there is nothing local to undo. The correction for a misfire is to cancel the payment —
+  which the server does allow at every mana prompt — and start again.
+- *"Meeting the cost never fires the cast."* The server fires it. When the last required mana is
+  supplied the payment loop ends and the cast proceeds, with no further prompt. There is no place to
+  insert a confirmation that the server would honour, so the player cannot adjust *which* mana paid
+  after the fact. Deceit, the motivating case for that rule, is answered by choosing the sources in
+  the first place rather than by reviewing them afterwards.
+
+The consequence is that **a misfired payment is corrected by cancelling, not by editing**, and the
+UI should make cancelling obvious for exactly as long as the server will accept it.
 
 ### 7.8 Trigger ordering
 
@@ -1581,16 +1584,20 @@ rather than a synthetic one.
 
 ### Phase 2 — The cast flow
 
-Separate from the board because it spans three modules and it is the only phase whose failure mode
-is submitting a wrong action to a live game rather than looking bad.
+Separate from the board because it is the only phase whose failure mode is submitting a wrong action
+to a live game rather than looking bad.
 
-- **2a — trace upstream.** The real prompt sequence for a cast carrying additional costs, read from
-  `HumanPlayer` in `../mage`. No design work until this is written down.
-- **2b — the intent contract.** `CastIntent` in `:protocol` and the bridge-side player for it,
-  tested headlessly against a real server — including the bail-out path, which is the part that
-  matters. Defines disconnect-mid-playback against 0074.
-- **2c — the UI.** Additional costs first with pending costs highlighted, server-proposed mana as
-  the editable default, land tapping per §7.7, one Confirm.
+**Rescoped 2026-09-02.** 2a was done and it redirected the phase: the declared-intent model rested on
+a server-proposed payment that does not exist (§7.6). Following the server instead removes the
+protocol and bridge work entirely, and what is left is a `:feature:game` surface.
+
+- **2a — trace upstream.** ✅ Done —
+  [`upstream-cast-sequence.md`](upstream-cast-sequence.md). The real prompt sequence, what reaches a
+  client, and what the server lets you cancel.
+- **2b — the cast flow** (0102). The server's prompt sequence rendered on the board, with a cancel
+  affordance on exactly the prompts that accept one. No new wire types; the prompts already cross
+  `:protocol`.
+- **2c — land tapping** (0103). §7.7's filtering: do not ask a question that has only one answer.
 
 ### Phase 3 — The board
 
@@ -1621,7 +1628,7 @@ Written up in [`project-plan.md`](project-plan.md), which is where they live. In
 | Epic | Carries | Phase |
 |---|---|---|
 | **EPIC-19 — Motion & Board Presentation** | §7.3 motion, §7.4 layout, piling, attachments | 1 and 3 |
-| **EPIC-20 — Declared Cast Intent** | §7.6 cast flow, §7.7 land tapping | 2 |
+| **EPIC-20 — The Cast Flow** | §7.6 cast flow, §7.7 land tapping | 2 |
 | **EPIC-23 — Game Information We Do Not Yet Map** | targets, attachments, player counters, `commandList`, zone contents, token identity | before what needs it |
 | **EPIC-24 — The Game Log** | §7.12 | any time |
 | **EPIC-25 — Deckbuilding** | §7.18 — the pre-sign-in mount, and the builder rebuild | immediate, then 4 |

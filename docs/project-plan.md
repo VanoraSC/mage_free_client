@@ -441,42 +441,46 @@ with the game.
 - As a developer, I want the **animation host built and proven against recorded real snapshots
   before the board depends on it**, so that sequencing is exercised against real timing.
 
-### EPIC-20 — Declared Cast Intent
-**What it is:** making casting one fluid act. Spans `:protocol`, `:bridge` and `:feature:game`.
-Specified by §7.6 and §7.7.
+### EPIC-20 — The Cast Flow
+**What it is:** making casting readable. Lives in `:feature:game` over shapes `:protocol` and
+`:core:network` already carry. Specified by §7.6 and §7.7.
 
-The server asks for a cast as an ordered sequence of separate questions — announce, special
-actions, modes, targets, mana — and rendering that faithfully produces the dialog chain the
-current client has. Instead the client assembles a **complete declared intent** locally and the
-bridge answers the server's prompt sequence as a batch. The intent player lives in the bridge
-because the prompt grammar is XMage-specific and order-dependent, and because the bridge can be
-tested headlessly against a real server.
+**Revised 2026-09-02.** This epic was *Declared Cast Intent*: the client would assemble a complete
+cast locally and the bridge would answer the server's prompt sequence as a batch, behind one Confirm.
+That model was dropped once the upstream trace
+([`upstream-cast-sequence.md`](upstream-cast-sequence.md) §2.3) established that its central
+assumption was false — the server does **not** propose a mana payment, and nothing upstream computes
+one. Offering an editable default therefore meant computing a payment ourselves, which is exactly the
+client-side rules work this project refuses everywhere else.
 
-**The safety rule: the client may change the form of the conversation; it may never invent the
-content of an answer.** On any prompt the intent does not unambiguously answer, the bridge stops,
-rewinds if it can, and hands that prompt to the client. This is the only epic whose failure mode
-is submitting a wrong action to a live game.
+The client now **follows the server's own sequence** and offers cancellation exactly where the server
+accepts it. Less clever, much harder to get wrong, and far smaller: no `CastIntent`, no bridge-side
+cast state, no new wire types.
 
-- As a player, I want casting a spell to be **one act with one Confirm**, not a chain of dialogs.
-- As a player, I want to **choose delve exiles and convoke creatures first**, with the objects
-  they'll consume highlighted, and mana solving only for the remainder.
-- As a player, I want the **server's proposed mana payment offered as an editable default**,
-  because cost-modifying effects mean I shouldn't trust arithmetic done on the phone.
-- As a player, I want **tapping a land to just tap it for mana** when there's only one thing it
-  could produce, and to be asked only when the choice is real.
-- As a player, I want **only mana abilities offered mid-cast**, since nothing else can be
-  activated then.
-- As a player, I want to **tap a tapped land to untap it**, so that fixing a payment is another
-  tap rather than a cancel.
-- As a player, I want **meeting the cost never to fire the cast** — completion is always
-  explicit, because which mana paid isn't always cosmetic and I want the last chance to back out.
-- As a player, I want **Cancel before Confirm to cost nothing and touch no server state.**
-- As a developer, I want the **upstream prompt sequence for a cast with additional costs traced
-  and written down before any design work** — read from the local XMage source, then confirmed
-  against a real game with an instrumented build Pete plays and returns the logs from. Source says
-  what the server *can* send; only a live game says what it *does*.
-- As a developer, I want **disconnect mid-playback defined against resync**, so that a drop
-  between "intent submitted" and "cast complete" lands the player somewhere truthful.
+**The safety rule survives and is now nearly free: the client may change the form of the conversation;
+it may never invent the content of an answer.** Every answer is a direct response to a question the
+server has just asked, so there is nothing to reconcile and nothing to guess.
+
+- As a player, I want casting to **read as one act** even though it is several round trips, with the
+  questions asked on the board rather than in a chain of dialogs.
+- As a player, I want **tapping a land to just tap it for mana** when there's only one thing it could
+  produce, and to be asked only when the choice is real.
+- As a player, I want **only mana abilities offered mid-cast**, since nothing else can be activated
+  then.
+- As a player, I want **Cancel offered exactly where it works** — always during mana payment, usually
+  during targeting, never during X — so I am never given a control the server discards.
+- As a player, I want to be **told before I commit to an X spell that X cannot be backed out of**,
+  since it is the one point of no return in a cast.
+- As a developer, I want the **upstream prompt sequence for a cast with additional costs traced and
+  written down before any design work** — done, and it is what redirected this epic.
+- As a developer, I want **what cancelling actually costs pinned by live tests**, since the rollback
+  is clean for ordinary lands but has two rare exceptions the source does not settle.
+
+**Dropped with the old model**, recorded so the loss is deliberate: one Confirm; choosing delve and
+convoke first with mana solving for the remainder; an editable proposed payment; tapping a tapped land
+to untap it; meeting the cost never firing the cast; and Cancel-before-Confirm costing nothing. The
+last three depended on nothing being submitted until Confirm, which is no longer true.
+
 
 ### EPIC-23 — Game Information We Do Not Yet Map
 **What it is:** bridge and protocol work, not UI. The server sends this correctly today and we
