@@ -2,6 +2,7 @@ package magefree.feature.connect
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -44,6 +45,13 @@ const val ADD_SERVER_LABEL: String = "Add server"
 const val OPEN_DECKS_LABEL: String = "Decks & cards"
 
 /**
+ * The design-system catalog entry. It sits beside deckbuilding because it is the other surface that
+ * needs no server, and because the board components are reviewed constantly while they are being
+ * built — burying it behind sign-in and a settings screen makes that a chore.
+ */
+const val OPEN_CATALOG_LABEL: String = "Components"
+
+/**
  * Stateless server list / add-server screen. Lists the persisted [ServerTarget]s as tappable
  * [MageListRow]s (design system), shows the design system's loading / empty surfaces, and anchors the
  * primary [ADD_SERVER_LABEL] action at the bottom for thumb reach. The add/edit form is a
@@ -58,6 +66,7 @@ fun ServerListScreen(
     onSelectServer: (ServerTarget) -> Unit,
     onAddServer: () -> Unit,
     onOpenDecks: () -> Unit,
+    onOpenCatalog: () -> Unit,
     onEditServer: (ServerTarget) -> Unit,
     onRemoveServer: (ServerTarget) -> Unit,
     onEditorNameChange: (String) -> Unit,
@@ -82,13 +91,22 @@ fun ServerListScreen(
                     icon = Icons.Filled.Add,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                // Deckbuilding works with no server at all, so it is reachable before anything is
+                // Both of these work with no server at all, so they are reachable before anything is
                 // configured — including on a first launch, where there is no server to sign in to.
-                MageTextButton(
-                    text = OPEN_DECKS_LABEL,
-                    onClick = onOpenDecks,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                // Side by side because they are peers: two ways into the parts of the app that need
+                // nothing but the device.
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
+                    MageTextButton(
+                        text = OPEN_DECKS_LABEL,
+                        onClick = onOpenDecks,
+                        modifier = Modifier.weight(1f),
+                    )
+                    MageTextButton(
+                        text = OPEN_CATALOG_LABEL,
+                        onClick = onOpenCatalog,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         },
     ) { innerPadding ->
@@ -233,6 +251,7 @@ private fun ServerListPopulatedPreview() {
             onSelectServer = {},
             onAddServer = {},
             onOpenDecks = {},
+            onOpenCatalog = {},
             onEditServer = {},
             onRemoveServer = {},
             onEditorNameChange = {},
@@ -254,6 +273,7 @@ private fun ServerListEmptyPreview() {
             onSelectServer = {},
             onAddServer = {},
             onOpenDecks = {},
+            onOpenCatalog = {},
             onEditServer = {},
             onRemoveServer = {},
             onEditorNameChange = {},
@@ -280,6 +300,7 @@ private fun ServerEditorPreview() {
             onSelectServer = {},
             onAddServer = {},
             onOpenDecks = {},
+            onOpenCatalog = {},
             onEditServer = {},
             onRemoveServer = {},
             onEditorNameChange = {},

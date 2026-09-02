@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.card.CardTile
 import magefree.designsystem.card.FullCardView
@@ -61,9 +62,15 @@ import magefree.designsystem.theme.ThemePreviews
  * in a [MageTheme] (and, when hosting live, in a width-constraining container to simulate window size).
  *
  * @param modifier the [Modifier] for the scrolling gallery.
+ * @param cardArt real card art for the card-forward sections. The design system carries no image
+ *   dependency, so a host that wants real art supplies the slot; without one every card falls back to
+ *   the built-in placeholder and the catalog still renders offline.
  */
 @Composable
-fun ComponentCatalog(modifier: Modifier = Modifier) {
+fun ComponentCatalog(
+    modifier: Modifier = Modifier,
+    cardArt: CardArtSlot? = null,
+) {
     Column(
         modifier =
             modifier
@@ -143,7 +150,7 @@ fun ComponentCatalog(modifier: Modifier = Modifier) {
         }
 
         CatalogSection(title = "Board card tier") {
-            BoardCardGallery()
+            BoardCardGallery(art = cardArt)
         }
 
         CatalogSection(title = "Card tile") {

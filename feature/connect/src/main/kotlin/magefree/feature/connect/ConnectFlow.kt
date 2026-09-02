@@ -27,6 +27,7 @@ fun ConnectFlow(
     onConnected: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenDecks: () -> Unit = {},
+    onOpenCatalog: () -> Unit = {},
 ) {
     var selectedServer by rememberSaveable(stateSaver = ServerTargetSaver) {
         mutableStateOf<ServerTarget?>(null)
@@ -37,6 +38,7 @@ fun ConnectFlow(
         ServerListRoute(
             onSelectServer = { selectedServer = it },
             onOpenDecks = onOpenDecks,
+            onOpenCatalog = onOpenCatalog,
             modifier = modifier,
         )
     } else {
@@ -55,6 +57,7 @@ fun ServerListRoute(
     onSelectServer: (ServerTarget) -> Unit,
     modifier: Modifier = Modifier,
     onOpenDecks: () -> Unit = {},
+    onOpenCatalog: () -> Unit = {},
     viewModel: ServerListViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -63,6 +66,7 @@ fun ServerListRoute(
         onSelectServer = onSelectServer,
         onAddServer = viewModel::openAddServer,
         onOpenDecks = onOpenDecks,
+        onOpenCatalog = onOpenCatalog,
         onEditServer = viewModel::openEditServer,
         onRemoveServer = viewModel::removeServer,
         onEditorNameChange = viewModel::updateEditorName,

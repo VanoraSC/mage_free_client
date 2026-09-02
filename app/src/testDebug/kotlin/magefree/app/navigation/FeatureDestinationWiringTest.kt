@@ -69,7 +69,7 @@ class FeatureDestinationWiringTest {
                     // A stand-in only so the graph can be built without Hilt; that the *production*
                     // default is `:feature:connect`'s ConnectFlow is asserted by the constant-pool
                     // guard in FeatureWiringGuardTest.
-                    connectFlow = { onConnected, _ -> Button(onClick = onConnected) { Text("stand-in") } },
+                    connectFlow = { onConnected, _, _ -> Button(onClick = onConnected) { Text("stand-in") } },
                 )
             }
         }
