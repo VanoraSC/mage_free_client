@@ -15,6 +15,7 @@ import magefree.bridge.xmage.BridgeMageClient
 import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageServerTarget
 import magefree.protocol.AskPrompt
+import magefree.protocol.CardIconTypeCode
 import magefree.protocol.ChooseAbilityPrompt
 import magefree.protocol.ChooseChoicePrompt
 import magefree.protocol.CommandObjectKind
@@ -282,6 +283,30 @@ class GameRelayIT {
             )
 
         const val RAISE_THE_ALARM = "Raise the Alarm"
+
+        /**
+         * The deck for the card-icon scenario. `Suntail Hawk` (`M14` #40) is a `{W}` 1/1 Bird whose only
+         * ability is flying, so one Plains puts a permanent with exactly one ability icon on the
+         * battlefield on turn one, beside a land that has none.
+         *
+         * A fixture proves the mapper reads the field; only a live game proves the **server populates
+         * it on the path we read** — `generateCardIconsForPermanent` runs off `permanent.getAbilities(game)`
+         * and returns early when `game` is null, so a snapshot built without a game would carry nothing
+         * and every hermetic test would still pass.
+         */
+        val ICON_DECK =
+            DeckList(
+                name = "it_icons",
+                author = "game-relay-it",
+                cards =
+                    listOf(
+                        DeckListCard(cardName = "Plains", setCode = "M21", collectorNumber = "260", amount = 30),
+                        DeckListCard(cardName = "Suntail Hawk", setCode = "M14", collectorNumber = "40", amount = 30),
+                    ),
+                sideboard = emptyList(),
+            )
+
+        const val SUNTAIL_HAWK = "Suntail Hawk"
 
         const val MOX = "Mox Poison"
         const val SENTINELS = "Palace Sentinels"
@@ -1290,6 +1315,148 @@ class GameRelayIT {
                 teardown(session, roomId, tableId, gameId)
             }
         }
+
+    @Test
+    fun `a live flier carries the server's own flying icon, and the land beside it carries none`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(session, roomId, options(name = "it_icon_$username"))
+                    }
+                assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, ICON_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+                events.awaitOfType<GameStarted>(GAME_INIT_TIMEOUT_MS, "a GAME_INIT push")
+
+                val state =
+                    requireNotNull(castTheHawk(session, gameId, events)) {
+                        "no snapshot ever carried a flier beside a land; callbacks=${callbackSummary()}"
+                    }
+
+                val board = state.players.single { it.viewer }.battlefield
+                val hawk = board.first { it.card.name == SUNTAIL_HAWK }
+                val land = board.first { it.card.name == PLAINS }
+
+                val icon = hawk.card.icons.single()
+                assertEquals(CardIconTypeCode.ABILITY_FLYING, icon.type)
+                // Upstream's `FlyingAbility` carries `CardIconImpl.ABILITY_FLYING`, whose hint is the
+                // ability's name. Asserting it here is what proves the hint survived a real server,
+                // and the hint is the only thing telling hexproof from shroud downstream.
+                assertEquals("Flying", icon.hint)
+                assertTrue(
+                    land.card.icons.isEmpty(),
+                    "the control: a Plains has no abilities, so the server marks nothing on it",
+                )
+
+                println(
+                    "GameRelayIT[icons]: ${board.map { "${it.card.name}${it.card.icons.map { i -> i.type }}" }} " +
+                        "callbacks=${callbackSummary()}",
+                )
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /**
+     * Plays lands and casts `Suntail Hawk`, returning the first snapshot in which our battlefield holds
+     * both the flier and a land.
+     */
+    private suspend fun castTheHawk(
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+    ): GameStateView? {
+        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
+        val tappedForThisPayment = mutableSetOf<String>()
+        var answered = 0
+
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                val board =
+                    state.players
+                        .firstOrNull { it.viewer }
+                        ?.battlefield
+                        .orEmpty()
+                if (board.any { it.card.name == SUNTAIL_HAWK } && board.any { it.card.name == PLAINS }) return state
+            }
+            if (event is GameOver) break
+            if (event !is GamePrompted) continue
+
+            val state = event.state
+            val prompt = event.prompt
+            val playable = state.playable.map { it.objectId }.toSet()
+            val ourBoard =
+                state.players
+                    .singleOrNull { it.viewer }
+                    ?.battlefield
+                    .orEmpty()
+            val ourMainPhase =
+                state.viewerHasPriority &&
+                    state.viewerPlayerId != null &&
+                    state.viewerPlayerId == state.activePlayerId &&
+                    state.phase == TurnPhaseCode.PRECOMBAT_MAIN &&
+                    state.step == PhaseStepCode.PRECOMBAT_MAIN
+
+            when {
+                prompt is SelectPrompt && ourMainPhase -> {
+                    tappedForThisPayment.clear()
+                    val plains = state.hand.firstOrNull { it.name == PLAINS && it.id in playable }
+                    val hawk = state.hand.firstOrNull { it.name == SUNTAIL_HAWK && it.id in playable }
+                    when {
+                        plains != null -> sendUuid(session, gameId, plains.id)
+                        hawk != null -> sendUuid(session, gameId, hawk.id)
+                        else -> pass(session, gameId)
+                    }
+                }
+                prompt is PlayManaPrompt -> {
+                    val land = ourBoard.firstOrNull { it.card.name == PLAINS && !it.tapped && it.card.id !in tappedForThisPayment }
+                    if (land != null) {
+                        tappedForThisPayment += land.card.id
+                        sendUuid(session, gameId, land.card.id)
+                    } else {
+                        pass(session, gameId)
+                    }
+                }
+                else -> answer(session, gameId, prompt)
+            }
+            answered++
+            if (answered > MAX_ANSWERS_TO_CAST) {
+                throw AssertionError(
+                    "answered $MAX_ANSWERS_TO_CAST prompts without resolving a $SUNTAIL_HAWK. " +
+                        "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
+                )
+            }
+        }
+        return null
+    }
 
     /**
      * Plays lands and casts `Raise the Alarm`, returning the first snapshot in which our battlefield
