@@ -158,6 +158,10 @@ fun ComponentCatalog(
             BoardCardGallery(artFor = artFor)
         }
 
+        CatalogSection(title = "Animation host") {
+            BoardHostGallery(artFor = artFor)
+        }
+
         CatalogSection(title = "Card tile") {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.medium)) {
                 CardTile(

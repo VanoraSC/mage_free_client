@@ -47,11 +47,17 @@ const val CATALOG_THEME_TOGGLE_CONTENT_DESCRIPTION: String = "Toggle light or da
 /** Accessibility label on the simulated-width toggle. */
 const val CATALOG_WIDTH_TOGGLE_CONTENT_DESCRIPTION: String = "Toggle simulated window width"
 
-/** The simulated content width used to preview a narrow phone layout. */
-private val PhoneSimWidth = 360.dp
+/**
+ * The simulated content width of a phone held in landscape — the app's only orientation (§7.19).
+ *
+ * Portrait widths are not simulated here because no new surface renders in portrait: a board
+ * component judged in a 360 dp column is being judged against a shape it will never be given, and the
+ * first thing that goes wrong is a row of permanents piling up at the edge.
+ */
+private val PhoneSimWidth = 891.dp
 
-/** The simulated content width used to preview a wide tablet layout. */
-private val TabletSimWidth = 720.dp
+/** The simulated content width of a tablet in landscape, which renders the same layout scaled. */
+private val TabletSimWidth = 1280.dp
 
 /**
  * The developer component-catalog screen: hosts the design system's [ComponentCatalog] behind a

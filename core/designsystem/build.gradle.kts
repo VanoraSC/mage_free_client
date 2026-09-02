@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material3.window.sizeclass)
     implementation(libs.compose.material.icons.core)
+    implementation(libs.compose.animation.core)
 
     testImplementation(libs.junit4)
 

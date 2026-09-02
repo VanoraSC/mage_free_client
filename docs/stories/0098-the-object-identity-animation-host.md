@@ -88,6 +88,24 @@ an unbounded backlog is not, and the sync rule is what bounds it in practice. Th
 sequence is still playing and a prompt arrives is specified — finish quickly — so it is asserted
 rather than left to emerge.
 
+**What was actually built, confirmed against the pinned BOM (Compose UI 1.9.2).** The API surface was
+read out of the artifact rather than assumed, and the host uses `LookaheadScope` together with
+`movableContentOf` and `Modifier.approachLayout` — all stable `androidx.compose.ui.layout` API, plus
+`Animatable` from `androidx.compose.animation:animation-core`, which is the dependency added to the
+version catalog. It does **not** use `SharedTransitionLayout`. That API matches elements *across* an
+`AnimatedContent`/`AnimatedVisibility` boundary, where the two are different composables in different
+subtrees; here the object is one composable that changes parent inside a single tree, and
+`movableContentOf` keeps it alive across that change directly. The rule §7.3 asks for — one shared
+coordinate space, movement from measured position to measured position, never destroy-and-recreate —
+is what both approaches serve, and this is the one the shape of the problem calls for.
+
+**The bound is on time, not on count.** "The queue must not grow without bound" is enforced by
+compressing what has not started yet into a fixed span, never by discarding a change: a change that
+is never shown is a game action the player was never told about, which is the collapse failure
+reached from the other side. One mechanism serves both callers — a prompt asks for a short span
+because the player is about to act, a backlog that has outgrown what trailing can justify asks for a
+longer one.
+
 ## 6. Implementation steps
 
 1. Read §7.3 in full, and confirm the shared-element API surface by compiling against the pinned BOM.
@@ -113,13 +131,13 @@ rather than left to emerge.
 
 ## 8. Acceptance criteria
 
-- [ ] Objects are addressed by stable id, hold one owning slot per snapshot, and animate between
+- [x] Objects are addressed by stable id, hold one owning slot per snapshot, and animate between
       slots in one shared coordinate space.
-- [ ] Changes play in order; a sequence is never collapsed into its final state.
-- [ ] A prompt drains the queue; a resync snaps without replaying.
-- [ ] Reduce-motion shortens and never removes.
-- [ ] The existing board is unchanged.
-- [ ] `./gradlew check` passes and the harness demonstrates ordered playback.
+- [x] Changes play in order; a sequence is never collapsed into its final state.
+- [x] A prompt drains the queue; a resync snaps without replaying.
+- [x] Reduce-motion shortens and never removes.
+- [x] The existing board is unchanged.
+- [x] `./gradlew check` passes and the harness demonstrates ordered playback.
 
 ## 9. References
 
