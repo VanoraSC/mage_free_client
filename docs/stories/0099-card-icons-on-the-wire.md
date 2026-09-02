@@ -59,6 +59,18 @@ hint — so a sealed hierarchy would be structure without payoff.
 **`canBeCombined` and `getCombinedInfo` are upstream presentation helpers** and do not cross. The
 board decides how to render a repeated icon; the wire carries what the server said.
 
+**The hint is not decoration — for some icons it is the whole answer.** Read in the clone while
+implementing: `CardIconImpl.ABILITY_SHROUD` is built on `CardIconType.ABILITY_HEXPROOF`, so shroud and
+hexproof arrive as the *same type* and are told apart only by a hint of `"Shroud"` or `"Hexproof"`.
+Anything downstream that reads an ability's name off the type alone will report a shrouded creature as
+hexproof. The constructor is `CardIconImpl(type, hint, text)` — **hint first**, text last and usually
+empty; `text` is where a value lives (an announced X arrives as text `"x=3"` with hint
+`"Announced X = 3"`, and a class level carries its level there).
+
+**`SYSTEM_COMBINED` and `SYSTEM_DEBUG` are transcribed too.** They are upstream client-side inner
+usage and are not expected from the server, but the enum mirrors upstream rather than a guess at which
+of its values travel; the mapper deciding what the server may say is the failure mode being avoided.
+
 ## 6. Implementation steps
 
 1. Read `CardIcon`, `CardIconImpl` and `CardIconType` in the local clone; enumerate the exact constants
@@ -79,10 +91,10 @@ board decides how to render a repeated icon; the wire carries what the server sa
 
 ## 8. Acceptance criteria
 
-- [ ] `cardIcons` crosses `:protocol` and reaches `GameCard`.
-- [ ] An unrecognised icon type decodes to `UNKNOWN`.
-- [ ] A live game against the reference server shows the icons arriving.
-- [ ] `./gradlew check` passes, and `:bridge` passes in the container.
+- [x] `cardIcons` crosses `:protocol` and reaches `GameCard`.
+- [x] An unrecognised icon type decodes to `UNKNOWN`.
+- [x] A live game against the reference server shows the icons arriving.
+- [x] `./gradlew check` passes, and `:bridge` passes in the container.
 
 ## 9. References
 

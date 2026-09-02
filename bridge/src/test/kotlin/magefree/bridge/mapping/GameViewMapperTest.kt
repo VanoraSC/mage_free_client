@@ -1,5 +1,7 @@
 package magefree.bridge.mapping
 
+import mage.abilities.icon.CardIconImpl
+import mage.abilities.icon.CardIconType
 import mage.constants.CardType
 import mage.constants.MageObjectType
 import mage.constants.PhaseStep
@@ -10,6 +12,7 @@ import mage.view.CardView
 import mage.view.CommandObjectView
 import mage.view.GameView
 import mage.view.PlayerView
+import magefree.protocol.CardIconTypeCode
 import magefree.protocol.CardTypeCode
 import magefree.protocol.CommandObjectKind
 import magefree.protocol.MageObjectTypeCode
@@ -1056,6 +1059,72 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `the icons the server computed cross the wire`() {
+        // The whole reason this field exists: whether a creature has flying *right now* — after layers,
+        // after a granted or removed ability — is a question only the server can answer. A bridge that
+        // drops the answer leaves the client to parse rules text, which makes it a rules engine.
+        val flier =
+            GameViews.permanent(
+                card = GameViews.card(name = "Serra Angel", icons = listOf(CardIconImpl.ABILITY_FLYING)),
+            )
+
+        val icon = GameViewMapper.mapCard(flier).icons.single()
+
+        assertEquals(CardIconTypeCode.ABILITY_FLYING, icon.type)
+        assertEquals("Flying", icon.hint)
+    }
+
+    @Test
+    fun `an icon's text and hint both survive, because each carries something the other does not`() {
+        // Upstream's `CardIconImpl(type, hint, text)` — hint first. For an announced X the text is the
+        // value drawn on the icon and the hint is the sentence; dropping either loses information the
+        // board or the inspect view needs.
+        val announced = GameViews.card(name = "Fireball", icons = listOf(CardIconImpl.variableCost(3)))
+
+        val icon = GameViewMapper.mapCard(announced).icons.single()
+
+        assertEquals(CardIconTypeCode.OTHER_COST_X, icon.type)
+        assertEquals("x=3", icon.text)
+        assertEquals("Announced X = 3", icon.hint)
+    }
+
+    @Test
+    fun `shroud arrives as the hexproof icon, told apart only by its hint`() {
+        // Upstream's own doing: `CardIconImpl.ABILITY_SHROUD` is built on `CardIconType.ABILITY_HEXPROOF`.
+        // Carrying the hint is what keeps the two distinguishable at all downstream.
+        val shrouded = GameViews.card(name = "Thrun", icons = listOf(CardIconImpl.ABILITY_SHROUD))
+
+        val icon = GameViewMapper.mapCard(shrouded).icons.single()
+
+        assertEquals(CardIconTypeCode.ABILITY_HEXPROOF, icon.type)
+        assertEquals("Shroud", icon.hint)
+    }
+
+    @Test
+    fun `an icon list upstream never populated maps to empty rather than throwing`() {
+        // `CardView` initialises `cardIcons` inline, but its own copy constructor still null-checks it
+        // (`if (cardView.cardIcons != null)`), so null is a state upstream itself expects to meet.
+        val sparse = GameViews.card(name = "Forest").apply { nullOutCardIcons() }
+
+        assertTrue(GameViewMapper.mapCard(sparse).icons.isEmpty())
+    }
+
+    @Test
+    fun `every icon type upstream defines has a code of its own`() {
+        // The guard where upstream's set and ours meet. If a future mage-common adds an icon, this fails
+        // naming it, rather than silently mapping a real ability to UNKNOWN and hiding it from the board.
+        CardIconType.values().forEach { upstream ->
+            val mapped =
+                GameViewMapper
+                    .mapCard(GameViews.card(icons = listOf(CardIconImpl(upstream, "hint"))))
+                    .icons
+                    .single()
+
+            assertEquals(upstream.name, mapped.type.name, "upstream's $upstream has no code of its own")
+        }
+    }
+
+    @Test
     fun `every card type upstream defines has a code of its own`() {
         // The guard on the one place upstream's set and ours meet. If a future mage-common adds a card
         // type, this fails here — naming the type — rather than silently mapping it to UNKNOWN and
@@ -1152,6 +1221,13 @@ class GameViewMapperTest {
                 field.set(this, null)
             }
         }
+
+    /** Nulls `CardView.cardIcons`, reproducing the null upstream's own copy constructor guards against. */
+    private fun CardView.nullOutCardIcons() {
+        val field = CardView::class.java.getDeclaredField("cardIcons")
+        field.isAccessible = true
+        field.set(this, null)
+    }
 
     /** Nulls `CardView.counters`, which is upstream's state for "this object has no counters at all". */
     private fun CardView.nullOutCounters() {

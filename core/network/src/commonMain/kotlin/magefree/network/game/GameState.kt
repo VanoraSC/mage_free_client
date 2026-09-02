@@ -266,6 +266,15 @@ enum class CommandObjectKind {
  *   `game.getObject(uuid)` into one flat list. Resolving an id to the object it names is the
  *   renderer's job — everything it could name is already in the same snapshot. Empty for anything that
  *   is not a targeting stack object, which is most cards.
+ * @property icons what the **server** says is notable about this object — the keyword abilities it has
+ *   right now, plus face-down, an announced X, that it carries restrictions, and so on.
+ *
+ *   **This is the only correct answer to "does it have flying".** Upstream builds the set from
+ *   `permanent.getAbilities(game)`, after layers, so a creature granted flying until end of turn
+ *   carries the icon and one that has lost it does not. A board that instead derived keywords from
+ *   [rules] text would be re-deriving rules the server already applied — the one thing this client
+ *   does not do. Empty for anything upstream generated no icons for, which is most lands and vanilla
+ *   creatures. See [GameCardIcon].
  */
 data class GameCard(
     val id: String,
@@ -286,7 +295,84 @@ data class GameCard(
     val targets: List<String> = emptyList(),
     val isToken: Boolean = false,
     val objectType: MageObjectType = MageObjectType.Unknown,
+    val icons: List<GameCardIcon> = emptyList(),
 )
+
+/**
+ * One thing the server marked about a [GameCard] — the app-schema projection of
+ * `mage.abilities.icon.CardIcon`.
+ *
+ * @property type which icon it is. [CardIconType.Unknown] is this build not recognising what the
+ *   server sent, which costs one icon rather than the snapshot.
+ * @property hint the server's own label for it, and **the field that carries the meaning** where
+ *   [type] does not: upstream sends shroud and hexproof as the same [CardIconType.AbilityHexproof],
+ *   told apart by a hint of `"Shroud"` or `"Hexproof"`. Upstream allows HTML and mana symbols in it —
+ *   a restrictions icon arrives as several reasons joined by `<br>` — and it is carried exactly as
+ *   sent, because deciding what to do with the markup belongs to whatever displays it.
+ * @property text the short string upstream draws *over* the icon, empty for most. It is where a value
+ *   lives: an announced X arrives as [CardIconType.OtherCostX] with text `"x=3"`, and a class level
+ *   carries its level here.
+ */
+data class GameCardIcon(
+    val type: CardIconType = CardIconType.Unknown,
+    val hint: String = "",
+    val text: String = "",
+)
+
+/**
+ * Which icon the server attached to a card.
+ *
+ * **Not the evergreen keyword set, and not meant to be.** Upstream ships icons for fourteen abilities;
+ * menace, ward, haste, flash, protection and prowess have none. What arrives is what the server chose
+ * to mark, and nothing here invents the rest — manufacturing a "menace" icon would be answering a
+ * rules question the server never answered.
+ *
+ * [SystemCombined] and [SystemDebug] are upstream's own client-side inner usage and are not expected
+ * from the server; they exist here because the set mirrors upstream rather than a guess at which of
+ * its values travel.
+ */
+enum class CardIconType {
+    /** How many copies of a card in a pile are playable. */
+    PlayableCount,
+
+    AbilityFlying,
+    AbilityDefender,
+    AbilityDeathtouch,
+    AbilityLifelink,
+    AbilityDoubleStrike,
+    AbilityFirstStrike,
+    AbilityCrew,
+    AbilityTrample,
+
+    /** Also carries **shroud**, distinguished only by [GameCardIcon.hint]. */
+    AbilityHexproof,
+    AbilityInfect,
+    AbilityIndestructible,
+    AbilityVigilance,
+    AbilityClassLevel,
+    AbilityReach,
+
+    FaceDown,
+
+    /** An announced X; the value is in [GameCardIcon.text]. */
+    OtherCostX,
+
+    /** The object is restricted from attacking, blocking or the like; the reasons are in the hint. */
+    HasRestrictions,
+    HasTargets,
+
+    RingBearer,
+    Commander,
+
+    /** Upstream client inner usage; not expected from the server. */
+    SystemCombined,
+
+    /** Upstream test-render usage; not expected from the server. */
+    SystemDebug,
+
+    /** An icon this build does not recognise. */
+    Unknown,
+}
 
 /**
  * What kind of object the server says a [GameCard] is.

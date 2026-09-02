@@ -29,6 +29,7 @@ import magefree.protocol.SelectPrompt
 import magefree.protocol.TargetPrompt
 import magefree.protocol.TurnPhaseCode
 import magefree.protocol.UnknownGamePrompt
+import magefree.protocol.CardIconTypeCode as CardIconTypeCodeWire
 import magefree.protocol.CommandObjectKind as CommandObjectKindCode
 import magefree.protocol.GamePrompt as GamePromptMessage
 import magefree.protocol.MageObjectTypeCode as MageObjectTypeCodeWire
@@ -244,7 +245,40 @@ internal object GameViewMapper {
             targets = targets,
             isToken = token,
             objectType = objectType.toObjectType(),
+            // The server's own `CardView.getCardIcons()`, generated from the game-aware ability set.
+            // Carried through unchanged, hint and text included: the hint is what an ability icon is
+            // *called* (shroud and hexproof share a type upstream and differ only there), and the text
+            // is where an announced X or a class level lives.
+            icons = icons.map { GameCardIcon(type = it.type.toIconType(), hint = it.hint, text = it.text) },
         )
+
+    private fun CardIconTypeCodeWire.toIconType(): CardIconType =
+        when (this) {
+            CardIconTypeCodeWire.PLAYABLE_COUNT -> CardIconType.PlayableCount
+            CardIconTypeCodeWire.ABILITY_FLYING -> CardIconType.AbilityFlying
+            CardIconTypeCodeWire.ABILITY_DEFENDER -> CardIconType.AbilityDefender
+            CardIconTypeCodeWire.ABILITY_DEATHTOUCH -> CardIconType.AbilityDeathtouch
+            CardIconTypeCodeWire.ABILITY_LIFELINK -> CardIconType.AbilityLifelink
+            CardIconTypeCodeWire.ABILITY_DOUBLE_STRIKE -> CardIconType.AbilityDoubleStrike
+            CardIconTypeCodeWire.ABILITY_FIRST_STRIKE -> CardIconType.AbilityFirstStrike
+            CardIconTypeCodeWire.ABILITY_CREW -> CardIconType.AbilityCrew
+            CardIconTypeCodeWire.ABILITY_TRAMPLE -> CardIconType.AbilityTrample
+            CardIconTypeCodeWire.ABILITY_HEXPROOF -> CardIconType.AbilityHexproof
+            CardIconTypeCodeWire.ABILITY_INFECT -> CardIconType.AbilityInfect
+            CardIconTypeCodeWire.ABILITY_INDESTRUCTIBLE -> CardIconType.AbilityIndestructible
+            CardIconTypeCodeWire.ABILITY_VIGILANCE -> CardIconType.AbilityVigilance
+            CardIconTypeCodeWire.ABILITY_CLASS_LEVEL -> CardIconType.AbilityClassLevel
+            CardIconTypeCodeWire.ABILITY_REACH -> CardIconType.AbilityReach
+            CardIconTypeCodeWire.OTHER_FACEDOWN -> CardIconType.FaceDown
+            CardIconTypeCodeWire.OTHER_COST_X -> CardIconType.OtherCostX
+            CardIconTypeCodeWire.OTHER_HAS_RESTRICTIONS -> CardIconType.HasRestrictions
+            CardIconTypeCodeWire.OTHER_HAS_TARGETS -> CardIconType.HasTargets
+            CardIconTypeCodeWire.RINGBEARER -> CardIconType.RingBearer
+            CardIconTypeCodeWire.COMMANDER -> CardIconType.Commander
+            CardIconTypeCodeWire.SYSTEM_COMBINED -> CardIconType.SystemCombined
+            CardIconTypeCodeWire.SYSTEM_DEBUG -> CardIconType.SystemDebug
+            CardIconTypeCodeWire.UNKNOWN -> CardIconType.Unknown
+        }
 
     private fun MageObjectTypeCodeWire.toObjectType(): MageObjectType =
         when (this) {

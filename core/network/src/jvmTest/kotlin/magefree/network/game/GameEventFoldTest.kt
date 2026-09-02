@@ -728,6 +728,114 @@ class GameEventFoldTest {
     }
 
     @Test
+    fun theServersCardIconsReachTheAppSchema() {
+        // A field that stops at :protocol has not reached the app. The board asks GameCard, so this is
+        // where "does it have flying" is finally answerable without the client parsing rules text.
+        val flier =
+            GamePermanentView(
+                card =
+                    GameCardView(
+                        id = "perm-1",
+                        name = "Serra Angel",
+                        creature = true,
+                        icons =
+                            listOf(
+                                magefree.protocol.GameCardIconView(
+                                    type = magefree.protocol.CardIconTypeCode.ABILITY_FLYING,
+                                    hint = "Flying",
+                                ),
+                                magefree.protocol.GameCardIconView(
+                                    type = magefree.protocol.CardIconTypeCode.OTHER_COST_X,
+                                    hint = "Announced X = 3",
+                                    text = "x=3",
+                                ),
+                            ),
+                    ),
+                controlledByViewer = true,
+            )
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 1,
+                            viewerPlayerId = "p-1",
+                            players =
+                                listOf(
+                                    GamePlayerView(
+                                        playerId = "p-1",
+                                        name = "pete",
+                                        viewer = true,
+                                        battlefield = listOf(flier),
+                                    ),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val icons =
+            folded.viewer!!
+                .battlefield
+                .single()
+                .card.icons
+        assertEquals(CardIconType.AbilityFlying, icons[0].type)
+        assertEquals("Flying", icons[0].hint)
+        // Both halves survive: the text is where the value lives, the hint is the sentence about it.
+        assertEquals(CardIconType.OtherCostX, icons[1].type)
+        assertEquals("x=3", icons[1].text)
+        assertEquals("Announced X = 3", icons[1].hint)
+    }
+
+    @Test
+    fun anIconThisBuildDoesNotRecogniseFoldsToUnknownRatherThanBeingDropped() {
+        // Losing the icon entirely would be worse than not knowing which it is: the board can still show
+        // that the server marked something, and the hint says what.
+        val folded =
+            GameEventFold.fold(
+                seed,
+                GameStarted(
+                    gameId = GAME,
+                    state =
+                        GameStateView(
+                            turn = 1,
+                            hand =
+                                listOf(
+                                    GameCardView(
+                                        id = "c-1",
+                                        name = "Thing",
+                                        icons = listOf(magefree.protocol.GameCardIconView(hint = "Menace")),
+                                    ),
+                                ),
+                        ),
+                ),
+            )!!
+
+        val icon =
+            folded.hand
+                .single()
+                .icons
+                .single()
+        assertEquals(CardIconType.Unknown, icon.type)
+        assertEquals("Menace", icon.hint)
+    }
+
+    @Test
+    fun aCardWithNoIconsFoldsToNone() {
+        // The ordinary case for a land or a vanilla creature — and never a gap for the client to fill in.
+        val folded = GameEventFold.fold(seed, GameStarted(gameId = GAME, state = view(hand = hand(1))))!!
+
+        assertTrue(
+            "no icons means the server marked nothing",
+            folded.hand
+                .single()
+                .icons
+                .isEmpty(),
+        )
+    }
+
+    @Test
     fun aCardWithNoObjectTypeFoldsToUnknownAndIsNotAToken() {
         val folded = GameEventFold.fold(seed, GameStarted(gameId = GAME, state = view(hand = hand(1))))!!
 
