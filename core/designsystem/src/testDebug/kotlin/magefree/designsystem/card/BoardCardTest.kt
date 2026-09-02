@@ -230,6 +230,39 @@ class BoardCardTest {
     }
 
     @Test
+    fun `turned attachments step sideways, so no card covers another's name`() {
+        // A stack steps perpendicular to the band it has to expose. A turned card's name and cost run
+        // down its right edge, so a second one stepping downward would cut the first name in half;
+        // stepping sideways leaves every name whole. The cost is width, and it has to be claimed.
+        composeTestRule.setContent {
+            MageTheme {
+                Box {
+                    BoardCard(
+                        state = BoardCardState(card = BEARS, attachments = listOf(EQUIPPED_TAPPED)),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(BARE),
+                    )
+                    BoardCard(
+                        state =
+                            BoardCardState(
+                                card = BEARS,
+                                attachments = listOf(EQUIPPED_TAPPED, SECOND_EQUIPPED_TAPPED),
+                            ),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(ENCHANTED),
+                    )
+                }
+            }
+        }
+
+        val one = composeTestRule.onNodeWithTag(BARE).fetchSemanticsNode().size
+        val two = composeTestRule.onNodeWithTag(ENCHANTED).fetchSemanticsNode().size
+
+        assertTrue("a second turned attachment must claim more width", two.width > one.width)
+        assertEquals("turned attachments step sideways, so they add no height", one.height, two.height)
+    }
+
+    @Test
     fun `a creature carrying one of each renders both attachments`() {
         show(BoardCardState(card = BEARS, attachments = listOf(PACIFISM, EQUIPPED_TAPPED)))
 
@@ -278,5 +311,6 @@ class BoardCardTest {
 
         /** An Equipment tapped to help pay a cost — improvise and convoke both do this. */
         val EQUIPPED_TAPPED = BoardAttachment(name = "Bonesplitter", manaCost = "1", tapped = true)
+        val SECOND_EQUIPPED_TAPPED = BoardAttachment(name = "Short Sword", manaCost = "1", tapped = true)
     }
 }

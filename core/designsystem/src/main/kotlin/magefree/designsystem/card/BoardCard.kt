@@ -273,34 +273,41 @@ fun BoardCard(
     val uprightReach = AttachmentInset * upright.size
     val hostTop = upStack
 
-    // Extents measured with the host's left edge at zero, then shifted so nothing is laid out at a
-    // negative coordinate. A turned attachment reaching left past the host is what forces this.
-    val turnedLeftMost = if (turned.isEmpty()) 0.dp else hostWidth + AttachmentBandHeight - cardHeight
-    val leftOverhang = maxOf(0.dp, -turnedLeftMost)
-    val rightMost = maxOf(hostWidth + uprightReach, hostWidth + AttachmentBandHeight * turned.size)
+    // A turned attachment lies behind the host with its left edge flush against the host's, so the
+    // host covers exactly its own width of it and the rest — the difference between a card's height
+    // and its width — stays in the open on the right. That is where its name and mana cost are: a
+    // quarter turn moves the band from the top edge to the right one.
+    //
+    // Which is also why several of them step sideways rather than downward. A stack always steps
+    // perpendicular to the band it has to expose, so that no card covers another's name: upright
+    // cards have a band across the top and step up, turned cards have one down the right and step
+    // right. The same rule, rotated with the card.
+    val turnedReach = if (turned.isEmpty()) 0.dp else cardHeight + AttachmentBandHeight * (turned.size - 1)
 
-    Box(
-        modifier = modifier.size(width = leftOverhang + rightMost, height = hostTop + hostHeight),
-    ) {
-        // Turned attachments are furthest back: the host and anything upright sits over them.
-        turned.forEachIndexed { index, attachment ->
+    val assemblyWidth = maxOf(hostWidth + uprightReach, turnedReach)
+    val assemblyHeight = hostTop + hostHeight
+
+    Box(modifier = modifier.size(width = assemblyWidth, height = assemblyHeight)) {
+        // Drawn furthest-out first, so the nearest turned card ends up on top and each one behind it
+        // shows a full-height band of its right edge.
+        turned.indices.reversed().forEach { index ->
             TurnedAttachedCard(
-                attachment = attachment,
+                attachment = turned[index],
                 width = width,
                 cardHeight = cardHeight,
-                art = attachmentArt(attachment),
+                art = attachmentArt(turned[index]),
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
                         .offset(
-                            x = leftOverhang + hostWidth + AttachmentBandHeight * (index + 1) - cardHeight,
+                            x = AttachmentBandHeight * index,
                             y = hostTop + (hostHeight - width) / 2,
                         ),
             )
         }
 
-        // Drawn back to front: the first sits highest and furthest right, and each subsequent one
-        // covers the body of the one behind it, leaving only its top band showing.
+        // Upright attachments stack the other way: up and slightly right, each leaving its top band —
+        // the part of a real card face that carries the name and cost — uncovered.
         upright.forEachIndexed { index, attachment ->
             UprightAttachedCard(
                 attachment = attachment,
@@ -311,7 +318,7 @@ fun BoardCard(
                     Modifier
                         .align(Alignment.TopStart)
                         .offset(
-                            x = leftOverhang + AttachmentInset * (upright.size - index),
+                            x = AttachmentInset * (upright.size - index),
                             y = AttachmentBandHeight * index,
                         ),
             )
@@ -325,7 +332,7 @@ fun BoardCard(
             counterPalette = counterPalette,
             art = art,
             onTap = onTap,
-            modifier = Modifier.align(Alignment.TopStart).offset(x = leftOverhang, y = hostTop),
+            modifier = Modifier.align(Alignment.TopStart).offset(x = 0.dp, y = hostTop),
         )
     }
 }
