@@ -71,7 +71,7 @@ private val TabletSimWidth = 720.dp
 fun ComponentCatalogScreen(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
-    cardArt: CardArtSlot? = null,
+    artFor: ((String) -> CardArtSlot?)? = null,
 ) {
     var darkTheme by rememberSaveable { mutableStateOf(false) }
     var wide by rememberSaveable { mutableStateOf(false) }
@@ -136,7 +136,7 @@ fun ComponentCatalogScreen(
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     ComponentCatalog(
-                        cardArt = cardArt,
+                        artFor = artFor,
                         modifier =
                             Modifier
                                 .widthIn(max = if (wide) TabletSimWidth else PhoneSimWidth)

@@ -46,11 +46,13 @@ class BoardCardTest {
     }
 
     @Test
-    fun `a card renders its name`() {
+    fun `the card face carries the name, so the tier overlays none of its own`() {
         show(BoardCardState(card = BEARS))
 
         composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Grizzly Bears").assertIsDisplayed()
+        // A real card already prints its name where a player looks for it, and an overlay covers the
+        // art it is printed on. Power and toughness are the exception, because those go stale.
+        composeTestRule.onNodeWithText("Grizzly Bears").assertDoesNotExist()
     }
 
     @Test
@@ -165,6 +167,79 @@ class BoardCardTest {
     }
 
     @Test
+    fun `a tapped attachment is turned, so it claims width instead of height`() {
+        // An Equipment tapped for improvise is still equipping. Turned a quarter turn it can only
+        // show its right edge, so it steps sideways — and being longer than the host is wide, it
+        // reaches out past both sides. The assembly has to measure itself around that, or the board
+        // draws a neighbour over it.
+        composeTestRule.setContent {
+            MageTheme {
+                Box {
+                    BoardCard(
+                        state = BoardCardState(card = BEARS),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(BARE),
+                    )
+                    BoardCard(
+                        state = BoardCardState(card = BEARS, attachments = listOf(EQUIPPED_TAPPED)),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(ENCHANTED),
+                    )
+                }
+            }
+        }
+
+        val bare = composeTestRule.onNodeWithTag(BARE).fetchSemanticsNode().size
+        val withTapped = composeTestRule.onNodeWithTag(ENCHANTED).fetchSemanticsNode().size
+
+        assertTrue(
+            "a turned attachment must widen the assembly — it sticks out past the host",
+            withTapped.width > bare.width,
+        )
+        assertEquals(
+            "a turned attachment steps sideways, so it must not add height the way an upright one does",
+            bare.height,
+            withTapped.height,
+        )
+    }
+
+    @Test
+    fun `an upright attachment claims height and a turned one claims width`() {
+        composeTestRule.setContent {
+            MageTheme {
+                Box {
+                    BoardCard(
+                        state = BoardCardState(card = BEARS, attachments = listOf(PACIFISM)),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(BARE),
+                    )
+                    BoardCard(
+                        state = BoardCardState(card = BEARS, attachments = listOf(EQUIPPED_TAPPED)),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(ENCHANTED),
+                    )
+                }
+            }
+        }
+
+        val upright = composeTestRule.onNodeWithTag(BARE).fetchSemanticsNode().size
+        val turned = composeTestRule.onNodeWithTag(ENCHANTED).fetchSemanticsNode().size
+
+        assertTrue("the upright stack is the taller one", upright.height > turned.height)
+        assertTrue("the turned stack is the wider one", turned.width > upright.width)
+    }
+
+    @Test
+    fun `a creature carrying one of each renders both attachments`() {
+        show(BoardCardState(card = BEARS, attachments = listOf(PACIFISM, EQUIPPED_TAPPED)))
+
+        assertEquals(
+            2,
+            composeTestRule.onAllNodesWithTag(BoardCardTestTags.ATTACHMENT).fetchSemanticsNodes().size,
+        )
+    }
+
+    @Test
     fun `two attachments render two bands`() {
         show(BoardCardState(card = BEARS, attachments = listOf(PACIFISM, HOLY_STRENGTH)))
 
@@ -200,5 +275,8 @@ class BoardCardTest {
         val FOREST = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")
         val PACIFISM = BoardAttachment(name = "Pacifism", manaCost = "1W")
         val HOLY_STRENGTH = BoardAttachment(name = "Holy Strength", manaCost = "W")
+
+        /** An Equipment tapped to help pay a cost — improvise and convoke both do this. */
+        val EQUIPPED_TAPPED = BoardAttachment(name = "Bonesplitter", manaCost = "1", tapped = true)
     }
 }

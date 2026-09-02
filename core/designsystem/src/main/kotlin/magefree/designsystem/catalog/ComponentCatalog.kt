@@ -62,14 +62,15 @@ import magefree.designsystem.theme.ThemePreviews
  * in a [MageTheme] (and, when hosting live, in a width-constraining container to simulate window size).
  *
  * @param modifier the [Modifier] for the scrolling gallery.
- * @param cardArt real card art for the card-forward sections. The design system carries no image
- *   dependency, so a host that wants real art supplies the slot; without one every card falls back to
- *   the built-in placeholder and the catalog still renders offline.
+ * @param artFor resolves a card name to its art. The design system carries no image dependency, so a
+ *   host that wants real art supplies this; without it every card falls back to the built-in
+ *   placeholder and the catalog still renders offline. It is a resolver rather than one slot because
+ *   the board sections show several cards at once — a creature with an Aura on it needs both faces.
  */
 @Composable
 fun ComponentCatalog(
     modifier: Modifier = Modifier,
-    cardArt: CardArtSlot? = null,
+    artFor: ((String) -> CardArtSlot?)? = null,
 ) {
     Column(
         modifier =
@@ -150,7 +151,7 @@ fun ComponentCatalog(
         }
 
         CatalogSection(title = "Board card tier") {
-            BoardCardGallery(art = cardArt)
+            BoardCardGallery(artFor = artFor)
         }
 
         CatalogSection(title = "Card tile") {

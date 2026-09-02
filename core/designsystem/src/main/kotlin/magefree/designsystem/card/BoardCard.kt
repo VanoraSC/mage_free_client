@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,10 +48,18 @@ data class BoardCounter(
     val count: Int,
 )
 
-/** A permanent attached to this one — an Aura, an Equipment, a Fortification. */
+/**
+ * A permanent attached to this one — an Aura, an Equipment, a Fortification.
+ *
+ * It carries its own [tapped] state because it is its own permanent and can be tapped independently
+ * of what it is attached to: improvise and convoke tap artifacts and creatures to help pay a cost, and
+ * an equipped Sword tapped that way is still equipping. A stack that drew every attachment upright
+ * would be misreporting the board.
+ */
 data class BoardAttachment(
     val name: String,
     val manaCost: String? = null,
+    val tapped: Boolean = false,
 )
 
 /**
@@ -231,7 +240,11 @@ data class BoardCardState(
  * @param focus what the board is currently about, which decides which signal is emphasised.
  * @param counterPalette the colour allocator, so a counter kind keeps its colour for the whole game.
  * @param modifier the [Modifier] for the whole assembly.
- * @param art the card-art slot; the built-in placeholder is used when none is supplied.
+ * @param art the card-art slot for the permanent itself. This is the **whole card face**, not a crop
+ *   of its art box: a real card already prints its name and mana cost where a player looks for them.
+ *   The built-in placeholder is used when none is supplied.
+ * @param attachmentArt resolves the art for each attached card, which is what makes the stack readable
+ *   — the exposed band of a real card face is where its name and cost are printed.
  * @param onTap invoked when the card is tapped; null makes the card non-interactive.
  */
 @Composable
@@ -242,28 +255,63 @@ fun BoardCard(
     focus: BoardFocus = BoardFocus.Quiet,
     counterPalette: CounterPalette = rememberCounterPalette(),
     art: CardArtSlot? = null,
+    attachmentArt: (BoardAttachment) -> CardArtSlot? = { null },
     onTap: (() -> Unit)? = null,
 ) {
     val cardHeight = width / CARD_ASPECT_RATIO
     val hostWidth = if (state.tapped) cardHeight else width
     val hostHeight = if (state.tapped) width else cardHeight
 
-    // Attachments sit behind and above, so the assembly is taller and a little wider than the card.
-    val stackHeight = AttachmentBandHeight * state.attachments.size
-    val stackWidth = AttachmentInset * state.attachments.size
+    // An untapped attachment slides upward behind the host and shows its top band. A tapped one is
+    // turned a quarter turn, so the band it can show is its right edge — it slides sideways instead,
+    // and it is longer than the host is wide, so it sticks out on both sides exactly as a sideways
+    // card under an upright one does on a table.
+    val upright = state.attachments.filter { !it.tapped }
+    val turned = state.attachments.filter { it.tapped }
+
+    val upStack = AttachmentBandHeight * upright.size
+    val uprightReach = AttachmentInset * upright.size
+    val hostTop = upStack
+
+    // Extents measured with the host's left edge at zero, then shifted so nothing is laid out at a
+    // negative coordinate. A turned attachment reaching left past the host is what forces this.
+    val turnedLeftMost = if (turned.isEmpty()) 0.dp else hostWidth + AttachmentBandHeight - cardHeight
+    val leftOverhang = maxOf(0.dp, -turnedLeftMost)
+    val rightMost = maxOf(hostWidth + uprightReach, hostWidth + AttachmentBandHeight * turned.size)
 
     Box(
-        modifier = modifier.size(width = hostWidth + stackWidth, height = hostHeight + stackHeight),
+        modifier = modifier.size(width = leftOverhang + rightMost, height = hostTop + hostHeight),
     ) {
-        state.attachments.forEachIndexed { index, attachment ->
-            AttachmentBand(
+        // Turned attachments are furthest back: the host and anything upright sits over them.
+        turned.forEachIndexed { index, attachment ->
+            TurnedAttachedCard(
                 attachment = attachment,
                 width = width,
+                cardHeight = cardHeight,
+                art = attachmentArt(attachment),
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
                         .offset(
-                            x = AttachmentInset * (state.attachments.size - index),
+                            x = leftOverhang + hostWidth + AttachmentBandHeight * (index + 1) - cardHeight,
+                            y = hostTop + (hostHeight - width) / 2,
+                        ),
+            )
+        }
+
+        // Drawn back to front: the first sits highest and furthest right, and each subsequent one
+        // covers the body of the one behind it, leaving only its top band showing.
+        upright.forEachIndexed { index, attachment ->
+            UprightAttachedCard(
+                attachment = attachment,
+                width = width,
+                cardHeight = cardHeight,
+                art = attachmentArt(attachment),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .offset(
+                            x = leftOverhang + AttachmentInset * (upright.size - index),
                             y = AttachmentBandHeight * index,
                         ),
             )
@@ -277,7 +325,7 @@ fun BoardCard(
             counterPalette = counterPalette,
             art = art,
             onTap = onTap,
-            modifier = Modifier.align(Alignment.BottomStart),
+            modifier = Modifier.align(Alignment.TopStart).offset(x = leftOverhang, y = hostTop),
         )
     }
 }
@@ -320,23 +368,11 @@ private fun HostCard(
                     .let { base -> if (onTap != null) base.cardInspectable(onTap = onTap) else base }
                     .testTag(BoardCardTestTags.CARD),
         ) {
+            // The whole card face, not a crop of its art box. A real card already carries its name and
+            // mana cost in the places a player looks for them, so overlaying our own is redundant —
+            // and an overlay is strictly worse, because it covers the art it is printed on. Power and
+            // toughness are different: they change during a game, and the printed pair goes stale.
             CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
-
-            // The name sits on its own band rather than directly on art: art is arbitrary, and a name
-            // that is only sometimes readable is worse than one that always is.
-            Text(
-                text = state.card.name,
-                style = BoardTypography.cardName,
-                color = BoardSurface.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier =
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .fillMaxWidth()
-                        .background(BoardSurface.zone.copy(alpha = BAND_OPACITY))
-                        .padding(horizontal = BoardCardPadding),
-            )
 
             if (state.counters.isNotEmpty()) {
                 Row(
@@ -454,42 +490,107 @@ private fun BadgeSquare(badge: BoardBadge) {
 }
 
 /**
- * The exposed band of one attached permanent: its name and mana cost, which is the whole point of
- * offsetting the stack vertically rather than only sideways.
+ * One attached permanent, rendered as a whole card behind the host.
+ *
+ * It is a full-size card rather than a label because that is what it is — an Aura is a permanent, and
+ * drawing it as a strip makes it read as an annotation on the creature instead of a card in play. Only
+ * its top band is left uncovered, and on a real card face that band is exactly where the name and mana
+ * cost are printed, so the stack becomes readable without anything being overlaid on it.
+ *
+ * With no art there is nothing in that band to read, so the name and cost are drawn instead. That is
+ * the degraded path, not the intended one.
  */
 @Composable
-private fun AttachmentBand(
+private fun UprightAttachedCard(
     attachment: BoardAttachment,
     width: Dp,
+    cardHeight: Dp,
+    art: CardArtSlot?,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    AttachedCardFace(
+        attachment = attachment,
+        art = art,
+        modifier = modifier.size(width = width, height = cardHeight),
+    )
+}
+
+/**
+ * A tapped attached permanent: the same card, turned a quarter turn.
+ *
+ * Turning it moves the band it can show from its top edge to its right edge, so the stack that would
+ * step upward steps sideways instead. It is longer than the host is wide, so it reaches out past both
+ * sides — which is what a sideways card slid under an upright one looks like, and why the assembly
+ * measures itself around it rather than letting it overhang into a neighbour.
+ */
+@Composable
+private fun TurnedAttachedCard(
+    attachment: BoardAttachment,
+    width: Dp,
+    cardHeight: Dp,
+    art: CardArtSlot?,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.size(width = cardHeight, height = width),
+        contentAlignment = Alignment.Center,
+    ) {
+        AttachedCardFace(
+            attachment = attachment,
+            art = art,
+            modifier =
+                Modifier
+                    .size(width = width, height = cardHeight)
+                    .graphicsLayer { rotationZ = TAPPED_ROTATION_DEGREES },
+        )
+    }
+}
+
+/** The face of an attached card, upright in its own coordinates. */
+@Composable
+private fun AttachedCardFace(
+    attachment: BoardAttachment,
+    art: CardArtSlot?,
+    modifier: Modifier = Modifier,
+) {
+    Box(
         modifier =
             modifier
-                .size(width = width, height = AttachmentBandHeight)
                 .clip(BoardCardShape)
-                .background(BoardSurface.cardRaised)
+                .background(BoardSurface.card)
                 .border(width = 1.dp, color = BoardSurface.zoneRaised, shape = BoardCardShape)
-                .padding(horizontal = BoardCardPadding)
                 .testTag(BoardCardTestTags.ATTACHMENT),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = attachment.name,
-            style = BoardTypography.cardName,
-            color = BoardSurface.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        attachment.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
-            Text(
-                text = cost,
-                style = BoardTypography.counter,
-                color = BoardSurface.onSurfaceMuted,
-                maxLines = 1,
-            )
+        if (art != null) {
+            art(Modifier.fillMaxSize())
+        } else {
+            Row(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                        .height(AttachmentBandHeight)
+                        .padding(horizontal = BoardCardPadding),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = attachment.name,
+                    style = BoardTypography.cardName,
+                    color = BoardSurface.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                attachment.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
+                    Text(
+                        text = cost,
+                        style = BoardTypography.counter,
+                        color = BoardSurface.onSurfaceMuted,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }

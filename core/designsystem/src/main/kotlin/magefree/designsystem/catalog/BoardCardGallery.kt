@@ -48,9 +48,12 @@ import magefree.designsystem.theme.Spacing
 @Composable
 internal fun BoardCardGallery(
     modifier: Modifier = Modifier,
-    art: CardArtSlot? = null,
+    artFor: ((String) -> CardArtSlot?)? = null,
 ) {
     val palette = rememberCounterPalette()
+    val art = artFor?.invoke(BEARS.name)
+    val forestArt = artFor?.invoke(FOREST.name)
+    val attachmentArt: (BoardAttachment) -> CardArtSlot? = { attachment -> artFor?.invoke(attachment.name) }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.medium)) {
         GalleryCaption("Resting, tapped, counters, and a land with no stats")
@@ -99,7 +102,7 @@ internal fun BoardCardGallery(
             LabelledCard(
                 label = "no stats",
                 state = BoardCardState(card = FOREST),
-                art = art,
+                art = forestArt,
                 palette = palette,
             )
         }
@@ -151,6 +154,7 @@ internal fun BoardCardGallery(
                 label = "one aura",
                 state = BoardCardState(card = BEARS, power = "2", toughness = "2", attachments = listOf(PACIFISM)),
                 art = art,
+                attachmentArt = attachmentArt,
                 palette = palette,
             )
             LabelledCard(
@@ -163,10 +167,11 @@ internal fun BoardCardGallery(
                         attachments = listOf(PACIFISM, HOLY_STRENGTH),
                     ),
                 art = art,
+                attachmentArt = attachmentArt,
                 palette = palette,
             )
             LabelledCard(
-                label = "attached + tapped",
+                label = "host tapped",
                 state =
                     BoardCardState(
                         card = BEARS,
@@ -176,6 +181,53 @@ internal fun BoardCardGallery(
                         attachments = listOf(PACIFISM),
                     ),
                 art = art,
+                attachmentArt = attachmentArt,
+                palette = palette,
+            )
+        }
+
+        GalleryCaption(
+            "An attachment has its own tap state — improvise taps an Equipment that is still equipping. " +
+                "Turned, it can only show its right edge, so it steps sideways",
+        )
+        BoardRow {
+            LabelledCard(
+                label = "equipment tapped",
+                state =
+                    BoardCardState(
+                        card = BEARS,
+                        power = "4",
+                        toughness = "2",
+                        attachments = listOf(BONESPLITTER_TAPPED),
+                    ),
+                art = art,
+                attachmentArt = attachmentArt,
+                palette = palette,
+            )
+            LabelledCard(
+                label = "equipment untapped",
+                state =
+                    BoardCardState(
+                        card = BEARS,
+                        power = "4",
+                        toughness = "2",
+                        attachments = listOf(BONESPLITTER),
+                    ),
+                art = art,
+                attachmentArt = attachmentArt,
+                palette = palette,
+            )
+            LabelledCard(
+                label = "one of each",
+                state =
+                    BoardCardState(
+                        card = BEARS,
+                        power = "4",
+                        toughness = "2",
+                        attachments = listOf(PACIFISM, BONESPLITTER_TAPPED),
+                    ),
+                art = art,
+                attachmentArt = attachmentArt,
                 palette = palette,
             )
         }
@@ -247,6 +299,7 @@ private fun LabelledCard(
     palette: CounterPalette,
     focus: BoardFocus = BoardFocus.Quiet,
     art: CardArtSlot? = null,
+    attachmentArt: (BoardAttachment) -> CardArtSlot? = { null },
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -258,6 +311,7 @@ private fun LabelledCard(
             focus = focus,
             counterPalette = palette,
             art = art,
+            attachmentArt = attachmentArt,
         )
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = BoardSurface.onSurfaceMuted)
     }
@@ -276,3 +330,5 @@ private val BEARS = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLin
 private val FOREST = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")
 private val PACIFISM = BoardAttachment(name = "Pacifism", manaCost = "1W")
 private val HOLY_STRENGTH = BoardAttachment(name = "Holy Strength", manaCost = "W")
+private val BONESPLITTER = BoardAttachment(name = "Bonesplitter", manaCost = "1")
+private val BONESPLITTER_TAPPED = BONESPLITTER.copy(tapped = true)
