@@ -166,6 +166,22 @@ class BoardSequencerTest {
     }
 
     @Test
+    fun `what is left to show is reported as it changes`() {
+        // A board that wants to say how far behind it is has to be able to watch this. It was plain
+        // state to begin with, which meant a status line read it once and then sat there being wrong —
+        // and a drain that worked perfectly looked like a button that did nothing.
+        val sequencer = BoardSequencer(initial = snapshot())
+        assertEquals(0, sequencer.remainingChanges)
+
+        sequencer.onSnapshot(snapshot(*tokens(3)))
+        assertEquals(3, sequencer.remainingChanges)
+
+        sequencer.advanceToIdle()
+        assertEquals("nothing left once the board has caught up", 0, sequencer.remainingChanges)
+        assertTrue(sequencer.isIdle)
+    }
+
+    @Test
     fun `a resync snaps, and replays nothing`() {
         val sequencer = BoardSequencer(initial = snapshot(bear(HAND)))
         sequencer.onSnapshot(snapshot(bear(BATTLEFIELD), wolf(BATTLEFIELD)))

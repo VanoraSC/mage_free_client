@@ -1,6 +1,8 @@
 package magefree.designsystem.board
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
@@ -51,8 +53,12 @@ class BoardSequencer(
 
     private val queue = ArrayDeque<ScheduledChange>()
     private val running = mutableListOf<ScheduledChange>()
-    private var nowMillis = 0L
-    private var busyUntilMillis = 0L
+
+    // Snapshot-backed, because they change while a running order plays and a board that wants to show
+    // how far behind it is has to be able to observe them. A plain field would be read once and then
+    // sit there being wrong, which is worse than not offering the number at all.
+    private var nowMillis by mutableLongStateOf(0L)
+    private var busyUntilMillis by mutableLongStateOf(0L)
 
     /** The changes that have not started yet, in the order they will. */
     val pending: List<ScheduledChange> get() = queue.toList()
@@ -68,6 +74,10 @@ class BoardSequencer(
      * awake for a board that has been still for ten minutes. It watches this instead, and stops.
      */
     var isPlaying: Boolean by mutableStateOf(false)
+        private set
+
+    /** How many changes are still to be shown, waiting or moving. Snapshot-backed, for the same reason. */
+    var remainingChanges: Int by mutableIntStateOf(0)
         private set
 
     /** Whether the board has caught up: nothing waiting, nothing still moving. */
@@ -111,6 +121,7 @@ class BoardSequencer(
      */
     fun onPrompt() {
         compressTo(PROMPT_DRAIN_MILLIS)
+        markPlaying()
     }
 
     /**
@@ -165,7 +176,8 @@ class BoardSequencer(
     }
 
     private fun markPlaying() {
-        isPlaying = queue.isNotEmpty() || running.isNotEmpty()
+        remainingChanges = queue.size + running.size
+        isPlaying = remainingChanges > 0
     }
 
     /**

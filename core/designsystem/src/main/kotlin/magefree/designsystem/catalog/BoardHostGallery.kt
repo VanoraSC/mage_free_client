@@ -51,8 +51,9 @@ import magefree.designsystem.theme.Spacing
  *   is the lag made legible: while a sequence plays, the board is deliberately behind the server.
  * - **A prompt drains.** Press *Ask me something* while the chain is playing. The rest of it goes past
  *   quickly rather than being cut off or waited out, because nobody should answer on a stale board.
- * - **A resync snaps.** *Reconnect* jumps to the end state with nothing replayed. It should look like
- *   arriving, not like a rewind.
+ * - **A resync snaps.** Press *Reconnect* while a sequence is playing: the board arrives at the state
+ *   the server is already in, with the rest of the running order discarded rather than replayed. Press
+ *   it on a still board and nothing happens, which is correct — there was nothing to catch up on.
  */
 
 /**
@@ -85,12 +86,22 @@ fun BoardHostGallery(
                     }
                 },
             )
-            MageSecondaryButton(text = "Ask me something", onClick = { sequencer.onPrompt() })
+            // Disabled while the board is still, because that is when it genuinely does nothing: there
+            // is no running order left to drain. A button that silently no-ops is indistinguishable
+            // from one that is broken, which is how this read the first time it was tried.
+            MageSecondaryButton(
+                text = "Ask me something",
+                onClick = { sequencer.onPrompt() },
+                enabled = !sequencer.isIdle,
+            )
             MageSecondaryButton(
                 text = "Reconnect",
                 onClick = {
-                    sequencer.onResync(Ending)
-                    step = Script.size
+                    // The server's own current state, which is what a reconnect actually delivers.
+                    // Not the end of the script: jumping the board somewhere the game has not reached
+                    // would be demonstrating the opposite of the rule, since the point of a resync is
+                    // that it shows you where things stand and narrates nothing on the way.
+                    sequencer.onResync(sequencer.latest)
                 },
             )
         }
@@ -100,8 +111,8 @@ fun BoardHostGallery(
                 if (sequencer.isIdle) {
                     "The board is showing the server's own state."
                 } else {
-                    "The board is ${sequencer.backlogMillis} ms behind the server, playing " +
-                        "${sequencer.pending.size + sequencer.active.size} more changes."
+                    "The board is ${sequencer.backlogMillis} ms behind the server, with " +
+                        "${sequencer.remainingChanges} more changes to show."
                 },
             style = MaterialTheme.typography.labelMedium,
         )
