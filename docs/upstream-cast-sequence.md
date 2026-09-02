@@ -149,17 +149,46 @@ exists to catch before it reaches a live game.
 ### 2.5 What cancelling costs
 
 Cancelling is offered at target selection (`canCancel`, `AbilityImpl.java:421`) and at every mana
-prompt (§2.2). Either one makes `activate` return `false`, and `PlayerImpl.playAbility` then rolls the
-game back to a bookmark taken before the cast (`PlayerImpl.java:1364`, restored at `:1421`).
+prompt (§2.2). Either one makes `activate` return `false`, and `PlayerImpl.cast` then rolls the game
+back to a bookmark taken before the cast (`PlayerImpl.java:1364`, restored at `:1421`).
 
-But the rollback is not total. Upstream's own comment on the line that takes the bookmark
-(`PlayerImpl.java:1365`):
+**In the ordinary case the rollback works and cancelling is clean.** The bookmark is taken before
+`card.cast(...)`, and every land tapped during payment happens after it, so `restoreState` puts those
+taps and that mana back. A player who taps two lands and then cancels gets both lands untapped. This
+is the case to design for.
+
+There are two established exceptions, and they are different from each other.
+
+**Mana floated *before* the cast started is outside the window.** The line that takes the bookmark
+also moves the player's *undo* bookmark forward to it (`PlayerImpl.java:1365`), with upstream's own
+comment:
 
 > move global bookmark to current state (if you activated mana before then you can't rollback it)
 
-**Mana already produced is not rolled back.** A player who taps two lands and then cancels has two
-tapped lands and floating mana. Any UI that presents cancelling as free is lying, and any playback
-that bails out mid-payment leaves the game in that state.
+So mana the player put in their pool before clicking the spell is not returned by cancelling the
+spell. That mana stays floating.
+
+**A mana source that cannot be undone removes the cast's own bookmark.** `playManaAbility`
+(`PlayerImpl.java:1565`) calls `resetStoredBookmark(game)` when the ability reports
+`isUndoPossible() == false` (`:1578`), and `resetStoredBookmark` calls `game.removeBookmark` on the
+stored bookmark — which during a cast *is* the cast's bookmark (`:4879`). `GameImpl.restoreState` then
+has an explicit failure path that logs *"It was not possible to do the requested undo operation"* and
+changes nothing (`GameImpl.java:1004`).
+
+`undoPossible` defaults to true and is set false by only a handful of cards, all of which reveal
+information — `Astrolabe`, `Barbed Sextant`, `Brass Infiniscope`, `Charmed Pendant`, and Drain Power's
+effect. So the case is rare, but it is reachable with a real card.
+
+**What was not established:** whether that failure path is actually reached in practice.
+`restoreState` tests `savedStates.contains(bookmark - 1)` — a *value* check on a `Stack<Integer>` of
+state indices — and then reads `savedStates.get(bookmark - 1)`, an *index* lookup, on the next line
+(`GameImpl.java:1002` and `:1008`). Those two lines do not agree with each other, and reasoning
+further from them would be guessing. **This is a thing to test, not to conclude.**
+
+**What this means:** a bail-out is not automatically dirty, as an earlier draft of this document
+claimed. It is clean for ordinary lands, it leaves pre-floated mana behind, and it has a rare path
+where the rollback may not happen at all. 0102's bail-out test should pin all three rather than assume
+any of them.
 
 ### 2.6 The one relevant user option
 

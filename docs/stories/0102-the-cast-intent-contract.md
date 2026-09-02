@@ -35,10 +35,13 @@ because it is no longer the thing being asked.
 - **Special mana payment is one-way.** Once convoke or improvise is used, normal mana abilities are
   locked out for the rest of that cast, and upstream's own remedy is "cancel and recast" (§2.4). An
   intent that mixes them in the wrong order is unplayable, and that must be caught before it is sent.
-- **Bailing out is not free.** Cancelling rolls the game back to a bookmark, but mana already produced
-  is explicitly excluded — upstream's own comment says so (§2.5). A bail-out therefore has a defined
-  end state: tapped permanents stay tapped and floating mana stays floating. That is the assertion the
-  bail-out test makes.
+- **Bailing out is mostly clean, and the exceptions are the interesting part.** Cancelling rolls the
+  game back to a bookmark taken before the cast, so lands tapped *during* payment are untapped again
+  (§2.5). But mana floated *before* the cast started is outside that window and stays floating, and a
+  mana source that reports itself as not undoable removes the cast's own bookmark, after which
+  `restoreState` has an explicit path that logs a failure and changes nothing. Whether that last path
+  is actually reached could not be established from the source — the two lines that decide it disagree
+  with each other — so **it is something for this story to test rather than assume**.
 
 **`PlayXManaPrompt` is dead.** `GAME_PLAY_XMANA` is declared, implemented and wired upstream, and
 nothing calls it (§2.1). Whatever handles X handles `GetAmountPrompt`.
@@ -103,9 +106,11 @@ player can carry on from. It is tested first and hardest.
 - **Unit (the bridge player, hermetic):** every prompt in the trace is answered from the right field;
   an intent that uses a special mana action after a land is rejected with its reason.
 - **Live against the reference server (standard 5):** a plain creature; a spell with X; a spell with a
-  target; a spell with an optional additional cost. Then **the bail-out**: an intent that runs out of
-  answers mid-payment, asserting the game is left with the taps and floating mana the trace says it
-  will be, and that the session is still usable afterwards.
+  target; a spell with an optional additional cost. Then **the bail-out**, in three parts: an intent that runs
+  out of answers mid-payment over ordinary lands leaves them untapped again; mana floated before the
+  cast began is still floating afterwards; and a non-undoable mana source (Astrolabe or Barbed
+  Sextant) pins whatever actually happens when the rollback bookmark has been removed. The session
+  must still be usable in every case.
 - **Disconnect mid-playback**, against 0074.
 - No eyes-on: this story renders nothing.
 
@@ -114,7 +119,8 @@ player can carry on from. It is tested first and hardest.
 - [ ] `CastIntent` crosses `:protocol` with one field per prompt the trace records.
 - [ ] The bridge replays an intent in engine order regardless of the order it was recorded in.
 - [ ] An intent that violates the special-mana ordering rule is rejected before anything is submitted.
-- [ ] The bail-out path has a defined end state, asserted against a live server.
+- [ ] The bail-out path has an end state asserted against a live server for all three cases: ordinary
+      lands, mana floated beforehand, and a mana source that reports itself as not undoable.
 - [ ] Disconnect mid-playback is defined against 0074.
 - [ ] `./gradlew check` passes, and `:bridge` passes in the container.
 
