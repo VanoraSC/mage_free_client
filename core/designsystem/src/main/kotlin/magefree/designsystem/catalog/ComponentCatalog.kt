@@ -162,6 +162,10 @@ fun ComponentCatalog(
             BoardHostGallery(artFor = artFor)
         }
 
+        CatalogSection(title = "Board inspect view") {
+            BoardInspectGallery(artFor = artFor)
+        }
+
         CatalogSection(title = "Card tile") {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.medium)) {
                 CardTile(
