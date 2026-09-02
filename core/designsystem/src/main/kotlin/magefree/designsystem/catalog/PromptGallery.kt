@@ -37,7 +37,7 @@ internal fun PromptGallery(modifier: Modifier = Modifier) {
         GalleryNote("Idle — quiet, but never empty: the phase and whose priority it is")
         OverBoard {
             Prompt(
-                state = PromptState.Idle(phase = "Main phase 1", priority = "Your priority"),
+                state = PromptState.Idle(turn = "Your turn", phase = "Main phase 1", priority = "Your priority"),
                 onAction = {},
             )
         }

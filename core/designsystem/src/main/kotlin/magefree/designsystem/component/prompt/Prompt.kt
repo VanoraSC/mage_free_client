@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,12 +89,18 @@ data class PromptAction(
  */
 sealed interface PromptState {
     /**
-     * Nothing is being asked. Carries the two facts a player checks constantly.
+     * Nothing is being asked. Carries the facts a player checks constantly.
      *
-     * @param phase where in the turn we are.
+     * **Turn and priority are separate questions**, and conflating them loses the case that matters:
+     * on an opponent's turn you can still hold priority, and what you may do depends on the second
+     * while what is about to happen depends on the first.
+     *
+     * @param turn whose turn it is.
+     * @param phase where in that turn we are.
      * @param priority whose priority it is, or null when that is not meaningful yet.
      */
     data class Idle(
+        val turn: String,
         val phase: String,
         val priority: String? = null,
     ) : PromptState
@@ -160,7 +170,12 @@ fun Prompt(
     }
 }
 
-/** Quiet, and never empty: the phase and whose priority it is. */
+/**
+ * Quiet, and never empty: whose turn it is, where in that turn we are, and who holds priority.
+ *
+ * Nothing here elides. Idle carries no size budget — it is a line of short facts — so truncating it
+ * would only ever hide something the player came to read.
+ */
 @Composable
 private fun IdlePrompt(state: PromptState.Idle) {
     Row(
@@ -175,23 +190,26 @@ private fun IdlePrompt(state: PromptState.Idle) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = state.phase,
+            text = idleSummary(state),
             style = BoardTypography.promptBody,
             color = BoardSurface.onSurfaceMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.weight(1f),
         )
-        state.priority?.let { priority ->
-            Text(
-                text = priority,
-                style = BoardTypography.promptBody,
-                color = BoardSurface.onSurfaceMuted,
-                maxLines = 1,
-            )
-        }
     }
 }
+
+/**
+ * The Idle line: turn, phase and priority, in that order, skipping anything the board did not supply.
+ *
+ * Pure so the ordering is testable without rendering. Turn comes first because it frames the other
+ * two — "Main phase 1" means something different on your turn than on theirs.
+ */
+internal fun idleSummary(state: PromptState.Idle): String =
+    listOfNotNull(
+        state.turn.takeIf { it.isNotBlank() },
+        state.phase.takeIf { it.isNotBlank() },
+        state.priority?.takeIf { it.isNotBlank() },
+    ).joinToString(IDLE_SEPARATOR)
 
 /** Loud, because a decision is wanted and it can be answered right here. */
 @Composable
@@ -233,11 +251,18 @@ private fun BoardInteractivePrompt(
     state: PromptState.BoardInteractive,
     onAction: (PromptAction) -> Unit,
 ) {
+    // Reset whenever the question changes: an expansion the player opened for one prompt should not
+    // still be open for the next.
+    var expanded by remember(state.headline, state.progress) { mutableStateOf(false) }
+
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .heightIn(max = BoardInteractiveMaxHeight)
+                // The budget binds the resting state only. Expanding is something the player asked
+                // for, and covering the board is a fair price for reading the question they are being
+                // asked — the promise is that it never happens without them.
+                .then(if (expanded) Modifier else Modifier.heightIn(max = BoardInteractiveMaxHeight))
                 .clip(PromptShape)
                 .background(BoardSurface.floating)
                 .padding(horizontal = PromptPadding, vertical = IdleVerticalPadding)
@@ -250,7 +275,7 @@ private fun BoardInteractivePrompt(
                 text = state.headline,
                 style = BoardTypography.promptBody,
                 color = BoardSurface.onSurface,
-                maxLines = 1,
+                maxLines = if (expanded) Int.MAX_VALUE else 1,
                 overflow = TextOverflow.Ellipsis,
             )
             state.progress?.let { progress ->
@@ -258,12 +283,32 @@ private fun BoardInteractivePrompt(
                     text = progress,
                     style = BoardTypography.counter,
                     color = BoardSignal.targeting,
-                    maxLines = 1,
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.testTag(PromptTestTags.PROGRESS),
                 )
             }
         }
+
+        // Always offered, never conditional on whether the text happens to be overflowing right now.
+        //
+        // Measuring that was the first attempt and it is the wrong shape: the answer depends on the
+        // width the board hands the Prompt and on the exact wording the server sent, so the control
+        // would appear and vanish for reasons the player cannot predict. A control that is always
+        // there is one they can learn. It also means the promise — the resting state fits its budget,
+        // and only a deliberate tap grows it — holds for reasons that do not depend on text metrics.
+        //
+        // The affordance is a sibling of the text rather than inside it: placed within the capped
+        // column it competed for room with the very text it exists to reveal, and lost.
+        Text(
+            text = if (expanded) EXPAND_LESS_LABEL else EXPAND_MORE_LABEL,
+            style = BoardTypography.counter,
+            color = BoardSignal.playable,
+            modifier =
+                Modifier
+                    .clickable { expanded = !expanded }
+                    .testTag(PromptTestTags.EXPAND),
+        )
         state.actions.forEach { action ->
             PromptButton(action = action, onAction = onAction, compact = true)
         }
@@ -336,6 +381,7 @@ object PromptTestTags {
     const val ASKING: String = "prompt-asking"
     const val BOARD_INTERACTIVE: String = "prompt-board-interactive"
     const val PROGRESS: String = "prompt-progress"
+    const val EXPAND: String = "prompt-expand"
 }
 
 /**
@@ -349,6 +395,13 @@ val BoardInteractiveMaxHeight: Dp = 56.dp
 
 /** How present the Idle state is: legible, but not competing with a board that is being read. */
 private const val IDLE_OPACITY = 0.72f
+
+/** What the affordance says when text is hidden, and when it is not. */
+private const val EXPAND_MORE_LABEL = "more"
+private const val EXPAND_LESS_LABEL = "less"
+
+/** Separates the Idle facts. */
+private const val IDLE_SEPARATOR = " · "
 
 private val PromptShape = RoundedCornerShape(6.dp)
 private val PromptPadding = 8.dp
