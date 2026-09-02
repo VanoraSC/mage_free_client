@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -367,7 +368,10 @@ private fun HostCard(
         Box(
             modifier =
                 Modifier
-                    .size(width = width, height = cardHeight)
+                    // requiredSize for the same reason a turned attachment needs it: when tapped, this
+                    // sits in a landscape box shorter than the card, and a plain size would be clamped
+                    // to it — cropping the card before the rotation could turn it.
+                    .requiredSize(width = width, height = cardHeight)
                     .graphicsLayer { rotationZ = if (state.tapped) TAPPED_ROTATION_DEGREES else 0f }
                     .clip(BoardCardShape)
                     .background(BoardSurface.card)
@@ -545,9 +549,13 @@ private fun TurnedAttachedCard(
         AttachedCardFace(
             attachment = attachment,
             art = art,
+            // requiredSize, not size: the card is taller than this landscape box, and a plain size
+            // would be clamped by the box's constraints — squashing the card to a square before the
+            // rotation ever happened, which cropped the art. The card keeps its own dimensions and
+            // the rotation is what makes it fit.
             modifier =
                 Modifier
-                    .size(width = width, height = cardHeight)
+                    .requiredSize(width = width, height = cardHeight)
                     .graphicsLayer { rotationZ = TAPPED_ROTATION_DEGREES },
         )
     }

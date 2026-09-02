@@ -72,6 +72,32 @@ class BoardCardTest {
     }
 
     @Test
+    fun `a tapped card keeps its card proportions rather than being squashed to fit`() {
+        // The bug this exists for: the rotated card sits in a landscape box shorter than the card, and
+        // a plain size modifier is clamped by the parent's constraints — so the card was measured as a
+        // square and its art cropped, before the rotation ever turned it. Rotation must move the card,
+        // not resize it, and only the card's own measured size can show that.
+        show(BoardCardState(card = BEARS, tapped = true))
+
+        val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
+        assertTrue(
+            "a tapped card measured ${face.width}x${face.height}, which is not a card shape",
+            face.height > face.width,
+        )
+    }
+
+    @Test
+    fun `a turned attachment keeps its card proportions too`() {
+        show(BoardCardState(card = BEARS, attachments = listOf(EQUIPPED_TAPPED)))
+
+        val face = composeTestRule.onNodeWithTag(BoardCardTestTags.ATTACHMENT).fetchSemanticsNode().size
+        assertTrue(
+            "a turned attachment measured ${face.width}x${face.height}, so its art is cropped",
+            face.height > face.width,
+        )
+    }
+
+    @Test
     fun `counters render on the face carrying only their count`() {
         show(BoardCardState(card = BEARS, counters = listOf(BoardCounter("+1/+1", 7))))
 
