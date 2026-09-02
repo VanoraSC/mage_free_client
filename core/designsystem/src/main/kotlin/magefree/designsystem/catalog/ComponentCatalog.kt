@@ -150,6 +150,10 @@ fun ComponentCatalog(
             BoardTokenGallery()
         }
 
+        CatalogSection(title = "Prompt") {
+            PromptGallery()
+        }
+
         CatalogSection(title = "Board card tier") {
             BoardCardGallery(artFor = artFor)
         }

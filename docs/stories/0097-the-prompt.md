@@ -41,10 +41,15 @@ portrait. The position the Prompt takes is a real design decision, not a detail.
 **In scope**
 - The Prompt component with the three states, rendered from a presentation model.
 - Transitions between the states, using 0095's motion tokens.
-- Server wording shown as the server wrote it, with markup stripped.
+- Server wording shown as the server wrote it. Stripping its markup stays with the translation that
+  builds the presentation model — `stripServerMarkup` already does it, and a design-system component
+  that knew about server markup would be reaching past its own boundary.
 - Server-supplied button labels preferred over hard-coded ones wherever they are present.
 - Progress in the board-interactive state ("2 of 3 targets").
 - A catalog entry covering all three states, including a long question and a long label.
+- **The phase bar** (§3.1 P0 #11): the turn as a row of steps, the current one marked, coloured by
+  whose turn it is, and each step the server accepts a stop for toggleable. Appearance only — it renders
+  a presentation model and is not wired to a game, like everything else in Phase 1.
 
 **Out of scope**
 - Wiring the Prompt to a live game. It is built and tested standalone here; the new board mounts it.
@@ -92,7 +97,7 @@ cancel is available rather than the component assuming it.
   size budget must fail against a full-height rendering, then pass.
 - **Hermetic Compose (`src/testDebug`):** each state renders its required content; the
   board-interactive state stays within its budget and shows progress; server-supplied labels win over
-  defaults; markup is stripped from the question; Cancel is absent when cancelling is not available.
+  defaults; Cancel is absent when cancelling is not available.
 - **The old board is untouched**, asserted by its existing tests passing unedited.
 - **Eyes-on:** the catalog in landscape — is the Asking state reachable by thumb, and does the
   board-interactive state leave the board usable.
@@ -101,7 +106,7 @@ cancel is available rather than the component assuming it.
 
 - [ ] One Prompt component renders Idle, Asking and Board-interactive from a presentation model.
 - [ ] The board-interactive state provably does not cover the board.
-- [ ] Server wording and server labels are used where present; markup is stripped.
+- [ ] Server wording and server labels are what the player sees, never hard-coded substitutes.
 - [ ] `DecisionPrompt`, `controlsFor` and the existing board are unchanged.
 - [ ] `./gradlew check` passes and the catalog shows all three states.
 
