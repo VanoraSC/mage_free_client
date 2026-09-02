@@ -47,6 +47,9 @@ portrait. The position the Prompt takes is a real design decision, not a detail.
 - Server-supplied button labels preferred over hard-coded ones wherever they are present.
 - Progress in the board-interactive state ("2 of 3 targets").
 - A catalog entry covering all three states, including a long question and a long label.
+- **The phase bar** (§3.1 P0 #11): the turn as a row of steps, the current one marked, coloured by
+  whose turn it is, and each step the server accepts a stop for toggleable. Appearance only — it renders
+  a presentation model and is not wired to a game, like everything else in Phase 1.
 
 **Out of scope**
 - Wiring the Prompt to a live game. It is built and tested standalone here; the new board mounts it.

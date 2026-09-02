@@ -14,6 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSurface
+import magefree.designsystem.component.phase.PhaseBar
+import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.PhaseBarTurn
+import magefree.designsystem.component.phase.StepIds
+import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.component.prompt.Prompt
 import magefree.designsystem.component.prompt.PromptAction
 import magefree.designsystem.component.prompt.PromptEmphasis
@@ -30,11 +35,51 @@ import magefree.designsystem.theme.Spacing
  * because a size budget is only worth having if it holds against the case that would break it.
  */
 
-/** Every Prompt state, each over a stand-in battlefield. */
+/** Every Prompt state, each over a stand-in battlefield, plus the phase bar that sits with them. */
 @Composable
 internal fun PromptGallery(modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.medium)) {
-        GalleryNote("Idle — quiet, but never empty: the phase and whose priority it is")
+        GalleryNote("Phase bar — your turn. The green marker means you may act; the amber dots are stops")
+        PhaseBar(
+            state = PhaseBarState(steps = standardTurnSteps(), currentStepId = StepIds.PRECOMBAT_MAIN),
+            onToggleStop = {},
+        )
+
+        GalleryNote("The opponent's turn — the marker goes grey, because colour on the board means you can act")
+        PhaseBar(
+            state =
+                PhaseBarState(
+                    steps = standardTurnSteps(),
+                    currentStepId = StepIds.DECLARE_ATTACKERS,
+                    turn = PhaseBarTurn.Opponents,
+                ),
+            onToggleStop = {},
+        )
+
+        GalleryNote("Stops on every step the server accepts one for — combat steps take none, so they show none")
+        PhaseBar(
+            state =
+                PhaseBarState(
+                    steps =
+                        standardTurnSteps(
+                            stops =
+                                setOf(
+                                    StepIds.UPKEEP,
+                                    StepIds.DRAW,
+                                    StepIds.PRECOMBAT_MAIN,
+                                    StepIds.BEGIN_COMBAT,
+                                    StepIds.DECLARE_ATTACKERS,
+                                    StepIds.END_COMBAT,
+                                    StepIds.POSTCOMBAT_MAIN,
+                                    StepIds.END_TURN,
+                                ),
+                        ),
+                    currentStepId = StepIds.END_TURN,
+                ),
+            onToggleStop = {},
+        )
+
+        GalleryNote("Idle — quiet, but never empty: whose turn it is, the phase, and whose priority it is")
         OverBoard {
             Prompt(
                 state = PromptState.Idle(turn = "Your turn", phase = "Main phase 1", priority = "Your priority"),
