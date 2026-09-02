@@ -91,6 +91,13 @@ compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material3-window-sizeclass = { module = "androidx.compose.material3:material3-window-size-class" }
 compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
+
+# The board animation host (0098) drives placement animations itself: it measures where an object
+# was and where it now is, and runs an `Animatable` between the two. That type and its specs live in
+# `animation-core`, which is what the host actually uses — the fuller `animation` artifact adds the
+# `AnimatedVisibility`/`AnimatedContent` surfaces the host has no need of. Version from the BOM.
+compose-animation-core = { module = "androidx.compose.animation:animation-core" }
+
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "androidx-navigation" }
 androidx-navigation-testing = { module = "androidx.navigation:navigation-testing", version.ref = "androidx-navigation" }
 

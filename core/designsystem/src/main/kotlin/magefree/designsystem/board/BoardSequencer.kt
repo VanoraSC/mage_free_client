@@ -60,8 +60,18 @@ class BoardSequencer(
     /** The changes that have started and not yet settled — what the host is animating. */
     val active: List<ScheduledChange> get() = running.toList()
 
+    /**
+     * Whether anything is waiting or still moving.
+     *
+     * Snapshot-backed, and the one piece of state here that exists for the host rather than for the
+     * board: a host that pumped the clock every frame regardless would keep the whole composition
+     * awake for a board that has been still for ten minutes. It watches this instead, and stops.
+     */
+    var isPlaying: Boolean by mutableStateOf(false)
+        private set
+
     /** Whether the board has caught up: nothing waiting, nothing still moving. */
-    val isIdle: Boolean get() = queue.isEmpty() && running.isEmpty()
+    val isIdle: Boolean get() = !isPlaying
 
     /** How far behind the server the board currently is, in milliseconds of running order left. */
     val backlogMillis: Long get() = (busyUntilMillis - nowMillis).coerceAtLeast(0L)
@@ -89,6 +99,7 @@ class BoardSequencer(
         if (backlogMillis > MAX_BACKLOG_MILLIS) {
             compressTo(MAX_BACKLOG_MILLIS)
         }
+        markPlaying()
     }
 
     /**
@@ -115,6 +126,7 @@ class BoardSequencer(
         latest = snapshot
         presented = snapshot
         busyUntilMillis = nowMillis
+        markPlaying()
     }
 
     /**
@@ -133,11 +145,27 @@ class BoardSequencer(
             running += started
         }
         running.removeAll { it.endMillis <= nowMillis }
+        markPlaying()
+    }
+
+    /**
+     * Moves the clock on by [deltaMillis], which is how a frame clock drives it.
+     *
+     * A host reports the gap since the last frame rather than an absolute reading, so that it can stop
+     * pumping while the board is still and start again later without the intervening wall-clock time
+     * counting as running order that has already played.
+     */
+    fun advanceBy(deltaMillis: Long) {
+        advanceTo(nowMillis + deltaMillis.coerceAtLeast(0L))
     }
 
     /** Advances the clock far enough that the whole running order has played and settled. */
     fun advanceToIdle() {
         if (busyUntilMillis > nowMillis) advanceTo(busyUntilMillis)
+    }
+
+    private fun markPlaying() {
+        isPlaying = queue.isNotEmpty() || running.isNotEmpty()
     }
 
     /**
