@@ -546,6 +546,36 @@ as one screen, a search result that knows what the deck already holds) is later 
 |-------|-------|------------|------------------|
 | 0093 ([#157](https://github.com/VanoraSC/mage_free_client/issues/157)) | Deckbuilding before sign-in | — | `DecksRoute` and `CardsRoute` mounted in the **root** graph, chrome-free, with an entry on the server-list screen. Deckbuilding is already fully offline — Room-backed storage, a bundled `formats.json`, a bundled `cards.sqlite`, nothing reading a session — so what made it feel server-dependent was only where it was mounted. A second mount point, not a relaxation of the shell's entry policy. |
 
+## UX Modernization Phase 1 — EPIC-03 + EPIC-19
+
+The foundation the new board is built on, and **the last phase that can be done without deciding what
+the board looks like.** [`../ui-modernization-plan.md`](../ui-modernization-plan.md) §11 puts the
+design system and the motion subsystem first for one reason: both are consumed by every surface after
+them, so a mistake in either is paid for four times over if it is found in Phase 3.
+
+**Everything here is additive.** §11: *"The old code is not edited to accommodate the new code."* The
+board tokens sit **beside** `MagePalette`/`MageTheme` rather than replacing them; the Board card tier
+joins `CardTile`/`FullCardView` rather than altering them; the Prompt is a new component and
+`DecisionPrompt` keeps serving the old board. Every story's acceptance criteria include the old path
+being provably untouched, so a regression cannot arrive in a working screen by way of this work.
+
+**Nothing here is wired to a live game.** These are components and a subsystem, exercised by the
+component catalog and a scripted harness. That is deliberate: it is what lets each be judged on its
+own before three things are built on top of it.
+
+**Every new surface is landscape.**
+
+| Story | Title | Depends on | What it delivers |
+|-------|-------|------------|------------------|
+| 0095 ([#161](https://github.com/VanoraSC/mage_free_client/issues/161)) | Board tokens: a grey ground, and colour reserved for information | — | The grey scale, information colours, elevation, board type scale and motion tokens. §7.4's grey ground is functional, not aesthetic: with a neutral ground the only saturated colour on the board is information — playable-now, targeting, combat, pending cost, threat — and against an illustrated background those signals lose. Two requirements are asserted rather than eyeballed: adjacent greys separate by value alone, and every signal colour contrasts against every grey it can sit on. One motion scale drives every duration, which is what lets reduce-motion **shorten** centrally rather than remove. |
+| 0096 ([#162](https://github.com/VanoraSC/mage_free_client/issues/162)) | The Board card tier, and one coherent card family | 0095 | The missing third tier of §7.5 — the card as it appears on a battlefield. Tile and Full already exist; Board is the one every permanent is drawn with, and the one §3.1's per-card signals are properties of: counters on the face, tapped as a 90° rotation rather than a badge, playable-now, targeted, combat, threat. EPIC-23 is why this is possible now — every field it renders crosses the wire. The component computes nothing about the game. |
+| 0097 ([#163](https://github.com/VanoraSC/mage_free_client/issues/163)) | The Prompt: one component, one position, three states | 0095 | §7.2's Idle / Asking / Board-interactive in one position, with board-interactive **never blocking the board** — the requirement designed against first, because it constrains everything else. It does not reimplement `controlsFor`, which already translates every prompt into the controls that answer it correctly; it builds the surface such a translation renders into. `DecisionPrompt` is a bottom-anchored modal choice list with no Idle state, so it stays with the old board. |
+| 0098 ([#164](https://github.com/VanoraSC/mage_free_client/issues/164)) | The animation host: stable identity, one owning slot, ordered playback | 0095, 0096 | §7.3's load-bearing subsystem. An animation exists because a game action happened — it is how the player finds out what the game did — so objects hold stable ids and one owning slot, move from measured position to measured position in one shared space, and **play in order** rather than collapsing into the final state. A prompt is the sync point; a resync snaps and replays nothing. Splits into a pure sequencer testable on a virtual clock and a Compose host that plays it, because sequencing is where this succeeds or fails and correct animation code cannot hide a wrong order. |
+
+**What Phase 1 deliberately does not do.** No board layout, no targeting or combat arrows, no zone
+browser, no live wiring. Those are Phase 3, and they are design questions; this phase is the
+vocabulary they are designed in.
+
 ## Housekeeping
 
 Cross-cutting work that changes no behaviour. Not part of an epic; scheduled whenever it stops
@@ -601,6 +631,8 @@ bridge). Stories **0001–0022 are complete and merged**:
 
 11. **Epic 11 (in-game play):** 0051 → 0052 → 0054 → 0055 → 0057 → 0058 → 0061 built;
     **0062 + 0063 + 0064 + 0065 + 0066 specified**. ⚠️ **0067 (Commander) parked** — a future increment.
+12. **EPIC-23 (game information we do not yet map):** 0086 → 0087 → 0088 → 0089 → 0090 → 0091. ✅
+13. **UX Modernization Phase 1 (EPIC-03 + EPIC-19):** 0095 → 0096 → 0097 → 0098. **Specified.**
 
 **Current state — a game is playable from the app, including combat.** Hosting works end to end, and
 the board renders a live game and answers the server's prompts: a full turn has been played on-device
