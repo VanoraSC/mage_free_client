@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.catalog.ComponentCatalog
 import magefree.designsystem.component.MageTopAppBar
 import magefree.designsystem.layout.contentInsets
@@ -70,6 +71,7 @@ private val TabletSimWidth = 720.dp
 fun ComponentCatalogScreen(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
+    artFor: ((String) -> CardArtSlot?)? = null,
 ) {
     var darkTheme by rememberSaveable { mutableStateOf(false) }
     var wide by rememberSaveable { mutableStateOf(false) }
@@ -134,6 +136,7 @@ fun ComponentCatalogScreen(
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     ComponentCatalog(
+                        artFor = artFor,
                         modifier =
                             Modifier
                                 .widthIn(max = if (wide) TabletSimWidth else PhoneSimWidth)

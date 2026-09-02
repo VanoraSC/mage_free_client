@@ -37,11 +37,31 @@ counters, tap state, attachments, token identity and targets all arrive on `Game
 ## 3. Scope
 
 **In scope**
-- A Board-tier card component: name, P/T, counters on the face, tap rotation, and the signal states
-  from §3.1 (playable-now, targeted, attacking/blocking, threat).
+- A Board-tier card component rendering the **whole card face**, so the card's own printed name and
+  mana cost do the work an overlay would otherwise cover. Power and toughness stay overlaid, because
+  they change during a game and the printed pair goes stale.
+- P/T, counters, keyword badges, attachments, tap state, and the §3.1 signals.
+- **Counters as a filled circle carrying only the count.** `+1/+1`, `-1/-1` and loyalty have fixed
+  colours; every other kind takes the next colour from a queue on first sight and keeps it for the
+  game. An alternating black-and-white ring makes a circle read on any background, and the digit
+  flips by the fill's lightness so an allocated colour can never produce an unreadable number.
+- **Emphasis follows a `BoardFocus`** rather than a fixed precedence: the signal the current moment is
+  about takes a strong border, and the most immediate remaining one a thin muted edge. A card carries
+  several signals at once and has only one border, and which of them matters is a property of the
+  moment rather than of the card.
+- **Attachments as whole cards behind the host**, each leaving the band that carries its name and cost
+  uncovered. An attachment carries its own tap state, because it is its own permanent — improvise and
+  convoke tap artifacts that are still attached.
 - The tap rotation as a **90° rotation of the card**, not a badge — §3.1 calls it "universal Magic
   idiom, cheaper to read than a badge", and it has layout consequences the component owns.
-- A catalog entry showing the tier in each state.
+- A catalog entry showing the tier in each state, rendered with **real card art** supplied by the host
+  through the existing `CardArtSlot`.
+
+**Deliberately not settled here**
+- Badges are placeholders. The data behind them is `CardView.cardIcons`, which the server already
+  computes from game-aware abilities and the bridge drops — story 0099.
+- Attachments have tap state but not their own signals. An Equipment about to be tapped for a cost is
+  a pending-cost target, which belongs with the board's wiring rather than this component.
 
 **Out of scope**
 - The battlefield layout that arranges these (§7.4's front-to-back rows, the land pile). That is the
@@ -62,33 +82,56 @@ Project baseline; `:core:designsystem`.
 is server-supplied state that already crosses the wire. The component renders what it is handed and
 computes nothing about the game — the same rule the whole client runs on.
 
-**Counters render on the face** (§3.1) and the count is open-ended: poison, energy, experience,
-+1/+1, and hundreds more, with the kind arriving as a string. So the component takes a list and shows
-kinds it knows how to place, degrading legibly rather than assuming a closed set.
+**The card face carries what it already prints.** A real card puts its name and mana cost where a
+player looks for them, so overlaying our own covers the art for no gain. Only what the printing gets
+*wrong* during a game is overlaid: current power and toughness, counters, badges, and the signals.
+
+**Counter kinds are an open set** — poison, energy, experience and hundreds more, arriving as
+strings — so a fixed table cannot cover them. What a player needs is narrower than global
+consistency: on one board there are rarely several kinds on a single card, but often many cards each
+carrying a different kind. The colour only has to say that one kind differs from another; the number
+carries the precision, and the inspect view (0100) carries the name.
+
+**A stack steps perpendicular to the band it exposes.** An upright attachment carries its name across
+its top edge, so the stack steps upward. A quarter turn moves that band to the right edge, so a
+turned attachment steps sideways instead. Stepping the wrong way covers the very thing the offset
+exists to reveal, and this one rule covers both cases.
+
+**A rotation moves a card, it does not resize it.** A rotated card sits in a box shorter than the card
+is tall, so a size that respects the parent's constraints is clamped — measuring the card as a square
+and cropping its art before the rotation turns it.
 
 ## 6. Implementation steps
 
 1. Read `CardTile`, `FullCardView`, `CardDisplay` and `CardArtSlot` to match the family's existing
    shape rather than inventing a parallel one.
 2. Add the Board tier against 0095's tokens.
-3. Catalog entry: the tier untapped, tapped, with counters, and in each signal state.
+3. Catalog entry against real card art, since a card component is judged on whether its overlays stay
+   readable over an illustration — and a flat placeholder is the one background that flatters
+   everything.
 
 ## 7. Testing & verification
 
-- **Proven failing first (standard 1):** the test asserting a tapped card is rotated must fail
-  against an untapped rendering, then pass.
-- **Hermetic Compose (`src/testDebug`):** counters appear on the face; tap state rotates; each signal
-  state is distinguishable; a card with an unknown counter kind still renders.
+- **Proven failing first (standard 1):** the test asserting a tapped card takes a landscape footprint
+  must fail against a rendering that only rotates pixels, then pass.
+- **Hermetic Compose (`src/testDebug`):** counters carry their count; an unknown counter kind still
+  gets a circle; badges render; an attachment shows its name and cost; the tier overlays no name of
+  its own; a tapped card and a turned attachment keep card proportions rather than being squashed.
+- **Footprint is asserted, not assumed:** an upright attachment claims height, a turned one claims
+  width, and a second turned one claims more width and no more height.
 - **`CardTile` and `FullCardView` behave as before**, with their tests unedited.
-- **Eyes-on:** the catalog at board size — is a name readable, is a counter readable, is tapped
-  obvious at a glance.
+- **Eyes-on:** the catalog at board size, over real art — is a counter readable, is tapped obvious at
+  a glance, and can an attached card be named without tapping it.
 
 ## 8. Acceptance criteria
 
-- [ ] A Board tier exists, rendering name, P/T, counters, tap state and the §3.1 signal states.
+- [ ] A Board tier exists, rendering the card face plus P/T, counters, badges, attachments, tap state
+      and the §3.1 signals.
+- [ ] Emphasis follows the board's focus rather than a fixed precedence.
+- [ ] An attachment carries its own tap state and is legible without being opened.
 - [ ] The tier computes nothing about the game; every state is passed in.
 - [ ] `CardTile`/`FullCardView` and their screens are unchanged.
-- [ ] `./gradlew check` passes and the catalog shows every state.
+- [ ] `./gradlew check` passes and the catalog shows every state over real art.
 
 ## 9. References
 

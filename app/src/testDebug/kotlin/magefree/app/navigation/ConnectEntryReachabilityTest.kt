@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performClick
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.testing.TestNavHostController
+import magefree.app.catalog.CatalogRoute
 import magefree.app.screens.HOME_TITLE
 import magefree.app.screens.SIGN_OUT_LABEL
 import magefree.designsystem.theme.MageTheme
@@ -82,12 +83,13 @@ class ConnectEntryReachabilityTest {
                     navController = controller,
                     connectionStatusBar = {},
                     onSignOut = { signOutCount++ },
-                    connectFlow = { onConnected, onOpenDecks ->
-                        // A Column, not two bare Buttons: without a layout they draw on top of each
+                    connectFlow = { onConnected, onOpenDecks, onOpenCatalog ->
+                        // A Column, not bare Buttons: without a layout they draw on top of each
                         // other at the same origin and a click lands on whichever is painted last.
                         Column {
                             Button(onClick = onConnected) { Text(CONNECT_STAND_IN_LABEL) }
                             Button(onClick = onOpenDecks) { Text(DECKS_STAND_IN_LABEL) }
+                            Button(onClick = onOpenCatalog) { Text(CATALOG_STAND_IN_LABEL) }
                         }
                     },
                     // Both offline destinations resolve ViewModels through the DI container, which this
@@ -96,6 +98,9 @@ class ConnectEntryReachabilityTest {
                         Button(onClick = onBrowseCards) { Text(DECKS_LIBRARY_STAND_IN_LABEL) }
                     },
                     cardsScreen = { Text(CARDS_STAND_IN_LABEL) },
+                    // The catalog resolves the Coil-backed art renderer through the DI container, so
+                    // it needs a stand-in here for the same reason the other offline screens do.
+                    catalogScreen = { Text(CATALOG_SCREEN_STAND_IN_LABEL) },
                 )
             }
         }
@@ -170,6 +175,33 @@ class ConnectEntryReachabilityTest {
     }
 
     @Test
+    fun theComponentCatalogIsReachableFromTheConnectDestinationWithNoSession() {
+        // The catalog needs no session either, and it is reviewed constantly while the board
+        // components are being built — so it sits beside deckbuilding rather than behind sign-in and
+        // a settings screen. This asserts the graph half; that the server list renders both controls
+        // side by side is `:feature:connect`'s test.
+        launchColdWithNoSession()
+
+        composeTestRule.onNodeWithText(CATALOG_STAND_IN_LABEL).performClick()
+
+        assertTrue("the catalog entry must land on CatalogRoute", currentRouteIs(CatalogRoute::class))
+        assertTrue(
+            "connect must stay on the back stack, so Back returns to the server list",
+            isOnBackStack(ConnectRoute),
+        )
+    }
+
+    @Test
+    fun reachingTheCatalogWithoutASessionDoesNotEnterTheShell() {
+        launchColdWithNoSession()
+
+        composeTestRule.onNodeWithText(CATALOG_STAND_IN_LABEL).performClick()
+
+        assertTrue("reaching the catalog must not enter the shell", !isOnBackStack(ShellRoute))
+        composeTestRule.onNodeWithText(HOME_TITLE).assertDoesNotExist()
+    }
+
+    @Test
     fun reachingDecksWithoutASessionDoesNotEnterTheShell() {
         // The entry policy is untouched by the second mount point: the shell is still only ever
         // entered with a live session, so none of its chrome may appear on this path.
@@ -189,8 +221,12 @@ class ConnectEntryReachabilityTest {
         /** The stand-in's offline-decks entry, standing for the server list's own control. */
         const val DECKS_STAND_IN_LABEL = "offline-decks-stand-in"
 
+        /** The stand-in's component-catalog entry, standing for the server list's own control. */
+        const val CATALOG_STAND_IN_LABEL = "catalog-stand-in"
+
         /** Markers for the offline destinations' own content. */
         const val DECKS_LIBRARY_STAND_IN_LABEL = "offline-decks-library-stand-in"
         const val CARDS_STAND_IN_LABEL = "offline-cards-stand-in"
+        const val CATALOG_SCREEN_STAND_IN_LABEL = "component-catalog-stand-in"
     }
 }

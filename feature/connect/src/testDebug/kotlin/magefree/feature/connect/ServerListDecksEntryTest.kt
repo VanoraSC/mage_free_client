@@ -35,6 +35,7 @@ class ServerListDecksEntryTest {
     val composeTestRule = createComposeRule()
 
     private var openDecksCount = 0
+    private var openCatalogCount = 0
 
     private fun show(uiState: ServerListUiState) {
         composeTestRule.setContent {
@@ -44,6 +45,7 @@ class ServerListDecksEntryTest {
                     onSelectServer = {},
                     onAddServer = {},
                     onOpenDecks = { openDecksCount++ },
+                    onOpenCatalog = { openCatalogCount++ },
                     onEditServer = {},
                     onRemoveServer = {},
                     onEditorNameChange = {},
@@ -80,5 +82,27 @@ class ServerListDecksEntryTest {
         composeTestRule.onNodeWithText(OPEN_DECKS_LABEL).performClick()
 
         assertEquals("the entry must raise its action, not merely render", 1, openDecksCount)
+    }
+
+    @Test
+    fun theCatalogEntrySitsBesideDecksWithNoServersConfigured() {
+        // Both are offline surfaces and both are peers on this screen, so a first launch offers them
+        // together rather than hiding one behind sign-in and a settings screen.
+        show(ServerListUiState(servers = emptyList(), isLoading = false))
+
+        composeTestRule.onNodeWithText(OPEN_DECKS_LABEL).assertIsDisplayed()
+        composeTestRule.onNodeWithText(OPEN_CATALOG_LABEL).assertIsDisplayed().assertHasClickAction()
+    }
+
+    @Test
+    fun tappingTheCatalogEntryRaisesItsOwnActionAndNotTheOther() {
+        // Two controls on one row is exactly where a mis-wiring hides: both render, and the wrong one
+        // fires.
+        show(ServerListUiState(servers = emptyList(), isLoading = false))
+
+        composeTestRule.onNodeWithText(OPEN_CATALOG_LABEL).performClick()
+
+        assertEquals("the entry must raise its action, not merely render", 1, openCatalogCount)
+        assertEquals("the catalog entry must not fire the decks action", 0, openDecksCount)
     }
 }

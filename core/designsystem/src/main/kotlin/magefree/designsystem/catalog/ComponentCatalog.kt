@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.card.CardTile
 import magefree.designsystem.card.FullCardView
@@ -61,9 +62,16 @@ import magefree.designsystem.theme.ThemePreviews
  * in a [MageTheme] (and, when hosting live, in a width-constraining container to simulate window size).
  *
  * @param modifier the [Modifier] for the scrolling gallery.
+ * @param artFor resolves a card name to its art. The design system carries no image dependency, so a
+ *   host that wants real art supplies this; without it every card falls back to the built-in
+ *   placeholder and the catalog still renders offline. It is a resolver rather than one slot because
+ *   the board sections show several cards at once — a creature with an Aura on it needs both faces.
  */
 @Composable
-fun ComponentCatalog(modifier: Modifier = Modifier) {
+fun ComponentCatalog(
+    modifier: Modifier = Modifier,
+    artFor: ((String) -> CardArtSlot?)? = null,
+) {
     Column(
         modifier =
             modifier
@@ -140,6 +148,10 @@ fun ComponentCatalog(modifier: Modifier = Modifier) {
 
         CatalogSection(title = "Board tokens") {
             BoardTokenGallery()
+        }
+
+        CatalogSection(title = "Board card tier") {
+            BoardCardGallery(artFor = artFor)
         }
 
         CatalogSection(title = "Card tile") {

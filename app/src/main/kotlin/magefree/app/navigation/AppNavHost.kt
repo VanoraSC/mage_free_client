@@ -9,6 +9,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
 import magefree.app.catalog.CatalogRoute
 import magefree.app.catalog.ComponentCatalogScreen
+import magefree.app.catalog.rememberCatalogArtResolver
 import magefree.app.connection.ui.ConnectionStatusBar
 import magefree.app.game.GameRoute
 import magefree.app.game.ImmersiveGameScreen
@@ -107,13 +108,22 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
-    connectFlow: @Composable (onConnected: () -> Unit, onOpenDecks: () -> Unit) -> Unit = { onConnected, onOpenDecks ->
-        ConnectFlow(onConnected = onConnected, onOpenDecks = onOpenDecks)
+    connectFlow: @Composable (
+        onConnected: () -> Unit,
+        onOpenDecks: () -> Unit,
+        onOpenCatalog: () -> Unit,
+    ) -> Unit = { onConnected, onOpenDecks, onOpenCatalog ->
+        ConnectFlow(onConnected = onConnected, onOpenDecks = onOpenDecks, onOpenCatalog = onOpenCatalog)
     },
     decksScreen: @Composable (onBrowseCards: () -> Unit) -> Unit = { onBrowseCards ->
         DecksLibraryRoute(onBrowseCards = onBrowseCards)
     },
     cardsScreen: @Composable (onBack: () -> Unit) -> Unit = { onBack -> CardsFeatureRoute(onBack = onBack) },
+    catalogScreen: @Composable (onExit: () -> Unit) -> Unit = { onExit ->
+        // Real card art is resolved here, so the screen itself stays previewable and the graph tests
+        // can substitute a stand-in rather than needing a DI container.
+        ComponentCatalogScreen(onExit = onExit, artFor = rememberCatalogArtResolver())
+    },
     onSignOut: () -> Unit = {},
 ) {
     NavHost(
@@ -134,6 +144,11 @@ fun AppNavHost(
                 {
                     // Offline decks: navigate without popping, so Back returns to the server list.
                     navController.navigate(DecksRoute) { launchSingleTop = true }
+                },
+                {
+                    // The component catalog, reached the same way and for the same reason: it needs
+                    // no session either.
+                    navController.navigate(CatalogRoute) { launchSingleTop = true }
                 },
             )
         }
@@ -163,7 +178,7 @@ fun AppNavHost(
             ImmersiveGameScreen(onExit = { navController.popBackStack() })
         }
         composable<CatalogRoute> {
-            ComponentCatalogScreen(onExit = { navController.popBackStack() })
+            catalogScreen { navController.popBackStack() }
         }
     }
 }
