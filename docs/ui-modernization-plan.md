@@ -675,20 +675,46 @@ lands do.
 
 ### 7.8 Trigger ordering
 
-When several triggers go on the stack simultaneously:
+**Traced 2026-09-02** — [`upstream-trigger-ordering.md`](upstream-trigger-ordering.md). The
+result-shaped framing below survives the trace; the batching does not, for the same reason §7.6 lost
+its Confirm.
+
+When several of your triggers go on the stack simultaneously:
 
 - They are shown **as the stack will look**, not as a list of questions.
-- The player **drags to rearrange** until it reads the way they want.
-- **The card on top resolves first.**
-- One confirm submits the arrangement.
+- **The card on top resolves first**, and the pick goes to the **bottom** — so the question is asked
+  as *"which of these resolves last"*, which is what the server is really asking.
+- The current stack is drawn as it stands, with the pick shown going underneath it.
+- Each candidate offers **"always first" / "always last"**, which removes the question for good.
 
-The component owns the translation between the **result-shaped** question the player answers ("what
-should the stack end up as") and the **process-shaped** question the server asks ("which do you put
-on next") — a §7.6-style change of form, not of content: the ordering is entirely the player's.
+The component owns the translation between the **result-shaped** question the player answers and the
+**process-shaped** question the server asks — a §7.6-style change of form, not of content: the
+ordering is entirely the player's. Upstream's own prompt says *"Pick triggered ability (goes to the
+stack first)"*, and first-on is last-to-resolve.
 
-Built as a reusable component, since the same interaction serves any "put these in an order" prompt,
-and **unit-tested on the translation itself** — an off-by-one reversal here is silent and
-game-losing.
+**Unit-tested on the translation itself** — an off-by-one reversal here is silent and game-losing, and
+there are two ways to get it wrong rather than one: the inversion, and the fact that **N triggers cost
+N−1 questions** because the last one is placed by elimination with no prompt at all.
+
+**Dragging a whole arrangement behind one confirm is not built**, and the reason is in the trace §1.3
+and §1.4: putting a trigger on the stack runs its own modes, targets and costs *immediately*, so the
+ordering questions are separated by unrelated prompts — and the candidate set can grow between them,
+because a trigger that fires as a result of an earlier one joins the same round. Holding a local
+arrangement across that would be the declared-intent model rebuilt for a smaller problem.
+
+**Two prerequisites, both small:**
+
+- **The prompt has no marker on our wire.** It arrives as an ordinary `GAME_TARGET`/`TargetPrompt`;
+  the only thing distinguishing it is `options["queryType"] == PICK_ABILITY`, which upstream's own
+  client reads and we do not map. Nothing here is buildable until that crosses. Matching on the
+  English message string would work and would be the wrong kind of correct.
+- **Neither the ordering prompt nor a trigger's targets can be cancelled** — a `TriggeredAbility` is
+  not an `ActivatedAbility`, so upstream's cancel flag is false for it. No cancel affordance is
+  offered.
+
+The auto-order controls already cross the wire (`PlayerActionCode`'s five `TRIGGER_AUTO_ORDER_*`
+values), so "always first" needs no new protocol work. It is also the highest-value part: two triggers
+that fire together every turn should be a question asked once, not a question asked well.
 
 ### 7.9 Passing priority
 
