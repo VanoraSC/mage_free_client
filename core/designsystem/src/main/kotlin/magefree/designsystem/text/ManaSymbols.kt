@@ -1,54 +1,46 @@
 package magefree.designsystem.text
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.Text
+import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.em
 import magefree.designsystem.R
 
 /*
- * The mana and tap symbols, drawn from a font the app ships.
+ * The shipped Mana font, drawn the way a mana symbol is actually printed.
  *
- * **Shipped rather than downloaded.** Upstream's client fetches symbol art from Scryfall at runtime
- * and caches it per user, because it may not redistribute it. The Mana font may be redistributed, so
- * this carries it instead: nothing to fetch on first run, no cache to manage, nothing to go stale, and
- * it works on a phone that has never been online.
+ * **The font is only half of a symbol.** Its glyphs are the foreground — the sun, the drop, the digit,
+ * the tap arrow — and nothing else; the project's own stylesheet supplies the rest, giving each one a
+ * coloured disc behind it (`background-color` plus `border-radius: 1em`) and splitting that disc
+ * diagonally for a hybrid. Drawing the glyph alone produces what the first cut of this produced: a
+ * small dark mark floating in white space, unreadable as `{R}` and indistinguishable from `{G}` at a
+ * glance.
  *
- * **Licensing, which is not all one thing.** The Mana project's stylesheets are MIT — but the *font*,
- * which is the part shipped here, is **SIL OFL 1.1**, and the symbol artwork itself remains
- * © Wizards of the Coast. OFL expressly permits bundling a font inside software, including
- * commercially, provided the notice travels with it and the font is not sold on its own. Upstream
- * ships no licence file at all, so this project carries the notice itself — see
- * `docs/third-party-notices.md`.
- *
- * **How the font is put together**, read out of `mana.css` rather than guessed. Each ordinary symbol
- * is one glyph in the Private Use Area: `{W}` is ``, `{T}` is ``. A **hybrid has no glyph
- * of its own** — the stylesheet composes it from the two halves at 0.55em, offset up-left and
- * down-right, and that is reproduced rather than approximated here, because a hybrid drawn as one of
- * its halves is a different cost.
- *
- * The codepoints are written as `Char(0x…)` on purpose. They are Private Use Area characters: pasted
- * literally they are invisible in a diff, survive nothing that touches encoding, and cannot be checked
- * against the stylesheet by eye.
+ * So the disc is drawn here, from `mana.css`'s own colour values, and the glyph is placed on it by its
+ * measured ink bounds rather than by font metrics. Measuring is what makes it sit centred: a glyph's
+ * line box carries ascent and descent that have nothing to do with where its ink is, and laying out by
+ * that box is what pushed the first version high and small inside its own placeholder.
  */
 
-/** The shipped Mana font. */
 internal val ManaFontFamily = FontFamily(Font(R.font.mana))
 
 /**
- * Every symbol that is a single glyph, by the code the server puts between braces.
+ * Every glyph in the font this app draws, by the code the server puts between braces.
  *
  * Transcribed from `mana.css`'s `content:` rules, whose values are the same numbers in CSS notation (`\e600`).
  */
-private val SingleGlyphs: Map<String, Char> =
+private val Glyphs: Map<String, Char> =
     mapOf(
         "W" to Char(0xE600),
         "U" to Char(0xE601),
@@ -91,36 +83,135 @@ private val SingleGlyphs: Map<String, Char> =
         "Q" to Char(0xE61B),
     )
 
+private val PhyrexianGlyph = Char(0xE618)
+
+/** The five colours, in the order upstream writes them. */
+private val Colours = listOf("W", "U", "B", "R", "G")
+
 /**
- * The symbols drawn as two glyphs, and which two.
+ * Disc colours, taken from `mana.css` rather than chosen.
  *
- * A hybrid is a choice — `{W/U}` is white *or* blue, `{2/W}` is two generic *or* one white, `{G/P}` is
- * green *or* two life. The pairs are built from the single-glyph table rather than by splitting the
- * code's characters, because the halves are not always what those characters say: every Phyrexian
- * pairing uses one shared glyph whatever colour it is combined with.
- *
- * Both orders are listed because upstream sends both — `{W/U}` and `{U/W}` are the same symbol printed
- * one way or the other, and a lookup that knew only one would fall back to text for half of them.
+ * The stylesheet keeps two sets and uses them in different places: a solid symbol's disc is a little
+ * more saturated than either half of a split one. Both are reproduced, because using one set for both
+ * makes hybrids read as heavier than the plain symbols beside them.
  */
-private val HybridGlyphs: Map<String, Pair<Char, Char>> =
+private val SolidDisc: Map<String, Color> =
+    mapOf(
+        "W" to Color(0xFFF0F2C0),
+        "U" to Color(0xFFB5CDE3),
+        "B" to Color(0xFFACA29A),
+        "R" to Color(0xFFDB8664),
+        "G" to Color(0xFF93B483),
+    )
+
+private val SplitDisc: Map<String, Color> =
+    mapOf(
+        "W" to Color(0xFFFDFBCE),
+        "U" to Color(0xFFBCDAF7),
+        "B" to Color(0xFFA7999E),
+        "R" to Color(0xFFF19B79),
+        "G" to Color(0xFF9FCBA6),
+        "C" to Color(0xFFD0C6BB),
+    )
+
+/** Generic and colourless costs, and everything that is not a colour at all: `{T}`, `{X}`, `{S}`. */
+private val NeutralDisc = Color(0xFFBEB9B2)
+
+/** The foreground, on every disc. `mana.css` sets it once, for all of them. */
+private val SymbolInk = Color(0xFF111111)
+
+/** What one symbol is made of. */
+private sealed interface SymbolArt {
+    /** A disc of one colour with one glyph centred on it. */
+    data class Single(
+        val glyph: Char,
+        val disc: Color,
+        val fill: Float = SINGLE_GLYPH_FILL,
+    ) : SymbolArt
+
+    /**
+     * A disc split along the anti-diagonal, with a glyph in each half.
+     *
+     * Which half is which is not decoration: `{2/W}` is *two generic or one white*, and the halves say
+     * so in the order they are written.
+     */
+    data class Split(
+        val first: Char,
+        val second: Char,
+        val top: Color,
+        val bottom: Color,
+    ) : SymbolArt
+}
+
+/**
+ * Every code the app can draw, and what it draws.
+ *
+ * Built rather than listed, because the hybrids are systematic and a hand-written table of seventy
+ * entries is a table with a typo in it. Both orders of every pair are registered: upstream sends
+ * `{W/U}` and `{U/W}` for the same printed symbol, and knowing only one would fall back to text for
+ * half of them, which reads as an intermittent bug rather than a missing feature.
+ */
+private val Arts: Map<String, SymbolArt> =
     buildMap {
-        val colours = listOf("W", "U", "B", "R", "G")
-        colours.forEach { first ->
-            colours.forEach { second ->
+        Glyphs.forEach { (code, glyph) ->
+            put(code, SymbolArt.Single(glyph = glyph, disc = SolidDisc[code] ?: NeutralDisc))
+        }
+        // The bare Phyrexian symbol is drawn larger than an ordinary glyph, as the stylesheet does
+        // with `transform: scale(1.2)` — it is a thin outline and shrinks away otherwise.
+        put("P", SymbolArt.Single(PhyrexianGlyph, NeutralDisc, fill = PHYREXIAN_GLYPH_FILL))
+        put("H", SymbolArt.Single(PhyrexianGlyph, NeutralDisc, fill = PHYREXIAN_GLYPH_FILL))
+
+        Colours.forEach { first ->
+            Colours.forEach { second ->
                 if (first != second) {
-                    put("$first/$second", SingleGlyphs.getValue(first) to SingleGlyphs.getValue(second))
+                    put(
+                        "$first/$second",
+                        SymbolArt.Split(
+                            first = Glyphs.getValue(first),
+                            second = Glyphs.getValue(second),
+                            top = SplitDisc.getValue(first),
+                            bottom = SplitDisc.getValue(second),
+                        ),
+                    )
                 }
             }
         }
-        colours.forEach { colour ->
-            put("2/$colour", SingleGlyphs.getValue("2") to SingleGlyphs.getValue(colour))
-            put("C/$colour", SingleGlyphs.getValue("C") to SingleGlyphs.getValue(colour))
-            put("$colour/P", SingleGlyphs.getValue(colour) to SingleGlyphs.getValue("P"))
+        Colours.forEach { colour ->
+            put(
+                "2/$colour",
+                SymbolArt.Split(
+                    first = Glyphs.getValue("2"),
+                    second = Glyphs.getValue(colour),
+                    top = SplitDisc.getValue("C"),
+                    bottom = SplitDisc.getValue(colour),
+                ),
+            )
+            put(
+                "C/$colour",
+                SymbolArt.Split(
+                    first = Glyphs.getValue("C"),
+                    second = Glyphs.getValue(colour),
+                    top = SplitDisc.getValue("C"),
+                    bottom = SplitDisc.getValue(colour),
+                ),
+            )
+            // Phyrexian mana is *not* a split symbol, however its code is spelled. `{G/P}` is one
+            // Phyrexian glyph on a green disc — the alternative payment is life, which has no glyph
+            // and is not drawn. Building it as a hybrid, which the first cut did, put a green tree
+            // and a Phyrexian mark side by side and said something the card does not.
+            put(
+                "$colour/P",
+                SymbolArt.Single(
+                    glyph = PhyrexianGlyph,
+                    disc = SolidDisc.getValue(colour),
+                    fill = PHYREXIAN_GLYPH_FILL,
+                ),
+            )
         }
     }
 
 /** Every code this font can draw. Exposed for the test that checks the set against the wire's own. */
-internal val ManaSymbolCodes: Set<String> get() = SingleGlyphs.keys + HybridGlyphs.keys
+internal val ManaSymbolCodes: Set<String> get() = Arts.keys
 
 /**
  * The symbol for [code], or `null` when the font has none.
@@ -129,48 +220,130 @@ internal val ManaSymbolCodes: Set<String> get() = SingleGlyphs.keys + HybridGlyp
  * code from a set newer than the font still reads as what the server sent.
  */
 fun manaSymbolSlot(code: String): SymbolSlot? {
-    SingleGlyphs[code]?.let { glyph ->
-        return { modifier -> ManaGlyph(glyph = glyph, modifier = modifier) }
-    }
-    HybridGlyphs[code]?.let { (first, second) ->
-        return { modifier -> HybridGlyph(first = first, second = second, modifier = modifier) }
-    }
-    return null
+    val art = Arts[code] ?: return null
+    return { modifier -> ManaSymbol(art = art, modifier = modifier) }
 }
 
-/** One glyph, at the size the text laid out for it. */
+/** One symbol, filling whatever space it is handed. */
 @Composable
-private fun ManaGlyph(
-    glyph: Char,
+private fun ManaSymbol(
+    art: SymbolArt,
     modifier: Modifier = Modifier,
-    scale: TextUnit = 1.em,
 ) {
-    Text(
-        text = glyph.toString(),
-        modifier = modifier,
-        style = TextStyle(fontFamily = ManaFontFamily, fontSize = scale, textAlign = TextAlign.Center),
-        color = Color.Unspecified,
-        maxLines = 1,
-    )
+    // The font as a `Typeface`, so the glyph can be measured and placed by its ink rather than by the
+    // line box a `Text` would give it. Resolved through Compose's own resolver so this module still
+    // needs nothing beyond the font resource it already ships.
+    val resolver = LocalFontFamilyResolver.current
+    val typeface = remember(resolver) { resolver.resolve(ManaFontFamily).value as? android.graphics.Typeface }
+    val paint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
+    val bounds = remember { android.graphics.Rect() }
+
+    Canvas(modifier = modifier) {
+        val diameter = minOf(size.width, size.height)
+        if (diameter <= 0f) return@Canvas
+        val centre = Offset(size.width / 2f, size.height / 2f)
+        val radius = diameter / 2f
+
+        when (art) {
+            is SymbolArt.Single -> {
+                drawCircle(color = art.disc, radius = radius, center = centre)
+                drawGlyph(typeface, paint, bounds, art.glyph, centre, diameter * art.fill)
+            }
+
+            is SymbolArt.Split -> {
+                drawCircle(color = art.top, radius = radius, center = centre)
+                // The half below the anti-diagonal, clipped to the disc. `mana.css` draws this as a
+                // hard-stopped 135° gradient, which is the same edge by another route.
+                val lower =
+                    Path().apply {
+                        moveTo(centre.x - radius, centre.y + radius)
+                        lineTo(centre.x + radius, centre.y - radius)
+                        lineTo(centre.x + radius, centre.y + radius)
+                        close()
+                    }
+                clipPath(Path().apply { addOval(circleBounds(centre, radius)) }) {
+                    drawPath(lower, art.bottom)
+                }
+                val offset = radius * SPLIT_GLYPH_OFFSET
+                val half = diameter * SPLIT_GLYPH_FILL
+                drawGlyph(typeface, paint, bounds, art.first, centre - Offset(offset, offset), half)
+                drawGlyph(typeface, paint, bounds, art.second, centre + Offset(offset, offset), half)
+            }
+        }
+    }
 }
 
 /**
- * A hybrid: two smaller glyphs, one up-left and one down-right, as the stylesheet draws them.
+ * Draws [glyph] with its **ink** centred on [centre] and its longer side [target] across.
  *
- * Drawing only one half would be a different cost; drawing them side by side would read as two
- * separate symbols in a row.
+ * Measured rather than assumed. `drawText` places a glyph by its baseline, and a font's baseline says
+ * where letters sit, not where an icon's picture is; the two differ by whatever the designer chose. So
+ * the glyph is measured once at a reference size, scaled to the size wanted, and measured again —
+ * `getTextBounds` is not exactly linear in text size — and then positioned from that box.
+ *
+ * If the platform reports no bounds at all, nothing is drawn. That is a stub renderer rather than a
+ * real one, which is what happens under Robolectric, and drawing a guess there would put a wrong
+ * picture in front of whoever was looking.
  */
-@Composable
-private fun HybridGlyph(
-    first: Char,
-    second: Char,
-    modifier: Modifier = Modifier,
+private fun DrawScope.drawGlyph(
+    typeface: android.graphics.Typeface?,
+    paint: android.graphics.Paint,
+    bounds: android.graphics.Rect,
+    glyph: Char,
+    centre: Offset,
+    target: Float,
 ) {
-    Box(modifier = modifier) {
-        ManaGlyph(glyph = first, scale = HYBRID_GLYPH_SCALE.em, modifier = Modifier.align(Alignment.TopStart))
-        ManaGlyph(glyph = second, scale = HYBRID_GLYPH_SCALE.em, modifier = Modifier.align(Alignment.BottomEnd))
+    if (typeface == null || target <= 0f) return
+    val text = glyph.toString()
+    paint.typeface = typeface
+    paint.color = SymbolInk.toArgb()
+
+    paint.textSize = GLYPH_REFERENCE_SIZE
+    paint.getTextBounds(text, 0, 1, bounds)
+    val measured = maxOf(bounds.width(), bounds.height())
+    if (measured <= 0) return
+
+    paint.textSize = GLYPH_REFERENCE_SIZE * (target / measured)
+    paint.getTextBounds(text, 0, 1, bounds)
+
+    drawIntoCanvas { canvas ->
+        canvas.nativeCanvas.drawText(
+            text,
+            centre.x - bounds.exactCenterX(),
+            centre.y - bounds.exactCenterY(),
+            paint,
+        )
     }
 }
 
+/** The square the disc is inscribed in. */
+private fun circleBounds(
+    centre: Offset,
+    radius: Float,
+) = androidx.compose.ui.geometry.Rect(
+    left = centre.x - radius,
+    top = centre.y - radius,
+    right = centre.x + radius,
+    bottom = centre.y + radius,
+)
+
+/**
+ * How much of the disc an ordinary glyph covers.
+ *
+ * `mana.css` gets the same proportion by setting the glyph to `0.95em` inside a `1.3em` disc. Here it
+ * is stated as what it is — a fraction of the disc — because the glyph is placed by measurement and
+ * the font's em size never enters into it.
+ */
+private const val SINGLE_GLYPH_FILL = 0.58f
+
+/** Phyrexian is a thin outline and is drawn larger, as `transform: scale(1.2)` does upstream. */
+private const val PHYREXIAN_GLYPH_FILL = 0.70f
+
 /** Each half of a split symbol, near the stylesheet's own `font-size: 0.55em`. */
-private const val HYBRID_GLYPH_SCALE = 0.62f
+private const val SPLIT_GLYPH_FILL = 0.42f
+
+/** How far each half sits from the centre, along the diagonal it is split on. */
+private const val SPLIT_GLYPH_OFFSET = 0.40f
+
+/** Measured at a size large enough that rounding in the reported bounds does not matter. */
+private const val GLYPH_REFERENCE_SIZE = 200f

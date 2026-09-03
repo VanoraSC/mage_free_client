@@ -1,6 +1,6 @@
 package magefree.designsystem.text
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +14,7 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
@@ -130,6 +131,7 @@ fun SymbolText(
     color: Color = Color.Unspecified,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
+    textAlign: TextAlign? = null,
 ) {
     val slots = LocalSymbolSlots.current
     val chunks = parseSymbolText(text)
@@ -165,6 +167,7 @@ fun SymbolText(
         color = color,
         maxLines = maxLines,
         overflow = overflow,
+        textAlign = textAlign ?: TextAlign.Unspecified,
         inlineContent =
             drawable.mapValues { (_, slot) ->
                 InlineTextContent(
@@ -172,15 +175,29 @@ fun SymbolText(
                         Placeholder(
                             width = symbolSize,
                             height = symbolSize,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+                            // Centred on the text rather than on the line: a line's box includes
+                            // leading, so aligning to it rides the symbol above the words it belongs
+                            // to — which is exactly how the first cut of this looked.
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
                         ),
-                ) { Box(modifier = Modifier) { slot(Modifier) } }
+                ) {
+                    // The slot fills the box it was given. It has to: the symbol is drawn to the space
+                    // it is handed, and a slot left to size itself drew a small mark in the corner of
+                    // a large placeholder, which read as both undersized and badly spaced.
+                    slot(Modifier.fillMaxSize())
+                }
             },
     )
 }
 
-/** How large a symbol is relative to the text it sits in. Slightly under the line, as printed cards do. */
-private const val SYMBOL_SCALE = 1.0f
+/**
+ * How large a symbol is relative to the text it sits in.
+ *
+ * Slightly *over* the line, which is what printed cards and `mana.css` both do — the stylesheet's disc
+ * is `1.3em` of a `0.95em` glyph, a shade over 1.2× the surrounding text. A symbol drawn at exactly the
+ * font size reads as small, because a disc's full width is doing the work a letter's x-height does.
+ */
+private const val SYMBOL_SCALE = 1.2f
 
 /** Used only when a style carries no font size at all. */
 private val DefaultSymbolSize = 14.sp

@@ -366,7 +366,10 @@ private fun PromptButton(
                 .padding(horizontal = PromptPadding),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
+        // An action's label is the server's own text, and for a mana ability that text is almost
+        // entirely symbols — `{T}: Add {R}`. A button is where they matter most: it is what the player
+        // reads to tell two options apart.
+        SymbolText(
             text = action.label,
             style = BoardTypography.promptBody,
             color = content,
