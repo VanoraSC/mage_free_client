@@ -141,7 +141,17 @@ fun BoardInspectView(
         // tall card cannot push the panel off screen. Sizing the card first would let a long attachment
         // stack decide how much room the detail gets, which is backwards.
         val available = maxWidth - PanelWidth - Spacing.medium
-        val cardWidth = minOf(available, maxHeight * CARD_ASPECT_RATIO * CARD_HEIGHT_SHARE)
+
+        // Sized against the whole **assembly**, not the card. A permanent with two Auras on it is
+        // taller than its own card, because the upright attachments stack above the host to show
+        // their name bands — so sizing the card to the space available overflows upward by exactly
+        // that stack, and the first thing to disappear is the name plate the stack exists to reveal.
+        val cardWidth =
+            boardCardWidthFitting(
+                state = state.asBoardCard(),
+                maxWidth = available,
+                maxHeight = maxHeight * CARD_HEIGHT_SHARE,
+            )
 
         Row(
             modifier = Modifier.fillMaxSize(),

@@ -233,6 +233,57 @@ data class BoardCardState(
 )
 
 /**
+ * The largest card width whose whole **assembly** fits in [maxWidth] × [maxHeight].
+ *
+ * A card with attachments is bigger than the card: upright attachments stack *above* the host so
+ * their name bands show, and turned ones reach out to the right. A caller that sizes the card to the
+ * space available gets an assembly that overflows by exactly the stack it forgot about — which
+ * presents as the attachments' name plates being cut off at the top, since the stack grows upward.
+ *
+ * The geometry lives here rather than at the call site because the constants do. Callers that hand a
+ * [BoardCard] a width worked out from their own arithmetic will drift from it the next time an
+ * attachment's band height changes.
+ *
+ * Returns at least [Dp.Hairline]; a space too small for any card is the caller's problem to notice,
+ * not this function's to hide.
+ */
+fun boardCardWidthFitting(
+    state: BoardCardState,
+    maxWidth: Dp,
+    maxHeight: Dp,
+): Dp {
+    val upright = state.attachments.count { !it.tapped }
+    val turned = state.attachments.count { it.tapped }
+    val upStack = AttachmentBandHeight * upright
+    val uprightReach = AttachmentInset * upright
+
+    // Height: the host sits under the upright stack, and a tapped host is a card's *width* tall.
+    val byHeight =
+        if (state.tapped) {
+            maxHeight - upStack
+        } else {
+            (maxHeight - upStack) * CARD_ASPECT_RATIO
+        }
+
+    // Width: the host plus the upright stack's sideways drift, and separately the turned reach,
+    // which is measured along the card's height and so converts through the aspect ratio.
+    val byHostWidth =
+        if (state.tapped) {
+            (maxWidth - uprightReach) * CARD_ASPECT_RATIO
+        } else {
+            maxWidth - uprightReach
+        }
+    val byTurnedReach =
+        if (turned == 0) {
+            byHostWidth
+        } else {
+            (maxWidth - AttachmentBandHeight * (turned - 1)) * CARD_ASPECT_RATIO
+        }
+
+    return minOf(byHeight, byHostWidth, byTurnedReach).coerceAtLeast(Dp.Hairline)
+}
+
+/**
  * A card at Board size, with whatever is attached to it stacked behind.
  *
  * **Tapping rotates the card rather than badging it** — the universal Magic idiom, and cheaper to read
