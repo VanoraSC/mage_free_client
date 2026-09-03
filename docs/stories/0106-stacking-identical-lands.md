@@ -17,12 +17,14 @@ cost.
 arrangement and gave the lands a bounded corner; without stacking, the only way a corner holds twelve
 lands is by shrinking them, which is what the corner exists to avoid.
 
-**The rule, as specified.** A stack has **six fixed places**: three for upright copies, staggered
-diagonally as though they were attached to each other, and three more beside them for turned ones. The
-top card is the lowest and furthest right, on both halves and for both players. Past three in a half,
-that half shows a floating count instead of more faces. Tapping acts on any one copy, because they are
-identical and the game draws no distinction between them. Tapping *animates*: the top card turns a
-quarter and travels along the diagonal into the nearest free turned place.
+**The rule, as specified.** A stack has **six fixed places** on one diagonal: three for upright copies,
+staggered down and right as though they were attached to each other, and a turned place at each of
+those, where a tapped copy lies **across** the upright one — covering its bottom half and leaving the
+name, the cost and most of the art to read. The top card is the lowest and furthest right, on both
+halves and for both players. Past three in a half, that half shows a floating count instead of more
+faces. Tapping acts on any one copy, because they are identical and the game draws no distinction
+between them, and it *animates*: the top card turns a quarter and drops onto the place it is already
+in.
 
 The worked example is the specification: **four Plains show three upright faces and a `×4`. Tap one and
 a card turns off the top into the lowest, furthest-right turned place, and the count goes away — three
@@ -34,9 +36,13 @@ turned faces and a `×4` again.**
 **In scope**
 - Grouping identical lands into stacks, tapped and untapped together, with the strict key §7.4
   describes.
-- Six fixed places per stack, and a count per half rather than per stack.
-- Turning and travelling a card between them when a copy is tapped.
-- Acting on a stack through its topmost untapped copy.
+- Six fixed places on one diagonal, the turned half lying across the upright half, and a count per half
+  rather than per stack.
+- A footprint that does not change when a land taps.
+- Turning and travelling a card between them when a copy is tapped, drawn in its own z-position
+  throughout so it never flicks from front to back as it lands.
+- Two hit regions per stack: the upright copies and the strip where the turned ones show past them.
+- Reporting which half was pressed, and leaving what that means to the board.
 - The land corner laid out on one line, sized so that line fits.
 - A catalog board that can actually be tapped, since a transition cannot be posed.
 
@@ -86,6 +92,15 @@ visible by looking; a badge over them would repeat what the fan already says. It
 is also why the worked example needs no special-casing: after a tap the untapped stack is three, and
 three is simply countable again.
 
+**The two halves share one diagonal.** Side by side they cost the width of two stacks, and they made
+the corner wrap — which is what put a Swamp on its own line under the Islands. Laid across each other
+they cost the overhang of a card on its side, and they read the way a tapped land does on a table.
+
+**The footprint never changes when a land taps.** It always allows for the turned half, occupied or
+not. A stack that grew as its first land tapped would resize the corner, which resizes every card on
+the board — and §7.3 is clear that movement means a game action happened. One land turning must not
+make the opponent's creatures jump.
+
 **Three places, not n.** A stagger that grew with the pile gives back exactly the space stacking exists
 to save — ten Plains fanned is ten Plains of board, overlapped. Three is enough to read a stack as a
 stack, and past three the number is what the player wants rather than more pictures of the same land.
@@ -124,8 +139,9 @@ wrong inside a layout that has already decided where everything goes.
 - [x] Identical lands draw as one stack with an upright half and a turned half, three places each.
 - [x] Tap state moves a copy between the halves rather than splitting the stack.
 - [x] Each half carries its own count, shown only past three.
-- [x] Tapping turns a card a quarter and travels it into the nearest free turned place.
-- [x] A tap names the topmost untapped copy, and a fully tapped stack offers nothing to tap.
+- [x] Tapping turns a card a quarter and drops it onto the place it is already in.
+- [x] The travelling card keeps its z-position for the whole flight.
+- [x] A press reports which half it landed on, so the board can act differently on each.
 - [x] Any other difference in state keeps a land out; an attachment keeps it out absolutely.
 - [x] The land corner lays its stacks on one line, and lands of one player never fall onto separate
       lines while there is room.

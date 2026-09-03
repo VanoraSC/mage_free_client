@@ -32,21 +32,32 @@ import magefree.designsystem.card.CounterPalette
  * One land, however many copies of it, in six fixed places.
  *
  * ```
- *    ┌───┐                     three untapped slots, staggered down-right,
- *    │ 0 ┌───┐                 as though the copies were attached to each other
- *    └───│ 1 ┌───┐   ┌───────┐
- *        └───│ 2 │   │   0   ├───────┐        three tapped slots, the same
- *            └───┘   └───┬───│   1   ├───────┐  diagonal, turned a quarter
- *                        └───│───────│   2   │
- *                            └───────┴───────┘
+ *      ┌────┐                one diagonal, three slots, staggered down-right as
+ *      │ 0  │                though the copies were attached to each other
+ *   ┌──┴──┬─┴──┐
+ *   │  0  │ 1  │             a turned copy lies ACROSS the upright one in its own
+ *   └──┬──┴──┬─┴──┐          slot, covering the bottom half and leaving the name,
+ *      │  1  │ 2  │          the cost and most of the art to read
+ *      └──┬──┴──┬─┴──┐
+ *         │  2  │    │
+ *         └─────┴────┘
  * ```
  *
  * **The slots are fixed and the cards move between them.** That is the whole design: a stack is not a
- * list that re-flows when its length changes, it is six places, and tapping is one card travelling from
- * one of them to another. Everything the player sees follows from that — the untapped half fills from
- * the back (slot 0) forward, so it empties from the front and the cards behind never shift; the tapped
- * half fills from the front (slot 2) backward, so each newly-tapped card lands in the nearest free
- * place and the ones already there never move.
+ * list that re-flows when its length changes, it is six places, and tapping is one card turning a
+ * quarter and dropping onto the slot it is already in. Everything the player sees follows from that —
+ * the upright half fills from the back (slot 0) forward, so it empties from the front and the cards
+ * behind never shift; the turned half fills from the front (slot 2) backward, so each newly-tapped card
+ * takes the nearest free place and the ones already there never move.
+ *
+ * **The two halves share one diagonal.** A turned copy lies across the upright copy in the same slot,
+ * covering its bottom half, which is what a tapped land on a table looks like and is much the narrower
+ * arrangement — the turned half costs the overhang of a card on its side, not a second stack.
+ *
+ * **The footprint never changes when a land taps.** It always allows for the turned half, occupied or
+ * not. A stack that grew as its first land tapped would resize the land corner, which resizes every
+ * card on the board; §7.3 is clear that movement means a game action happened, and one land turning
+ * must not make the opponent's creatures jump.
  *
  * **The top card is the lowest and furthest right**, on both halves and for both players. It is the one
  * a hand would reach for, so it is the one a tap acts on and the one a travelling card leaves from.
@@ -69,9 +80,9 @@ import magefree.designsystem.card.CounterPalette
  * @param width the card width the board is drawing at.
  * @param palette the board's counter palette, so a counter kind keeps its colour across every card.
  * @param artFor resolves the card's art from the printing the server named.
- * @param onInspect called when the stack is tapped, with the topmost *untapped* copy — the one a hand
- *   would reach for. It falls back to any member once they are all tapped, since a fully tapped stack
- *   can still be looked at.
+ * @param onPress called with the half that was pressed. Hit testing does the work: the turned cards are
+ *   drawn over the upright ones, so a press on the exposed strip below them reaches a turned card and a
+ *   press on the top half reaches an upright one, with no coordinate arithmetic anywhere.
  * @param modifier the [Modifier] for the stack.
  */
 @Composable
@@ -80,7 +91,7 @@ internal fun LandStack(
     width: Dp,
     palette: CounterPalette,
     artFor: TableArtResolver?,
-    onInspect: ((String) -> Unit)?,
+    onPress: ((LandStackHalf) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val geometry = LandStackGeometry(width)
@@ -103,7 +114,7 @@ internal fun LandStack(
     Box(
         modifier =
             modifier
-                .size(width = geometry.totalWidth(turned > 0), height = geometry.totalHeight)
+                .size(width = geometry.totalWidth, height = geometry.totalHeight)
                 .testTag(BattlefieldTestTags.stack(stack.inspectId)),
     ) {
         // Back to front, so the lowest and furthest right of each half is drawn on top.
@@ -116,45 +127,53 @@ internal fun LandStack(
                 width = width,
                 palette = palette,
                 artFor = artFor,
-                onInspect = onInspect,
+                onPress = onPress?.let { press -> { press(LandStackHalf.Upright) } },
             )
         }
         // Arrivals fill slot 2 first, then 1, then 0 — the nearest free place each time — but they are
         // *drawn* back to front, so the lowest and furthest right is on top in this half exactly as it
         // is in the other. Drawing them in arrival order instead puts the newest card on top and the
         // two halves end up mirror images of each other, which reads as a mistake rather than a rule.
+        //
+        // **The travelling card is drawn in its own place in that order, not on top of everything.**
+        // Drawing it last and then handing over to a static card that belongs further back makes the
+        // card flick from front to back at the instant it lands, which reads as a glitch rather than as
+        // a card being put down. Its z-position is settled before it starts moving and never changes.
         val firstTurnedSlot = PILE_FAN_LIMIT - turned
+        val arriving = travel.value < 1f
+        // Past three there is no free place, so the arrival is a transient rather than one of the
+        // drawn slots — otherwise the slot it "took" would lose the card that is genuinely in it.
+        val takesASlot = stack.tapped.size <= PILE_FAN_LIMIT
+        val leaving = geometry.uprightCentre(maxOf(minOf(stack.untapped.size + 1, PILE_FAN_LIMIT) - 1, 0))
         for (slot in firstTurnedSlot until PILE_FAN_LIMIT) {
-            val newest = slot == firstTurnedSlot && travel.value < 1f
-            if (!newest) {
-                StackedCard(
-                    stack = stack,
-                    geometry = geometry,
-                    centre = geometry.turnedCentre(slot),
-                    turn = 1f,
-                    width = width,
-                    palette = palette,
-                    artFor = artFor,
-                    onInspect = onInspect,
-                )
-            }
-        }
-
-        if (travel.value < 1f) {
-            // One card in flight, from the untapped top slot to the place it is arriving at. Past
-            // three tapped there is no free slot, so it flies to the front one and is simply gone when
-            // it lands — by then the count badge has taken over saying how many there are.
-            val from = geometry.uprightCentre(maxOf(minOf(stack.untapped.size + 1, PILE_FAN_LIMIT) - 1, 0))
-            val to = geometry.turnedCentre(maxOf(PILE_FAN_LIMIT - stack.tapped.size, 0))
+            val newest = slot == firstTurnedSlot && arriving && takesASlot
             StackedCard(
                 stack = stack,
                 geometry = geometry,
-                centre = lerp(from, to, travel.value),
+                centre = if (newest) lerp(leaving, geometry.turnedCentre(slot), travel.value) else geometry.turnedCentre(slot),
+                turn = if (newest) travel.value else 1f,
+                width = width,
+                palette = palette,
+                artFor = artFor,
+                // A card in flight is not a target. Pressing where it *was* would act on a stack that
+                // has already changed underneath the finger.
+                onPress = if (newest) null else onPress?.let { press -> { press(LandStackHalf.Turned) } },
+            )
+        }
+
+        // Past three turned there is no free place for the arrival to take, so it flies to the front
+        // one and is simply gone when it lands — by then the count has taken over saying how many
+        // there are. Drawn behind the whole turned half, which is where it is going.
+        if (arriving && !takesASlot) {
+            StackedCard(
+                stack = stack,
+                geometry = geometry,
+                centre = lerp(leaving, geometry.turnedCentre(0), travel.value),
                 turn = travel.value,
                 width = width,
                 palette = palette,
                 artFor = artFor,
-                onInspect = null,
+                onPress = null,
             )
         }
 
@@ -192,7 +211,7 @@ private fun HalfCount(
     if (count <= PILE_FAN_LIMIT) return
     Box(
         modifier = Modifier.offset(x = box.left, y = 0.dp).size(width = box.width, height = box.height),
-        contentAlignment = Alignment.TopEnd,
+        contentAlignment = if (box.atTop) Alignment.TopEnd else Alignment.BottomEnd,
     ) {
         Text(
             text = "×$count",
@@ -207,11 +226,12 @@ private fun HalfCount(
     }
 }
 
-/** One half's footprint inside the stack, so a badge can sit in its corner. */
+/** One half's footprint inside the stack, and which corner of it a count belongs in. */
 internal data class HalfBox(
     val left: Dp,
     val width: Dp,
     val height: Dp,
+    val atTop: Boolean,
 )
 
 /**
@@ -232,7 +252,7 @@ private fun StackedCard(
     width: Dp,
     palette: CounterPalette,
     artFor: TableArtResolver?,
-    onInspect: ((String) -> Unit)?,
+    onPress: (() -> Unit)?,
 ) {
     val permanent = stack.representative
     Box(
@@ -246,7 +266,7 @@ private fun StackedCard(
             state = permanent.state.copy(tapped = false),
             width = width,
             art = artFor?.invoke(permanent.art, permanent.state.card),
-            onTap = onInspect?.let { inspect -> { inspect(stack.tapActionId ?: stack.inspectId) } },
+            onTap = onPress,
             counterPalette = palette,
         )
     }
@@ -266,52 +286,64 @@ private class LandStackGeometry(
     private val stepX: Dp = cardWidth * STACK_STEP_X_FRACTION
     private val stepY: Dp = cardHeight * STACK_STEP_Y_FRACTION
 
-    /** The upright half's footprint, and the whole stack's height — a portrait card is the taller. */
-    val totalHeight: Dp = cardHeight + stepY * (PILE_FAN_LIMIT - 1)
+    /**
+     * How far the turned card's own centre sits below the upright one it lies across.
+     *
+     * Placed so its top edge falls at the upright card's waist: the upright card keeps its whole top
+     * half — the name, the cost, most of the art — and the turned one reads as having been laid over
+     * the bottom of it, which is what tapping a land on a table looks like.
+     */
+    private val turnedDrop: Dp = cardWidth / 2
 
-    private val uprightWidth: Dp = cardWidth + stepX * (PILE_FAN_LIMIT - 1)
-    private val turnedWidth: Dp = cardHeight + stepX * (PILE_FAN_LIMIT - 1)
+    /**
+     * A turned card is wider than an upright one, so it hangs off both sides of the diagonal. The
+     * whole stack shifts right by that overhang, which keeps every slot at a non-negative offset.
+     */
+    private val turnedOverhang: Dp = (cardHeight - cardWidth) / 2
 
-    /** The turned half sits beside the upright one, and only claims room when something is in it. */
-    fun totalWidth(hasTurned: Boolean): Dp = if (hasTurned) uprightWidth + cardWidth * HALVES_GAP_FRACTION + turnedWidth else uprightWidth
+    /**
+     * **The footprint never changes when a land taps.** It always allows for the turned half, whether
+     * or not anything is in it. A stack that grew as its first land tapped would resize the corner,
+     * which resizes every card on the board — and §7.3 is clear that movement means a game action
+     * happened. One land turning must not make the opponent's creatures jump.
+     */
+    val totalWidth: Dp = cardHeight + stepX * (PILE_FAN_LIMIT - 1)
+    val totalHeight: Dp = cardHeight / 2 + turnedDrop + cardWidth / 2 + stepY * (PILE_FAN_LIMIT - 1)
 
     /** Slot 0 is furthest back — up and left; slot 2 is the top card, lowest and furthest right. */
     fun uprightCentre(slot: Int): Offset2 =
         Offset2(
-            x = stepX * slot + cardWidth / 2,
+            x = turnedOverhang + stepX * slot + cardWidth / 2,
             y = stepY * slot + cardHeight / 2,
         )
 
     /**
-     * The same diagonal, a quarter turn round, beside the upright half.
+     * The same slot, a quarter turn round and dropped onto the card in it.
      *
-     * Its front slot sits level with the upright half's front card, so a card leaving the top of one
-     * arrives at the front of the other without changing height — the travel reads as a rotation and a
-     * step sideways rather than as a swoop.
+     * The two halves share one diagonal rather than sitting side by side: a turned copy lies *across*
+     * the upright copy at the same slot, covering its bottom and leaving its top to read. That is both
+     * what a tapped land looks like on a table and much the narrower arrangement — the turned half
+     * costs the overhang rather than a second stack's width.
+     *
+     * It also makes the travel honest. A card leaving slot two rotates and drops onto slot two; it does
+     * not fly across the board to a separate pile, because there is no separate pile.
      */
     fun turnedCentre(slot: Int): Offset2 {
-        val front = uprightCentre(PILE_FAN_LIMIT - 1)
-        return Offset2(
-            x = uprightWidth + cardWidth * HALVES_GAP_FRACTION + stepX * slot + cardHeight / 2,
-            y = front.y - stepY * (PILE_FAN_LIMIT - 1 - slot),
-        )
+        val upright = uprightCentre(slot)
+        return Offset2(x = upright.x, y = upright.y + turnedDrop)
     }
 
     /**
-     * Each half's own footprint, so its count sits over its own cards.
+     * Each half's own count sits in a different corner, because the halves now overlap.
      *
-     * Per half rather than per stack, so a board with four upright and two turned says four beside the
-     * upright ones and nothing beside the turned ones — which is the truth, and is what makes the count
-     * disappear when a tap takes an upright half from four to three.
+     * The upright one goes top-right, above the cards, where the down-right stagger leaves the corner
+     * clear. The turned one goes bottom-right, under them, for the same reason in the other direction.
+     * Per half rather than per stack: a board with four upright and two turned says four over the
+     * upright ones and nothing over the turned ones, which is the truth.
      */
-    fun uprightBox(): HalfBox = HalfBox(left = 0.dp, width = uprightWidth, height = totalHeight)
+    fun uprightBox(): HalfBox = HalfBox(left = 0.dp, width = totalWidth, height = totalHeight, atTop = true)
 
-    fun turnedBox(): HalfBox =
-        HalfBox(
-            left = uprightWidth + cardWidth * HALVES_GAP_FRACTION,
-            width = turnedWidth,
-            height = totalHeight,
-        )
+    fun turnedBox(): HalfBox = HalfBox(left = 0.dp, width = totalWidth, height = totalHeight, atTop = false)
 }
 
 /** A point in the stack's own space. Dp rather than pixels, because the slots are defined in cards. */
@@ -346,24 +378,43 @@ private const val TAPPED_TURN_DEGREES = 90f
 private const val TAP_TRAVEL_MILLIS = 260
 
 /** Between the upright half and the turned one. */
-private const val HALVES_GAP_FRACTION = 0.06f
 
 private val CountShape = RoundedCornerShape(2.dp)
 private val CountPadding = 2.dp
 
 /**
- * How much room this stack needs, in card widths.
+ * How much room a stack needs, in card widths — the same whatever is in it.
  *
  * Exposed so the board can size its lands by asking rather than by re-deriving the geometry, which is
- * the kind of duplication that drifts. The turned half costs a card *height* rather than a width,
- * because a turned card lies on its side.
+ * the kind of duplication that drifts. It is a card *height* across, not a width, because a turned copy
+ * lies on its side and hangs off both edges of the diagonal.
  */
-internal fun TableLandStack.widthInCards(): Float {
-    val upright = 1f + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1)
-    if (tapped.isEmpty()) return upright
-    val turned = 1f / CARD_ASPECT_RATIO + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1)
-    return upright + HALVES_GAP_FRACTION + turned
+internal fun stackWidthInCards(): Float = 1f / CARD_ASPECT_RATIO + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1)
+
+/**
+ * How tall a stack is, in card widths — again the same whatever is in it.
+ *
+ * Half an upright card down to the waist, then the turned card laid across it, then the diagonal.
+ */
+internal fun stackHeightInCards(): Float {
+    val diagonal = 1f / CARD_ASPECT_RATIO * STACK_STEP_Y_FRACTION * (PILE_FAN_LIMIT - 1)
+    return 1f / CARD_ASPECT_RATIO / 2f + 0.5f + 0.5f + diagonal
 }
 
-/** How tall any stack is, in card widths. Constant: the staggering does not depend on the contents. */
-internal fun stackHeightInCards(): Float = 1f / CARD_ASPECT_RATIO * (1f + STACK_STEP_Y_FRACTION * (PILE_FAN_LIMIT - 1))
+/**
+ * Which part of a stack was pressed.
+ *
+ * **The two halves are different affordances and the component says which, rather than deciding.** An
+ * upright copy's exposed top half is the card you would pick up; a turned copy's exposed strip below it
+ * is the card already lying down. What each means is a question about the game — pressing an upright
+ * land activates its mana ability, and there is no such thing as untapping one at will — so the board
+ * answers it, not the stack. Collapsing them into one press would leave the board unable to tell
+ * "act on this land" from "look at the one you already used".
+ */
+enum class LandStackHalf {
+    /** An upright copy: the top half of the diagonal, the part no turned card is lying across. */
+    Upright,
+
+    /** A turned copy: the strip below the upright cards, where a tapped one shows past them. */
+    Turned,
+}

@@ -27,6 +27,7 @@ import magefree.app.game.ImmersiveSystemUi
 import magefree.designsystem.component.MageSecondaryButton
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
+import magefree.feature.game.table.LandStackHalf
 import magefree.feature.game.table.TableArtResolver
 import magefree.feature.game.table.battlefieldModel
 
@@ -81,9 +82,20 @@ fun BattlefieldPreviewScreen(
             BattlefieldLayout(
                 model = battlefieldModel(state),
                 artFor = artFor,
-                onInspect = { id ->
-                    inspected = id
-                    if (board.tappable) tappedPlains = (tappedPlains + 1).coerceAtMost(CATALOG_PLAINS)
+                onInspect = { id -> inspected = id },
+                // The two halves of a stack are two affordances, and the board decides what each
+                // means. Here that is: press an upright copy to tap one, press the strip where a
+                // turned copy shows past them to untap one — which is what makes the turn-and-drop
+                // watchable in both directions without a reset button between every try.
+                onLandPress = { stack, half ->
+                    inspected = stack.inspectId
+                    if (board.tappable) {
+                        tappedPlains =
+                            when (half) {
+                                LandStackHalf.Upright -> (tappedPlains + 1).coerceAtMost(CATALOG_PLAINS)
+                                LandStackHalf.Turned -> (tappedPlains - 1).coerceAtLeast(0)
+                            }
+                    }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -109,9 +121,6 @@ fun BattlefieldPreviewScreen(
                         tappedPlains = 0
                     },
                 )
-                if (board.tappable && tappedPlains > 0) {
-                    MageSecondaryButton(text = "Untap", onClick = { tappedPlains = 0 })
-                }
                 inspected?.let { Text(text = it, style = MaterialTheme.typography.labelMedium) }
             }
         }

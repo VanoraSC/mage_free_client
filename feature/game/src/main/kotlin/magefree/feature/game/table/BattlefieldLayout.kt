@@ -80,7 +80,11 @@ import magefree.designsystem.card.rememberCounterPalette
  *   arrangement is much harder to judge that way, because a board of grey rectangles hides whether a
  *   card is actually readable at the size it was given.
  * @param onInspect called with a permanent's id when its card is tapped, or `null` for a board that is
- *   only being looked at.
+ *   only being looked at. Lands do not go through it: see [onLandPress].
+ * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
+ *   because a stack is two affordances rather than one — the upright copies are the card you would pick
+ *   up, and the turned ones are the cards already lying down — and what each *means* is a question
+ *   about the game rather than about the layout.
  */
 @Composable
 fun BattlefieldLayout(
@@ -88,6 +92,7 @@ fun BattlefieldLayout(
     modifier: Modifier = Modifier,
     artFor: TableArtResolver? = null,
     onInspect: ((String) -> Unit)? = null,
+    onLandPress: ((TableLandStack, LandStackHalf) -> Unit)? = null,
 ) {
     val palette = rememberCounterPalette()
 
@@ -125,6 +130,7 @@ fun BattlefieldLayout(
                     palette = palette,
                     artFor = artFor,
                     onInspect = onInspect,
+                    onLandPress = onLandPress,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -138,6 +144,7 @@ fun BattlefieldLayout(
                     palette = palette,
                     artFor = artFor,
                     onInspect = onInspect,
+                    onLandPress = onLandPress,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -156,6 +163,7 @@ private fun SideLayout(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
+    onLandPress: ((TableLandStack, LandStackHalf) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     // The viewer's front row comes first, so packing to the top puts it against the middle; the
@@ -180,7 +188,7 @@ private fun SideLayout(
                 alignment = towardCorner,
                 palette = palette,
                 artFor = artFor,
-                onInspect = onInspect,
+                onLandPress = onLandPress,
                 modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
             )
         }
@@ -224,7 +232,7 @@ private fun LandZone(
     alignment: Alignment,
     palette: CounterPalette,
     artFor: TableArtResolver?,
-    onInspect: ((String) -> Unit)?,
+    onLandPress: ((TableLandStack, LandStackHalf) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier, contentAlignment = alignment) {
@@ -239,7 +247,7 @@ private fun LandZone(
                     width = width,
                     palette = palette,
                     artFor = artFor,
-                    onInspect = onInspect,
+                    onPress = onLandPress?.let { press -> { half -> press(stack, half) } },
                 )
             }
         }
@@ -316,8 +324,9 @@ private fun landCardWidth(
     if (most == 0) return PreferredCardWidth
 
     // The busiest side's line, measured in card widths, so the answer is one division rather than a
-    // search. Every stack pays for its own upright faces and, if it has any, its turned half.
-    val widest = stacks.maxOf { line -> line.sumOf { it.widthInCards().toDouble() }.toFloat() }
+    // search. Every stack costs the same, occupied or not, which is what keeps the board from resizing
+    // itself the moment a land taps.
+    val widest = stackWidthInCards() * most
     val byWidth = (zoneCeiling - StackGap * (most - 1)) / widest.coerceAtLeast(1f)
     val byHeight = sideHeight * CARD_ASPECT_RATIO / stackHeightInCards()
 
@@ -332,8 +341,7 @@ private fun landZoneWidth(
     val stacks = sides.map { it.landStacks() }
     val most = stacks.maxOfOrNull { it.size } ?: 0
     if (most == 0) return 0.dp
-    val widest = stacks.maxOf { line -> line.sumOf { it.widthInCards().toDouble() }.toFloat() }
-    return landWidth * widest + StackGap * (most - 1)
+    return landWidth * stackWidthInCards() * most + StackGap * (most - 1)
 }
 
 /**

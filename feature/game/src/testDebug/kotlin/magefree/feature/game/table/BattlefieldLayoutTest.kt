@@ -5,11 +5,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -47,12 +50,17 @@ class BattlefieldLayoutTest {
     val composeTestRule = createComposeRule()
 
     private val inspected = mutableListOf<String>()
+    private val landPresses = mutableListOf<LandStackHalf>()
 
     private fun show(state: GameState) {
         composeTestRule.setContent {
             MageTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    BattlefieldLayout(model = battlefieldModel(state), onInspect = { inspected += it })
+                    BattlefieldLayout(
+                        model = battlefieldModel(state),
+                        onInspect = { inspected += it },
+                        onLandPress = { _, half -> landPresses += half },
+                    )
                 }
             }
         }
@@ -265,12 +273,20 @@ class BattlefieldLayoutTest {
     }
 
     @Test
-    fun `a stack is acted on through one of its own members`() {
-        show(oneSided("me", (1..4).map { plains("p$it") }))
+    fun `pressing an upright copy is a different action from pressing a turned one`() {
+        // The two halves are two affordances. Hit testing has to separate them without any coordinate
+        // arithmetic in the caller: the turned cards are drawn over the upright ones, so the strip that
+        // shows past them reaches a turned card and the top half reaches an upright one.
+        show(oneSided("me", listOf(plains("p1", tapped = true)) + (2..4).map { plains("p$it") }))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p1")).performClick()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p2")).performTouchInput {
+            click(Offset(center.x, height * 0.2f))
+        }
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p2")).performTouchInput {
+            click(Offset(center.x, height * 0.95f))
+        }
 
-        assertTrue("tapping the stack reported $inspected", inspected.single().startsWith("p"))
+        assertEquals(listOf(LandStackHalf.Upright, LandStackHalf.Turned), landPresses)
     }
 
     @Test
