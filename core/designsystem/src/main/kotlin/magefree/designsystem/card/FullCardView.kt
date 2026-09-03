@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import magefree.designsystem.text.SymbolText
 import magefree.designsystem.theme.MageTheme
 import magefree.designsystem.theme.Sizing
 import magefree.designsystem.theme.Spacing
@@ -106,7 +107,7 @@ fun FullCardView(
                             modifier = Modifier.weight(1f, fill = false),
                         )
                         card.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
-                            Text(
+                            SymbolText(
                                 text = cost,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -194,7 +195,7 @@ private fun CardDetailSection(
 private val SampleCard =
     CardDisplay(
         name = "Lightning Bolt",
-        manaCost = "R",
+        manaCost = "{R}",
         typeLine = "Instant",
         oracleText = "Lightning Bolt deals 3 damage to any target.",
     )
@@ -202,7 +203,7 @@ private val SampleCard =
 private val SampleTextHeavyCard =
     CardDisplay(
         name = "Elspeth, Sun's Champion",
-        manaCost = "4WW",
+        manaCost = "{4}{W}{W}",
         typeLine = "Legendary Planeswalker — Elspeth",
         oracleText =
             "+1: Create three 1/1 white Soldier creature tokens.\n\n" +

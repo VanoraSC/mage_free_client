@@ -195,8 +195,32 @@ any of them.
 ### 2.6 The one relevant user option
 
 `userData.isUseFirstManaAbility()` (`HumanPlayer.java:2348`) skips the ability picker when the object
-is a land and its first ability is a mana ability. It is the closest thing upstream has to §7.7's
-low-friction land tapping, and it is a blunt per-user toggle rather than a per-decision judgement.
+is a land and its first ability is a mana ability. It is a blunt per-user toggle, on top of the
+per-decision filtering described next.
+
+### 2.7 §7.7's filtering is already the server's, all three rules
+
+Traced 2026-09-03, while starting 0103. The story assumed the client could "do better by deciding per
+decision" than upstream's per-user toggle. It cannot, because upstream **already decides per
+decision**, and it has information the client does not:
+
+- **One possible mana → no prompt.** `suppressAbilityPicker` returns `ability.isManaActivatedAbility()`
+  for anything on the battlefield (`HumanPlayer.java:2407`), and a single suppressed ability is
+  activated directly (`:2344`). A basic land taps with no picker, server-side.
+- **Only the real options.** `ManaUtil.tryToAutoPay` (`ManaUtil.java:65`) narrows a permanent's mana
+  abilities against the **unpaid cost** — by symbol where the cost has them, by mana otherwise
+  (`:82`, `:84`). Narrowed to one, the picker is suppressed by the rule above. It bows out entirely
+  when the spell `caresAboutManaColor` (`HumanPlayer.java:1774`, magefree/mage#9070), which is
+  correct: there the choice is real.
+- **Mid-cast, only mana abilities.** Payment goes through `getUseableManaAbilities`
+  (`HumanPlayer.java:1769`), which is mana abilities and nothing else. Outside payment the ordinary
+  path uses the full activated set, so the narrowing is per moment, not a setting.
+
+**What follows.** A client that filtered these itself would be choosing *which mana to produce*, and
+that is content, not form — the one thing the safety rule forbids. So 0103 is not a filtering story.
+The gap it should close is that our cast surface renders a `ChooseAbility` prompt with **no way to
+answer it**: when the choice is real — a dual land against a coloured cost, a spell that cares which
+colour paid — the server asks, and the player must be able to reply.
 
 ---
 

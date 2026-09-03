@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,11 +20,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -31,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSignal
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
+import magefree.designsystem.text.ManaFontGlyph
+import magefree.designsystem.text.SymbolText
 
 /*
  * The Board tier: a card as it appears on a battlefield or in a stack pile.
@@ -78,32 +86,57 @@ data class BoardAttachment(
  *
  * [Unknown] exists because a newer server can send an icon this build has not heard of; it renders as
  * a neutral badge rather than vanishing, so the player still sees that *something* is there.
+ *
+ * **[glyph] is the picture, [shortLabel] is what happens without one.** The shipped Mana font draws
+ * every keyword upstream marks, so a flier is a feather rather than the letters `FLY`. Four of these
+ * have no usable picture — a restriction, a target and an unrecognised icon are not keywords at all,
+ * and the level banner is unreadable at this size — so those keep their short form. That is the same
+ * rule the mana symbols follow: what cannot be drawn is still said.
  */
 enum class BoardBadge(
     val shortLabel: String,
     val label: String,
+    val glyph: Char? = null,
 ) {
-    Flying("FLY", "Flying"),
-    Defender("DEF", "Defender"),
-    Deathtouch("DTH", "Deathtouch"),
-    Lifelink("LL", "Lifelink"),
-    DoubleStrike("DS", "Double strike"),
-    FirstStrike("FS", "First strike"),
-    Trample("TR", "Trample"),
+    Flying("FLY", "Flying", Char(0xE952)),
+    Defender("DEF", "Defender", Char(0xE94C)),
+    Deathtouch("DTH", "Deathtouch", Char(0xE94B)),
+    Lifelink("LL", "Lifelink", Char(0xEA4B)),
+    DoubleStrike("DS", "Double strike", Char(0xE94D)),
+    FirstStrike("FS", "First strike", Char(0xE950)),
+    Trample("TR", "Trample", Char(0xE964)),
 
-    /** Upstream sends **shroud** under this icon too, told apart only by the server's own hint. */
-    Hexproof("HEX", "Hexproof"),
-    Indestructible("IND", "Indestructible"),
-    Vigilance("VIG", "Vigilance"),
-    Reach("RCH", "Reach"),
-    Infect("INF", "Infect"),
-    Crew("CRW", "Crew"),
+    /**
+     * Upstream sends **shroud** under this icon too, told apart only by the server's own hint — so the
+     * two are separate entries here, and whoever reads the hint picks between them. They are worth
+     * telling apart: hexproof stops *their* spells, shroud stops yours as well.
+     */
+    Hexproof("HEX", "Hexproof", Char(0xE954)),
+    Shroud("SHR", "Shroud", Char(0xEA88)),
+    Indestructible("IND", "Indestructible", Char(0xE95A)),
+    Vigilance("VIG", "Vigilance", Char(0xE968)),
+    Reach("RCH", "Reach", Char(0xE960)),
+    Infect("INF", "Infect", Char(0xEA73)),
+    Crew("CRW", "Crew", Char(0xE947)),
+
+    /**
+     * No glyph, though the font has one. `ms-level` is a wide banner with the word *LEVEL* set into
+     * it in microtype; scaled into a 13dp square it is an illegible smudge, and a badge nobody can
+     * read is worse than three letters they can.
+     */
     ClassLevel("CLS", "Class level"),
+    FaceDown("FD", "Face down", Char(0xE9D6)),
+
+    /** No glyph: this is a property of the game state, not a keyword any font has a picture of. */
     HasTargets("TGT", "Has targets"),
-    CostX("X", "Announced X"),
+    CostX("X", "Announced X", Char(0xE615)),
+
+    /** No glyph, for the same reason. The reasons themselves are in the server's hint. */
     HasRestrictions("!", "Restricted"),
-    Commander("CMD", "Commander"),
-    Ringbearer("RNG", "Ring-bearer"),
+    Commander("CMD", "Commander", Char(0xE9C6)),
+    Ringbearer("RNG", "Ring-bearer", Char(0xE9DF)),
+
+    /** No glyph by definition: the server named something this build does not know. */
     Unknown("?", "Unrecognised"),
 }
 
@@ -499,12 +532,17 @@ private fun HostCard(
 }
 
 /**
- * One counter: a filled circle carrying only its count.
+ * One counter: a filled chip carrying its kind's symbol, where the font has one, and its count.
  *
- * The ring alternates black and white around the circumference, which is what lets the same counter
- * read on dark art, light art and the card frame alike without anyone choosing a colour per
- * background. The digit flips between black and white by the fill's lightness, so a queue-allocated
- * colour can never produce an unreadable number.
+ * The ring alternates black and white around the outline, which is what lets the same counter read on
+ * dark art, light art and the card frame alike without anyone choosing a colour per background. The
+ * digit and the symbol flip between black and white by the fill's lightness, so a queue-allocated
+ * colour can never produce an unreadable chip.
+ *
+ * **The symbol is added to the colour, not swapped for it.** [CounterPalette] answers *which kind is
+ * this, compared to that one* for every kind including the hundreds the font has never heard of; the
+ * glyph answers *which kind is this* outright, for the two dozen it has. A counter with no glyph is
+ * the chip without its leading symbol — the same shape, the same colour, the same count.
  */
 @Composable
 internal fun CounterCircle(
@@ -512,41 +550,76 @@ internal fun CounterCircle(
     palette: CounterPalette,
 ) {
     val fill = palette.colorFor(counter.name)
-    Box(
+    val ink = counterDigitColor(fill)
+    val glyph = counterGlyph(counter.name)
+    Row(
         modifier =
             Modifier
-                .size(CounterCircleSize)
+                .height(CounterCircleSize)
+                .defaultMinSize(minWidth = CounterCircleSize)
                 .drawBehind {
-                    val radius = size.minDimension / 2f
-                    drawCircle(color = fill, radius = radius)
-                    // A white ring, then a dashed black ring on top of it: the gaps in the black show
-                    // the white through, giving one alternating outline rather than two rings.
+                    val radius = size.height / 2f
+                    val corner = CornerRadius(radius, radius)
+                    drawRoundRect(color = fill, cornerRadius = corner)
+                    // A white outline, then a dashed black one on top of it: the gaps in the black
+                    // show the white through, giving one alternating edge rather than two.
                     val strokePx = RING_STROKE_DP.dp.toPx()
-                    val inset = radius - strokePx / 2f
-                    drawCircle(color = Color.White, radius = inset, style = Stroke(width = strokePx))
-                    drawCircle(
+                    val inset = strokePx / 2f
+                    val body = Size(size.width - strokePx, size.height - strokePx)
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset(inset, inset),
+                        size = body,
+                        cornerRadius = corner,
+                        style = Stroke(width = strokePx),
+                    )
+                    drawRoundRect(
                         color = Color.Black,
-                        radius = inset,
+                        topLeft = Offset(inset, inset),
+                        size = body,
+                        cornerRadius = corner,
                         style =
                             Stroke(
                                 width = strokePx,
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(RING_DASH_PX, RING_DASH_PX)),
                             ),
                     )
-                },
-        contentAlignment = Alignment.Center,
+                }.padding(horizontal = CounterChipPadding),
+        horizontalArrangement = Arrangement.spacedBy(CounterChipPadding, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (glyph != null) {
+            ManaFontGlyph(
+                glyph = glyph,
+                color = ink,
+                fill = COUNTER_GLYPH_FILL,
+                modifier =
+                    Modifier
+                        .size(CounterGlyphSize)
+                        .semantics { contentDescription = counter.name },
+            )
+        }
         Text(
             text = counterCountLabel(counter.count),
             style = BoardTypography.counter,
-            color = counterDigitColor(fill),
+            color = ink,
             maxLines = 1,
             textAlign = TextAlign.Center,
         )
     }
 }
 
-/** A keyword badge. Placeholder art: a small square carrying the keyword's short form. */
+/**
+ * A keyword badge: the keyword's own symbol on a small plate.
+ *
+ * The plate stays because the badge sits on card art, which can be any colour — an unbacked glyph
+ * disappears against half the cards in a set. What changed is what is on it: the shipped font draws
+ * the actual keyword, so a flier is a feather instead of the letters `FLY`.
+ *
+ * **The keyword is still said, not just drawn.** The glyph carries the full name as its content
+ * description, so a badge reads as "Flying" to anything that reads rather than looks — the same
+ * promise the mana symbols make about the server's sentences.
+ */
 @Composable
 internal fun BadgeSquare(badge: BoardBadge) {
     Box(
@@ -557,13 +630,28 @@ internal fun BadgeSquare(badge: BoardBadge) {
                 .border(width = 1.dp, color = BoardSurface.onSurfaceMuted, shape = BadgeShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = badge.shortLabel,
-            style = BoardTypography.counter,
-            color = BoardSurface.onSurface,
-            maxLines = 1,
-            textAlign = TextAlign.Center,
-        )
+        val glyph = badge.glyph
+        if (glyph != null) {
+            ManaFontGlyph(
+                glyph = glyph,
+                color = BoardSurface.onSurface,
+                fill = BADGE_GLYPH_FILL,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .semantics { contentDescription = badge.label },
+            )
+        } else {
+            // Nothing to draw, so the short form stands — a restriction and a target are game state
+            // rather than keywords, and no font has a picture of them.
+            Text(
+                text = badge.shortLabel,
+                style = BoardTypography.counter,
+                color = BoardSurface.onSurface,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -668,7 +756,7 @@ private fun AttachedCardFace(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 attachment.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
-                    Text(
+                    SymbolText(
                         text = cost,
                         style = BoardTypography.counter,
                         color = BoardSurface.onSurfaceMuted,
@@ -729,6 +817,18 @@ private val FocalBorderWidth = 2.dp
 private val SecondaryBorderWidth = 1.dp
 private val CounterCircleSize = 15.dp
 private val BadgeSize = 13.dp
+
+/** The gap between a counter's symbol and its count, and the chip's own inset from its outline. */
+private val CounterChipPadding = 1.dp
+
+/** The symbol's box inside the chip: the chip's height less its outline and inset on both sides. */
+private val CounterGlyphSize = 11.dp
+
+/** Room around the glyph, so it does not sit on the plate's outline. */
+private const val BADGE_GLYPH_FILL = 0.74f
+
+/** The counter's chip is tighter than a badge's plate, and its symbol takes more of the space. */
+private const val COUNTER_GLYPH_FILL = 0.92f
 
 /*
  * The stack's two steps are **fractions of the card**, not fixed distances.

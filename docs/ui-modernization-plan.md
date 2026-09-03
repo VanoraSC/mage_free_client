@@ -655,11 +655,18 @@ server reports as legal, and rule 3 narrows that to what is legal *here*. Which 
 falls into is derived from the server's reported abilities, never from a hardcoded notion of what
 lands do.
 
-Upstream does some of this already: `HumanPlayer` suppresses the ability picker for a land whose
-first ability is a mana ability when the user option `useFirstManaAbility` is set, and
-`ManaUtil.tryToAutoPay` narrows a chosen permanent's abilities when one fits the unpaid cost exactly
-(`upstream-cast-sequence.md` §2.3, §2.6). The client's job is to do the same filtering per decision
-rather than per user preference.
+**All three of those rules are already the server's — corrected 2026-09-03** after tracing them
+(`upstream-cast-sequence.md` §2.7), and the correction matters because it removes the work rather than
+describing it. `suppressAbilityPicker` hides the picker for any single mana ability on the
+battlefield; `ManaUtil.tryToAutoPay` narrows a permanent's abilities against the **unpaid cost**
+before the question is asked at all; and payment goes through `getUseableManaAbilities`, which is mana
+abilities only. Upstream's `useFirstManaAbility` is a *further*, blunter per-user suppression on top,
+not the whole of it as an earlier draft of this section said.
+
+So the client does not filter, and must not: choosing which mana a land produces is content, and §7.6's
+safety rule forbids inventing content. What the client owes is to **render the picker the server does
+send** — a dual land against a coloured cost, a spell that cares which colour paid — with every option
+it listed. That is 0103.
 
 **Two rules were retired on 2026-09-02, with the declared-intent model (§7.6).** They are recorded
 here because they were load-bearing for that design and their loss is a real cost, not an oversight:

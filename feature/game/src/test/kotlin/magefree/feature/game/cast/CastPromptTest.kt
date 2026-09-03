@@ -1,5 +1,7 @@
 package magefree.feature.game.cast
 
+import magefree.network.game.AbilityChoice
+import magefree.network.game.ChoiceOption
 import magefree.network.game.GamePrompt
 import magefree.network.game.PromptOptions
 import org.junit.Assert.assertEquals
@@ -109,6 +111,60 @@ class CastPromptTest {
         assertTrue(castPromptModel(GamePrompt.PlayMana(message = "Pay {2}{R}")).choosesOnBoard)
         assertTrue(castPromptModel(GamePrompt.Target(message = "Choose a target")).choosesOnBoard)
         assertTrue(!castPromptModel(GamePrompt.Ask(message = "Kick it?")).choosesOnBoard)
+    }
+
+    @Test
+    fun `every option the server listed is offered, and none is dropped`() {
+        // The narrowing is upstream's and has already happened by the time this arrives: it suppresses
+        // the picker entirely for a single mana ability, and `tryToAutoPay` cuts a permanent's
+        // abilities down against the unpaid cost first. So a picker that reaches us is one where the
+        // choice is **real**, and dropping an option would be choosing which mana to produce — content
+        // rather than form, and the one thing the safety rule forbids.
+        val model =
+            castPromptModel(
+                GamePrompt.ChooseAbility(
+                    message = "Choose a mana ability",
+                    choices =
+                        listOf(
+                            AbilityChoice(abilityId = "a-1", text = "{T}: Add {R}"),
+                            AbilityChoice(abilityId = "a-2", text = "{T}: Add {W}"),
+                        ),
+                ),
+            )
+
+        assertEquals(
+            listOf(CastChoice("a-1", "{T}: Add {R}"), CastChoice("a-2", "{T}: Add {W}")),
+            model.choices,
+        )
+    }
+
+    @Test
+    fun `an option's label is the server's own text, never rebuilt from its id`() {
+        val model =
+            castPromptModel(
+                GamePrompt.ChooseAbility(
+                    message = "Choose a mana ability",
+                    choices = listOf(AbilityChoice(abilityId = "6f2c-…", text = "{T}: Add {G}")),
+                ),
+            )
+
+        assertEquals("{T}: Add {G}", model.choices.single().label)
+        assertEquals("6f2c-…", model.choices.single().reply)
+    }
+
+    @Test
+    fun `a mode choice carries its key, which is not what is shown`() {
+        // The key is what the reply carries and the label is what a player reads. Sending the label
+        // would be a wrong action submitted to a live game.
+        val model =
+            castPromptModel(
+                GamePrompt.ChooseChoice(
+                    message = "Choose a mode",
+                    choices = listOf(ChoiceOption(key = "mode-1", label = "Destroy target creature")),
+                ),
+            )
+
+        assertEquals(CastChoice(reply = "mode-1", label = "Destroy target creature"), model.choices.single())
     }
 
     @Test

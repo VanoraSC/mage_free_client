@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import magefree.designsystem.text.SymbolText
 import magefree.designsystem.theme.Elevation
 import magefree.designsystem.theme.MageShapes
 import magefree.designsystem.theme.MageTheme
@@ -105,7 +106,7 @@ fun CardTile(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     card.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
-                        Text(
+                        SymbolText(
                             text = cost,
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -144,14 +145,14 @@ internal fun CardArtRegion(
 private val SampleCreature =
     CardDisplay(
         name = "Grizzly Bears",
-        manaCost = "1G",
+        manaCost = "{1}{G}",
         typeLine = "Creature — Bear",
     )
 
 private val SampleLongName =
     CardDisplay(
         name = "Rin and Seri, Inseparable",
-        manaCost = "1RGW",
+        manaCost = "{1}{R}{G}{W}",
         typeLine = "Legendary Creature — Dog Cat",
     )
 

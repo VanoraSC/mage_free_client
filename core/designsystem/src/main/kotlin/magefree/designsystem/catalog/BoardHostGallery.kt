@@ -190,8 +190,8 @@ private val Graveyard = BoardSlotId("graveyard")
 
 private val CardWidth = 56.dp
 
-private val BearsCard = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear")
-private val PacifismCard = CardDisplay(name = "Pacifism", manaCost = "1W", typeLine = "Enchantment — Aura")
+private val BearsCard = CardDisplay(name = "Grizzly Bears", manaCost = "{1}{G}", typeLine = "Creature — Bear")
+private val PacifismCard = CardDisplay(name = "Pacifism", manaCost = "{1}{W}", typeLine = "Enchantment — Aura")
 private val ForestCard = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")
 
 private val Bears = BoardObjectId("bears")

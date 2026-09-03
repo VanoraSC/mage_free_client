@@ -107,7 +107,7 @@ internal fun BoardCardGallery(
             )
         }
 
-        GalleryCaption("Keyword badges — placeholder art, sized for several along the bottom edge")
+        GalleryCaption("Keyword badges — the keyword's own symbol, sized for several along the bottom edge")
         BoardRow {
             LabelledCard(
                 label = "flying",
@@ -319,16 +319,16 @@ private fun LabelledCard(
 
 /** A caption in the surrounding app theme, so the board's colours never explain themselves. */
 @Composable
-private fun GalleryCaption(text: String) {
+internal fun GalleryCaption(text: String) {
     Text(text = text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /** Board size, near the small end of what the battlefield will derive, so legibility is judged honestly. */
 private val GalleryCardWidth = 68.dp
 
-private val BEARS = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear")
+private val BEARS = CardDisplay(name = "Grizzly Bears", manaCost = "{1}{G}", typeLine = "Creature — Bear")
 private val FOREST = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")
-private val PACIFISM = BoardAttachment(name = "Pacifism", manaCost = "1W")
-private val HOLY_STRENGTH = BoardAttachment(name = "Holy Strength", manaCost = "W")
-private val BONESPLITTER = BoardAttachment(name = "Bonesplitter", manaCost = "1")
+private val PACIFISM = BoardAttachment(name = "Pacifism", manaCost = "{1}{W}")
+private val HOLY_STRENGTH = BoardAttachment(name = "Holy Strength", manaCost = "{W}")
+private val BONESPLITTER = BoardAttachment(name = "Bonesplitter", manaCost = "{1}")
 private val BONESPLITTER_TAPPED = BONESPLITTER.copy(tapped = true)
