@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
+import magefree.designsystem.text.SymbolText
 import magefree.designsystem.theme.MageShapes
 import magefree.designsystem.theme.Spacing
 
@@ -260,7 +261,7 @@ private fun AttachmentRow(attachment: BoardAttachment) {
         ) {
             Text(text = attachment.name, style = BoardTypography.cardName, color = BoardSurface.onSurface)
             attachment.manaCost?.let { cost ->
-                Text(text = cost, style = BoardTypography.cardStats, color = BoardSurface.onSurfaceMuted)
+                SymbolText(text = cost, style = BoardTypography.cardStats, color = BoardSurface.onSurfaceMuted)
             }
         }
         if (attachment.tapped) {

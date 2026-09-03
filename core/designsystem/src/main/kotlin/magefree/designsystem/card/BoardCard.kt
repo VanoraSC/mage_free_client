@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSignal
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
+import magefree.designsystem.text.SymbolText
 
 /*
  * The Board tier: a card as it appears on a battlefield or in a stack pile.
@@ -668,7 +669,7 @@ private fun AttachedCardFace(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 attachment.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
-                    Text(
+                    SymbolText(
                         text = cost,
                         style = BoardTypography.counter,
                         color = BoardSurface.onSurfaceMuted,

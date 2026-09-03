@@ -37,6 +37,7 @@ import magefree.designsystem.board.BoardSignal
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
 import magefree.designsystem.board.LocalMotionScale
+import magefree.designsystem.text.SymbolText
 
 /*
  * The Prompt: one component, one position, three states.
@@ -227,13 +228,15 @@ private fun AskingPrompt(
                 .testTag(PromptTestTags.ASKING),
         verticalArrangement = Arrangement.spacedBy(PromptPadding),
     ) {
-        Text(
+        // The server writes these, and its strings carry symbol tokens — a question really does read
+        // "Pay {2}{R}". SymbolText draws the ones the shipped font knows and leaves the rest as sent.
+        SymbolText(
             text = state.question,
             style = BoardTypography.promptTitle,
             color = BoardSurface.onSurface,
         )
         state.detail?.takeIf { it.isNotBlank() }?.let { detail ->
-            Text(text = detail, style = BoardTypography.promptBody, color = BoardSurface.onSurfaceMuted)
+            SymbolText(text = detail, style = BoardTypography.promptBody, color = BoardSurface.onSurfaceMuted)
         }
         PromptActions(actions = state.actions, onAction = onAction)
     }
@@ -271,7 +274,7 @@ private fun BoardInteractivePrompt(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
+            SymbolText(
                 text = state.headline,
                 style = BoardTypography.promptBody,
                 color = BoardSurface.onSurface,
@@ -279,7 +282,7 @@ private fun BoardInteractivePrompt(
                 overflow = TextOverflow.Ellipsis,
             )
             state.progress?.let { progress ->
-                Text(
+                SymbolText(
                     text = progress,
                     style = BoardTypography.counter,
                     color = BoardSignal.targeting,

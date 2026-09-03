@@ -152,6 +152,10 @@ fun ComponentCatalog(
             )
         }
 
+        CatalogSection(title = "Mana and tap symbols") {
+            SymbolGallery()
+        }
+
         CatalogSection(title = "Board tokens") {
             BoardTokenGallery()
         }
@@ -230,21 +234,21 @@ private val FullCardViewShowcaseHeight = 520.dp
 private val CatalogCreature =
     CardDisplay(
         name = "Grizzly Bears",
-        manaCost = "1G",
+        manaCost = "{1}{G}",
         typeLine = "Creature — Bear",
     )
 
 private val CatalogLongName =
     CardDisplay(
         name = "Rin and Seri, Inseparable",
-        manaCost = "1RGW",
+        manaCost = "{1}{R}{G}{W}",
         typeLine = "Legendary Creature — Dog Cat",
     )
 
 private val CatalogSpell =
     CardDisplay(
         name = "Lightning Bolt",
-        manaCost = "R",
+        manaCost = "{R}",
         typeLine = "Instant",
         oracleText = "Lightning Bolt deals 3 damage to any target.",
     )

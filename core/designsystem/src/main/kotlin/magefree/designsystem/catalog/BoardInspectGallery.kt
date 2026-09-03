@@ -91,7 +91,7 @@ private fun InspectExample(
 
 private val ExampleHeight = 320.dp
 
-private val BearCard = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear")
+private val BearCard = CardDisplay(name = "Grizzly Bears", manaCost = "{1}{G}", typeLine = "Creature — Bear")
 
 private val BareBear =
     BoardInspectState(card = BearCard, power = "2", toughness = "2")
@@ -110,11 +110,11 @@ private val EnchantedBear =
             ),
         attachments =
             listOf(
-                BoardAttachment(name = "Holy Strength", manaCost = "W"),
-                BoardAttachment(name = "Bonesplitter", manaCost = "1", tapped = true),
+                BoardAttachment(name = "Holy Strength", manaCost = "{W}"),
+                BoardAttachment(name = "Bonesplitter", manaCost = "{1}", tapped = true),
                 // The case worth seeing: their Pacifism on your creature, which looks like yours on the
                 // board and is not.
-                BoardAttachment(name = "Pacifism", manaCost = "1W", controlledByOther = true),
+                BoardAttachment(name = "Pacifism", manaCost = "{1}{W}", controlledByOther = true),
             ),
         modifications =
             listOf(
