@@ -27,7 +27,6 @@ import magefree.designsystem.card.CARD_ASPECT_RATIO
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.boardCardWidthFitting
 import magefree.designsystem.card.rememberCounterPalette
-import kotlin.math.ceil
 
 /*
  * The battlefield, arranged as §7.4 describes it.
@@ -101,13 +100,18 @@ fun BattlefieldLayout(
     ) {
         val sides = model.opponents + listOfNotNull(model.viewer)
         val sideHeight = (maxHeight - BoardMargin * 2) / sides.size.coerceAtLeast(1)
-        val landZoneWidth = (maxWidth - BoardMargin * 2) * LAND_ZONE_SHARE
-        val mainWidth = maxWidth - BoardMargin * 2 - landZoneWidth - ZoneGap
+        val boardWidth = maxWidth - BoardMargin * 2
 
-        // One size for every land and one for everything else, shared across both sides: a creature on
-        // the far side is the same size as one on this side, because the game does not say one of them
-        // is nearer.
-        val landWidth = landCardWidth(sides, landZoneWidth, sideHeight)
+        // **The land corner takes what it needs, up to a ceiling.** A share carved off the top would
+        // hold width open on a board with two lands and run out on one with six kinds of them — and
+        // running out is what puts a Swamp on its own line below the Islands, which is the bug this
+        // replaced. So the corner asks for one row of stacks and is capped, never reserved.
+        val landWidth = landCardWidth(sides, boardWidth * LAND_ZONE_CEILING, sideHeight)
+        val landZoneWidth = minOf(landZoneWidth(sides, landWidth), boardWidth * LAND_ZONE_CEILING)
+        val mainWidth = boardWidth - landZoneWidth - if (landZoneWidth > 0.dp) ZoneGap else 0.dp
+
+        // One size for everything that is not a land, shared across both sides: a creature on the far
+        // side is the same size as one on this side, because the game does not say one is nearer.
         val cardWidth = mainCardWidth(sides, mainWidth, sideHeight)
 
         Column(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
@@ -165,7 +169,7 @@ private fun SideLayout(
         modifier = modifier.fillMaxWidth().testTag(BattlefieldTestTags.side(side.playerId)),
         horizontalArrangement = Arrangement.spacedBy(ZoneGap),
     ) {
-        val lands = side.pilesIn(PermanentRole.Land)
+        val lands = side.landStacks()
         // The rule, in the one place it can be broken: a side with no lands emits no zone, so the
         // corner costs nothing rather than holding an empty box.
         if (lands.isNotEmpty()) {
@@ -203,17 +207,18 @@ private fun SideLayout(
 }
 
 /**
- * The lands, wrapped into their corner.
+ * The lands, in their corner, on one line.
  *
- * A wrapping grid rather than a row, because the zone is bounded: lands that overflowed sideways would
- * either push into the creatures or scroll out of sight, and a land you cannot see is a land you
- * cannot tap for mana. Growing downward into the side's own half is the one direction that costs
- * nobody else anything.
+ * **One line, and it wraps only under protest.** The first cut wrapped freely into a grid, and the
+ * result was a Swamp on its own row under the Islands and a Plains on its own row under the Forests —
+ * lands of one player scattered down their half instead of reading as one row of stacks. They are the
+ * same kind of thing and they belong on the same horizontal. The card size is derived so that one line
+ * fits; wrapping remains as the last resort for a board with more kinds of land than anyone plays.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LandZone(
-    lands: List<TablePile>,
+    lands: List<TableLandStack>,
     tag: String,
     width: Dp,
     alignment: Alignment,
@@ -225,12 +230,12 @@ private fun LandZone(
     Box(modifier = modifier, contentAlignment = alignment) {
         FlowRow(
             modifier = Modifier.testTag(tag),
-            horizontalArrangement = Arrangement.spacedBy(ZoneGap),
-            verticalArrangement = Arrangement.spacedBy(CardGap),
+            horizontalArrangement = Arrangement.spacedBy(StackGap),
+            verticalArrangement = Arrangement.spacedBy(StackGap),
         ) {
-            lands.forEach { pile ->
-                PileFan(
-                    pile = pile,
+            lands.forEach { stack ->
+                LandStack(
+                    stack = stack,
                     width = width,
                     palette = palette,
                     artFor = artFor,
@@ -292,39 +297,43 @@ private fun PermanentCard(
 /**
  * How wide a land is drawn.
  *
- * The zone is a fixed box, so this is a packing question: for each number of columns the zone could
- * hold, the width is bounded both by the columns fitting across it and by the resulting rows fitting
- * down it. The best column count is whichever of those gives the largest card, and the answer is
- * capped at [PreferredCardWidth] — a board with two lands on it draws two ordinary lands, not two
- * lands the height of the battlefield.
+ * **Sized so one line of stacks fits.** A stack costs more than a card — up to three staggered faces
+ * on the upright side, and a turned half beside it once anything is tapped — so the budget is spent in
+ * stack-widths, not card-widths. The whole corner then has to fit inside the side's own height too,
+ * because a stack is taller than a card by the same staggering.
  *
- * Trying every column count sounds wasteful and is not: there are never more columns than lands, the
- * arithmetic is four operations, and it runs once per snapshot.
+ * Capped at [PreferredCardWidth] and floored at [MinCardWidth]: a board with two lands draws two
+ * ordinary lands rather than two the height of the battlefield, and a board with more kinds of land
+ * than anyone plays wraps rather than shrinking past legibility.
  */
 private fun landCardWidth(
     sides: List<BattlefieldSide>,
-    zoneWidth: Dp,
+    zoneCeiling: Dp,
     sideHeight: Dp,
 ): Dp {
-    val piles = sides.map { it.pilesIn(PermanentRole.Land) }
-    val most = piles.maxOfOrNull { it.size } ?: 0
+    val stacks = sides.map { it.landStacks() }
+    val most = stacks.maxOfOrNull { it.size } ?: 0
     if (most == 0) return PreferredCardWidth
 
-    // A stack is wider than a card by the faces behind the front one, so the packing is over stacks
-    // rather than over lands — which is exactly why piling buys space: ten Plains is one stack here,
-    // not ten. The widest stack stands in for all of them, so nothing overflows the zone.
-    val widestPile = piles.flatten().maxOf { minOf(it.count, PILE_FAN_LIMIT) }
+    // The busiest side's line, measured in card widths, so the answer is one division rather than a
+    // search. Every stack pays for its own upright faces and, if it has any, its turned half.
+    val widest = stacks.maxOf { line -> line.sumOf { it.widthInCards().toDouble() }.toFloat() }
+    val byWidth = (zoneCeiling - StackGap * (most - 1)) / widest.coerceAtLeast(1f)
+    val byHeight = sideHeight * CARD_ASPECT_RATIO / stackHeightInCards()
 
-    var best = MinCardWidth
-    for (columns in 1..most) {
-        val rows = ceil(most.toFloat() / columns).toInt()
-        val perColumn = (zoneWidth - ZoneGap * (columns - 1)) / columns
-        val byWidth = perColumn - PileFanStep * (widestPile - 1)
-        val byHeight = (sideHeight - CardGap * (rows - 1)) / rows * CARD_ASPECT_RATIO
-        val fits = minOf(byWidth, byHeight)
-        if (fits > best) best = fits
-    }
-    return minOf(best, PreferredCardWidth).coerceAtLeast(MinCardWidth)
+    return minOf(byWidth, byHeight, PreferredCardWidth).coerceAtLeast(MinCardWidth)
+}
+
+/** What the land corner actually asks for at [landWidth] — one line of the busiest side's stacks. */
+private fun landZoneWidth(
+    sides: List<BattlefieldSide>,
+    landWidth: Dp,
+): Dp {
+    val stacks = sides.map { it.landStacks() }
+    val most = stacks.maxOfOrNull { it.size } ?: 0
+    if (most == 0) return 0.dp
+    val widest = stacks.maxOf { line -> line.sumOf { it.widthInCards().toDouble() }.toFloat() }
+    return landWidth * widest + StackGap * (most - 1)
 }
 
 /**
@@ -405,11 +414,14 @@ object BattlefieldTestTags {
         row: String,
     ): String = "battlefield-row-$playerId-$row"
 
-    /** One stack, by the id an action on it would name. */
-    fun pile(actionId: String): String = "battlefield-pile-$actionId"
+    /** One land stack, by the id it reports when tapped. */
+    fun stack(stackId: String): String = "battlefield-stack-$stackId"
 
-    /** A stack's count badge, present only past [PILE_FAN_LIMIT]. */
-    fun pileCount(actionId: String): String = "battlefield-pile-count-$actionId"
+    /** A stack count badge, present only past [PILE_FAN_LIMIT]. */
+    fun stackCount(stackId: String): String = "battlefield-stack-count-$stackId"
+
+    /** The turned half's count badge. */
+    fun stackTappedCount(stackId: String): String = "battlefield-stack-tapped-count-$stackId"
 }
 
 /**
@@ -418,7 +430,7 @@ object BattlefieldTestTags {
  * A ceiling on the least interesting permanents, which is §7.4's whole point about them. It is not a
  * reservation: a side with no lands draws no zone at all, and the creatures get the width back.
  */
-private const val LAND_ZONE_SHARE = 0.28f
+private const val LAND_ZONE_CEILING = 0.46f
 
 /**
  * The size a card is drawn at when the board has room for it.
@@ -436,4 +448,5 @@ private val BoardMargin = 12.dp
 
 private val ZoneGap = 8.dp
 private val CardGap = 3.dp
+private val StackGap = 8.dp
 private val RowGap = 3.dp

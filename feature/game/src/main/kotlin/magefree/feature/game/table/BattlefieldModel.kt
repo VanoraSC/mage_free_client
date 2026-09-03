@@ -77,32 +77,43 @@ data class TablePermanent(
 )
 
 /**
- * Permanents that are identical in every respect, drawn as one stack.
+ * Every copy of one land a player controls, tapped and untapped together, drawn as one stack.
  *
- * **A stack says "these are interchangeable — read one, you have read them all."** That promise is the
- * whole value of it, and it is what makes the grouping strict rather than convenient: anything that
- * makes one member different from another keeps it out. Same card, same printing, same tap state, same
- * counters, same badges, same combat assignment, same playability.
+ * **Tap state does not split the stack; it decides which half of it a card sits in.** That is the
+ * difference between this and a plain grouping, and it is what makes the board readable: four Plains
+ * are one thing on the battlefield whether two of them are tapped or none are, and drawing them as two
+ * unrelated piles that drift apart as the turn goes on says otherwise. One stack with an untapped side
+ * and a tapped side keeps the count in one place and gives a tapping card somewhere to travel *to*.
  *
- * @property members every permanent in the stack, in the server's own order. Never empty.
+ * **Everything else is still strict.** A stack promises *these are interchangeable — read one and you
+ * have read them all*, so any other difference keeps a land out: counters, badges, combat, playability,
+ * and the printing. An attachment keeps it out absolutely.
+ *
+ * @property untapped the upright copies, in the server's own order.
+ * @property tapped the turned copies, in the server's own order.
  */
-data class TablePile(
-    val members: List<TablePermanent>,
+data class TableLandStack(
+    val untapped: List<TablePermanent>,
+    val tapped: List<TablePermanent>,
 ) {
     /** What the stack is drawn as. Any member would do, which is the point of it being a stack. */
-    val representative: TablePermanent get() = members.first()
+    val representative: TablePermanent get() = (untapped + tapped).first()
 
-    /** How many there are. The stack draws at most [PILE_FAN_LIMIT] of them and counts the rest. */
-    val count: Int get() = members.size
+    /** How many there are in total, across both halves. */
+    val count: Int get() = untapped.size + tapped.size
 
     /**
-     * The permanent an action on this stack refers to.
+     * The permanent tapping this stack refers to.
      *
-     * Any of them, because they are identical by construction. Four Plains are four Plains: tapping
-     * "the third one" is not a distinction the game makes, and asking the player to make it would be
-     * inventing a choice rather than offering one.
+     * The topmost untapped copy — the one drawn lowest and furthest right, which is the one a player
+     * would reach for. Which of them it actually is does not matter: they are identical by
+     * construction, and asking the player to pick between four Plains would be inventing a choice
+     * rather than offering one. `null` when every copy is already tapped.
      */
-    val actionId: String get() = members.first().id
+    val tapActionId: String? get() = untapped.lastOrNull()?.id
+
+    /** Any member, for a board that is only being looked at rather than played. */
+    val inspectId: String get() = representative.id
 }
 
 /** One player's half of the board. */
@@ -116,32 +127,34 @@ data class BattlefieldSide(
     fun inRole(role: PermanentRole): List<TablePermanent> = permanents.filter { it.role == role }
 
     /**
-     * The permanents in [role] as the stacks the board draws.
+     * This side's lands, gathered into stacks.
      *
-     * **Only lands stack, for now.** §7.4's reasoning is that piling buys space, and the space is in
-     * the lands: a board of ten Plains collapses and a board of ten differently-developed creatures
-     * does not, because those ten differ. Applying it to creatures would be correct and would almost
-     * never fire, so it is not done here — and the one place it could fire, a row of identical tokens,
-     * is worth doing deliberately rather than as a side effect.
+     * **Only lands stack.** §7.4's reasoning is that piling buys space, and the space is in the lands:
+     * a board of ten Plains collapses and a board of ten differently-developed creatures does not,
+     * because those ten differ. Applying it to creatures would be correct and would almost never fire,
+     * so it is not done here — and the one place it could fire, a row of identical tokens, is worth
+     * doing deliberately rather than as a side effect.
      */
-    fun pilesIn(role: PermanentRole): List<TablePile> {
-        val members = inRole(role)
-        if (role != PermanentRole.Land) return members.map { TablePile(listOf(it)) }
-
+    fun landStacks(): List<TableLandStack> {
         // Insertion-ordered, so the stacks appear where the server first mentioned them rather than in
         // whatever order a hash produced — a land that reorders itself between snapshots is a land
         // that appears to have moved.
-        val piles = LinkedHashMap<PileKey, MutableList<TablePermanent>>()
-        val alone = mutableListOf<TablePile>()
-        members.forEach { permanent ->
-            val key = permanent.pileKey()
+        val grouped = LinkedHashMap<LandStackKey, MutableList<TablePermanent>>()
+        val alone = mutableListOf<TableLandStack>()
+        inRole(PermanentRole.Land).forEach { permanent ->
+            val key = permanent.landStackKey()
             if (key == null) {
-                alone += TablePile(listOf(permanent))
+                alone += permanent.asOwnStack()
             } else {
-                piles.getOrPut(key) { mutableListOf() } += permanent
+                grouped.getOrPut(key) { mutableListOf() } += permanent
             }
         }
-        return piles.values.map { TablePile(it) } + alone
+        return grouped.values.map { members ->
+            TableLandStack(
+                untapped = members.filterNot { it.state.tapped },
+                tapped = members.filter { it.state.tapped },
+            )
+        } + alone
     }
 
     /** True when nothing occupies [role] — the layout draws no region at all for it. */
@@ -160,14 +173,27 @@ data class BattlefieldSide(
  * combat, playability, power and toughness — plus the printing, because two Forests with different art
  * are visibly two different things however identical the game considers them.
  */
-private data class PileKey(
+private data class LandStackKey(
     val state: BoardCardState,
     val art: CardArtRequest?,
 )
 
-private fun TablePermanent.pileKey(): PileKey? = if (carriesAttachment) null else PileKey(state = state, art = art)
+/**
+ * The key with **tap state removed**, since that is what the stack has two halves for.
+ *
+ * `null` for a permanent that may never stack: see the class doc above.
+ */
+private fun TablePermanent.landStackKey(): LandStackKey? =
+    if (carriesAttachment) null else LandStackKey(state = state.copy(tapped = false), art = art)
 
-/** How many faces a stack shows before it starts counting instead. */
+private fun TablePermanent.asOwnStack(): TableLandStack =
+    if (state.tapped) {
+        TableLandStack(untapped = emptyList(), tapped = listOf(this))
+    } else {
+        TableLandStack(untapped = listOf(this), tapped = emptyList())
+    }
+
+/** How many faces each half of a stack shows before it starts counting instead. */
 const val PILE_FAN_LIMIT: Int = 3
 
 /**

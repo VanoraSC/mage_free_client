@@ -68,14 +68,23 @@ fun BattlefieldPreviewScreen(
 
     var step by remember { mutableIntStateOf(0) }
     var inspected by remember { mutableStateOf<String?>(null) }
+    var tappedPlains by remember { mutableIntStateOf(0) }
     val board = catalogBoard(step)
+
+    // The stacking rule is about a *transition* — a card turning a quarter and travelling into the
+    // other half of its stack — and a transition cannot be posed. So one board is played rather than
+    // stepped through: tapping its Plains taps a Plains, and the animation is the thing being judged.
+    val state = if (board.tappable) tappedPlainsBoard(tappedPlains) else board.state
 
     Surface(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().testTag(BattlefieldPreviewTestTags.SCREEN)) {
             BattlefieldLayout(
-                model = battlefieldModel(board.state),
+                model = battlefieldModel(state),
                 artFor = artFor,
-                onInspect = { inspected = it },
+                onInspect = { id ->
+                    inspected = id
+                    if (board.tappable) tappedPlains = (tappedPlains + 1).coerceAtMost(CATALOG_PLAINS)
+                },
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -97,8 +106,12 @@ fun BattlefieldPreviewScreen(
                     onClick = {
                         step += 1
                         inspected = null
+                        tappedPlains = 0
                     },
                 )
+                if (board.tappable && tappedPlains > 0) {
+                    MageSecondaryButton(text = "Untap", onClick = { tappedPlains = 0 })
+                }
                 inspected?.let { Text(text = it, style = MaterialTheme.typography.labelMedium) }
             }
         }

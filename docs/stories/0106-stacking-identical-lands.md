@@ -1,4 +1,4 @@
-# 0106 — Stacking identical lands: three faces, then a count
+# 0106 — Stacking identical lands: six places, and a card that turns into one
 
 - **Epic:** EPIC-19 — Game Board Rebuild
 - **Story:** #187
@@ -17,32 +17,37 @@ cost.
 arrangement and gave the lands a bounded corner; without stacking, the only way a corner holds twelve
 lands is by shrinking them, which is what the corner exists to avoid.
 
-**The rule, as specified.** Identical lands stack horizontally up to three faces. Past three the fan
-caps and a floating count takes over, so the player can tell one, two, three and *more* apart at a
-glance. Tapping a stack acts on any one member, because they are identical and the game draws no
-distinction. Tapped lands form their own stack.
+**The rule, as specified.** A stack has **six fixed places**: three for upright copies, staggered
+diagonally as though they were attached to each other, and three more beside them for turned ones. The
+top card is the lowest and furthest right, on both halves and for both players. Past three in a half,
+that half shows a floating count instead of more faces. Tapping acts on any one copy, because they are
+identical and the game draws no distinction between them. Tapping *animates*: the top card turns a
+quarter and travels along the diagonal into the nearest free turned place.
 
-The worked example is the specification: **four Plains show three faces and a `×4`. Tap one and the
-untapped stack is three faces with no badge — three is countable again — beside a tapped stack of one.
-Tap another and the two stacks are two and two.**
+The worked example is the specification: **four Plains show three upright faces and a `×4`. Tap one and
+a card turns off the top into the lowest, furthest-right turned place, and the count goes away — three
+is countable again. Tap another and it is two upright and two turned. Tap the last and there are three
+turned faces and a `×4` again.**
 
 ## 3. Scope
 
 **In scope**
-- Grouping identical lands into stacks, with the strict key §7.4 describes.
-- Drawing a stack as up to three offset faces plus a count past three.
-- Acting on a stack through one of its members.
-- The land corner sized over stacks rather than over lands.
-- Catalog boards that walk the worked example one press at a time.
+- Grouping identical lands into stacks, tapped and untapped together, with the strict key §7.4
+  describes.
+- Six fixed places per stack, and a count per half rather than per stack.
+- Turning and travelling a card between them when a copy is tapped.
+- Acting on a stack through its topmost untapped copy.
+- The land corner laid out on one line, sized so that line fits.
+- A catalog board that can actually be tapped, since a transition cannot be posed.
 
 **Out of scope**
 - **Stacking creatures.** §7.4 says piles are for lands and tokens: ten Plains collapse and ten
   differently-developed creatures do not, because they differ. The one case that would fire — a row of
   identical tokens — is worth doing deliberately rather than as a side effect of a general rule.
-- **The movement between stacks.** A land leaving the untapped stack for the tapped one should travel,
-  and travelling is the animation host's job (0098). The board is not yet driven through the host, so
-  the stacks change between snapshots rather than animating; wiring the host is its own step and is
-  where that belongs.
+- **Driving the movement from the animation host** (0098). The turn-and-travel is animated here by the
+  stack itself, from its own counts, because it is a transition *within* one component and the host
+  exists to sequence transitions *between* snapshots. When the board is wired to the host the two will
+  need to agree on who owns the timing; that is a step of its own.
 
 ## 4. Prerequisites & toolchain
 
@@ -56,6 +61,21 @@ one member different from another keeps it out: tap state, counters, badges, com
 playability, power and toughness, and the printing — two Forests with different art are visibly two
 different things however identical the game considers them.
 
+**Tap state is the one difference that does not split a stack.** Four Plains are one thing a player
+controls whether two of them are tapped or none are, and two unrelated piles drifting apart across the
+turn say otherwise. One stack with two halves keeps the count in one place — and gives a tapping card
+somewhere to travel *to*, which is what makes the movement mean anything.
+
+**A count per half, not per stack.** With three upright and one turned there are four copies, and a
+badge saying four would be counting a card the player can already see. Each half answers only for
+itself, which is why tapping one of four makes the count vanish rather than persist.
+
+**The travelling card is drawn, not moved.** The copies are identical, so tracking which server id sits
+in which place would be work in service of a distinction nobody can see — and it would be fragile, since
+the snapshot has no idea which copy the player pressed. The places are drawn from counts instead, and
+when the turned count rises a single card is animated from the upright top place to the one it is
+arriving at. The stack behind it never re-flows, which is exactly what fixed places bought.
+
 **An attachment is absolute, not another field.** An attachment attaches to one specific instance: the
 Aura is on *that* Plains, not on the group. Two identically-enchanted permanents still do not stack.
 And the rule reads what the *server* said is attached rather than what we managed to resolve, so a
@@ -66,14 +86,19 @@ visible by looking; a badge over them would repeat what the fan already says. It
 is also why the worked example needs no special-casing: after a tap the untapped stack is three, and
 three is simply countable again.
 
-**Three faces, not n.** A fan that grew with the pile gives back exactly the space piling exists to
-save — ten Plains fanned is ten Plains of board, overlapped. Three is enough to read a stack as a
+**Three places, not n.** A stagger that grew with the pile gives back exactly the space stacking exists
+to save — ten Plains fanned is ten Plains of board, overlapped. Three is enough to read a stack as a
 stack, and past three the number is what the player wants rather than more pictures of the same land.
 
-**The fan claims the space it covers.** Drawn with offset modifiers a stack measures one card wide and
-the next thing along the row is placed on top of it, so it is a `Layout` that measures its children and
-sizes to the whole fan. Measuring is also how it handles a tapped stack without knowing about tapping:
-a tapped card's footprint is landscape, and the fan finds that out rather than being told.
+**Both halves stagger the same way, front card on top.** Arrivals fill the turned half from its front
+place backwards, but they are *drawn* back to front, so the lowest and furthest right is on top in both
+halves. Drawing them in arrival order instead makes the two halves mirror images, which reads as a
+mistake rather than as a rule.
+
+**The card is rotated here, not handed `tapped = true`.** The stack needs *partial* turns — a card
+halfway through a tap is at forty-five degrees — and the card tier flips its own footprint from portrait
+to landscape when told it is tapped, which would jump. That logic is right everywhere it is used and
+wrong inside a layout that has already decided where everything goes.
 
 ## 6. Implementation steps
 
@@ -84,24 +109,28 @@ a tapped card's footprint is landscape, and the fan finds that out rather than b
 
 ## 7. Testing & verification
 
-- **Unit:** four identical lands are one stack; tapping one splits it into three and one, and another
-  into two and two; a counter, a different card and a playable highlight each keep a land out; an
-  attachment keeps one out absolutely, *including* when the snapshot never sent the aura; a stack acts
-  through one of its own members; creatures do not stack.
-- **Hermetic Compose:** a stack of four shows a count and a stack of three does not; after one tap
-  there are two stacks and no count; ten of a land draw at the same size as three of it, which is the
-  whole point.
-- **Eyes-on:** the battlefield preview's three consecutive Plains boards.
+- **Unit:** four identical lands are one stack; tapping moves a copy between its halves rather than
+  splitting it; a counter, a different card and a playable highlight each keep a land out; an
+  attachment keeps one out absolutely, *including* when the snapshot never sent the aura; a tap names
+  a copy that is actually untapped; a fully tapped stack offers nothing to tap; creatures do not stack.
+- **Hermetic Compose:** four upright shows a count and three does not; after one tap there is still one
+  stack and no count; a half counts only itself; a fully turned stack counts on its turned half; ten of
+  a land occupy what three of it occupy.
+- **Eyes-on:** the battlefield preview, whose Plains board is tapped rather than stepped through — the
+  turn-and-travel only exists while it is running.
 
 ## 8. Acceptance criteria
 
-- [x] Identical lands draw as one stack of at most three faces.
-- [x] A stack of more than three carries a count; three or fewer does not.
-- [x] Tapped and untapped lands are separate stacks.
-- [x] Acting on a stack names one of its own members.
-- [x] Any difference in state keeps a land out of a stack; an attachment keeps it out absolutely.
+- [x] Identical lands draw as one stack with an upright half and a turned half, three places each.
+- [x] Tap state moves a copy between the halves rather than splitting the stack.
+- [x] Each half carries its own count, shown only past three.
+- [x] Tapping turns a card a quarter and travels it into the nearest free turned place.
+- [x] A tap names the topmost untapped copy, and a fully tapped stack offers nothing to tap.
+- [x] Any other difference in state keeps a land out; an attachment keeps it out absolutely.
+- [x] The land corner lays its stacks on one line, and lands of one player never fall onto separate
+      lines while there is room.
 - [x] Ten of a land occupy about what three of it occupy.
-- [x] `./gradlew check` passes and the preview walks the worked example.
+- [x] `./gradlew check` passes and the preview can be tapped.
 
 ## 9. References
 

@@ -8,44 +8,49 @@ import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
 import magefree.network.game.PlayableObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Which permanents stack, and which pointedly do not.
+ * Which lands share a stack, and which pointedly do not.
  *
  * A stack promises *these are interchangeable — read one and you have read them all*, so every test
  * here is about a difference that breaks the promise. The failure mode a loose key produces is not a
- * crash: it is a board that says a player has four identical Plains when one of them is tapped, or
- * that two creatures are the same when only one of them is carrying an Aura. Both would be read and
- * believed.
+ * crash: it is a board that says a player has four identical Plains when one of them is carrying an
+ * Aura. It would be read and believed.
+ *
+ * The one difference that deliberately does **not** split a stack is tap state, because that is what
+ * the stack has two halves for — and it is the whole reason a tapping card has somewhere to travel to.
  */
-class TablePileTest {
+class TableLandStackTest {
     @Test
     fun `four identical lands are one stack`() {
-        val side = sideWith((1..4).map { plains("p$it") })
+        val stacks = sideWith((1..4).map { plains("p$it") }).landStacks()
 
-        val piles = side.pilesIn(PermanentRole.Land)
-
-        assertEquals(1, piles.size)
-        assertEquals(4, piles.single().count)
+        assertEquals(1, stacks.size)
+        assertEquals(4, stacks.single().count)
     }
 
     @Test
-    fun `tapping one splits the stack in two, which is the whole worked example`() {
-        // Four Plains, one tapped: three untapped and one tapped. Tap another and it is two and two.
-        val oneTapped = sideWith(listOf(plains("p1", tapped = true)) + (2..4).map { plains("p$it") })
-        val twoTapped = sideWith((1..2).map { plains("p$it", tapped = true) } + (3..4).map { plains("p$it") })
+    fun `tapping does not split the stack, it moves a card to its other half`() {
+        // The worked example. Four Plains stay one stack throughout; what changes is how many are in
+        // each half. Two separate stacks would drift apart across the turn and stop reading as one
+        // thing the player has four of.
+        val none = sideWith((1..4).map { plains("p$it") }).landStacks().single()
+        val one = sideWith(listOf(plains("p1", tapped = true)) + (2..4).map { plains("p$it") }).landStacks().single()
+        val two = sideWith((1..2).map { plains("p$it", tapped = true) } + (3..4).map { plains("p$it") }).landStacks().single()
 
-        assertEquals(listOf(1, 3), oneTapped.pilesIn(PermanentRole.Land).map { it.count }.sorted())
-        assertEquals(listOf(2, 2), twoTapped.pilesIn(PermanentRole.Land).map { it.count })
+        assertEquals(4 to 0, none.untapped.size to none.tapped.size)
+        assertEquals(3 to 1, one.untapped.size to one.tapped.size)
+        assertEquals(2 to 2, two.untapped.size to two.tapped.size)
     }
 
     @Test
     fun `different lands are different stacks`() {
         val side = sideWith(listOf(plains("p1"), plains("p2"), forest("f1")))
 
-        assertEquals(listOf(2, 1), side.pilesIn(PermanentRole.Land).map { it.count })
+        assertEquals(listOf(2, 1), side.landStacks().map { it.count })
     }
 
     @Test
@@ -55,11 +60,11 @@ class TablePileTest {
         val marked = plains("p4").let { it.copy(card = it.card.copy(counters = listOf(GameCounter("charge", 1)))) }
         val side = sideWith((1..3).map { plains("p$it") } + marked)
 
-        assertEquals(listOf(3, 1), side.pilesIn(PermanentRole.Land).map { it.count })
+        assertEquals(listOf(3, 1), side.landStacks().map { it.count })
     }
 
     @Test
-    fun `an attachment keeps a permanent out of every stack, absolutely`() {
+    fun `an attachment keeps a land out of every stack, absolutely`() {
         // Not another field in the key: an attachment attaches to one specific instance. Two
         // identically-enchanted lands still do not stack, because each carries its own aura.
         //
@@ -70,29 +75,36 @@ class TablePileTest {
         val alsoEnchanted = plains("p4").copy(attachments = listOf("aura2"))
         val side = sideWith(listOf(plains("p1"), plains("p2"), enchanted, alsoEnchanted))
 
-        val counts = side.pilesIn(PermanentRole.Land).map { it.count }
-        assertEquals(listOf(2, 1, 1), counts)
+        assertEquals(listOf(2, 1, 1), side.landStacks().map { it.count })
     }
 
     @Test
     fun `a playable land is not the same as an unplayable one`() {
         // The board draws the playable signal on one and not the other, so stacking them would be
         // showing a highlight over three lands when the server offered one.
-        val state =
-            stateWith((1..4).map { plains("p$it") }).copy(playable = listOf(PlayableObject(objectId = "p1")))
+        val state = stateWith((1..4).map { plains("p$it") }).copy(playable = listOf(PlayableObject(objectId = "p1")))
         val side = battlefieldModel(state).viewer!!
 
-        assertEquals(listOf(1, 3), side.pilesIn(PermanentRole.Land).map { it.count }.sorted())
+        assertEquals(listOf(1, 3), side.landStacks().map { it.count }.sorted())
     }
 
     @Test
-    fun `a stack acts through one of its members`() {
-        val pile = sideWith((1..4).map { plains("p$it") }).pilesIn(PermanentRole.Land).single()
+    fun `a tap acts on the topmost untapped copy`() {
+        // The one a hand would reach for: lowest and furthest right, which is the last of the upright
+        // half. Which server id that is does not matter — they are identical — but it has to be one
+        // that is actually still untapped, or the board would be asking to tap a tapped land.
+        val stack = sideWith(listOf(plains("p1", tapped = true)) + (2..4).map { plains("p$it") }).landStacks().single()
 
-        assertTrue(
-            "the action id should be one of the stack's own members",
-            pile.actionId in pile.members.map { it.id },
-        )
+        assertEquals(stack.untapped.last().id, stack.tapActionId)
+        assertTrue("the tap target should be untapped", stack.untapped.any { it.id == stack.tapActionId })
+    }
+
+    @Test
+    fun `a fully tapped stack offers nothing to tap`() {
+        val stack = sideWith((1..3).map { plains("p$it", tapped = true) }).landStacks().single()
+
+        assertNull(stack.tapActionId)
+        assertEquals(3, stack.count)
     }
 
     @Test
@@ -102,7 +114,8 @@ class TablePileTest {
         // combat. Nothing is gained and the movement is a lie.
         val side = sideWith((1..4).map { bears("b$it") })
 
-        assertEquals(4, side.pilesIn(PermanentRole.Creature).size)
+        assertEquals(4, side.inRole(PermanentRole.Creature).size)
+        assertTrue("creatures should not have been gathered into stacks", side.landStacks().isEmpty())
     }
 }
 

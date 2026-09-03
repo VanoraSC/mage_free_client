@@ -66,10 +66,17 @@ internal fun BattlefieldSection(onOpenPreview: () -> Unit) {
     }
 }
 
-/** One board worth looking at, and what it is showing. Shared with the full-window preview. */
+/**
+ * One board worth looking at, and what it is showing. Shared with the full-window preview.
+ *
+ * @property tappable when true the board is built from a live count of tapped Plains rather than being
+ *   fixed, so tapping the stack actually taps a land. The stacking rule is about a transition, and a
+ *   canned before-and-after cannot show a transition — the animation only exists while it is running.
+ */
 internal class CatalogBoard(
     val label: String,
     val state: GameState,
+    val tappable: Boolean = false,
 )
 
 /**
@@ -211,7 +218,10 @@ private val Developed =
         gameId = "catalog",
         viewerPlayerId = "me",
         combat = listOf(CombatGroup(defenderId = "them", attackerIds = listOf("bears"), blockerIds = listOf("wurm"))),
-        playable = listOf(PlayableObject(objectId = "f4")),
+        // Every untapped land is playable, which is what a real snapshot says: the server offers all
+        // of them at once. Marking only one splits the Forests into two stacks for a reason no game
+        // produces, which is a fixture bug that reads as a layout bug.
+        playable = listOf(PlayableObject(objectId = "f4"), PlayableObject(objectId = "f5")),
         players =
             listOf(
                 GamePlayer(
@@ -325,12 +335,16 @@ private const val PLAINS_COUNT = 4
 internal val Boards =
     listOf(
         CatalogBoard(label = "Opening — two lands a side", state = Opening),
-        CatalogBoard(label = "Four Plains — three faces and a count", state = plainsBoard(tapped = 0)),
-        CatalogBoard(label = "…tap one — three untapped, no count, one tapped", state = plainsBoard(tapped = 1)),
-        CatalogBoard(label = "…tap another — two and two", state = plainsBoard(tapped = 2)),
+        CatalogBoard(label = "Four Plains — tap them", state = plainsBoard(tapped = 0), tappable = true),
         CatalogBoard(label = "Developed — an Aura across the board, two land stacks", state = Developed),
         CatalogBoard(label = "Crowded — nine creatures shrink; twelve lands do not", state = Crowded),
     )
+
+/** The Plains board at a given number tapped, for the one board that is played rather than posed. */
+internal fun tappedPlainsBoard(tapped: Int): GameState = plainsBoard(tapped.coerceIn(0, PLAINS_COUNT))
+
+/** How many Plains the worked example puts on the board. */
+internal const val CATALOG_PLAINS = PLAINS_COUNT
 
 /** The board at [step], wrapping so the preview's one button can cycle forever. */
 internal fun catalogBoard(step: Int): CatalogBoard = Boards[step.mod(Boards.size)]

@@ -220,7 +220,7 @@ class BattlefieldLayoutTest {
         // is the first number a glance cannot give you.
         show(oneSided("me", (1..4).map { plains("p$it") }))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p1")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p1")).assertIsDisplayed()
         composeTestRule.onNodeWithText("×4").assertIsDisplayed()
     }
 
@@ -228,7 +228,7 @@ class BattlefieldLayoutTest {
     fun `three of a kind need no count, because three is countable`() {
         show(oneSided("me", (1..3).map { plains("p$it") }))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.pileCount("p1")).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1")).assertDoesNotExist()
     }
 
     @Test
@@ -237,16 +237,38 @@ class BattlefieldLayoutTest {
         // stack is back to three faces and no badge — beside a tapped stack of one.
         show(oneSided("me", listOf(plains("p1", tapped = true)) + (2..4).map { plains("p$it") }))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p1")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p2")).assertIsDisplayed()
+        // Still one stack — tapping moved a copy into its other half rather than splitting it in two.
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p2")).assertIsDisplayed()
         composeTestRule.onNodeWithText("×4").assertDoesNotExist()
+    }
+
+    @Test
+    fun `each half counts only itself`() {
+        // Four upright and two turned is not a stack of six with a badge saying so: the two turned
+        // ones are right there, visible, and counting them again would be counting cards the player
+        // can already see. Only the half that has run out of places to draw says a number.
+        show(oneSided("me", (1..4).map { plains("p$it") } + (5..6).map { plains("p$it", tapped = true) }))
+
+        composeTestRule.onNodeWithText("×4").assertIsDisplayed()
+        composeTestRule.onNodeWithText("×6").assertDoesNotExist()
+        composeTestRule.onNodeWithText("×2").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a fully tapped stack counts on its turned half`() {
+        // The end of the worked example: tap the last of four and there are three turned faces and a
+        // count, with nothing upright at all.
+        show(oneSided("me", (1..4).map { plains("p$it", tapped = true) }))
+
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackTappedCount("p1")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1")).assertDoesNotExist()
     }
 
     @Test
     fun `a stack is acted on through one of its own members`() {
         show(oneSided("me", (1..4).map { plains("p$it") }))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p1")).performClick()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p1")).performClick()
 
         assertTrue("tapping the stack reported $inspected", inspected.single().startsWith("p"))
     }
@@ -260,10 +282,11 @@ class BattlefieldLayoutTest {
             right = oneSided("ten", (1..10).map { plains("p$it") }),
         )
 
-        assertEquals(
-            cardWidthIn(BattlefieldTestTags.row("three", BattlefieldTestTags.LAND_ZONE)),
-            cardWidthIn(BattlefieldTestTags.row("ten", BattlefieldTestTags.LAND_ZONE)),
-        )
+        // Within a pixel: the two boards are stacked to share a render, so their halves differ by the
+        // odd row of pixels. What matters is that ten does not cost measurably more than three.
+        val three = cardWidthIn(BattlefieldTestTags.row("three", BattlefieldTestTags.LAND_ZONE))
+        val ten = cardWidthIn(BattlefieldTestTags.row("ten", BattlefieldTestTags.LAND_ZONE))
+        assertTrue("three measured $three, ten measured $ten", kotlin.math.abs(three - ten) <= 2)
     }
 
     @Test
