@@ -3,12 +3,15 @@ package magefree.designsystem.card
 import android.app.Application
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
 import magefree.designsystem.theme.MageTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -174,6 +177,49 @@ class BoardInspectViewTest {
     }
 
     @Test
+    fun `an attachment stack is not cut off at the top`() {
+        // A permanent with Auras on it is **taller than its own card**: the upright attachments stack
+        // above the host so their name plates show. Sizing the card to the height available overflows
+        // upward by exactly that stack, and the first thing to go is the name and mana cost the stack
+        // exists to reveal — which is what it did, in the catalog, on the enchanted example.
+        composeTestRule.setContent {
+            MageTheme {
+                Box(modifier = Modifier.size(SHORT_WIDTH, SHORT_HEIGHT)) {
+                    BoardInspectView(
+                        state =
+                            BEAR.copy(
+                                attachments =
+                                    listOf(
+                                        BoardAttachment(name = "Holy Strength", manaCost = "W"),
+                                        BoardAttachment(name = "Pacifism", manaCost = "1W", controlledByOther = true),
+                                        BoardAttachment(name = "Unholy Strength", manaCost = "B"),
+                                    ),
+                            ),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+
+        val cardArea = composeTestRule.onNodeWithTag(BoardInspectTestTags.CARD).fetchSemanticsNode()
+        val top = cardArea.positionInRoot.y
+        val bottom = top + cardArea.size.height
+        val attachments =
+            composeTestRule
+                .onAllNodesWithTag(BoardCardTestTags.ATTACHMENT, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+
+        assertTrue("the fixture must actually render attachments, or this proves nothing", attachments.isNotEmpty())
+        attachments.forEach { node ->
+            assertTrue(
+                "an attachment runs from ${node.positionInRoot.y} to ${node.positionInRoot.y + node.size.height}, " +
+                    "outside the card area $top..$bottom — its name plate is cut off",
+                node.positionInRoot.y >= top && node.positionInRoot.y + node.size.height <= bottom,
+            )
+        }
+    }
+
+    @Test
     fun `the panel sits beside the card and never over it`() {
         show(
             BEAR.copy(
@@ -197,6 +243,10 @@ class BoardInspectViewTest {
     private fun countNodesWithText(text: String): Int = composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().size
 
     private companion object {
+        /** A deliberately cramped board: room for a card, not for a card plus three Auras above it. */
+        val SHORT_WIDTH = 620.dp
+        val SHORT_HEIGHT = 300.dp
+
         val BEAR =
             BoardInspectState(
                 card = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear"),

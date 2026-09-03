@@ -233,6 +233,53 @@ data class BoardCardState(
 )
 
 /**
+ * The largest card width whose whole **assembly** fits in [maxWidth] × [maxHeight].
+ *
+ * A card with attachments is bigger than the card: upright attachments stack *above* the host so
+ * their name bands show, and turned ones reach out to the right. A caller that sizes the card to the
+ * space available gets an assembly that overflows by exactly the stack it forgot about — which
+ * presents as the attachments' name plates being cut off at the top, since the stack grows upward.
+ *
+ * The geometry lives here rather than at the call site because the constants do. Callers that hand a
+ * [BoardCard] a width worked out from their own arithmetic will drift from it the next time an
+ * attachment's band height changes.
+ *
+ * Returns at least [Dp.Hairline]; a space too small for any card is the caller's problem to notice,
+ * not this function's to hide.
+ */
+fun boardCardWidthFitting(
+    state: BoardCardState,
+    maxWidth: Dp,
+    maxHeight: Dp,
+): Dp {
+    val upright = state.attachments.count { !it.tapped }
+    val turned = state.attachments.count { it.tapped }
+
+    // Every dimension of the assembly is a multiple of the card's own width, because the steps are
+    // fractions of the card rather than fixed distances. So each constraint is `width <= budget /
+    // factor` and the answer is the smallest of them — no searching, no iteration.
+    val ratio = CARD_ASPECT_RATIO
+    val band = ATTACHMENT_BAND_FRACTION / ratio // a band, in units of card width
+    val inset = ATTACHMENT_INSET_FRACTION
+    val host = if (state.tapped) 1f else 1f / ratio // the host's own height, in units of card width
+
+    // Height. The host sits under the upright stack — and the upright attachments are never rotated,
+    // so they stay a whole card tall and can reach *below* a tapped host, which is only a card's
+    // width tall. Solving only the first constraint is what puts the stack outside the assembly.
+    val byHostHeight = maxHeight / (band * upright + host)
+    val byUprightDepth =
+        if (upright == 0) byHostHeight else maxHeight / (band * (upright - 1) + 1f / ratio)
+
+    // Width. The host plus the stack's sideways drift, and separately the turned reach, which is
+    // measured along the card's height.
+    val byHostWidth = maxWidth / ((if (state.tapped) 1f / ratio else 1f) + inset * upright)
+    val byTurnedReach =
+        if (turned == 0) byHostWidth else maxWidth / ((1f + ATTACHMENT_BAND_FRACTION * (turned - 1)) / ratio)
+
+    return minOf(byHostHeight, byUprightDepth, byHostWidth, byTurnedReach).coerceAtLeast(Dp.Hairline)
+}
+
+/**
  * A card at Board size, with whatever is attached to it stacked behind.
  *
  * **Tapping rotates the card rather than badging it** — the universal Magic idiom, and cheaper to read
@@ -279,8 +326,11 @@ fun BoardCard(
     val upright = state.attachments.filter { !it.tapped }
     val turned = state.attachments.filter { it.tapped }
 
-    val upStack = AttachmentBandHeight * upright.size
-    val uprightReach = AttachmentInset * upright.size
+    val band = attachmentBandHeight(cardHeight)
+    val inset = attachmentInset(width)
+
+    val upStack = band * upright.size
+    val uprightReach = inset * upright.size
     val hostTop = upStack
 
     // A turned attachment lies behind the host with its left edge flush against the host's, so the
@@ -292,10 +342,18 @@ fun BoardCard(
     // perpendicular to the band it has to expose, so that no card covers another's name: upright
     // cards have a band across the top and step up, turned cards have one down the right and step
     // right. The same rule, rotated with the card.
-    val turnedReach = if (turned.isEmpty()) 0.dp else cardHeight + AttachmentBandHeight * (turned.size - 1)
+    val turnedReach = if (turned.isEmpty()) 0.dp else cardHeight + band * (turned.size - 1)
 
     val assemblyWidth = maxOf(hostWidth + uprightReach, turnedReach)
-    val assemblyHeight = hostTop + hostHeight
+
+    // An upright attachment is a whole card tall wherever the host is, so the stack can reach below
+    // the host rather than only above it — which happens exactly when the host is **tapped**, because
+    // a tapped host is only a card's *width* tall while the Auras behind it are not rotated and stay
+    // full height. Declaring only `hostTop + hostHeight` there under-measures the assembly, and the
+    // attachments spill out of it: the first thing a parent clips is the name band the stack exists
+    // to expose.
+    val uprightDepth = if (upright.isEmpty()) 0.dp else band * (upright.size - 1) + cardHeight
+    val assemblyHeight = maxOf(hostTop + hostHeight, uprightDepth)
 
     Box(modifier = modifier.size(width = assemblyWidth, height = assemblyHeight)) {
         // Drawn furthest-out first, so the nearest turned card ends up on top and each one behind it
@@ -310,7 +368,7 @@ fun BoardCard(
                     Modifier
                         .align(Alignment.TopStart)
                         .offset(
-                            x = AttachmentBandHeight * index,
+                            x = band * index,
                             y = hostTop + (hostHeight - width) / 2,
                         ),
             )
@@ -328,8 +386,8 @@ fun BoardCard(
                     Modifier
                         .align(Alignment.TopStart)
                         .offset(
-                            x = AttachmentInset * (upright.size - index),
-                            y = AttachmentBandHeight * index,
+                            x = inset * (upright.size - index),
+                            y = band * index,
                         ),
             )
         }
@@ -531,6 +589,7 @@ private fun UprightAttachedCard(
     AttachedCardFace(
         attachment = attachment,
         art = art,
+        bandHeight = attachmentBandHeight(cardHeight),
         modifier = modifier.size(width = width, height = cardHeight),
     )
 }
@@ -558,6 +617,7 @@ private fun TurnedAttachedCard(
         AttachedCardFace(
             attachment = attachment,
             art = art,
+            bandHeight = attachmentBandHeight(cardHeight),
             // requiredSize, not size: the card is taller than this landscape box, and a plain size
             // would be clamped by the box's constraints — squashing the card to a square before the
             // rotation ever happened, which cropped the art. The card keeps its own dimensions and
@@ -575,6 +635,7 @@ private fun TurnedAttachedCard(
 private fun AttachedCardFace(
     attachment: BoardAttachment,
     art: CardArtSlot?,
+    bandHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -593,7 +654,7 @@ private fun AttachedCardFace(
                     Modifier
                         .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .height(AttachmentBandHeight)
+                        .height(bandHeight)
                         .padding(horizontal = BoardCardPadding),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -669,8 +730,27 @@ private val SecondaryBorderWidth = 1.dp
 private val CounterCircleSize = 15.dp
 private val BadgeSize = 13.dp
 
-/** Tall enough for an attached card's name and mana cost — the reason the stack offsets vertically. */
-private val AttachmentBandHeight = 15.dp
+/*
+ * The stack's two steps are **fractions of the card**, not fixed distances.
+ *
+ * They started as 15.dp and 4.dp, which are right for a card on a battlefield and wrong everywhere
+ * else: the same 15.dp that exposes a whole name plate on a 68.dp card shows a sliver of one on the
+ * 250.dp card the inspect view draws, and a 4.dp sideways step that reads clearly at board size is
+ * invisible beside a card four times as wide. A stack whose offsets do not grow with the card stops
+ * being a stack and becomes a pile of edges.
+ *
+ * The fractions below are calibrated so that at the board's own 68.dp they still produce 15.dp and
+ * 4.dp — the tier that was designed and eyeballed against them renders as it did.
+ */
 
-/** The small sideways step that makes the stack read as separate cards rather than one block. */
-private val AttachmentInset = 4.dp
+/** The band as a fraction of the card's **height**: 15dp of a 68dp card's 95dp height. */
+private const val ATTACHMENT_BAND_FRACTION = 0.158f
+
+/** The sideways step as a fraction of the card's **width**: 4dp of 68dp. */
+private const val ATTACHMENT_INSET_FRACTION = 0.059f
+
+/** Tall enough for an attached card's name and mana cost — the reason the stack offsets vertically. */
+private fun attachmentBandHeight(cardHeight: Dp): Dp = cardHeight * ATTACHMENT_BAND_FRACTION
+
+/** The sideways step that makes the stack read as separate cards rather than one block. */
+private fun attachmentInset(width: Dp): Dp = width * ATTACHMENT_INSET_FRACTION

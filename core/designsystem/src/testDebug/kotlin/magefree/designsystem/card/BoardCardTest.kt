@@ -324,9 +324,96 @@ class BoardCardTest {
 
     private fun cardHeight(): Dp = (CARD_WIDTH.value / CARD_ASPECT_RATIO).roundToInt().dp
 
+    @Test
+    fun `a tapped card's assembly still contains the Auras stacked on it`() {
+        // The combination nothing showed until the inspect view put it on screen: a **tapped** host
+        // with **upright** attachments. Tapping makes the host only a card's width tall, but an Aura
+        // behind it is not rotated and stays a whole card tall — so the stack reaches below the host,
+        // and an assembly measured as "host plus the stack above it" does not contain it. Whatever
+        // clips first takes the name band off the top, which is the one thing the stack is there for.
+        show(
+            BoardCardState(
+                card = BEARS,
+                tapped = true,
+                attachments = listOf(HOLY_STRENGTH, PACIFISM),
+            ),
+        )
+
+        val footprint = composeTestRule.onNodeWithTag(FOOTPRINT).fetchSemanticsNode()
+        val top = footprint.positionInRoot.y
+        val bottom = top + footprint.size.height
+        val attachments =
+            composeTestRule
+                .onAllNodesWithTag(BoardCardTestTags.ATTACHMENT, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+
+        assertEquals("both Auras must render, or this proves nothing", 2, attachments.size)
+        attachments.forEach { node ->
+            assertTrue(
+                "an attachment runs from ${node.positionInRoot.y} to " +
+                    "${node.positionInRoot.y + node.size.height}, outside the card's own footprint " +
+                    "$top..$bottom — the assembly is smaller than what it draws",
+                node.positionInRoot.y >= top - ROUNDING_SLACK_PX &&
+                    node.positionInRoot.y + node.size.height <= bottom + ROUNDING_SLACK_PX,
+            )
+        }
+    }
+
+    @Test
+    fun `the stack's steps grow with the card, so a band is a name plate at any size`() {
+        // The defect the inspect view exposed: the steps were fixed distances tuned for a card on a
+        // battlefield. 15dp exposes a whole name plate on a 68dp card and a sliver of one on the 250dp
+        // card a zoom draws, and a 4dp sideways step that reads at board size vanishes beside a card
+        // four times as wide. Asserted as a **ratio**, because the point is that it scales — not that
+        // it happens to be any particular number.
+        val enchanted = BoardCardState(card = BEARS, attachments = listOf(PACIFISM))
+        composeTestRule.setContent {
+            MageTheme {
+                Box {
+                    BoardCard(state = enchanted, width = CARD_WIDTH, modifier = Modifier.testTag(SMALL))
+                    BoardCard(state = enchanted, width = CARD_WIDTH * 2f, modifier = Modifier.testTag(LARGE))
+                }
+            }
+        }
+
+        val small =
+            composeTestRule
+                .onNodeWithTag(SMALL)
+                .fetchSemanticsNode()
+                .size.height
+                .toFloat()
+        val large =
+            composeTestRule
+                .onNodeWithTag(LARGE)
+                .fetchSemanticsNode()
+                .size.height
+                .toFloat()
+
+        // The assembly is a card plus one band, so the whole thing scales with the card.
+        assertEquals(
+            "the stack does not scale with the card: 2x the card gave ${large / small}x the assembly",
+            2f,
+            large / small,
+            0.02f,
+        )
+    }
+
     private companion object {
         val CARD_WIDTH: Dp = 72.dp
         const val FOOTPRINT = "footprint"
+
+        /**
+         * One pixel, for the containment assertions.
+         *
+         * Compose rounds each offset and each size to whole pixels independently, so a child placed at
+         * `round(a)` with height `round(b)` can end one pixel past a parent measured as `round(a + b)`.
+         * That is arithmetic, not a layout defect - a name plate is not clipped by a pixel. The bug this
+         * guards against was 84dp.
+         */
+        const val ROUNDING_SLACK_PX = 1
+
+        const val SMALL = "footprint-small"
+        const val LARGE = "footprint-large"
         const val BARE = "bare"
         const val ENCHANTED = "enchanted"
 
