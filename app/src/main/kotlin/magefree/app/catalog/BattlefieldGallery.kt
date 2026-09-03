@@ -3,8 +3,8 @@ package magefree.app.catalog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,7 +15,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.component.MageSecondaryButton
 import magefree.designsystem.component.MageSectionHeader
@@ -74,9 +73,13 @@ internal fun BattlefieldSection() {
             style = MaterialTheme.typography.labelMedium,
         )
 
-        // A landscape window, because that is the only shape the board is designed for (§7.19). The
-        // catalog scrolls vertically, so the board needs a bounded height or it has none.
-        Box(modifier = Modifier.fillMaxWidth().height(BoardWindowHeight)) {
+        // **A phone-landscape window, not a tall one.** The catalog scrolls vertically, so the board
+        // needs a bounded height — and the obvious bounded height, a fixed dp, gives a nearly square
+        // box in this column and a board shape the app will never have. Every rule §7.4 states is
+        // about *fitting*: the derived card size, the rows that vanish when empty, the front rows
+        // meeting in the middle. Judging any of them in the wrong aspect ratio judges the wrong thing,
+        // so the window is the real one's proportions and the width toggle above makes it bigger.
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(PHONE_LANDSCAPE_RATIO)) {
             BattlefieldLayout(
                 model = battlefieldModel(board.state),
                 artFor = CatalogBattlefieldArt,
@@ -92,7 +95,13 @@ private class CatalogBoard(
     val state: GameState,
 )
 
-private val BoardWindowHeight = 320.dp
+/**
+ * A phone held sideways, which is the only shape the board targets (§7.19).
+ *
+ * 891 × 411 is the window a 1080 × 2400 phone gives in landscape, and it is what the hermetic tests
+ * are configured against, so the catalog and the tests are looking at the same board.
+ */
+private const val PHONE_LANDSCAPE_RATIO = 891f / 411f
 
 /** No art dependency here either; the arrangement is what is being judged. */
 private val CatalogBattlefieldArt: ((String) -> CardArtSlot?)? = null
