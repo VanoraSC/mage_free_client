@@ -118,7 +118,15 @@ fun BattlefieldLayout(
     }
 }
 
-/** One side's rows, in [order] from top to bottom. */
+/**
+ * One side's rows, in [order] from top to bottom, packed against the centre line.
+ *
+ * **The rows take the height they need and no more.** They used to share the side's height equally,
+ * which is the same mistake as sizing a card to its space: with a fixed card size that leaves a band
+ * of empty grey between the two rows and pushes them apart for no reason the game gives. Packing them
+ * toward the middle instead means the two front rows meet there, and whatever is left over falls at
+ * the outside edges where nothing needs it.
+ */
 @Composable
 private fun SideRows(
     side: BattlefieldSide,
@@ -129,9 +137,13 @@ private fun SideRows(
     onInspect: ((String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    // The viewer's front row is first, so packing to the top puts it against the middle; the
+    // opponent's is last, so theirs packs to the bottom. Same rule, mirrored.
+    val towardCentre = if (order === ViewerOrder) Alignment.Top else Alignment.Bottom
+
     Column(
         modifier = modifier.fillMaxWidth().testTag(BattlefieldTestTags.side(side.playerId)),
-        verticalArrangement = Arrangement.spacedBy(RowGap),
+        verticalArrangement = Arrangement.spacedBy(RowGap, towardCentre),
     ) {
         order.forEach { row ->
             val content = row.roles.flatMap(side::inRole)
@@ -142,10 +154,10 @@ private fun SideRows(
                     permanents = content,
                     tag = BattlefieldTestTags.row(side.playerId, row.name),
                     width = width,
+                    alignment = row.alignment,
                     palette = palette,
                     artFor = artFor,
                     onInspect = onInspect,
-                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -158,12 +170,13 @@ private fun PermanentRow(
     permanents: List<TablePermanent>,
     tag: String,
     width: Dp,
+    alignment: Alignment,
     palette: CounterPalette,
     artFor: ((String) -> CardArtSlot?)?,
     onInspect: ((String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxWidth(), contentAlignment = alignment) {
         Row(
             modifier =
                 Modifier
@@ -189,7 +202,14 @@ private fun PermanentRow(
 /**
  * The card width every side is drawn at.
  *
- * Three constraints, and the smallest wins.
+ * **A card has a size, and a sparse board does not make it bigger.** This is the constraint the first
+ * cut of this got backwards: it sized cards to fill whatever space was going, so an opening board of
+ * two lands drew two lands the height of the battlefield. Nothing about a game says a Forest is more
+ * important when there is only one of it. So the width starts at [PreferredCardWidth] and the other
+ * constraints only ever take it *down* — the board is a fixed size, and a card shrinks because the
+ * board got busy, never grows because it got quiet.
+ *
+ * The rest are the reasons it shrinks, and the smallest wins.
  *
  * **Width:** the busiest row has to fit across the board, so the width is what leaves room for that
  * many cards and the gaps between them.
@@ -221,7 +241,7 @@ private fun cardWidth(
     val rowHeight = (sideHeight - RowGap * (rowsPerSide - 1)) / rowsPerSide
     val byHeight = rowHeight * CARD_ASPECT_RATIO
 
-    val plain = minOf(byWidth, byHeight)
+    val plain = minOf(PreferredCardWidth, byWidth, byHeight)
     val byAssembly =
         (model.opponents + listOfNotNull(model.viewer))
             .flatMap { it.permanents }
@@ -265,10 +285,28 @@ private fun sideRows(model: BattlefieldModel): BattlefieldRowCounts {
 private data class BattlefieldRow(
     val name: String,
     val roles: List<PermanentRole>,
+    val alignment: Alignment,
 )
 
-private val FrontRow = BattlefieldRow(name = "front", roles = listOf(PermanentRole.Creature))
-private val BackRow = BattlefieldRow(name = "back", roles = listOf(PermanentRole.Land, PermanentRole.Other))
+/** Creatures, centred: they are what the eye goes to, and combat happens between the two of these. */
+private val FrontRow =
+    BattlefieldRow(
+        name = "front",
+        roles = listOf(PermanentRole.Creature),
+        alignment = Alignment.Center,
+    )
+
+/**
+ * Lands and everything else, against the near edge — §7.4's *"lands to the side, at the back"*.
+ *
+ * Lands come first inside the row, which is what puts them at the side rather than merely at the back.
+ */
+private val BackRow =
+    BattlefieldRow(
+        name = "back",
+        roles = listOf(PermanentRole.Land, PermanentRole.Other),
+        alignment = Alignment.CenterStart,
+    )
 
 /** The viewer reads bottom-up: their creatures sit against the centre line, above their lands. */
 private val ViewerOrder = listOf(FrontRow, BackRow)
@@ -289,6 +327,15 @@ object BattlefieldTestTags {
         row: String,
     ): String = "battlefield-row-$playerId-$row"
 }
+
+/**
+ * The size a card is drawn at when the board has room for it.
+ *
+ * A ceiling, not a target: it is what a quiet board looks like, and every other constraint can only
+ * take it down. Chosen so a phone in landscape holds a comfortable board — around a dozen permanents
+ * across a row — at full size, before anything has to give.
+ */
+private val PreferredCardWidth = 58.dp
 
 /** Below this a card stops being readable, so the row scrolls rather than shrinking further. */
 private val MinCardWidth = 44.dp

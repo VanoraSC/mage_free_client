@@ -121,6 +121,23 @@ class BattlefieldLayoutTest {
     }
 
     @Test
+    fun `a quiet board does not draw bigger cards, it draws the same cards`() {
+        // The constraint the first cut had backwards: it sized cards to fill whatever space was
+        // going, so an opening board of two lands drew two lands the height of the battlefield.
+        // Nothing about a game says a Forest matters more when there is only one of it. A card has a
+        // size; the board shrinks it when it gets busy and never grows it when it gets quiet.
+        showPair(
+            left = oneSided("sparse", listOf(forest())),
+            right = oneSided("some", List(4) { creature(it) }),
+        )
+
+        assertEquals(
+            cardWidthIn(BattlefieldTestTags.row("sparse", "back")),
+            cardWidthIn(BattlefieldTestTags.row("some", "front")),
+        )
+    }
+
+    @Test
     fun `a busier row draws smaller cards, which is what makes them fit`() {
         // The test a fixed card width fails and everything else here passes: a flat row of twelve at
         // one creature's size runs off the board rather than shrinking to fit it.

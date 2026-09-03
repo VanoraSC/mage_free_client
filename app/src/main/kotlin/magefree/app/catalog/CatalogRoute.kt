@@ -14,3 +14,13 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data object CatalogRoute
+
+/**
+ * Route for the **full-window battlefield preview**, reached from the catalog's battlefield section.
+ *
+ * A route of its own rather than a box inside [CatalogRoute] because the board needs the whole window
+ * and its own orientation: §7.4's rules are all about fitting a real one, and none of them can be
+ * assessed in a letterbox inside a scrolling portrait column. Debug-only, like the catalog itself.
+ */
+@Serializable
+data object BattlefieldPreviewRoute

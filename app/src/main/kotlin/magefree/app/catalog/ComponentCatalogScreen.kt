@@ -78,6 +78,7 @@ fun ComponentCatalogScreen(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
     artFor: ((String) -> CardArtSlot?)? = null,
+    onOpenBattlefield: () -> Unit = {},
 ) {
     var darkTheme by rememberSaveable { mutableStateOf(false) }
     var wide by rememberSaveable { mutableStateOf(false) }
@@ -148,7 +149,7 @@ fun ComponentCatalogScreen(
                         // worth looking at is the sequence.
                         hostSections = {
                             CastFlowSection()
-                            BattlefieldSection()
+                            BattlefieldSection(onOpenPreview = onOpenBattlefield)
                         },
                         modifier =
                             Modifier

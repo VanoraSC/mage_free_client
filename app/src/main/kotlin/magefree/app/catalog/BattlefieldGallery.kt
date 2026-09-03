@@ -1,26 +1,14 @@
 package magefree.app.catalog
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.component.MageSecondaryButton
 import magefree.designsystem.component.MageSectionHeader
 import magefree.designsystem.theme.Spacing
-import magefree.feature.game.table.BattlefieldLayout
-import magefree.feature.game.table.battlefieldModel
 import magefree.network.game.CardIconType
 import magefree.network.game.CardType
 import magefree.network.game.CombatGroup
@@ -49,62 +37,37 @@ import magefree.network.game.PlayableObject
  * the arrangement, and a recording would pin the layout to whatever one game happened to contain.
  */
 
-/** The battlefield section, assembled here because the design system cannot see game types. */
+/**
+ * The battlefield section: an entry point, not a preview.
+ *
+ * **The board is not shown inline, and that is the point.** It was, and a letterbox in the catalog's
+ * portrait column is not something the arrangement can be judged from — the card size that only
+ * shrinks when the board is busy, the rows that vanish when empty, the two front rows meeting in the
+ * middle are all rules about fitting a real window. In a strip a few hundred dp wide they are
+ * technically visible and none of them can be assessed. So this opens the real thing.
+ */
 @Composable
-internal fun BattlefieldSection() {
-    var step by remember { mutableIntStateOf(0) }
-    var inspected by remember { mutableStateOf<String?>(null) }
-    val board = Boards[step]
-
+internal fun BattlefieldSection(onOpenPreview: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
         MageSectionHeader(text = "Battlefield")
         HorizontalDivider()
 
-        MageSecondaryButton(
-            text = board.label,
-            onClick = {
-                step = (step + 1) % Boards.size
-                inspected = null
-            },
-        )
-
         Text(
-            text = inspected?.let { "Tapped: $it" } ?: "Tap a permanent to check it reports its own id.",
+            text =
+                "Opens full-window and landscape, because that is the only shape the board is " +
+                    "designed for. Cycles an opening board, a developed one and a crowded one.",
             style = MaterialTheme.typography.labelMedium,
         )
 
-        // **A phone-landscape window, not a tall one.** The catalog scrolls vertically, so the board
-        // needs a bounded height — and the obvious bounded height, a fixed dp, gives a nearly square
-        // box in this column and a board shape the app will never have. Every rule §7.4 states is
-        // about *fitting*: the derived card size, the rows that vanish when empty, the front rows
-        // meeting in the middle. Judging any of them in the wrong aspect ratio judges the wrong thing,
-        // so the window is the real one's proportions and the width toggle above makes it bigger.
-        Box(modifier = Modifier.fillMaxWidth().aspectRatio(PHONE_LANDSCAPE_RATIO)) {
-            BattlefieldLayout(
-                model = battlefieldModel(board.state),
-                artFor = CatalogBattlefieldArt,
-                onInspect = { inspected = it },
-            )
-        }
+        MageSecondaryButton(text = "Open the battlefield", onClick = onOpenPreview)
     }
 }
 
-/** One board worth looking at, and what it is showing. */
-private class CatalogBoard(
+/** One board worth looking at, and what it is showing. Shared with the full-window preview. */
+internal class CatalogBoard(
     val label: String,
     val state: GameState,
 )
-
-/**
- * A phone held sideways, which is the only shape the board targets (§7.19).
- *
- * 891 × 411 is the window a 1080 × 2400 phone gives in landscape, and it is what the hermetic tests
- * are configured against, so the catalog and the tests are looking at the same board.
- */
-private const val PHONE_LANDSCAPE_RATIO = 891f / 411f
-
-/** No art dependency here either; the arrangement is what is being judged. */
-private val CatalogBattlefieldArt: ((String) -> CardArtSlot?)? = null
 
 private fun card(
     id: String,
@@ -283,9 +246,12 @@ private val Crowded =
             ),
     )
 
-private val Boards =
+internal val Boards =
     listOf(
         CatalogBoard(label = "Opening — two lands a side", state = Opening),
         CatalogBoard(label = "Developed — creatures, an artifact, an Aura across the board", state = Developed),
         CatalogBoard(label = "Crowded — sixteen permanents on one side", state = Crowded),
     )
+
+/** The board at [step], wrapping so the preview's one button can cycle forever. */
+internal fun catalogBoard(step: Int): CatalogBoard = Boards[step.mod(Boards.size)]

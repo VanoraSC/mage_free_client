@@ -37,15 +37,17 @@ old code is not edited to accommodate new code. The new surface builds its own m
   folded onto their hosts, badges resolved from the server's icons.
 - The arrangement itself: opponent's side mirrored above, the viewer's below, no chrome, no region
   holding height while empty.
-- Card size derived from the widest populated row and floored at a legibility minimum.
-- A catalog section, fed by the same mapping, so the arrangement can be judged.
+- A card size that shrinks when the board is busy and never grows when it is quiet.
+- A full-window, landscape preview surface, reached from the catalog, so the arrangement can be judged
+  in the shape of window it is designed for.
 
 **Out of scope**
 - **Piling** (§7.4's other half, 0065's presentation). Every permanent renders individually here; the
   pile is the next story and slots into the same buckets.
 - The hand, player vitals, the stack, and the floating layers generally.
-- The live screen, its entry point and the landscape request. This story delivers the surface and its
-  model; mounting it is the story after piling, so that what gets mounted is the finished thing.
+- The live *game* screen and its entry point. This story delivers the surface, its model and a preview
+  to iterate in; mounting it against a real session comes after piling, so that what gets mounted is
+  the finished thing.
 - Combat arrows. The signal colours from 0096 are used; the arrows are §3.1 work.
 
 ## 4. Prerequisites & toolchain
@@ -69,9 +71,18 @@ the non-creature bucket, which is what `isAttachedToPermanent` is for.
 hint of `"Shroud"`. That is the one place the mapping reads the hint, and 0104 gave shroud its own
 badge for it.
 
-**The size is derived, not chosen.** §7.4: card size comes from the widest populated row, floored at a
-legibility minimum, and below the floor the row scrolls. The arrangement therefore measures before it
-sizes, rather than picking a dp that is right on one device.
+**A card has a size; a quiet board does not make it bigger.** This is the thing the first cut got
+backwards. §7.4 says card size is derived from the widest populated row and floored at a legibility
+minimum, and read alone that suggests fitting cards to the space available — which drew an opening
+board of two lands as two lands the height of the battlefield. Nothing about a game says a Forest
+matters more when there is only one of it. So the width starts at a preferred size and every other
+constraint only takes it down: the board is a fixed size, a card shrinks because the board got busy,
+and below the floor the row scrolls rather than shrinking further.
+
+**The rows pack toward the centre line** for the same reason. Sharing a side's height equally between
+its rows leaves a band of empty grey between them once the card has a fixed size, pushing them apart
+for no reason the game gives. Packed to the middle, the two front rows meet there and the slack falls
+at the outside edges where nothing needs it.
 
 **No region holds height while empty.** A side with no lands has no land area, not an empty one. This
 is the rule that pays for the card size, and it is easy to lose to a `Spacer` that seemed harmless.
@@ -90,7 +101,7 @@ is the rule that pays for the card size, and it is easy to lose to a `Spacer` th
   shroud icon becomes the shroud badge and a hexproof one does not.
 - **Hermetic Compose:** an empty bucket claims no height; the viewer's side is below the opponent's;
   card size falls when a row is fuller.
-- **Eyes-on:** the catalog's battlefield section.
+- **Eyes-on:** the catalog's battlefield section, which opens the board full-window and landscape.
 
 ## 8. Acceptance criteria
 
@@ -98,7 +109,9 @@ is the rule that pays for the card size, and it is easy to lose to a `Spacer` th
 - [x] An attachment renders on its host and nowhere else; a player-attached permanent keeps its bucket.
 - [x] Badges are resolved from the server's icons, with shroud told from hexproof by the hint.
 - [x] No empty region holds height.
-- [x] Card size is derived from the widest populated row and floored.
+- [x] A card is drawn at a preferred size, shrinking only when the board is too busy for it, and never
+      growing when the board is quiet.
+- [x] Below the legibility floor the row scrolls rather than shrinking further.
 - [x] A card carrying attachments is sized as the whole assembly, not as the card.
 - [x] `./gradlew check` passes and the catalog shows the arrangement.
 
