@@ -7,15 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalFontFamilyResolver
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import magefree.designsystem.R
 
 /*
  * The shipped Mana font, drawn the way a mana symbol is actually printed.
@@ -32,8 +24,6 @@ import magefree.designsystem.R
  * line box carries ascent and descent that have nothing to do with where its ink is, and laying out by
  * that box is what pushed the first version high and small inside its own placeholder.
  */
-
-internal val ManaFontFamily = FontFamily(Font(R.font.mana))
 
 /**
  * Every glyph in the font this app draws, by the code the server puts between braces.
@@ -233,8 +223,7 @@ private fun ManaSymbol(
     // The font as a `Typeface`, so the glyph can be measured and placed by its ink rather than by the
     // line box a `Text` would give it. Resolved through Compose's own resolver so this module still
     // needs nothing beyond the font resource it already ships.
-    val resolver = LocalFontFamilyResolver.current
-    val typeface = remember(resolver) { resolver.resolve(ManaFontFamily).value as? android.graphics.Typeface }
+    val typeface = rememberManaTypeface()
     val paint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
     val bounds = remember { android.graphics.Rect() }
 
@@ -247,7 +236,7 @@ private fun ManaSymbol(
         when (art) {
             is SymbolArt.Single -> {
                 drawCircle(color = art.disc, radius = radius, center = centre)
-                drawGlyph(typeface, paint, bounds, art.glyph, centre, diameter * art.fill)
+                drawFontGlyph(typeface, paint, bounds, art.glyph, centre, diameter * art.fill, SymbolInk)
             }
 
             is SymbolArt.Split -> {
@@ -266,53 +255,10 @@ private fun ManaSymbol(
                 }
                 val offset = radius * SPLIT_GLYPH_OFFSET
                 val half = diameter * SPLIT_GLYPH_FILL
-                drawGlyph(typeface, paint, bounds, art.first, centre - Offset(offset, offset), half)
-                drawGlyph(typeface, paint, bounds, art.second, centre + Offset(offset, offset), half)
+                drawFontGlyph(typeface, paint, bounds, art.first, centre - Offset(offset, offset), half, SymbolInk)
+                drawFontGlyph(typeface, paint, bounds, art.second, centre + Offset(offset, offset), half, SymbolInk)
             }
         }
-    }
-}
-
-/**
- * Draws [glyph] with its **ink** centred on [centre] and its longer side [target] across.
- *
- * Measured rather than assumed. `drawText` places a glyph by its baseline, and a font's baseline says
- * where letters sit, not where an icon's picture is; the two differ by whatever the designer chose. So
- * the glyph is measured once at a reference size, scaled to the size wanted, and measured again —
- * `getTextBounds` is not exactly linear in text size — and then positioned from that box.
- *
- * If the platform reports no bounds at all, nothing is drawn. That is a stub renderer rather than a
- * real one, which is what happens under Robolectric, and drawing a guess there would put a wrong
- * picture in front of whoever was looking.
- */
-private fun DrawScope.drawGlyph(
-    typeface: android.graphics.Typeface?,
-    paint: android.graphics.Paint,
-    bounds: android.graphics.Rect,
-    glyph: Char,
-    centre: Offset,
-    target: Float,
-) {
-    if (typeface == null || target <= 0f) return
-    val text = glyph.toString()
-    paint.typeface = typeface
-    paint.color = SymbolInk.toArgb()
-
-    paint.textSize = GLYPH_REFERENCE_SIZE
-    paint.getTextBounds(text, 0, 1, bounds)
-    val measured = maxOf(bounds.width(), bounds.height())
-    if (measured <= 0) return
-
-    paint.textSize = GLYPH_REFERENCE_SIZE * (target / measured)
-    paint.getTextBounds(text, 0, 1, bounds)
-
-    drawIntoCanvas { canvas ->
-        canvas.nativeCanvas.drawText(
-            text,
-            centre.x - bounds.exactCenterX(),
-            centre.y - bounds.exactCenterY(),
-            paint,
-        )
     }
 }
 
@@ -344,6 +290,3 @@ private const val SPLIT_GLYPH_FILL = 0.42f
 
 /** How far each half sits from the centre, along the diagonal it is split on. */
 private const val SPLIT_GLYPH_OFFSET = 0.40f
-
-/** Measured at a size large enough that rounding in the reported bounds does not matter. */
-private const val GLYPH_REFERENCE_SIZE = 200f

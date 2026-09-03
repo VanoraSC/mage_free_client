@@ -107,7 +107,7 @@ internal fun BoardCardGallery(
             )
         }
 
-        GalleryCaption("Keyword badges — placeholder art, sized for several along the bottom edge")
+        GalleryCaption("Keyword badges — the keyword's own symbol, sized for several along the bottom edge")
         BoardRow {
             LabelledCard(
                 label = "flying",
@@ -319,7 +319,7 @@ private fun LabelledCard(
 
 /** A caption in the surrounding app theme, so the board's colours never explain themselves. */
 @Composable
-private fun GalleryCaption(text: String) {
+internal fun GalleryCaption(text: String) {
     Text(text = text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 

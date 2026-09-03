@@ -36,7 +36,7 @@ import magefree.designsystem.theme.Spacing
  * This is where they ask, so the two halves are designed together.
  *
  * **The panel explains the board's shorthand in the board's own terms.** A counter row draws the same
- * circle the card draws, next to the counter's name; a badge row draws the same square next to the
+ * chip the card draws, next to the counter's name; a badge row draws the same plate next to the
  * keyword's name. That is what turns the colour queue from an arbitrary allocation into something a
  * player learns — and it is why the view takes the live [CounterPalette] rather than choosing colours
  * of its own, which would teach a shorthand the board does not use.
@@ -50,9 +50,11 @@ import magefree.designsystem.theme.Spacing
  * A keyword badge with what the server said about it.
  *
  * @property badge which keyword, as the board draws it.
- * @property detail the server's own hint, shown when it says more than the badge's name does. Two
- *   cases make this load-bearing: upstream sends **shroud** under the hexproof icon, distinguished by
- *   its hint alone, and a restrictions badge carries the actual reasons the permanent cannot act.
+ * @property detail the server's own hint, shown when it says more than the badge's name does. It is
+ *   load-bearing for the badges that carry no keyword of their own: a restrictions badge holds the
+ *   actual reasons the permanent cannot act, and a hexproof one can say which colours it is hexproof
+ *   from. Whoever builds this from the wire also uses the hint to choose between [BoardBadge.Hexproof]
+ *   and [BoardBadge.Shroud], which upstream sends under one icon type.
  */
 data class InspectBadge(
     val badge: BoardBadge,

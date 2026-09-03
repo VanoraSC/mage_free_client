@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Dp
@@ -98,17 +99,18 @@ class BoardCardTest {
     }
 
     @Test
-    fun `counters render on the face carrying only their count`() {
+    fun `counters render on the face carrying their count`() {
         show(BoardCardState(card = BEARS, counters = listOf(BoardCounter("+1/+1", 7))))
 
         composeTestRule.onNodeWithTag(BoardCardTestTags.COUNTERS).assertIsDisplayed()
         composeTestRule.onNodeWithText("7").assertIsDisplayed()
-        // The kind is carried by colour, not by a label that would not fit at board size.
+        // The kind is a symbol and a colour, never its written name: `+1/+1` spelled out does not fit
+        // at board size and would crowd out the number, which is the part that changes.
         composeTestRule.onNodeWithText("+1/+1").assertDoesNotExist()
     }
 
     @Test
-    fun `a counter kind this build has never heard of still gets a circle`() {
+    fun `a counter kind this build has never heard of still gets a chip`() {
         show(BoardCardState(card = BEARS, counters = listOf(BoardCounter("wibble", 3))))
 
         composeTestRule.onNodeWithTag(BoardCardTestTags.COUNTERS).assertIsDisplayed()
@@ -116,7 +118,7 @@ class BoardCardTest {
     }
 
     @Test
-    fun `several counter kinds each get their own circle`() {
+    fun `several counter kinds each get their own chip`() {
         show(
             BoardCardState(
                 card = BEARS,
@@ -130,12 +132,15 @@ class BoardCardTest {
     }
 
     @Test
-    fun `badges render along the bottom edge`() {
+    fun `badges render along the bottom edge, and still say which keyword they are`() {
         show(BoardCardState(card = BEARS, badges = listOf(BoardBadge.Flying, BoardBadge.Trample)))
 
         composeTestRule.onNodeWithTag(BoardCardTestTags.BADGES).assertIsDisplayed()
-        composeTestRule.onNodeWithText(BoardBadge.Flying.shortLabel).assertIsDisplayed()
-        composeTestRule.onNodeWithText(BoardBadge.Trample.shortLabel).assertIsDisplayed()
+        // A badge is a picture now, so the keyword lives in the description rather than in visible
+        // text — and it is the full word, not the `FLY` the placeholder used to show. Losing this is
+        // the one way the change could take information away instead of adding it.
+        composeTestRule.onNodeWithContentDescription(BoardBadge.Flying.label).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription(BoardBadge.Trample.label).assertIsDisplayed()
     }
 
     @Test
@@ -143,6 +148,28 @@ class BoardCardTest {
         show(BoardCardState(card = BEARS, badges = listOf(BoardBadge.Unknown)))
 
         composeTestRule.onNodeWithTag(BoardCardTestTags.BADGES).assertIsDisplayed()
+        // No font has a picture of "the server named something we do not know", so this one keeps its
+        // short form. A badge that drew nothing at all would hide the fact that something is there.
+        composeTestRule.onNodeWithText(BoardBadge.Unknown.shortLabel).assertIsDisplayed()
+    }
+
+    @Test
+    fun `a counter says its kind as well as its count`() {
+        // The colour alone said "different from that one"; the symbol says which. The count has to
+        // survive it — that is the number the player is actually reading.
+        show(BoardCardState(card = BEARS, counters = listOf(BoardCounter("+1/+1", 3))))
+
+        composeTestRule.onNodeWithTag(BoardCardTestTags.COUNTERS).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("+1/+1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a counter kind the font has never heard of still shows its count`() {
+        show(BoardCardState(card = BEARS, counters = listOf(BoardCounter("moonsilver", 2))))
+
+        composeTestRule.onNodeWithTag(BoardCardTestTags.COUNTERS).assertIsDisplayed()
+        composeTestRule.onNodeWithText("2").assertIsDisplayed()
     }
 
     @Test

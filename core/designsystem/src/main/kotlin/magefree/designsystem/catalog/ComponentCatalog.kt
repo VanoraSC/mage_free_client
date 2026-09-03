@@ -164,6 +164,10 @@ fun ComponentCatalog(
             PromptGallery()
         }
 
+        CatalogSection(title = "Badges and counters") {
+            BadgeAndCounterGallery()
+        }
+
         CatalogSection(title = "Board card tier") {
             BoardCardGallery(artFor = artFor)
         }
