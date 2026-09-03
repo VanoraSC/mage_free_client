@@ -59,8 +59,9 @@ found by playing real games, not by reasoning.
 - **No way to look in a zone.** Graveyard and exile are counts on a vitals bar. `GameViewMapper`
   reduces the graveyard to `player.graveyard?.size` and throws the cards away, and does not map
   `PlayerView.commandList` at all, though the server sends both in full (§7.13).
-- **No attachment relationships.** The bridge maps `attachedTo` but not `PermanentView.attachments`,
-  so an Aura or Equipment renders as a loose permanent with no visible link to its host (§7.4).
+- ~~**No attachment relationships.**~~ **Fixed by 0087.** The bridge now maps `attachments`,
+  `attachedToPermanent` and `attachedControllerDiffers` alongside `attachedTo`. The *old* board still
+  draws an Aura as a loose permanent — it is the surface that has not caught up, not the wire (§7.4).
 - **Poison is invisible.** `PlayerView.counters` — poison, energy, experience — is not in
   `:protocol` at all, nor are `monarch`, `initiative` or `designationNames`. A player can lose to
   poison without the board ever showing it (§7.15).
@@ -481,8 +482,9 @@ board has to draw it or the three buckets actively mislead.
 **The server gives us both directions.** `PermanentView` carries `attachments` (a `List<UUID>` of
 what is attached to this permanent), `attachedTo` (what this permanent is attached to),
 `attachedToPermanent`, and `attachedControllerDiffers` — the last for the case where you control the
-Aura but your opponent controls the creature, which is a real and easily-missed board state. The
-bridge maps **only `attachedTo`**; `attachments` and the two flags are unmapped.
+Aura but your opponent controls the creature, which is a real and easily-missed board state. All four
+cross the wire as of 0087; when this section was written the bridge mapped only `attachedTo`, which is
+why the old board draws an Aura loose.
 
 **Only identical objects in identical states stack.** That is the whole rule, and it is strict.
 
