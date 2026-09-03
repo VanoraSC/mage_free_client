@@ -7,8 +7,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
+import magefree.app.catalog.BattlefieldPreviewRoute
+import magefree.app.catalog.BattlefieldPreviewScreen
 import magefree.app.catalog.CatalogRoute
 import magefree.app.catalog.ComponentCatalogScreen
+import magefree.app.catalog.rememberBattlefieldArtResolver
 import magefree.app.catalog.rememberCatalogArtResolver
 import magefree.app.connection.ui.ConnectionStatusBar
 import magefree.app.game.GameRoute
@@ -119,10 +122,14 @@ fun AppNavHost(
         DecksLibraryRoute(onBrowseCards = onBrowseCards)
     },
     cardsScreen: @Composable (onBack: () -> Unit) -> Unit = { onBack -> CardsFeatureRoute(onBack = onBack) },
-    catalogScreen: @Composable (onExit: () -> Unit) -> Unit = { onExit ->
+    catalogScreen: @Composable (onExit: () -> Unit, onOpenBattlefield: () -> Unit) -> Unit = { onExit, onOpenBattlefield ->
         // Real card art is resolved here, so the screen itself stays previewable and the graph tests
         // can substitute a stand-in rather than needing a DI container.
-        ComponentCatalogScreen(onExit = onExit, artFor = rememberCatalogArtResolver())
+        ComponentCatalogScreen(
+            onExit = onExit,
+            artFor = rememberCatalogArtResolver(),
+            onOpenBattlefield = onOpenBattlefield,
+        )
     },
     onSignOut: () -> Unit = {},
 ) {
@@ -177,8 +184,19 @@ fun AppNavHost(
         composable<GameRoute> {
             ImmersiveGameScreen(onExit = { navController.popBackStack() })
         }
+        composable<BattlefieldPreviewRoute> {
+            // The battlefield needs the whole window and its own orientation, so it is a route of its
+            // own rather than a box inside the catalog. See BattlefieldPreviewScreen.
+            BattlefieldPreviewScreen(
+                onExit = { navController.popBackStack() },
+                artFor = rememberBattlefieldArtResolver(),
+            )
+        }
         composable<CatalogRoute> {
-            catalogScreen { navController.popBackStack() }
+            catalogScreen(
+                { navController.popBackStack() },
+                { navController.navigate(BattlefieldPreviewRoute) },
+            )
         }
     }
 }
