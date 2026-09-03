@@ -25,6 +25,7 @@ import magefree.designsystem.theme.MageShapes
 import magefree.designsystem.theme.Spacing
 import magefree.feature.game.cast.CastPrompt
 import magefree.feature.game.cast.CastPromptEvent
+import magefree.network.game.AbilityChoice
 import magefree.network.game.GamePrompt
 import magefree.network.game.PromptOptions
 
@@ -110,6 +111,14 @@ private val CastScript: List<GamePrompt> =
             message = "Pay {3}{R}",
             options = PromptOptions(text = mapOf(PromptOptions.SPECIAL_BUTTON to "Convoke")),
         ),
+        GamePrompt.ChooseAbility(
+            message = "Choose a mana ability",
+            choices =
+                listOf(
+                    AbilityChoice(abilityId = "sacred-foundry-red", text = "{T}: Add {R}"),
+                    AbilityChoice(abilityId = "sacred-foundry-white", text = "{T}: Add {W}"),
+                ),
+        ),
         GamePrompt.PlayMana(message = "Pay {2}{R}"),
     )
 
@@ -121,6 +130,8 @@ private val CastCaptions: List<String> =
         "optional targets — declining means \"I have chosen enough\", so the way out reads Done",
         "a required target, as a free cast produces. Nothing to press but the board",
         "paying, with convoke offered because the server offered it. Cancel is available again",
+        "a dual land against a coloured cost — the server asked because the choice is real, and every " +
+            "option it listed is offered",
         "the next mana prompt — one per source, each showing what is left to pay",
     )
 

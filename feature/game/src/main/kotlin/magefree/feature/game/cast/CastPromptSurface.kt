@@ -52,6 +52,23 @@ sealed interface CastPromptEvent {
     data class Amount(
         val value: Int,
     ) : CastPromptEvent
+
+    /**
+     * Use one of a permanent's abilities — answered with `GameClient.chooseAbility`.
+     *
+     * Separate from [ChooseOption] rather than one event carrying a string, because the two are
+     * answered by different methods and sending one to the other is a wrong action submitted to a live
+     * game. That is the failure mode this whole phase exists to avoid, and the type system can rule it
+     * out for free.
+     */
+    data class ChooseAbility(
+        val abilityId: String,
+    ) : CastPromptEvent
+
+    /** Pick one of the server's listed options — answered with `GameClient.chooseChoice`. */
+    data class ChooseOption(
+        val key: String,
+    ) : CastPromptEvent
 }
 
 /** Test tags for the cast surface. */
@@ -86,6 +103,10 @@ fun CastPrompt(
             model.answers.forEachIndexed { index, label ->
                 add(PromptAction(label = label, emphasis = if (index == 0) PromptEmphasis.Primary else PromptEmphasis.Secondary))
             }
+            // Every option the server listed, in the order it listed them. The narrowing already
+            // happened upstream, so anything dropped here would be a choice made on the player's
+            // behalf.
+            model.choices.forEach { add(PromptAction(label = it.label, emphasis = PromptEmphasis.Secondary)) }
             model.special?.let { add(PromptAction(label = it, emphasis = PromptEmphasis.Secondary)) }
             model.amount?.let { add(PromptAction(label = ANNOUNCE, emphasis = PromptEmphasis.Primary)) }
             if (exit is CastExit.Offered) add(PromptAction(label = exit.label, emphasis = PromptEmphasis.Cancel))
@@ -110,10 +131,15 @@ fun CastPrompt(
                     PromptState.Asking(question = model.headline, detail = note, actions = actions)
                 },
             onAction = { action ->
+                val chosen = model.choices.firstOrNull { it.label == action.label }
                 when {
                     exit is CastExit.Offered && action.label == exit.label -> onEvent(CastPromptEvent.Exit)
                     action.label == model.special -> onEvent(CastPromptEvent.Special)
                     action.label == ANNOUNCE -> onEvent(CastPromptEvent.Amount(amount))
+                    // Which event a picked option becomes is decided by the prompt that produced it,
+                    // because the two are answered by different methods.
+                    chosen != null && prompt is GamePrompt.ChooseAbility -> onEvent(CastPromptEvent.ChooseAbility(chosen.reply))
+                    chosen != null -> onEvent(CastPromptEvent.ChooseOption(chosen.reply))
                     else -> onEvent(CastPromptEvent.Answer(affirmative = action.label == model.answers.firstOrNull()))
                 }
             },

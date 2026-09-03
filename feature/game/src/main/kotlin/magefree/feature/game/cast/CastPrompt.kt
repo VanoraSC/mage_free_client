@@ -67,6 +67,14 @@ sealed interface CastExit {
  *   an optional cost's two. **Index 0 is the affirmative**, and the ordering is part of the contract
  *   rather than a convention, because the surface replies by index and getting it backwards would pay
  *   a cost the player declined. Empty for everything answered on the board or by a number.
+ * @property choices the options the **server** listed, when the question is "which of these".
+ *
+ *   Every one of them is shown. The narrowing is upstream's and has already happened: it suppresses
+ *   the picker entirely for a single mana ability, and `ManaUtil.tryToAutoPay` cuts a permanent's
+ *   abilities down against the unpaid cost before any of this is sent (trace §2.7). So a picker that
+ *   arrives is one where the choice is **real** — a dual land against a coloured cost, a spell that
+ *   cares which colour paid — and dropping an option here would be choosing which mana to produce,
+ *   which is content rather than form.
  */
 data class CastPromptModel(
     val headline: String,
@@ -75,6 +83,19 @@ data class CastPromptModel(
     val amount: IntRange? = null,
     val choosesOnBoard: Boolean = false,
     val answers: List<String> = emptyList(),
+    val choices: List<CastChoice> = emptyList(),
+)
+
+/**
+ * One option of a picker the server sent.
+ *
+ * @property reply what the answer carries. Opaque here on purpose: it is an ability id for one prompt
+ *   and a choice key for another, and the surface knows which because it was handed the prompt.
+ * @property label what to show — the server's own rendered text, never rebuilt from the reply.
+ */
+data class CastChoice(
+    val reply: String,
+    val label: String,
 )
 
 /**
@@ -123,6 +144,7 @@ fun castPromptModel(prompt: GamePrompt): CastPromptModel =
                     } else {
                         CastExit.Offered(CANCEL_CAST)
                     },
+                choices = prompt.choices.map { CastChoice(reply = it.key, label = it.label) },
             )
 
         // The one point of no return in a cast. Said out loud rather than left to be discovered: a
@@ -144,10 +166,14 @@ fun castPromptModel(prompt: GamePrompt): CastPromptModel =
                 exit = CastExit.NotAccepted(AMOUNT_IS_FINAL),
             )
 
+        // Which of this permanent's abilities to use — a dual land against a coloured cost, most
+        // often. Every option upstream sent is offered, because upstream has already removed the ones
+        // that were not real (trace §2.7).
         is GamePrompt.ChooseAbility ->
             CastPromptModel(
                 headline = prompt.message,
                 exit = CastExit.Offered(CANCEL_CAST),
+                choices = prompt.choices.map { CastChoice(reply = it.abilityId, label = it.text) },
             )
 
         // A yes/no. Both answers continue the cast, so there is nothing to back out of — and the

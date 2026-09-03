@@ -11,9 +11,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import magefree.designsystem.component.prompt.AmountPickerTestTags
 import magefree.designsystem.theme.MageTheme
+import magefree.network.game.AbilityChoice
+import magefree.network.game.ChoiceOption
 import magefree.network.game.GamePrompt
 import magefree.network.game.PromptOptions
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -132,6 +135,61 @@ class CastPromptSurfaceTest {
         composeTestRule.onNodeWithText("Convoke").performClick()
 
         assertEquals(listOf(CastPromptEvent.Special), events)
+    }
+
+    @Test
+    fun `a real ability choice is answerable, in the server's own text`() {
+        // The gap 0102 left: a dual land against a coloured cost produces this prompt, and the surface
+        // rendered it as a headline with nothing to press — a dead end mid-payment.
+        show(
+            GamePrompt.ChooseAbility(
+                message = "Choose a mana ability",
+                choices =
+                    listOf(
+                        AbilityChoice(abilityId = "a-red", text = "{T}: Add {R}"),
+                        AbilityChoice(abilityId = "a-white", text = "{T}: Add {W}"),
+                    ),
+            ),
+        )
+
+        composeTestRule.onNodeWithText("{T}: Add {R}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("{T}: Add {W}").performClick()
+
+        assertEquals(listOf(CastPromptEvent.ChooseAbility("a-white")), events)
+    }
+
+    @Test
+    fun `a mode is answered with its key rather than its label`() {
+        // The key is the reply and the label is the reading. Sending the label would be a wrong action
+        // submitted to a live game, which is the failure mode this whole phase exists to avoid.
+        show(
+            GamePrompt.ChooseChoice(
+                message = "Choose a mode",
+                choices = listOf(ChoiceOption(key = "mode-2", label = "Draw a card")),
+            ),
+        )
+
+        composeTestRule.onNodeWithText("Draw a card").performClick()
+
+        assertEquals(listOf(CastPromptEvent.ChooseOption("mode-2")), events)
+    }
+
+    @Test
+    fun `an ability choice never reports itself as a mode, or the reverse`() {
+        // The two are answered by different methods, so the surface must not blur them. Asserted
+        // through the event type rather than the payload, because the payload is a plausible string
+        // either way and would look correct while being sent to the wrong place.
+        show(
+            GamePrompt.ChooseAbility(
+                message = "Choose a mana ability",
+                choices = listOf(AbilityChoice(abilityId = "a-1", text = "{T}: Add {B}")),
+            ),
+        )
+
+        composeTestRule.onNodeWithText("{T}: Add {B}").performClick()
+
+        assertEquals(1, events.size)
+        assertTrue("a picked ability must not be reported as a mode: ${events.single()}", events.single() is CastPromptEvent.ChooseAbility)
     }
 
     @Test
