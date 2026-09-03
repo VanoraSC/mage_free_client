@@ -30,6 +30,10 @@ So:
 - **The symbol artwork remains © Wizards of the Coast.** That is the same standing position every
   Magic client is in, upstream XMage included; it is noted rather than resolved here.
 
+**Do not read the licence off npm.** `mana-font`'s `package.json` carries `"license": "MIT"` — a single
+field that cannot express a split, and which is the CSS's terms rather than the font's. The README is
+the project's own statement of what covers what, and is what is quoted above.
+
 **What OFL 1.1 requires of us**, and how it is met:
 
 | Condition | Here |
