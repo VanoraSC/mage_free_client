@@ -2,12 +2,13 @@ package magefree.feature.game.table
 
 import android.app.Application
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
@@ -26,17 +27,18 @@ import org.robolectric.annotation.Config
 /**
  * The battlefield arranged.
  *
- * Three of §7.4's rules have layout consequences a still picture would not catch and a flat row passes
+ * §7.4's rules have layout consequences a still picture would not catch and a flat row passes
  * silently:
  *
- * - **Creatures sit against the centre line.** The viewer's creatures are *above* their lands and the
- *   opponent's are *below* theirs, so the two front rows face each other. A layout that drew both
- *   sides in the same order would look plausible and be wrong.
+ * - **Creatures sit against the centre line**, and the two land corners mirror across it. A layout
+ *   that drew both sides in the same order would look plausible and be wrong.
  * - **An empty region holds no height.** Today's board reserves a fixed height for regions whether or
- *   not they contain anything, which is the thing this rule exists to stop — and it is invisible in a
- *   screenshot of a full board.
- * - **The card size is derived from the busiest row.** A board with one creature and a board with
- *   twelve cannot draw the same card, or the twelve do not fit.
+ *   not they contain anything — and an empty-but-present region is invisible in a screenshot of a
+ *   full board.
+ * - **A card has a size.** A quiet board draws the same card as a comfortable one; only a busy board
+ *   shrinks it.
+ * - **Lands are bounded.** However many there are, they may not take space from the creatures — which
+ *   is the entire reason they have a corner instead of a row.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, qualifiers = "w891dp-h411dp")
@@ -56,14 +58,20 @@ class BattlefieldLayoutTest {
         }
     }
 
-    /** Two boards in one composition, so two derived sizes can be compared in a single render. */
+    /**
+     * Two boards in one composition, so two derived sizes can be compared in a single render.
+     *
+     * Stacked rather than side by side: splitting the width halves the main area, and a comparison
+     * between "quiet" and "comfortable" then has no room to be quiet in. Both boards get the same
+     * constraints either way, which is all the comparisons need.
+     */
     private fun showPair(
         left: GameState,
         right: GameState,
     ) {
         composeTestRule.setContent {
             MageTheme {
-                Row(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.fillMaxSize()) {
                     BattlefieldLayout(model = battlefieldModel(left), modifier = Modifier.weight(1f))
                     BattlefieldLayout(model = battlefieldModel(right), modifier = Modifier.weight(1f))
                 }
@@ -77,7 +85,7 @@ class BattlefieldLayoutTest {
             .fetchSemanticsNode()
             .positionInRoot.y
 
-    /** The measured width of the first card in a row — the derived size, as actually drawn. */
+    /** The measured width of the first card in a region — the derived size, as actually drawn. */
     private fun cardWidthIn(tag: String): Int =
         composeTestRule
             .onNodeWithTag(tag)
@@ -86,12 +94,14 @@ class BattlefieldLayoutTest {
             .first()
             .size.width
 
+    private fun lands(playerId: String) = BattlefieldTestTags.row(playerId, BattlefieldTestTags.LAND_ZONE)
+
     @Test
     fun `the two front rows face each other across the centre line`() {
         show(twoSided())
 
         assertTrue(
-            "the opponent's lands should be furthest away",
+            "the opponent's other permanents should be furthest away",
             top(BattlefieldTestTags.row("them", "back")) < top(BattlefieldTestTags.row("them", "front")),
         )
         assertTrue(
@@ -99,25 +109,59 @@ class BattlefieldLayoutTest {
             top(BattlefieldTestTags.row("them", "front")) < top(BattlefieldTestTags.row("me", "front")),
         )
         assertTrue(
-            "my lands should be nearest me",
+            "my other permanents should be nearest me",
             top(BattlefieldTestTags.row("me", "front")) < top(BattlefieldTestTags.row("me", "back")),
         )
     }
 
     @Test
-    fun `a row with nothing in it is not drawn at all`() {
+    fun `the land corners mirror across the centre line`() {
+        // The opponent's lands sit above their creatures and mine sit below mine, so the two zones
+        // are in opposite corners. Packing both the same way is the plausible wrong answer: it looks
+        // fine on one side and puts the opponent's lands in the middle of the board.
+        show(twoSided())
+
+        assertTrue(
+            "the opponent's lands should be above their creatures",
+            top(lands("them")) < top(BattlefieldTestTags.row("them", "front")),
+        )
+        assertTrue(
+            "my lands should be below my creatures",
+            top(lands("me")) > top(BattlefieldTestTags.row("me", "front")),
+        )
+    }
+
+    @Test
+    fun `lands live in their own corner, not in a row with anything else`() {
+        show(oneSided("me", listOf(forest(), talisman())))
+
+        composeTestRule.onNodeWithTag(lands("me")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.row("me", "back")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.row("me", "front")).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a region with nothing in it is not drawn at all`() {
         show(oneSided("me", listOf(bears())))
 
         composeTestRule.onNodeWithTag(BattlefieldTestTags.row("me", "front")).assertIsDisplayed()
         composeTestRule.onNodeWithTag(BattlefieldTestTags.row("me", "back")).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(lands("me")).assertDoesNotExist()
     }
 
     @Test
-    fun `lands and other permanents share the back row`() {
-        show(oneSided("me", listOf(forest(), talisman())))
+    fun `however many lands there are, they take nothing from the creatures`() {
+        // The whole reason lands have a bounded corner rather than a row. A shared row makes a
+        // twelve-land board shrink its creatures to fit lands the player barely looks at.
+        showPair(
+            left = oneSided("few", listOf(bears(), forest("f0"))),
+            right = oneSided("many", listOf(bears()) + List(12) { forest("f$it") }),
+        )
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.row("me", "back")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.row("me", "front")).assertDoesNotExist()
+        assertEquals(
+            cardWidthIn(BattlefieldTestTags.row("few", "front")),
+            cardWidthIn(BattlefieldTestTags.row("many", "front")),
+        )
     }
 
     @Test
@@ -127,12 +171,12 @@ class BattlefieldLayoutTest {
         // Nothing about a game says a Forest matters more when there is only one of it. A card has a
         // size; the board shrinks it when it gets busy and never grows it when it gets quiet.
         showPair(
-            left = oneSided("sparse", listOf(forest())),
+            left = oneSided("sparse", listOf(creature(0))),
             right = oneSided("some", List(4) { creature(it) }),
         )
 
         assertEquals(
-            cardWidthIn(BattlefieldTestTags.row("sparse", "back")),
+            cardWidthIn(BattlefieldTestTags.row("sparse", "front")),
             cardWidthIn(BattlefieldTestTags.row("some", "front")),
         )
     }
@@ -170,6 +214,72 @@ class BattlefieldLayoutTest {
     }
 
     @Test
+    fun `a stack shows three faces and then starts counting`() {
+        // The fan caps so ten Plains cost the width of three, and the count only appears where the
+        // picture stops answering the question: one, two and three are visible by looking, and four
+        // is the first number a glance cannot give you.
+        show(oneSided("me", (1..4).map { plains("p$it") }))
+
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p1")).assertIsDisplayed()
+        composeTestRule.onNodeWithText("×4").assertIsDisplayed()
+    }
+
+    @Test
+    fun `three of a kind need no count, because three is countable`() {
+        show(oneSided("me", (1..3).map { plains("p$it") }))
+
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.pileCount("p1")).assertDoesNotExist()
+    }
+
+    @Test
+    fun `tapping one splits the stack and the count goes away`() {
+        // Pete's worked example, rendered: four Plains with a count, one tapped, and the untapped
+        // stack is back to three faces and no badge — beside a tapped stack of one.
+        show(oneSided("me", listOf(plains("p1", tapped = true)) + (2..4).map { plains("p$it") }))
+
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p1")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p2")).assertIsDisplayed()
+        composeTestRule.onNodeWithText("×4").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a stack is acted on through one of its own members`() {
+        show(oneSided("me", (1..4).map { plains("p$it") }))
+
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.pile("p1")).performClick()
+
+        assertTrue("tapping the stack reported $inspected", inspected.single().startsWith("p"))
+    }
+
+    @Test
+    fun `ten of a land cost about what three of it cost`() {
+        // The whole point of stacking. Without it the land corner has to shrink its cards to fit ten,
+        // and shrinking is exactly what the corner exists to avoid.
+        showPair(
+            left = oneSided("three", (1..3).map { plains("p$it") }),
+            right = oneSided("ten", (1..10).map { plains("p$it") }),
+        )
+
+        assertEquals(
+            cardWidthIn(BattlefieldTestTags.row("three", BattlefieldTestTags.LAND_ZONE)),
+            cardWidthIn(BattlefieldTestTags.row("ten", BattlefieldTestTags.LAND_ZONE)),
+        )
+    }
+
+    @Test
+    fun `nothing is drawn against the edge of the screen`() {
+        // A card in the very corner is awkward to touch, and finding that out per device is expensive.
+        show(oneSided("me", listOf(forest())))
+
+        val leftEdge =
+            composeTestRule
+                .onNodeWithTag(lands("me"))
+                .fetchSemanticsNode()
+                .positionInRoot.x
+        assertTrue("the land zone started at $leftEdge", leftEdge > 0f)
+    }
+
+    @Test
     fun `tapping a permanent reports the server's own id`() {
         show(oneSided("me", listOf(bears())))
 
@@ -193,8 +303,17 @@ class BattlefieldLayoutTest {
             viewerPlayerId = "me",
             players =
                 listOf(
-                    GamePlayer(playerId = "me", name = "Me", isViewer = true, battlefield = listOf(bears(), forest())),
-                    GamePlayer(playerId = "them", name = "Them", battlefield = listOf(creature(9), forest("their-forest"))),
+                    GamePlayer(
+                        playerId = "me",
+                        name = "Me",
+                        isViewer = true,
+                        battlefield = listOf(bears(), forest(), talisman()),
+                    ),
+                    GamePlayer(
+                        playerId = "them",
+                        name = "Them",
+                        battlefield = listOf(creature(9), forest("their-forest"), talisman("their-talisman")),
+                    ),
                 ),
         )
 }
@@ -212,7 +331,7 @@ private fun creature(index: Int) = permanent("creature-$index", "Saproling", lis
 
 private fun forest(id: String = "forest") = permanent(id, "Forest", listOf(CardType.Land))
 
-private fun talisman() = permanent("talisman", "Talisman of Unity", listOf(CardType.Artifact))
+private fun talisman(id: String = "talisman") = permanent(id, "Talisman of Unity", listOf(CardType.Artifact))
 
 /** An Aura attached to a host, which leaves the buckets and renders on the host instead. */
 private fun aura(id: String) =
@@ -221,3 +340,12 @@ private fun aura(id: String) =
         attachedTo = "bears",
         isAttachedToPermanent = true,
     )
+
+/** A basic land with a real printing, so two of them are identical in every respect that matters. */
+private fun plains(
+    id: String,
+    tapped: Boolean = false,
+) = GamePermanent(
+    card = GameCard(id = id, name = "Plains", setCode = "10E", collectorNumber = "364", cardTypes = listOf(CardType.Land)),
+    isTapped = tapped,
+)

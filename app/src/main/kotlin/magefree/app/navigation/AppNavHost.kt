@@ -11,6 +11,7 @@ import magefree.app.catalog.BattlefieldPreviewRoute
 import magefree.app.catalog.BattlefieldPreviewScreen
 import magefree.app.catalog.CatalogRoute
 import magefree.app.catalog.ComponentCatalogScreen
+import magefree.app.catalog.rememberBattlefieldArtResolver
 import magefree.app.catalog.rememberCatalogArtResolver
 import magefree.app.connection.ui.ConnectionStatusBar
 import magefree.app.game.GameRoute
@@ -186,7 +187,10 @@ fun AppNavHost(
         composable<BattlefieldPreviewRoute> {
             // The battlefield needs the whole window and its own orientation, so it is a route of its
             // own rather than a box inside the catalog. See BattlefieldPreviewScreen.
-            BattlefieldPreviewScreen(onExit = { navController.popBackStack() })
+            BattlefieldPreviewScreen(
+                onExit = { navController.popBackStack() },
+                artFor = rememberBattlefieldArtResolver(),
+            )
         }
         composable<CatalogRoute> {
             catalogScreen(

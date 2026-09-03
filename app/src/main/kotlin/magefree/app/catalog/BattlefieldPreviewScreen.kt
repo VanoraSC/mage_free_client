@@ -27,6 +27,7 @@ import magefree.app.game.ImmersiveSystemUi
 import magefree.designsystem.component.MageSecondaryButton
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
+import magefree.feature.game.table.TableArtResolver
 import magefree.feature.game.table.battlefieldModel
 
 /*
@@ -50,11 +51,15 @@ import magefree.feature.game.table.battlefieldModel
  *
  * @param onExit leaves the preview; also bound to system back, so there is one exit path.
  * @param modifier the [Modifier] for the surface.
+ * @param artFor resolves art from the printing each fixture names. Without it the board is grey
+ *   rectangles, and a grey rectangle is exactly the background that makes every card component look
+ *   fine — the point of this surface is whether a real card is readable at the size it was given.
  */
 @Composable
 fun BattlefieldPreviewScreen(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
+    artFor: TableArtResolver? = null,
 ) {
     // Landscape and immersive for as long as this surface is composed, restored on the way out.
     LandscapeOnly()
@@ -69,6 +74,7 @@ fun BattlefieldPreviewScreen(
         Box(modifier = Modifier.fillMaxSize().testTag(BattlefieldPreviewTestTags.SCREEN)) {
             BattlefieldLayout(
                 model = battlefieldModel(board.state),
+                artFor = artFor,
                 onInspect = { inspected = it },
                 modifier = Modifier.fillMaxSize(),
             )

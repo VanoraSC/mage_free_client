@@ -26,10 +26,12 @@ import magefree.network.game.PlayableObject
  * What a still picture cannot show, and what these boards are chosen to make visible:
  *
  * - **The arrangement holds as the board fills.** An opening board of two lands and a board deep into
- *   a game have to be the same layout, not two that happen to look fine at their own size. Stepping
- *   between them is the fastest way to see the derived card size do its job.
+ *   a game have to be the same layout, not two that happen to look fine at their own size.
  * - **The empty regions genuinely take no space.** The opening board has no creatures on either side,
- *   and the lands should sit where the lands sit, not floating in the middle of a reserved row.
+ *   and the lands should sit in their corner rather than floating in a reserved row.
+ * - **Stacking, at the moment it changes.** Four Plains become a stack of three and a count; tapping
+ *   one splits them into two stacks and the count disappears. Three consecutive boards walk that
+ *   through, because the transition is the part a still picture cannot show.
  * - **Attachments are on their hosts.** The developed board has an Aura on a creature the opponent
  *   controls, which is the case that is easy to draw twice or in the wrong bucket.
  *
@@ -55,7 +57,8 @@ internal fun BattlefieldSection(onOpenPreview: () -> Unit) {
         Text(
             text =
                 "Opens full-window and landscape, because that is the only shape the board is " +
-                    "designed for. Cycles an opening board, a developed one and a crowded one.",
+                    "designed for. Cycles six boards, three of which walk the land-stacking rule " +
+                    "through the moment a Plains is tapped.",
             style = MaterialTheme.typography.labelMedium,
         )
 
@@ -68,6 +71,37 @@ internal class CatalogBoard(
     val label: String,
     val state: GameState,
 )
+
+/**
+ * The printings the fixtures name, so the preview shows real cards.
+ *
+ * **Pinned, and Tenth Edition throughout.** The preview is a visual-QA surface: art that changed
+ * between runs would make it useless for comparing one build against the next, and one frame style
+ * means the only differences on screen are the ones the arrangement introduces. Every pair was read
+ * out of the app's own bundled card database rather than recalled, because a wrong collector number is
+ * a card that silently fails to load rather than an error anyone sees.
+ */
+private val Printings: Map<String, Pair<String, String>> =
+    mapOf(
+        "Forest" to ("10E" to "380"),
+        "Island" to ("10E" to "368"),
+        "Plains" to ("10E" to "364"),
+        "Swamp" to ("10E" to "372"),
+        "Mountain" to ("10E" to "376"),
+        "Grizzly Bears" to ("10E" to "268"),
+        "Llanowar Elves" to ("10E" to "274"),
+        "Suntail Hawk" to ("10E" to "50"),
+        "Serra Angel" to ("10E" to "39"),
+        "Air Elemental" to ("10E" to "64"),
+        "Mahamoti Djinn" to ("10E" to "90"),
+        "Craw Wurm" to ("10E" to "257"),
+        "Shivan Dragon" to ("10E" to "230"),
+        "Troll Ascetic" to ("10E" to "305"),
+        "Pacifism" to ("10E" to "31"),
+        "Icy Manipulator" to ("10E" to "326"),
+        "Loxodon Warhammer" to ("10E" to "332"),
+        "Rod of Ruin" to ("10E" to "341"),
+    )
 
 private fun card(
     id: String,
@@ -82,6 +116,8 @@ private fun card(
 ) = GameCard(
     id = id,
     name = name,
+    setCode = Printings[name]?.first,
+    collectorNumber = Printings[name]?.second,
     manaCost = manaCost,
     typeLine = types.joinToString(" ") { it.name },
     power = power,
@@ -125,6 +161,29 @@ private fun creature(
     attachments = attachments,
 )
 
+/**
+ * Four Plains, at the three moments that make the stacking rule legible.
+ *
+ * The transition is the part that is hard to reason about from a still picture. Four Plains show three
+ * faces and a count; tap one and the untapped stack drops to three faces with **no** badge — three is
+ * countable again — beside a tapped stack of one; tap another and the two stacks are two and two.
+ */
+private fun plainsBoard(tapped: Int) =
+    GameState(
+        gameId = "catalog",
+        viewerPlayerId = "me",
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "me",
+                    name = "You",
+                    isViewer = true,
+                    battlefield = (1..PLAINS_COUNT).map { index -> land("p$index", "Plains", tapped = index <= tapped) },
+                ),
+                GamePlayer(playerId = "them", name = "Opponent", battlefield = listOf(land("i1", "Island"))),
+            ),
+    )
+
 /** Two lands a side and nothing else: the board every game starts as. */
 private val Opening =
     GameState(
@@ -151,7 +210,7 @@ private val Developed =
     GameState(
         gameId = "catalog",
         viewerPlayerId = "me",
-        combat = listOf(CombatGroup(defenderId = "them", attackerIds = listOf("bears"), blockerIds = listOf("wall"))),
+        combat = listOf(CombatGroup(defenderId = "them", attackerIds = listOf("bears"), blockerIds = listOf("wurm"))),
         playable = listOf(PlayableObject(objectId = "f4")),
         players =
             listOf(
@@ -178,15 +237,20 @@ private val Developed =
                                 manaCost = "{W}",
                                 icons = listOf(GameCardIcon(type = CardIconType.AbilityFlying, hint = "Flying")),
                             ),
-                            GamePermanent(card = card("talisman", "Talisman of Unity", listOf(CardType.Artifact), manaCost = "{2}")),
+                            GamePermanent(card = card("icy", "Icy Manipulator", listOf(CardType.Artifact), manaCost = "{4}")),
+                            // Three tapped Forests and two untapped: two stacks, neither big enough
+                            // for a count, which is the ordinary mid-game shape.
+                            land("f1", "Forest", tapped = true),
+                            land("f2", "Forest", tapped = true),
                             land("f3", "Forest", tapped = true),
                             land("f4", "Forest"),
-                            land("p1", "Plains", tapped = true),
-                            // Your Aura, on their creature. It should appear on the Wall and nowhere
+                            land("f5", "Forest"),
+                            land("pl1", "Plains", tapped = true),
+                            // Your Aura, on their creature. It should appear on the Wurm and nowhere
                             // else, on the far side of the board from the seat that controls it.
                             GamePermanent(
                                 card = card("pacifism", "Pacifism", listOf(CardType.Enchantment), manaCost = "{1}{W}"),
-                                attachedTo = "wall",
+                                attachedTo = "wurm",
                                 isAttachedToPermanent = true,
                                 attachedControllerDiffers = true,
                             ),
@@ -198,21 +262,20 @@ private val Developed =
                     battlefield =
                         listOf(
                             creature(
-                                id = "wall",
-                                name = "Wall of Omens",
-                                power = "0",
+                                id = "wurm",
+                                name = "Craw Wurm",
+                                power = "6",
                                 toughness = "4",
-                                manaCost = "{1}{W}",
-                                icons = listOf(GameCardIcon(type = CardIconType.AbilityDefender, hint = "Defender")),
+                                manaCost = "{4}{G}{G}",
                                 attachments = listOf("pacifism"),
                             ),
                             creature(
-                                id = "shrouded",
-                                name = "Silhana Ledgewalker",
-                                power = "1",
-                                toughness = "1",
-                                manaCost = "{1}{G}",
-                                icons = listOf(GameCardIcon(type = CardIconType.AbilityHexproof, hint = "Shroud")),
+                                id = "troll",
+                                name = "Troll Ascetic",
+                                power = "3",
+                                toughness = "2",
+                                manaCost = "{1}{G}{G}",
+                                icons = listOf(GameCardIcon(type = CardIconType.AbilityHexproof, hint = "Hexproof from all")),
                             ),
                             land("i3", "Island", tapped = true),
                             land("i4", "Island"),
@@ -222,7 +285,13 @@ private val Developed =
             ),
     )
 
-/** A board wide enough that the derived size has to give ground, and then the row scrolls. */
+/**
+ * A board busy enough that the derived size has to give ground — and a land corner that does not.
+ *
+ * Nine creatures shrink the front row; twelve lands collapse into three stacks and take about as much
+ * room as three lands. That difference is the whole argument for stacking, and it is only visible with
+ * both on screen at once.
+ */
 private val Crowded =
     GameState(
         gameId = "catalog",
@@ -234,23 +303,33 @@ private val Crowded =
                     name = "You",
                     isViewer = true,
                     battlefield =
-                        (1..9).map { index ->
-                            creature("t$index", "Saproling", "1", "1", manaCost = "")
-                        } + (1..7).map { index -> land("l$index", "Forest", tapped = index % 3 == 0) },
+                        (1..9).map { index -> creature("elf$index", "Llanowar Elves", "1", "1", manaCost = "{G}") } +
+                            (1..7).map { index -> land("f$index", "Forest", tapped = index % 3 == 0) } +
+                            (1..5).map { index -> land("m$index", "Mountain") },
                 ),
                 GamePlayer(
                     playerId = "them",
                     name = "Opponent",
-                    battlefield = listOf(creature("dragon", "Shivan Dragon", "5", "5", "{4}{R}{R}")),
+                    battlefield =
+                        listOf(
+                            creature("dragon", "Shivan Dragon", "5", "5", "{4}{R}{R}"),
+                            creature("djinn", "Mahamoti Djinn", "5", "6", "{4}{U}{U}"),
+                        ),
                 ),
             ),
     )
 
+/** The worked example the stacking rule was specified against. */
+private const val PLAINS_COUNT = 4
+
 internal val Boards =
     listOf(
         CatalogBoard(label = "Opening — two lands a side", state = Opening),
-        CatalogBoard(label = "Developed — creatures, an artifact, an Aura across the board", state = Developed),
-        CatalogBoard(label = "Crowded — sixteen permanents on one side", state = Crowded),
+        CatalogBoard(label = "Four Plains — three faces and a count", state = plainsBoard(tapped = 0)),
+        CatalogBoard(label = "…tap one — three untapped, no count, one tapped", state = plainsBoard(tapped = 1)),
+        CatalogBoard(label = "…tap another — two and two", state = plainsBoard(tapped = 2)),
+        CatalogBoard(label = "Developed — an Aura across the board, two land stacks", state = Developed),
+        CatalogBoard(label = "Crowded — nine creatures shrink; twelve lands do not", state = Crowded),
     )
 
 /** The board at [step], wrapping so the preview's one button can cycle forever. */

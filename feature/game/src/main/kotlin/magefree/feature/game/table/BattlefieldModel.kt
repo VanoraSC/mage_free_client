@@ -1,10 +1,15 @@
 package magefree.feature.game.table
 
+import androidx.compose.runtime.Composable
+import magefree.cards.art.CardArtFace
+import magefree.cards.art.CardArtRequest
+import magefree.cards.art.CardArtSize
 import magefree.designsystem.card.BoardAttachment
 import magefree.designsystem.card.BoardBadge
 import magefree.designsystem.card.BoardCardSignal
 import magefree.designsystem.card.BoardCardState
 import magefree.designsystem.card.BoardCounter
+import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.card.CardDisplay
 import magefree.network.game.CardIconType
 import magefree.network.game.CardType
@@ -40,17 +45,65 @@ enum class PermanentRole {
 }
 
 /**
+ * Draws a permanent's art, given the printing the server named and what the card is.
+ *
+ * The same shape as the design system's `CardArtSlot` seam and for the same reason: `:feature:game`
+ * lays the board out and something further out loads the images. It takes a *request*, not a name,
+ * because the server names the printing — a snapshot carries `setCode` and `collectorNumber`, so a
+ * board never has to guess which Forest it is looking at.
+ */
+typealias TableArtResolver = @Composable (CardArtRequest?, CardDisplay) -> CardArtSlot?
+
+/**
  * One permanent as the board will draw it.
  *
  * @property id the server's own object id, which is what the animation host tracks identity by.
  * @property role which bucket it belongs to.
  * @property state everything the Board card tier needs to draw it.
+ * @property art the printing the server named, or `null` for a card it did not — a face-down
+ *   permanent, or a token, which has no printing to name.
+ * @property carriesAttachment whether the *server* said something is attached to this, which is not
+ *   quite the same as [state] having attachments to draw: a snapshot can name an attachment it did
+ *   not also send. It is carried separately because it decides whether this may stack, and there the
+ *   answer has to come from what the server said rather than from what we managed to resolve — a
+ *   partial snapshot must not quietly merge two enchanted permanents into one.
  */
 data class TablePermanent(
     val id: String,
     val role: PermanentRole,
     val state: BoardCardState,
+    val art: CardArtRequest? = null,
+    val carriesAttachment: Boolean = false,
 )
+
+/**
+ * Permanents that are identical in every respect, drawn as one stack.
+ *
+ * **A stack says "these are interchangeable — read one, you have read them all."** That promise is the
+ * whole value of it, and it is what makes the grouping strict rather than convenient: anything that
+ * makes one member different from another keeps it out. Same card, same printing, same tap state, same
+ * counters, same badges, same combat assignment, same playability.
+ *
+ * @property members every permanent in the stack, in the server's own order. Never empty.
+ */
+data class TablePile(
+    val members: List<TablePermanent>,
+) {
+    /** What the stack is drawn as. Any member would do, which is the point of it being a stack. */
+    val representative: TablePermanent get() = members.first()
+
+    /** How many there are. The stack draws at most [PILE_FAN_LIMIT] of them and counts the rest. */
+    val count: Int get() = members.size
+
+    /**
+     * The permanent an action on this stack refers to.
+     *
+     * Any of them, because they are identical by construction. Four Plains are four Plains: tapping
+     * "the third one" is not a distinction the game makes, and asking the player to make it would be
+     * inventing a choice rather than offering one.
+     */
+    val actionId: String get() = members.first().id
+}
 
 /** One player's half of the board. */
 data class BattlefieldSide(
@@ -62,9 +115,60 @@ data class BattlefieldSide(
     /** The permanents in [role], in the server's own order. */
     fun inRole(role: PermanentRole): List<TablePermanent> = permanents.filter { it.role == role }
 
+    /**
+     * The permanents in [role] as the stacks the board draws.
+     *
+     * **Only lands stack, for now.** §7.4's reasoning is that piling buys space, and the space is in
+     * the lands: a board of ten Plains collapses and a board of ten differently-developed creatures
+     * does not, because those ten differ. Applying it to creatures would be correct and would almost
+     * never fire, so it is not done here — and the one place it could fire, a row of identical tokens,
+     * is worth doing deliberately rather than as a side effect.
+     */
+    fun pilesIn(role: PermanentRole): List<TablePile> {
+        val members = inRole(role)
+        if (role != PermanentRole.Land) return members.map { TablePile(listOf(it)) }
+
+        // Insertion-ordered, so the stacks appear where the server first mentioned them rather than in
+        // whatever order a hash produced — a land that reorders itself between snapshots is a land
+        // that appears to have moved.
+        val piles = LinkedHashMap<PileKey, MutableList<TablePermanent>>()
+        val alone = mutableListOf<TablePile>()
+        members.forEach { permanent ->
+            val key = permanent.pileKey()
+            if (key == null) {
+                alone += TablePile(listOf(permanent))
+            } else {
+                piles.getOrPut(key) { mutableListOf() } += permanent
+            }
+        }
+        return piles.values.map { TablePile(it) } + alone
+    }
+
     /** True when nothing occupies [role] — the layout draws no region at all for it. */
     fun isEmpty(role: PermanentRole): Boolean = permanents.none { it.role == role }
 }
+
+/**
+ * What makes two permanents the same stack, or `null` for one that may never stack at all.
+ *
+ * `null` is the **attachment** case, and it is absolute rather than another field in the key. An
+ * attachment attaches to one specific instance: the Aura is on *that* Grizzly Bears, not on the group.
+ * Two identically-enchanted permanents still do not stack, because each carries its own attachment and
+ * "read one and you have read them all" stops being true.
+ *
+ * Everything else is a field, and the field is the whole drawing state — tap, counters, badges,
+ * combat, playability, power and toughness — plus the printing, because two Forests with different art
+ * are visibly two different things however identical the game considers them.
+ */
+private data class PileKey(
+    val state: BoardCardState,
+    val art: CardArtRequest?,
+)
+
+private fun TablePermanent.pileKey(): PileKey? = if (carriesAttachment) null else PileKey(state = state, art = art)
+
+/** How many faces a stack shows before it starts counting instead. */
+const val PILE_FAN_LIMIT: Int = 3
 
 /**
  * Both halves of the board.
@@ -107,6 +211,8 @@ fun battlefieldModel(state: GameState): BattlefieldModel {
                                         combat = combat,
                                         playable = playable,
                                     ),
+                                art = artRequestOf(permanent.card),
+                                carriesAttachment = permanent.attachments.isNotEmpty(),
                             )
                         },
             )
@@ -133,6 +239,29 @@ private fun roleOf(card: GameCard): PermanentRole =
         CardType.Land in card.cardTypes -> PermanentRole.Land
         else -> PermanentRole.Other
     }
+
+/**
+ * The printing the server named, or `null` when it named none.
+ *
+ * **A face-down permanent gets no request.** Its face is not information the viewer is entitled to,
+ * and the server may still be sending what the card is; drawing its art would show a card the game
+ * says is hidden. A token has no printing to name either, and falls back to the placeholder.
+ *
+ * [GameCard.transformed] is what says a permanent is *currently* showing its back face, and a
+ * double-faced card's two faces share one printing — so which face is up is entirely a matter of which
+ * [CardArtFace] is asked for.
+ */
+private fun artRequestOf(card: GameCard): CardArtRequest? {
+    if (card.isFaceDown) return null
+    val set = card.setCode?.takeIf { it.isNotBlank() } ?: return null
+    val number = card.collectorNumber?.takeIf { it.isNotBlank() } ?: return null
+    return CardArtRequest(
+        setCode = set,
+        collectorNumber = number,
+        face = if (card.transformed) CardArtFace.BACK else CardArtFace.FRONT,
+        size = CardArtSize.SMALL,
+    )
+}
 
 /**
  * What is attached to [permanent], as the Board tier draws it.
