@@ -324,6 +324,40 @@ class BoardCardTest {
 
     private fun cardHeight(): Dp = (CARD_WIDTH.value / CARD_ASPECT_RATIO).roundToInt().dp
 
+    @Test
+    fun `a tapped card's assembly still contains the Auras stacked on it`() {
+        // The combination nothing showed until the inspect view put it on screen: a **tapped** host
+        // with **upright** attachments. Tapping makes the host only a card's width tall, but an Aura
+        // behind it is not rotated and stays a whole card tall — so the stack reaches below the host,
+        // and an assembly measured as "host plus the stack above it" does not contain it. Whatever
+        // clips first takes the name band off the top, which is the one thing the stack is there for.
+        show(
+            BoardCardState(
+                card = BEARS,
+                tapped = true,
+                attachments = listOf(HOLY_STRENGTH, PACIFISM),
+            ),
+        )
+
+        val footprint = composeTestRule.onNodeWithTag(FOOTPRINT).fetchSemanticsNode()
+        val top = footprint.positionInRoot.y
+        val bottom = top + footprint.size.height
+        val attachments =
+            composeTestRule
+                .onAllNodesWithTag(BoardCardTestTags.ATTACHMENT, useUnmergedTree = true)
+                .fetchSemanticsNodes()
+
+        assertEquals("both Auras must render, or this proves nothing", 2, attachments.size)
+        attachments.forEach { node ->
+            assertTrue(
+                "an attachment runs from ${node.positionInRoot.y} to " +
+                    "${node.positionInRoot.y + node.size.height}, outside the card's own footprint " +
+                    "$top..$bottom — the assembly is smaller than what it draws",
+                node.positionInRoot.y >= top && node.positionInRoot.y + node.size.height <= bottom,
+            )
+        }
+    }
+
     private companion object {
         val CARD_WIDTH: Dp = 72.dp
         const val FOOTPRINT = "footprint"

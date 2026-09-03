@@ -257,13 +257,23 @@ fun boardCardWidthFitting(
     val upStack = AttachmentBandHeight * upright
     val uprightReach = AttachmentInset * upright
 
-    // Height: the host sits under the upright stack, and a tapped host is a card's *width* tall.
-    val byHeight =
+    // Height has two constraints and only the first is obvious. The host sits under the upright
+    // stack, and a tapped host is a card's *width* tall — but the upright attachments are never
+    // rotated, so they stay a whole card tall and can reach below a tapped host. Solving only the
+    // first is what puts the stack outside the assembly.
+    val byHostHeight =
         if (state.tapped) {
             maxHeight - upStack
         } else {
             (maxHeight - upStack) * CARD_ASPECT_RATIO
         }
+    val byUprightDepth =
+        if (upright == 0) {
+            byHostHeight
+        } else {
+            (maxHeight - AttachmentBandHeight * (upright - 1)) * CARD_ASPECT_RATIO
+        }
+    val byHeight = minOf(byHostHeight, byUprightDepth)
 
     // Width: the host plus the upright stack's sideways drift, and separately the turned reach,
     // which is measured along the card's height and so converts through the aspect ratio.
@@ -346,7 +356,15 @@ fun BoardCard(
     val turnedReach = if (turned.isEmpty()) 0.dp else cardHeight + AttachmentBandHeight * (turned.size - 1)
 
     val assemblyWidth = maxOf(hostWidth + uprightReach, turnedReach)
-    val assemblyHeight = hostTop + hostHeight
+
+    // An upright attachment is a whole card tall wherever the host is, so the stack can reach below
+    // the host rather than only above it — which happens exactly when the host is **tapped**, because
+    // a tapped host is only a card's *width* tall while the Auras behind it are not rotated and stay
+    // full height. Declaring only `hostTop + hostHeight` there under-measures the assembly, and the
+    // attachments spill out of it: the first thing a parent clips is the name band the stack exists
+    // to expose.
+    val uprightDepth = if (upright.isEmpty()) 0.dp else AttachmentBandHeight * (upright.size - 1) + cardHeight
+    val assemblyHeight = maxOf(hostTop + hostHeight, uprightDepth)
 
     Box(modifier = modifier.size(width = assemblyWidth, height = assemblyHeight)) {
         // Drawn furthest-out first, so the nearest turned card ends up on top and each one behind it
