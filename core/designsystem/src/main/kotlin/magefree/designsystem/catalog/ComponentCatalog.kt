@@ -66,11 +66,17 @@ import magefree.designsystem.theme.ThemePreviews
  *   host that wants real art supplies this; without it every card falls back to the built-in
  *   placeholder and the catalog still renders offline. It is a resolver rather than one slot because
  *   the board sections show several cards at once — a creature with an Aura on it needs both faces.
+ * @param hostSections extra sections the host appends after the design system's own. It exists because
+ *   some things worth eyeballing are assembled *above* this module — a cast is a sequence of prompts
+ *   driven by game types the design system deliberately cannot see — and the alternative is either a
+ *   dependency pointing the wrong way or no eyes-on at all. The host supplies its own
+ *   [CatalogSection]-shaped content; nothing here inspects it.
  */
 @Composable
 fun ComponentCatalog(
     modifier: Modifier = Modifier,
     artFor: ((String) -> CardArtSlot?)? = null,
+    hostSections: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -182,6 +188,8 @@ fun ComponentCatalog(
                 )
             }
         }
+
+        hostSections?.invoke()
 
         CatalogSection(title = "Full card view") {
             // Fixed height: the full view fills its space, so the gallery gives it a bounded window.

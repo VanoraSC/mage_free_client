@@ -116,12 +116,20 @@ in the snapshot riding with the prompt.
 
 ## 8. Acceptance criteria
 
-- [ ] Every prompt in a cast renders on the board rather than as a dialog chain.
-- [ ] Cancel is offered on exactly the prompts the server accepts it for, and the X prompt is not one.
-- [ ] Cancelling during mana payment leaves the lands untapped, asserted against a live server.
+- [x] Every prompt in a cast renders on the board rather than as a dialog chain.
+- [x] Cancel is offered on exactly the prompts the server accepts it for, and the X prompt is not one.
+- [x] Cancelling during mana payment leaves the lands untapped, asserted against a live server.
 - [ ] The two rare cancellation cases from trace §2.5 are pinned by tests rather than assumed.
-- [ ] No `:protocol` or `:bridge` change was needed, or the need is recorded as a finding.
-- [ ] `./gradlew check` passes and the catalog renders the flow.
+      **Not done, and left open deliberately.** Attempting the first — mana floated *before* a cast,
+      then cancelling it — showed it is not reachable the way it looked: floating mana means activating
+      a land's mana ability outside a payment, and the live run answered 400 prompts without the
+      server ever offering that as a playable object on the path the harness drives. The second needs
+      a card that reports `isUndoPossible() == false` (`Astrolabe`, `Barbed Sextant`, `Charmed
+      Pendant`, `Brass Infiniscope`) in a deck and used for mana, which is a bigger fixture than the
+      rest of this story put together. Both remain what the trace calls them: things to test rather
+      than conclude. Nothing in the current design depends on either — the main case is proven live.
+- [x] No `:protocol` or `:bridge` change was needed, or the need is recorded as a finding.
+- [x] `./gradlew check` passes and the catalog renders the flow.
 
 ## 9. References
 

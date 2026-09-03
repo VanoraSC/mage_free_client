@@ -63,6 +63,10 @@ sealed interface CastExit {
  * @property amount the range when the prompt asks for a number, else `null`.
  * @property choosesOnBoard whether the answer is picked on the battlefield rather than in the Prompt.
  *   Mana sources and targets are board picks; a yes/no is not.
+ * @property answers the buttons that *answer* the question, as opposed to leaving it — currently only
+ *   an optional cost's two. **Index 0 is the affirmative**, and the ordering is part of the contract
+ *   rather than a convention, because the surface replies by index and getting it backwards would pay
+ *   a cost the player declined. Empty for everything answered on the board or by a number.
  */
 data class CastPromptModel(
     val headline: String,
@@ -70,6 +74,7 @@ data class CastPromptModel(
     val special: String? = null,
     val amount: IntRange? = null,
     val choosesOnBoard: Boolean = false,
+    val answers: List<String> = emptyList(),
 )
 
 /**
@@ -145,9 +150,19 @@ fun castPromptModel(prompt: GamePrompt): CastPromptModel =
                 exit = CastExit.Offered(CANCEL_CAST),
             )
 
-        // A yes/no. Both answers continue the cast, so there is nothing to back out of.
+        // A yes/no. Both answers continue the cast, so there is nothing to back out of — and the
+        // server's own wording is the question: upstream sends "Mulligan"/"Keep" where that is what it
+        // means, and answering a differently-worded question is answering a different one.
         is GamePrompt.Ask ->
-            CastPromptModel(headline = prompt.message, exit = CastExit.NotAccepted(ASK_IS_ANSWERABLE))
+            CastPromptModel(
+                headline = prompt.message,
+                exit = CastExit.NotAccepted(ASK_IS_ANSWERABLE),
+                answers =
+                    listOf(
+                        prompt.options.leftButtonText ?: DEFAULT_YES,
+                        prompt.options.rightButtonText ?: DEFAULT_NO,
+                    ),
+            )
 
         is GamePrompt.Select ->
             CastPromptModel(
@@ -183,6 +198,11 @@ internal const val TARGET_REQUIRED: String = "This spell was cast without paying
 internal const val CHOICE_REQUIRED: String = "This choice has to be made before the spell can go on the stack."
 
 internal const val AMOUNT_IS_FINAL: String = "Once announced this can't be taken back — you can still cancel when paying."
+
+/** Fallbacks when the server sent no wording of its own. */
+internal const val DEFAULT_YES: String = "Yes"
+
+internal const val DEFAULT_NO: String = "No"
 
 internal const val ASK_IS_ANSWERABLE: String = "Either answer carries on with the spell."
 
