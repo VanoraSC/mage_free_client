@@ -707,10 +707,12 @@ arrangement across that would be the declared-intent model rebuilt for a smaller
 
 **Two prerequisites, both small:**
 
-- **The prompt has no marker on our wire.** It arrives as an ordinary `GAME_TARGET`/`TargetPrompt`;
-  the only thing distinguishing it is `options["queryType"] == PICK_ABILITY`, which upstream's own
-  client reads and we do not map. Nothing here is buildable until that crosses. Matching on the
-  English message string would work and would be the wrong kind of correct.
+- **The marker needs a name, not a wire change** (corrected 2026-09-03). The prompt arrives as an
+  ordinary `GAME_TARGET`/`TargetPrompt`, distinguished only by `options["queryType"] == PICK_ABILITY`
+  — and that value **already reaches us**, because the bridge copies upstream's whole options map
+  through. What is missing is a named constant and accessor on `PromptOptions`, beside
+  `leftButtonText` and `possibleTargets`: reaching into the raw map by string is the same defect as
+  matching on the English message. One constant, one accessor, one test.
 - **Neither the ordering prompt nor a trigger's targets can be cancelled** — a `TriggeredAbility` is
   not an `ActivatedAbility`, so upstream's cancel flag is false for it. No cancel affordance is
   offered.

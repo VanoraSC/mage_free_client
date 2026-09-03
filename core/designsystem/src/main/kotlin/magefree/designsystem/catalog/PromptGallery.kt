@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -19,6 +23,7 @@ import magefree.designsystem.component.phase.PhaseBarState
 import magefree.designsystem.component.phase.PhaseBarTurn
 import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
+import magefree.designsystem.component.prompt.AmountPicker
 import magefree.designsystem.component.prompt.Prompt
 import magefree.designsystem.component.prompt.PromptAction
 import magefree.designsystem.component.prompt.PromptEmphasis
@@ -139,6 +144,16 @@ internal fun PromptGallery(modifier: Modifier = Modifier) {
                 onAction = {},
             )
         }
+
+        GalleryNote(
+            "Amount — for the questions that are genuinely a number. The bounds are the server's, and " +
+                "the stepper cannot produce a value it would refuse",
+        )
+        var amount by remember { mutableIntStateOf(2) }
+        AmountPicker(value = amount, range = 0..7, onValueChange = { amount = it })
+
+        GalleryNote("A range with one value in it: both steps are unavailable, and the bounds say why")
+        AmountPicker(value = 3, range = 3..3, onValueChange = {})
     }
 }
 

@@ -143,6 +143,10 @@ fun ComponentCatalogScreen(
                 ) {
                     ComponentCatalog(
                         artFor = artFor,
+                        // Assembled here rather than in the design system, which deliberately cannot
+                        // see game types: a cast is a sequence of `GamePrompt`s, and the only thing
+                        // worth looking at is the sequence.
+                        hostSections = { CastFlowSection() },
                         modifier =
                             Modifier
                                 .widthIn(max = if (wide) TabletSimWidth else PhoneSimWidth)

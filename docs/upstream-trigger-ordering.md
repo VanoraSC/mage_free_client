@@ -95,15 +95,27 @@ target selection — carrying the abilities as a `CardsView`.
 that to decide it is looking at an ordering prompt rather than a targeting one
 (`Mage.Client/src/main/java/mage/client/dialog/ShowCardsDialog.java:110`).
 
-**We do not map it.** `queryType` appears nowhere in `bridge/`, `protocol/` or `core/`, and
-`GamePromptOptions` carries only button text, possible attackers/blockers and chosen targets. So a
-trigger-ordering prompt arrives in the app as an ordinary `TargetPrompt` whose message happens to read
-*"Pick triggered ability (goes to the stack first)"*.
+**It already crosses our wire — corrected 2026-09-03.** An earlier version of this document said we do
+not map it, on the strength of `grep -rn queryType` over `bridge/`, `protocol/` and `core/` returning
+nothing. The string is indeed absent, because nothing *names* it — but `GamePromptMapper.optionsView`
+copies **every** key of upstream's options map through wholesale, so the value arrives regardless. A
+live prompt captured while working on 0102 settles it:
 
-The bridge already knows this prompt exists — `GamePromptMapper.target` documents the `PICK_ABILITY`
-case and falls back to `cards.map { it.id }` because that overload never populates `targets`
-(0072's fix). What is missing is any **marker** the client can branch on. Matching on the message
-string would work and would be the wrong kind of correct.
+```
+SelectPrompt(message=Play spells and abilities, options=GamePromptOptions(text={queryType=SELECT}, ids={}))
+```
+
+So the marker is in `PromptOptions.text["queryType"]` today, and a trigger-ordering prompt is
+distinguishable from a targeting one **now**, without any wire work.
+
+What is missing is only a **named constant and an accessor** — `PromptOptions` exposes
+`leftButtonText`, `possibleTargets` and friends by name and should expose this one the same way,
+because a client reaching into the raw map by string is the same defect as matching on the English
+message. That is a much smaller prerequisite than "map it": one constant, one accessor, one test.
+
+The bridge already knows this prompt exists in another respect — `GamePromptMapper.target` documents
+the `PICK_ABILITY` case and falls back to `cards.map { it.id }` because that overload never populates
+`targets` (0072's fix).
 
 **Neither the ordering prompt nor a trigger's own targets can be cancelled.**
 `chooseTriggeredAbility` loops `while (canRespond())` until a valid ability id arrives

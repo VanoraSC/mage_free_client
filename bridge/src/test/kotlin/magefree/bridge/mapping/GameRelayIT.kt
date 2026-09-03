@@ -1458,6 +1458,176 @@ class GameRelayIT {
         return null
     }
 
+    @Test
+    fun `cancelling a payment part-way puts the tapped land back`() =
+        runBlocking {
+            val username = uniqueUsername()
+            val client = BridgeMageClient()
+            val session = connect(client, username)
+            val roomId = requireNotNull(session.mainRoomId) { "the main room id should be resolvable once connected" }
+
+            var tableId: UUID? = null
+            var gameId: UUID? = null
+            var pump: Job? = null
+            val events = Channel<ServerMessage>(Channel.UNLIMITED)
+            try {
+                pump = startCallbackPump(client, events)
+
+                val created =
+                    withContext(Dispatchers.IO) {
+                        TableRelay.createTable(session, roomId, options(name = "it_cxl_$username"))
+                    }
+                assertTrue(created is TableCreated, "the real server should accept the mapped MatchOptions; got $created")
+                tableId = UUID.fromString((created as TableCreated).table.tableId)
+
+                assertJoined(join(session, roomId, tableId, AI_SEAT_NAME, SeatPlayerTypeCode.COMPUTER_MAD, DECK))
+                assertJoined(join(session, roomId, tableId, username, SeatPlayerTypeCode.HUMAN, TOKEN_DECK))
+
+                val start = withContext(Dispatchers.IO) { TableRelay.startMatch(session, roomId, tableId) }
+                assertEquals(TableActionResult(action = TableActionCode.START_MATCH, ok = true), start)
+
+                val matchStarting = events.awaitOfType<MatchStarting>(MATCH_START_TIMEOUT_MS, "a START_GAME push")
+                gameId = UUID.fromString(matchStarting.gameId)
+
+                val joined = withContext(Dispatchers.IO) { GameRelay.joinGame(session, gameId) }
+                assertTrue(joined.ok, "the real server should accept joinGame for a match we are seated in; got $joined")
+                events.awaitOfType<GameStarted>(GAME_INIT_TIMEOUT_MS, "a GAME_INIT push")
+
+                val cancelled = tapOneLandThenCancel(session, gameId, events)
+
+                assertTrue(
+                    cancelled.tappedDuringPayment,
+                    "the run never got a land tapped inside a payment, so it proves nothing about " +
+                        "cancelling one; callbacks=${callbackSummary()}",
+                )
+                val settled =
+                    requireNotNull(cancelled.afterCancel) {
+                        "no snapshot arrived after the cancel; callbacks=${callbackSummary()}"
+                    }
+                val board = settled.players.single { it.viewer }.battlefield
+
+                // The claim the design rests on, from the trace's §2.5: the cast bookmark is taken
+                // before the spell is put on the stack, so a land tapped *during* payment is rolled
+                // back with everything else. Cancelling is clean.
+                assertTrue(
+                    board.none { it.card.name == PLAINS && it.tapped },
+                    "a land tapped during the cancelled payment is still tapped: " +
+                        board.filter { it.card.name == PLAINS }.map { "${it.card.name}(tapped=${it.tapped})" },
+                )
+                assertTrue(
+                    board.none { it.card.name.contains("Soldier") },
+                    "the cancelled spell resolved anyway: ${board.map { it.card.name }}",
+                )
+
+                println("GameRelayIT[cancel]: ${board.map { "${it.card.name}(tapped=${it.tapped})" }} callbacks=${callbackSummary()}")
+            } finally {
+                pump?.cancel()
+                events.close()
+                teardown(session, roomId, tableId, gameId)
+            }
+        }
+
+    /** What the cancel run observed: whether a land was ever tapped mid-payment, and the state after. */
+    private class CancelledPayment {
+        var tappedDuringPayment: Boolean = false
+        var afterCancel: GameStateView? = null
+    }
+
+    /**
+     * Plays lands, starts casting `Raise the Alarm`, taps **one** land for it, and then cancels at the
+     * next mana prompt — leaving the payment half made, which is the only interesting way to cancel.
+     *
+     * `Raise the Alarm` costs `{1}{W}`, so its payment is two prompts: the first is answered with a
+     * land and the second is refused. A one-mana spell would be paid in full by the first answer and
+     * there would be no half-made payment to abandon.
+     */
+    private suspend fun tapOneLandThenCancel(
+        session: SessionImpl,
+        gameId: UUID,
+        events: Channel<ServerMessage>,
+    ): CancelledPayment {
+        val observed = CancelledPayment()
+        val deadline = System.currentTimeMillis() + PLAY_TIMEOUT_MS
+        var paidOnce = false
+        var cancelled = false
+        var answered = 0
+
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = minOf(PUSH_TIMEOUT_MS, deadline - System.currentTimeMillis())
+            val event = withTimeoutOrNull(remaining) { events.receive() } ?: break
+
+            stateOf(event)?.let { state ->
+                val board =
+                    state.players
+                        .firstOrNull { it.viewer }
+                        ?.battlefield
+                        .orEmpty()
+                if (board.any { it.card.name == PLAINS && it.tapped }) observed.tappedDuringPayment = true
+                // The first snapshot after the cancel in which we are asked something again: the
+                // rollback has happened and the board has settled.
+                if (cancelled && event is GamePrompted) {
+                    observed.afterCancel = state
+                    return observed
+                }
+            }
+            if (event is GameOver) break
+            if (event !is GamePrompted) continue
+
+            val state = event.state
+            val prompt = event.prompt
+            val playable = state.playable.map { it.objectId }.toSet()
+            val ourBoard =
+                state.players
+                    .singleOrNull { it.viewer }
+                    ?.battlefield
+                    .orEmpty()
+            val ourMainPhase =
+                state.viewerHasPriority &&
+                    state.viewerPlayerId != null &&
+                    state.viewerPlayerId == state.activePlayerId &&
+                    state.phase == TurnPhaseCode.PRECOMBAT_MAIN &&
+                    state.step == PhaseStepCode.PRECOMBAT_MAIN
+
+            when {
+                prompt is SelectPrompt && ourMainPhase -> {
+                    val plains = state.hand.firstOrNull { it.name == PLAINS && it.id in playable }
+                    val alarm = state.hand.firstOrNull { it.name == RAISE_THE_ALARM && it.id in playable }
+                    when {
+                        // Two lands before casting, so the payment takes two answers.
+                        plains != null && ourBoard.count { it.card.name == PLAINS } < 2 -> sendUuid(session, gameId, plains.id)
+                        alarm != null -> sendUuid(session, gameId, alarm.id)
+                        plains != null -> sendUuid(session, gameId, plains.id)
+                        else -> pass(session, gameId)
+                    }
+                }
+                prompt is PlayManaPrompt && !paidOnce -> {
+                    val land = ourBoard.firstOrNull { it.card.name == PLAINS && !it.tapped }
+                    if (land != null) {
+                        paidOnce = true
+                        sendUuid(session, gameId, land.card.id)
+                    } else {
+                        pass(session, gameId)
+                    }
+                }
+                // The cancel: upstream's payment loop takes a boolean as "abandon this", which is the
+                // same arm `pass` sends.
+                prompt is PlayManaPrompt -> {
+                    cancelled = true
+                    pass(session, gameId)
+                }
+                else -> answer(session, gameId, prompt)
+            }
+            answered++
+            if (answered > MAX_ANSWERS_TO_CAST) {
+                throw AssertionError(
+                    "answered $MAX_ANSWERS_TO_CAST prompts without reaching a half-made payment. " +
+                        "last prompt: ${event.prompt}. Callbacks: ${callbackSummary()}",
+                )
+            }
+        }
+        return observed
+    }
+
     /**
      * Plays lands and casts `Raise the Alarm`, returning the first snapshot in which our battlefield
      * holds both a token and something that is not one.
