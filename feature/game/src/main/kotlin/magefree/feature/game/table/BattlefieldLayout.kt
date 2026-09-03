@@ -81,6 +81,10 @@ import magefree.designsystem.card.rememberCounterPalette
  *   card is actually readable at the size it was given.
  * @param onInspect called with a permanent's id when its card is tapped, or `null` for a board that is
  *   only being looked at. Lands do not go through it: see [onLandPress].
+ * @param hand the viewer's own cards, from [handCards]. Empty for a spectator, and for anyone whose
+ *   hand the board is not showing — an empty hand draws nothing rather than an empty strip.
+ * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
+ *   flow's business; the board only says which card the player reached for.
  * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
  *   because a stack is two affordances rather than one — the upright copies are the card you would pick
  *   up, and the turned ones are the cards already lying down — and what each *means* is a question
@@ -93,6 +97,8 @@ fun BattlefieldLayout(
     artFor: TableArtResolver? = null,
     onInspect: ((String) -> Unit)? = null,
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)? = null,
+    hand: List<TableHandCard> = emptyList(),
+    onPlayFromHand: ((String) -> Unit)? = null,
 ) {
     val palette = rememberCounterPalette()
 
@@ -104,8 +110,19 @@ fun BattlefieldLayout(
                 .testTag(BattlefieldTestTags.BOARD),
     ) {
         val sides = model.opponents + listOfNotNull(model.viewer)
-        val sideHeight = (maxHeight - BoardMargin * 2) / sides.size.coerceAtLeast(1)
         val boardWidth = maxWidth - BoardMargin * 2
+        val boardHeight = maxHeight - BoardMargin * 2
+
+        // **The hand takes a share off the top, and only when there is one.** It is a region of the
+        // base layer rather than a floating layer, so the battlefields genuinely have less room when
+        // the player is holding cards — which is the honest arrangement: a hand that overlapped the
+        // board would be a floating layer, and §7.4 reserves those for what is transient.
+        //
+        // A spectator holds nothing, and an empty hand is drawn as nothing rather than as an empty
+        // strip, which is the same rule every other region here follows.
+        val handBudget = if (hand.isEmpty()) 0.dp else boardHeight * HAND_HEIGHT_SHARE
+        val handTile = handTileWidth(handBudget)
+        val sideHeight = (boardHeight - handBudget) / sides.size.coerceAtLeast(1)
 
         // **The land corner takes what it needs, up to a ceiling.** A share carved off the top would
         // hold width open on a board with two lands and run out on one with six kinds of them — and
@@ -148,6 +165,18 @@ fun BattlefieldLayout(
                     modifier = Modifier.weight(1f),
                 )
             }
+
+            // Nearest the player, under their own half. Its height is what the tiles need rather than
+            // the share reserved for it: the share sizes the tile, and the region then takes what that
+            // tile actually measures, so a large font scale grows the hand instead of clipping it.
+            HandRegion(
+                cards = hand,
+                tileWidth = handTile,
+                artFor = artFor,
+                onPlay = onPlayFromHand,
+                onInspect = onInspect,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -458,3 +487,12 @@ private val ZoneGap = 8.dp
 private val CardGap = 3.dp
 private val StackGap = 8.dp
 private val RowGap = 3.dp
+
+/**
+ * How much of the board's height the hand is sized against.
+ *
+ * A share rather than a fixed dp, because the board derives everything else from its own size too. It
+ * sizes the tile; the region then takes whatever that tile measures, so the share is a budget and not
+ * a reservation — and a hand that is not there takes none of it.
+ */
+private const val HAND_HEIGHT_SHARE = 0.30f

@@ -218,10 +218,27 @@ private val Developed =
         gameId = "catalog",
         viewerPlayerId = "me",
         combat = listOf(CombatGroup(defenderId = "them", attackerIds = listOf("bears"), blockerIds = listOf("wurm"))),
+        // A hand of five with two castable. The contrast is the point of the playable highlight: a
+        // hand where everything or nothing is lit shows nothing. The untapped Forests pay for the
+        // Elves and the Hawk; the Dragon and the Djinn are out of reach.
+        hand =
+            listOf(
+                card("hand-elves", "Llanowar Elves", listOf(CardType.Creature), isCreature = true, manaCost = "{G}"),
+                card("hand-hawk", "Suntail Hawk", listOf(CardType.Creature), isCreature = true, manaCost = "{W}"),
+                card("hand-dragon", "Shivan Dragon", listOf(CardType.Creature), isCreature = true, manaCost = "{4}{R}{R}"),
+                card("hand-djinn", "Mahamoti Djinn", listOf(CardType.Creature), isCreature = true, manaCost = "{4}{U}{U}"),
+                card("hand-pacifism", "Pacifism", listOf(CardType.Enchantment), manaCost = "{1}{W}"),
+            ),
         // Every untapped land is playable, which is what a real snapshot says: the server offers all
         // of them at once. Marking only one splits the Forests into two stacks for a reason no game
         // produces, which is a fixture bug that reads as a layout bug.
-        playable = listOf(PlayableObject(objectId = "f4"), PlayableObject(objectId = "f5")),
+        playable =
+            listOf(
+                PlayableObject(objectId = "f4"),
+                PlayableObject(objectId = "f5"),
+                PlayableObject(objectId = "hand-elves"),
+                PlayableObject(objectId = "hand-hawk"),
+            ),
         players =
             listOf(
                 GamePlayer(
