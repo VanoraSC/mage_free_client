@@ -30,6 +30,7 @@ import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.LandStackHalf
 import magefree.feature.game.table.TableArtResolver
 import magefree.feature.game.table.battlefieldModel
+import magefree.feature.game.table.handCards
 
 /*
  * The battlefield, filling the window.
@@ -81,6 +82,8 @@ fun BattlefieldPreviewScreen(
         Box(modifier = Modifier.fillMaxSize().testTag(BattlefieldPreviewTestTags.SCREEN)) {
             BattlefieldLayout(
                 model = battlefieldModel(state),
+                hand = handCards(state),
+                onPlayFromHand = { id -> inspected = "played $id" },
                 artFor = artFor,
                 onInspect = { id -> inspected = id },
                 // The two halves of a stack are two affordances, and the board decides what each
