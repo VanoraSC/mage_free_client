@@ -2,6 +2,7 @@ package magefree.app.catalog
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,20 +50,26 @@ import magefree.network.game.PlayableObject
  * technically visible and none of them can be assessed. So this opens the real thing.
  */
 @Composable
-internal fun BattlefieldSection(onOpenPreview: () -> Unit) {
+internal fun BattlefieldSection(
+    onOpenPreview: () -> Unit,
+    onOpenCastMock: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
         MageSectionHeader(text = "Battlefield")
         HorizontalDivider()
 
         Text(
             text =
-                "Opens full-window and landscape, because that is the only shape the board is " +
-                    "designed for. Cycles six boards, three of which walk the land-stacking rule " +
-                    "through the moment a Plains is tapped.",
+                "Both open full-window and landscape, because that is the only shape the board is " +
+                    "designed for. The battlefield cycles boards to judge the layout by looking; the " +
+                    "cast mock is judged by doing — read a card, play or cast it, drag one out of hand.",
             style = MaterialTheme.typography.labelMedium,
         )
 
-        MageSecondaryButton(text = "Open the battlefield", onClick = onOpenPreview)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
+            MageSecondaryButton(text = "Open the battlefield", onClick = onOpenPreview)
+            MageSecondaryButton(text = "Cast and inspect", onClick = onOpenCastMock)
+        }
     }
 }
 
@@ -396,3 +403,74 @@ internal const val CATALOG_PLAINS = PLAINS_COUNT
 
 /** The board at [step], wrapping so the preview's one button can cycle forever. */
 internal fun catalogBoard(step: Int): CatalogBoard = Boards[step.mod(Boards.size)]
+
+/**
+ * The board the cast mock uses: a real hand with a mixture the player has to choose between.
+ *
+ * Two lands and three spells, three of them castable — a Forest to play, an Elves and a Hawk to cast,
+ * and a Dragon and a Djinn out of reach. That mixture is what makes the mock worth pressing: the
+ * button says *Play* on one and *Cast* on another, and two cards offer nothing at all.
+ */
+internal fun castMockBoard(): GameState =
+    GameState(
+        gameId = "cast-mock",
+        viewerPlayerId = "me",
+        hand =
+            listOf(
+                card("mock-forest", "Forest", listOf(CardType.Land)),
+                card(
+                    "mock-elves",
+                    "Llanowar Elves",
+                    listOf(CardType.Creature),
+                    isCreature = true,
+                    power = "1",
+                    toughness = "1",
+                    manaCost = "{G}",
+                ),
+                card(
+                    "mock-hawk",
+                    "Suntail Hawk",
+                    listOf(CardType.Creature),
+                    isCreature = true,
+                    power = "1",
+                    toughness = "1",
+                    manaCost = "{W}",
+                ),
+                card(
+                    "mock-dragon",
+                    "Shivan Dragon",
+                    listOf(CardType.Creature),
+                    isCreature = true,
+                    power = "5",
+                    toughness = "5",
+                    manaCost = "{4}{R}{R}",
+                ),
+                card("mock-pacifism", "Pacifism", listOf(CardType.Enchantment), manaCost = "{1}{W}"),
+            ),
+        playable =
+            listOf(
+                PlayableObject(objectId = "mock-forest"),
+                PlayableObject(objectId = "mock-elves"),
+                PlayableObject(objectId = "mock-hawk"),
+            ),
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "me",
+                    name = "You",
+                    isViewer = true,
+                    battlefield =
+                        listOf(
+                            creature("mock-bears", "Grizzly Bears", "2", "2", "{1}{G}"),
+                            land("mock-f1", "Forest"),
+                            land("mock-f2", "Forest"),
+                            land("mock-p1", "Plains", tapped = true),
+                        ),
+                ),
+                GamePlayer(
+                    playerId = "them",
+                    name = "Opponent",
+                    battlefield = listOf(creature("mock-wurm", "Craw Wurm", "6", "4", "{4}{G}{G}"), land("mock-i1", "Island")),
+                ),
+            ),
+    )

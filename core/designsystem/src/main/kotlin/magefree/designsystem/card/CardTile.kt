@@ -50,6 +50,12 @@ import magefree.designsystem.theme.Spacing
  * @param art the card-art slot; when null the built-in [CardArtPlaceholder] is shown.
  * @param onLongPressPeek optional long-press accelerator that peeks at the card.
  * @param peekLabel accessibility label for the long-press action.
+ * @param caption whether to draw the name, cost and type line under the art.
+ *
+ * **On, except where the art already says it.** A deck row or a search result often has no art loaded
+ * and the caption is the whole tile. A hand card is the opposite: the art *is* the card face, with its
+ * name and cost printed on it, so the caption repeats them — and in a hand of twelve it cost a third
+ * of every tile's height to say what the picture said.
  * @param signal what the game is currently saying about this card, or `null` for none.
  *
  * **The signal is drawn the way the Board tier draws it**, in the same colour from the same palette.
@@ -66,6 +72,7 @@ fun CardTile(
     art: CardArtSlot? = null,
     onLongPressPeek: (() -> Unit)? = null,
     peekLabel: String = "Peek at card",
+    caption: Boolean = true,
     signal: BoardCardSignal? = null,
 ) {
     val summary = card.accessibleSummary
@@ -101,6 +108,7 @@ fun CardTile(
             ) {
                 CardArtRegion(card = card, art = art, modifier = Modifier.fillMaxSize())
             }
+            if (!caption) return@Column
             Column(
                 modifier =
                     Modifier

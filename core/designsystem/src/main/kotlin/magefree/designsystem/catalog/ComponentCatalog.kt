@@ -86,6 +86,12 @@ fun ComponentCatalog(
                 .padding(Spacing.medium),
         verticalArrangement = Arrangement.spacedBy(Spacing.large),
     ) {
+        // **First, not last.** The host's sections are the ones that open a whole surface — the board,
+        // the cast flow — and they are what somebody reviewing the game comes here for. Putting them
+        // after every component meant scrolling past the entire design system to reach the two entries
+        // anyone actually uses, several times an evening.
+        hostSections?.invoke()
+
         CatalogSection(title = "Buttons") {
             MagePrimaryButton(text = "Primary", onClick = {})
             MagePrimaryButton(text = "Primary + icon", onClick = {}, icon = Icons.Filled.Star)
@@ -196,8 +202,6 @@ fun ComponentCatalog(
                 )
             }
         }
-
-        hostSections?.invoke()
 
         CatalogSection(title = "Full card view") {
             // Fixed height: the full view fills its space, so the gallery gives it a bounded window.

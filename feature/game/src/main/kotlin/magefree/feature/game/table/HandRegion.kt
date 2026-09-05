@@ -1,17 +1,25 @@
 package magefree.feature.game.table
 
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.card.CARD_ASPECT_RATIO
 import magefree.designsystem.card.CardTile
+import kotlin.math.roundToInt
 
 /*
  * The hand, on the base layer, never a gesture away.
@@ -26,9 +34,14 @@ import magefree.designsystem.card.CardTile
  * *overlap* — every card keeps an edge on screen, and the overlap is only ever as much as it has to
  * be. A seven-card hand at a comfortable size does not overlap at all.
  *
- * What an overlap leaves showing is a card's **left edge**, which is where the Tile tier prints its
- * name. That is not a coincidence to rely on quietly, so it is written down: the tier's caption puts
- * the name first, and this layout depends on it.
+ * What an overlap leaves showing is a card's **left edge**, and a Magic card prints its name across the
+ * top-left of its own face — so an overlapped hand still reads as a list of names. That is a property
+ * of the card and not of anything here, which is exactly why it is written down: the layout depends on
+ * it and cannot enforce it.
+ *
+ * **The tiles carry no caption.** The art *is* the card face, with the name and cost printed on it, so
+ * a caption underneath repeated them — and in a hand of twelve it cost a third of every tile's height
+ * to say what the picture already said.
  */
 
 /**
@@ -72,12 +85,44 @@ fun HandRegion(
             //
             // Later cards are drawn on top, so an overlap reads left to right and the rightmost card is
             // whole — the same convention the land stacks use for the copy you would reach for.
-            Box(modifier = Modifier.offset(x = start + step * index).width(tileWidth).align(Alignment.CenterStart)) {
+
+            // Dragged upward out of the hand, a playable card does what its button does — §7.1's
+            // accelerator, which always has a tap path. Offered only for a card the server marked
+            // playable: dragging an uncastable card would either do nothing, which is confusing, or
+            // submit an action the server had not offered, which is worse.
+            var dragged by remember(card.id) { mutableFloatStateOf(0f) }
+            val draggable =
+                if (onPlay == null || !card.isPlayable) {
+                    Modifier
+                } else {
+                    Modifier.pointerInput(card.id) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (dragged <= -DragThreshold.toPx()) onPlay(card.id)
+                                dragged = 0f
+                            },
+                            onDragCancel = { dragged = 0f },
+                        ) { _, delta -> dragged += delta }
+                    }
+                }
+
+            Box(
+                modifier =
+                    Modifier
+                        .offset(x = start + step * index)
+                        .offset { IntOffset(x = 0, y = dragged.roundToInt()) }
+                        .width(tileWidth)
+                        .align(Alignment.CenterStart)
+                        .then(draggable),
+            ) {
                 CardTile(
                     card = card.card,
                     onTap = { onPlay?.invoke(card.id) },
                     onLongPressPeek = onInspect?.let { inspect -> { inspect(card.id) } },
                     art = artFor?.invoke(card.art, card.card),
+                    // No caption: the card face already prints its name and cost, and repeating them
+                    // underneath cost a third of every tile's height to say what the picture said.
+                    caption = false,
                     signal = card.signal,
                     modifier = Modifier.testTag(HandTestTags.card(card.id)),
                 )
@@ -94,12 +139,11 @@ fun HandRegion(
  * past the floor the tiles overlap rather than shrinking further, because a hand of twenty at a
  * legible size is a hand you can read and a hand of twenty at four dp each is not.
  *
- * The height budget covers the art; a tile's caption sits under it and takes what the text needs, so
- * the estimate is deliberately a little conservative rather than pretending to know a font's metrics.
+ * A hand tile is the card face and nothing else, so the budget is the card's own height and the width
+ * follows from its ratio. That is also why it can be larger than it was: the caption used to take a
+ * third of the tile to repeat what the art already printed.
  */
-fun handTileWidth(heightBudget: Dp): Dp =
-    minOf(PreferredTileWidth, heightBudget * ART_SHARE_OF_TILE * CARD_ASPECT_RATIO)
-        .coerceAtLeast(MinTileWidth)
+fun handTileWidth(heightBudget: Dp): Dp = minOf(PreferredTileWidth, heightBudget * CARD_ASPECT_RATIO).coerceAtLeast(MinTileWidth)
 
 /**
  * How far apart the tiles are placed.
@@ -133,7 +177,7 @@ object HandTestTags {
  * Larger than a board card: the hand is read closely and repeatedly, and it is the one region where a
  * card's type line and cost are being weighed rather than glanced at.
  */
-private val PreferredTileWidth = 96.dp
+private val PreferredTileWidth = 132.dp
 
 /**
  * Below this a tile stops being a card and becomes a stripe.
@@ -150,10 +194,9 @@ private val TileGap = 4.dp
 private val HandPadding = 8.dp
 
 /**
- * How much of a tile's height is its art, the rest being the caption.
+ * How far a card has to leave the hand before the drag counts as playing it.
  *
- * A rough share rather than a measurement: the caption is text and takes what the font asks for, and
- * pretending to know that in advance is how a layout ends up clipping at a large font scale. Being a
- * little conservative costs a few dp of tile and buys a hand that never overflows its strip.
+ * Far enough that a shaky tap is not a cast — this is a gesture that submits a game action, and the
+ * cost of triggering it by accident is a spell on the stack the player did not intend.
  */
-private const val ART_SHARE_OF_TILE = 0.72f
+private val DragThreshold = 64.dp

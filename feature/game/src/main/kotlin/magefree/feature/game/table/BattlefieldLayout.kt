@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -113,16 +114,18 @@ fun BattlefieldLayout(
         val boardWidth = maxWidth - BoardMargin * 2
         val boardHeight = maxHeight - BoardMargin * 2
 
-        // **The hand takes a share off the top, and only when there is one.** It is a region of the
-        // base layer rather than a floating layer, so the battlefields genuinely have less room when
-        // the player is holding cards — which is the honest arrangement: a hand that overlapped the
-        // board would be a floating layer, and §7.4 reserves those for what is transient.
+        // **Every region gets the whole screen, and they overlay where they must.** The first cut cut
+        // the board into horizontal bands — opponent, viewer, hand — which meant the hand's band was
+        // held open across the *full width* even though the hand only ever occupies the middle of it.
+        // The visible result was a land corner floating well above the bottom of the screen with a
+        // rectangle of nothing under it. Bands are simple and they waste the screen, and the screen is
+        // what the player reads the game from.
         //
-        // A spectator holds nothing, and an empty hand is drawn as nothing rather than as an empty
-        // strip, which is the same rule every other region here follows.
-        val handBudget = if (hand.isEmpty()) 0.dp else boardHeight * HAND_HEIGHT_SHARE
-        val handTile = handTileWidth(handBudget)
-        val sideHeight = (boardHeight - handBudget) / sides.size.coerceAtLeast(1)
+        // So the sides are anchored — opponents to the top, the viewer to the bottom — and each gets
+        // half the board rather than a share of what is left. The hand is placed into the space the
+        // viewer's own rows leave empty, beside the land corner rather than over it.
+        val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
+        val sideHeight = boardHeight / sides.size.coerceAtLeast(1)
 
         // **The land corner takes what it needs, up to a ceiling.** A share carved off the top would
         // hold width open on a board with two lands and run out on one with six kinds of them — and
@@ -136,21 +139,27 @@ fun BattlefieldLayout(
         // side is the same size as one on this side, because the game does not say one is nearer.
         val cardWidth = mainCardWidth(sides, mainWidth, sideHeight)
 
-        Column(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
-            model.opponents.forEach { side ->
-                SideLayout(
-                    side = side,
-                    order = OpponentOrder,
-                    landWidth = landWidth,
-                    cardWidth = cardWidth,
-                    landZoneWidth = landZoneWidth,
-                    palette = palette,
-                    artFor = artFor,
-                    onInspect = onInspect,
-                    onLandPress = onLandPress,
-                    modifier = Modifier.weight(1f),
-                )
+        Box(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
+            // Opponents against the top edge, sharing it between them.
+            Column(modifier = Modifier.align(Alignment.TopStart).fillMaxWidth()) {
+                model.opponents.forEach { side ->
+                    SideLayout(
+                        side = side,
+                        order = OpponentOrder,
+                        landWidth = landWidth,
+                        cardWidth = cardWidth,
+                        landZoneWidth = landZoneWidth,
+                        palette = palette,
+                        artFor = artFor,
+                        onInspect = onInspect,
+                        onLandPress = onLandPress,
+                        modifier = Modifier.height(sideHeight),
+                    )
+                }
             }
+
+            // The viewer against the bottom edge, so their land corner is in the actual corner of the
+            // screen rather than wherever a band happened to end.
             model.viewer?.let { side ->
                 SideLayout(
                     side = side,
@@ -162,20 +171,21 @@ fun BattlefieldLayout(
                     artFor = artFor,
                     onInspect = onInspect,
                     onLandPress = onLandPress,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().height(sideHeight),
                 )
             }
 
-            // Nearest the player, under their own half. Its height is what the tiles need rather than
-            // the share reserved for it: the share sizes the tile, and the region then takes what that
-            // tile actually measures, so a large font scale grows the hand instead of clipping it.
+            // The hand goes in the space the viewer's own rows leave: they pack toward the centre
+            // line, so the bottom of that half is empty. It is placed *beside* the land corner rather
+            // than over it — a hand covering the lands would put the cards you tap for mana under the
+            // cards you tap to spend it.
             HandRegion(
                 cards = hand,
                 tileWidth = handTile,
                 artFor = artFor,
                 onPlay = onPlayFromHand,
                 onInspect = onInspect,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.align(Alignment.BottomEnd).width(mainWidth),
             )
         }
     }

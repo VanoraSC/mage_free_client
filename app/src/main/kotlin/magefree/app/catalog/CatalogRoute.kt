@@ -24,3 +24,13 @@ data object CatalogRoute
  */
 @Serializable
 data object BattlefieldPreviewRoute
+
+/**
+ * Route for the **cast-and-inspect mock**, reached from the catalog's battlefield section.
+ *
+ * Separate from [BattlefieldPreviewRoute] because the two answer different questions: that one is for
+ * judging the layout, which is done by looking, and this one is for judging the interaction, which can
+ * only be done by doing it. Debug-only, like everything else here.
+ */
+@Serializable
+data object CastMockRoute

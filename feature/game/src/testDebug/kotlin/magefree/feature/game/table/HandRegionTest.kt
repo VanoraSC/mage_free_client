@@ -12,8 +12,11 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import magefree.designsystem.theme.MageTheme
+import magefree.network.game.CardType
 import magefree.network.game.GameCard
+import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
 import magefree.network.game.PlayableObject
@@ -110,14 +113,43 @@ class HandRegionTest {
     }
 
     @Test
-    fun `the hand takes its room from the battlefields, and takes none when it is empty`() {
-        // It is a region of the base layer, not a floating one: holding cards genuinely leaves less
-        // board. A hand that overlapped the battlefields would be a floating layer, and §7.4 keeps
-        // those for what is transient.
+    fun `dragging a playable card out of the hand plays it`() {
+        // §7.1's accelerator, and it does exactly what the button does. The threshold matters: this
+        // gesture submits a game action, and the cost of firing it by accident is a spell on the stack
+        // the player did not intend.
+        show(stateWith(3))
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("h1")).performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 200f)
+        }
+
+        assertEquals(listOf("h1"), played)
+    }
+
+    @Test
+    fun `dragging a card the server has not offered plays nothing`() {
+        // Dragging an uncastable card either does nothing, which is confusing, or submits an action
+        // the server never offered, which is worse. It returns to the hand.
+        show(stateWith(3, playable = false))
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("h1")).performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 200f)
+        }
+
+        assertEquals(emptyList<String>(), played)
+    }
+
+    @Test
+    fun `the hand costs the battlefields no height at all`() {
+        // The rule that replaced the first cut's. Cutting the board into bands — opponent, viewer,
+        // hand — held the hand's band open across the *full width* even though a hand only occupies
+        // the middle of it, and the visible cost was a land corner floating above the bottom of the
+        // screen with a rectangle of nothing under it. The regions overlay instead, so a player
+        // holding twelve cards has exactly as much battlefield as one holding none.
         composeTestRule.setContent {
             MageTheme {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Board(state = stateWith(5, playerId = "holding"), modifier = Modifier.weight(1f))
+                    Board(state = stateWith(12, playerId = "holding"), modifier = Modifier.weight(1f))
                     Board(state = stateWith(0, playerId = "empty"), modifier = Modifier.weight(1f))
                 }
             }
@@ -134,7 +166,28 @@ class HandRegionTest {
                 .fetchSemanticsNode()
                 .size.height
 
-        assertTrue("with a hand the side measured $holding, without it $empty", holding < empty)
+        // Within a pixel: the two boards are stacked to share a render, so their halves differ by the
+        // odd row. What matters is that the hand costs nothing, not that it costs exactly nothing.
+        assertTrue(
+            "with a hand the side measured $holding, without it $empty",
+            kotlin.math.abs(holding - empty) <= 2,
+        )
+    }
+
+    @Test
+    fun `the hand sits beside the land corner, never over it`() {
+        // A hand covering the lands would put the cards you tap for mana under the cards you tap to
+        // spend it — and the land corner is the one region whose whole purpose is being tappable.
+        show(stateWith(12, playerId = "me", lands = 3))
+
+        val lands =
+            composeTestRule
+                .onNodeWithTag(BattlefieldTestTags.row("me", BattlefieldTestTags.LAND_ZONE))
+                .fetchSemanticsNode()
+        val landsRight = lands.positionInRoot.x + lands.size.width
+        val (handLeft, _) = bounds("h0")
+
+        assertTrue("the lands end at $landsRight and the hand starts at $handLeft", handLeft >= landsRight)
     }
 
     @Composable
@@ -151,11 +204,26 @@ private const val BOARD_WIDTH_PX = 891f * 1f
 private fun stateWith(
     handSize: Int,
     playerId: String = "me",
+    lands: Int = 0,
+    playable: Boolean = true,
 ) = GameState(
     gameId = "g",
     viewerPlayerId = playerId,
     hand = (0 until handSize).map { GameCard(id = "h$it", name = "Grizzly Bears", manaCost = "{1}{G}") },
     // Every card in hand is playable, which is what a snapshot on your own main phase looks like.
-    playable = (0 until handSize).map { PlayableObject(objectId = "h$it") },
-    players = listOf(GamePlayer(playerId = playerId, name = playerId, isViewer = true, battlefield = emptyList())),
+    playable = if (playable) (0 until handSize).map { PlayableObject(objectId = "h$it") } else emptyList(),
+    players =
+        listOf(
+            GamePlayer(
+                playerId = playerId,
+                name = playerId,
+                isViewer = true,
+                battlefield =
+                    (0 until lands).map { index ->
+                        GamePermanent(
+                            card = GameCard(id = "l$index", name = "Forest", cardTypes = listOf(CardType.Land)),
+                        )
+                    },
+            ),
+        ),
 )

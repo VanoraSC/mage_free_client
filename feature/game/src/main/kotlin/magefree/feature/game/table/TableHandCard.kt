@@ -4,6 +4,9 @@ import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
 import magefree.designsystem.card.BoardCardSignal
 import magefree.designsystem.card.CardDisplay
+import magefree.designsystem.card.CardPreviewAction
+import magefree.designsystem.card.CardPreviewState
+import magefree.network.game.CardType
 import magefree.network.game.GameState
 
 /*
@@ -33,7 +36,29 @@ data class TableHandCard(
     val card: CardDisplay,
     val art: CardArtRequest? = null,
     val signal: BoardCardSignal? = null,
-)
+    val isLand: Boolean = false,
+    val power: String? = null,
+    val toughness: String? = null,
+    val abilities: List<String> = emptyList(),
+) {
+    /** True when the server is offering this card right now. */
+    val isPlayable: Boolean get() = signal == BoardCardSignal.Playable
+
+    /**
+     * What a player would call doing this: *Play* a land, *Cast* anything else.
+     *
+     * A wording choice and not a legality one. Whether the card can be played at all is [isPlayable],
+     * which is the server's answer; this only picks the word, and picking it from the card's type is
+     * what every Magic player and every rules document does.
+     */
+    val actionLabel: String get() = if (isLand) PLAY_LABEL else CAST_LABEL
+}
+
+/** Lands are *played*, not cast — they never use the stack. */
+const val PLAY_LABEL: String = "Play"
+
+/** Everything else is *cast*. */
+const val CAST_LABEL: String = "Cast"
 
 /**
  * The viewer's hand, in the server's own order.
@@ -55,9 +80,43 @@ fun handCards(state: GameState): List<TableHandCard> {
                 ),
             art = handArtRequest(card.setCode, card.collectorNumber),
             signal = if (card.id in playable) BoardCardSignal.Playable else null,
+            isLand = CardType.Land in card.cardTypes,
+            power = card.power,
+            toughness = card.toughness,
+            abilities = card.rules,
         )
     }
 }
+
+/**
+ * A hand card as the inspect overlay shows it.
+ *
+ * @param oracleText the **printed** text, which the wire does not carry — `CardView.rules` is the
+ *   game-aware form and arrives as [TableHandCard.abilities]. The two differ exactly where it matters,
+ *   so the printed text comes from the device's own card database, and until the board is looking cards
+ *   up there it is supplied by whoever is showing the preview.
+ * @param onAct what to do when the player presses Play or Cast. Absent for a card the server has not
+ *   offered: a button that submitted an action the server had not agreed to is the one thing §7.6
+ *   forbids everywhere else in this app.
+ */
+fun handPreviewState(
+    card: TableHandCard,
+    oracleText: String? = null,
+    onAct: ((String) -> Unit)? = null,
+): CardPreviewState =
+    CardPreviewState(
+        card = card.card,
+        power = card.power,
+        toughness = card.toughness,
+        abilities = card.abilities,
+        oracleText = oracleText,
+        action =
+            if (card.isPlayable && onAct != null) {
+                CardPreviewAction(label = card.actionLabel, onAct = { onAct(card.id) })
+            } else {
+                null
+            },
+    )
 
 /** The printing the server named, or `null` when it named none — a token, or a card it did not pin. */
 private fun handArtRequest(

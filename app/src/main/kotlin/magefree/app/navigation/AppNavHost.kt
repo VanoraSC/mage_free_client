@@ -9,10 +9,13 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.serialization.Serializable
 import magefree.app.catalog.BattlefieldPreviewRoute
 import magefree.app.catalog.BattlefieldPreviewScreen
+import magefree.app.catalog.CastMockRoute
+import magefree.app.catalog.CastMockScreen
 import magefree.app.catalog.CatalogRoute
 import magefree.app.catalog.ComponentCatalogScreen
 import magefree.app.catalog.rememberBattlefieldArtResolver
 import magefree.app.catalog.rememberCatalogArtResolver
+import magefree.app.catalog.rememberOracleLookup
 import magefree.app.connection.ui.ConnectionStatusBar
 import magefree.app.game.GameRoute
 import magefree.app.game.ImmersiveGameScreen
@@ -122,15 +125,17 @@ fun AppNavHost(
         DecksLibraryRoute(onBrowseCards = onBrowseCards)
     },
     cardsScreen: @Composable (onBack: () -> Unit) -> Unit = { onBack -> CardsFeatureRoute(onBack = onBack) },
-    catalogScreen: @Composable (onExit: () -> Unit, onOpenBattlefield: () -> Unit) -> Unit = { onExit, onOpenBattlefield ->
-        // Real card art is resolved here, so the screen itself stays previewable and the graph tests
-        // can substitute a stand-in rather than needing a DI container.
-        ComponentCatalogScreen(
-            onExit = onExit,
-            artFor = rememberCatalogArtResolver(),
-            onOpenBattlefield = onOpenBattlefield,
-        )
-    },
+    catalogScreen: @Composable (onExit: () -> Unit, onOpenBattlefield: () -> Unit, onOpenCastMock: () -> Unit) -> Unit =
+        { onExit, onOpenBattlefield, onOpenCastMock ->
+            // Real card art is resolved here, so the screen itself stays previewable and the graph tests
+            // can substitute a stand-in rather than needing a DI container.
+            ComponentCatalogScreen(
+                onExit = onExit,
+                artFor = rememberCatalogArtResolver(),
+                onOpenBattlefield = onOpenBattlefield,
+                onOpenCastMock = onOpenCastMock,
+            )
+        },
     onSignOut: () -> Unit = {},
 ) {
     NavHost(
@@ -192,10 +197,21 @@ fun AppNavHost(
                 artFor = rememberBattlefieldArtResolver(),
             )
         }
+        composable<CastMockRoute> {
+            // The oracle text comes from the device's own Scryfall-derived catalog, resolved here for
+            // the same reason the art renderer is: the screen stays previewable and the graph tests can
+            // run without a DI container.
+            CastMockScreen(
+                onExit = { navController.popBackStack() },
+                artFor = rememberBattlefieldArtResolver(),
+                oracleFor = rememberOracleLookup(),
+            )
+        }
         composable<CatalogRoute> {
             catalogScreen(
                 { navController.popBackStack() },
                 { navController.navigate(BattlefieldPreviewRoute) },
+                { navController.navigate(CastMockRoute) },
             )
         }
     }

@@ -1,6 +1,7 @@
 package magefree.feature.game.table
 
 import magefree.designsystem.card.BoardCardSignal
+import magefree.network.game.CardType
 import magefree.network.game.GameCard
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
@@ -85,3 +86,69 @@ private fun card(
     id: String,
     name: String,
 ) = GameCard(id = id, name = name)
+
+/**
+ * What a hand card offers, and what it is called.
+ *
+ * Two decisions live here and only one of them is the client's. **Whether** a card can be acted on is
+ * the server's — `GameState.playable` — and a preview that offered a button on a card the server had
+ * not offered would submit an action nothing had agreed to. **What to call it** is a wording choice,
+ * and lands are played while everything else is cast.
+ */
+class HandCardActionTest {
+    @Test
+    fun `a playable land offers Play and a playable spell offers Cast`() {
+        val state =
+            stateWith(
+                hand = listOf(land("forest"), spell("bears")),
+            ).copy(playable = listOf(PlayableObject(objectId = "forest"), PlayableObject(objectId = "bears")))
+
+        val actions = handCards(state).associate { it.id to handPreviewState(it, onAct = {}).action?.label }
+
+        assertEquals(PLAY_LABEL, actions["forest"])
+        assertEquals(CAST_LABEL, actions["bears"])
+    }
+
+    @Test
+    fun `a card the server has not offered gets no button at all`() {
+        // Not a disabled one: a greyed-out Cast invites the player to work out why, and the answer is
+        // a rules question the client cannot answer. Nothing is the honest control.
+        val state = stateWith(hand = listOf(spell("bears")))
+
+        assertNull(handPreviewState(handCards(state).single(), onAct = {}).action)
+    }
+
+    @Test
+    fun `no handler means no button, however playable the card is`() {
+        // A board that is being looked at rather than played offers nothing to press.
+        val state = stateWith(hand = listOf(land("forest"))).copy(playable = listOf(PlayableObject(objectId = "forest")))
+
+        assertNull(handPreviewState(handCards(state).single(), onAct = null).action)
+    }
+
+    @Test
+    fun `the panel carries the server's own text and current size`() {
+        val state =
+            stateWith(
+                hand =
+                    listOf(
+                        spell("bears").copy(
+                            power = "4",
+                            toughness = "4",
+                            rules = listOf("Flying", "{T}: Add {G}."),
+                        ),
+                    ),
+            )
+
+        val preview = handPreviewState(handCards(state).single())
+
+        assertEquals("4", preview.power)
+        assertEquals("4", preview.toughness)
+        assertEquals(listOf("Flying", "{T}: Add {G}."), preview.abilities)
+    }
+}
+
+private fun land(id: String) = GameCard(id = id, name = "Forest", cardTypes = listOf(CardType.Land))
+
+private fun spell(id: String) =
+    GameCard(id = id, name = "Grizzly Bears", manaCost = "{1}{G}", cardTypes = listOf(CardType.Creature), isCreature = true)
