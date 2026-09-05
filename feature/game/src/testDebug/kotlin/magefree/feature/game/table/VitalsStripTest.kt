@@ -17,6 +17,7 @@ import magefree.network.game.GameCounter
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -65,6 +66,30 @@ class VitalsStripTest {
         composeTestRule.onNodeWithTag(VitalsTestTags.strip("them")).assertIsDisplayed()
         composeTestRule.onNodeWithTag(VitalsTestTags.life("me"), useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithTag(VitalsTestTags.library("me"), useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the strips are a scoreboard in the top right, in seat order`() {
+        // Together and in one place a player learns once, because the two seats' numbers are read
+        // against each other. The top right is genuinely free: each side packs its rows toward the
+        // centre line, so the far top of the opponent's half has nothing in it.
+        show(twoSeats())
+
+        val opponent = composeTestRule.onNodeWithTag(VitalsTestTags.strip("them")).fetchSemanticsNode()
+        val viewer = composeTestRule.onNodeWithTag(VitalsTestTags.strip("me")).fetchSemanticsNode()
+
+        assertTrue(
+            "the opponent's strip should be above the viewer's, at ${opponent.positionInRoot.y} and ${viewer.positionInRoot.y}",
+            opponent.positionInRoot.y < viewer.positionInRoot.y,
+        )
+        assertTrue(
+            "both should be in the top half, at ${viewer.positionInRoot.y}",
+            viewer.positionInRoot.y < SCREEN_HEIGHT_PX / 2f,
+        )
+        assertTrue(
+            "both should be against the right edge, ending at ${opponent.positionInRoot.x + opponent.size.width}",
+            opponent.positionInRoot.x + opponent.size.width > SCREEN_WIDTH_PX * 0.5f,
+        )
     }
 
     @Test
@@ -158,3 +183,6 @@ private fun twoSeats(
             GamePlayer(playerId = "them", name = "Them", life = 18, libraryCount = 28),
         ),
 )
+
+private const val SCREEN_WIDTH_PX = 891f
+private const val SCREEN_HEIGHT_PX = 411f

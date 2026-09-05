@@ -193,20 +193,19 @@ fun BattlefieldLayout(
                 modifier = Modifier.align(Alignment.BottomEnd).width(mainWidth),
             )
 
-            // **Against the centre line, on the left.** Every other region has already claimed a
-            // corner: lands take the two on the left, the hand takes the bottom right, and the
-            // creatures run down the middle. What is left is the left edge where the two halves meet,
-            // and it happens to be the right place on its own terms — the two seats' numbers read as
-            // one scoreboard when they are adjacent, which is how a player compares them.
+            // **Top right, both seats together.** A scoreboard: the two seats' numbers are read
+            // against each other — *my* life against *theirs* — so they belong adjacent and in one
+            // place a player learns once, rather than each floating near its own half.
             //
             // Ordered opponents-then-viewer, so the strips run down the screen the way the seats do.
             //
-            // Overlaid, like everything else: a strip is one line of text, and reserving a band for it
-            // across the whole width would cost the battlefield far more than the strip occupies.
+            // Overlaid, like everything else: reserving a band for it across the whole width would
+            // cost the battlefield far more than the strip occupies.
             if (vitals.isNotEmpty()) {
                 Column(
-                    modifier = Modifier.align(Alignment.CenterStart).padding(VitalsInset),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(VitalsInset),
                     verticalArrangement = Arrangement.spacedBy(VitalsGap),
+                    horizontalAlignment = Alignment.End,
                 ) {
                     (vitals.filterNot { it.isViewer } + vitals.filter { it.isViewer }).forEach { seat ->
                         VitalsStrip(

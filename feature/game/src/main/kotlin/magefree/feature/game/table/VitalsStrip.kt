@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSignal
 import magefree.designsystem.board.BoardSurface
@@ -63,14 +64,19 @@ fun VitalsStrip(
     ) {
         Text(
             text = vitals.name,
-            style = BoardTypography.counter,
+            style = BoardTypography.cardStats,
             color = if (vitals.hasPriority) BoardSignal.playable else BoardSurface.onSurfaceMuted,
         )
 
+        // Life gets the design system's own `vitals` token — *"the largest thing on the board that is
+        // not a card"* — which is what it was defined for and what the first cut of this missed by
+        // drawing it at the size of a counter on a card face. It is also what sets the strip's height:
+        // everything beside it is a smaller number on the same line.
         Chip(
             label = "${vitals.life}",
             fill = LifeColor,
             tag = VitalsTestTags.life(vitals.playerId),
+            style = BoardTypography.vitals,
         )
 
         // Library before the rest: an empty one is a loss on the next draw, which is the only zone
@@ -110,7 +116,7 @@ fun VitalsStrip(
         if (vitals.showsWins) {
             Text(
                 text = "${vitals.wins}/${vitals.winsNeeded}",
-                style = BoardTypography.counter,
+                style = BoardTypography.cardStats,
                 color = BoardSurface.onSurfaceMuted,
                 modifier = Modifier.testTag(VitalsTestTags.wins(vitals.playerId)),
             )
@@ -128,7 +134,7 @@ private fun ZoneCount(
     if (count <= 0) return
     Text(
         text = "$label$count",
-        style = BoardTypography.counter,
+        style = BoardTypography.cardStats,
         color = BoardSurface.onSurfaceMuted,
         modifier = Modifier.testTag(tag),
     )
@@ -142,6 +148,7 @@ private fun Chip(
     tag: String,
     outlined: Boolean = false,
     alarming: Boolean = false,
+    style: TextStyle = BoardTypography.cardStats,
 ) {
     Box(
         modifier =
@@ -159,7 +166,7 @@ private fun Chip(
     ) {
         Text(
             text = label,
-            style = BoardTypography.counter,
+            style = style,
             color = if (outlined) BoardSurface.onSurfaceMuted else counterDigitColor(fill),
         )
     }
@@ -173,7 +180,7 @@ private fun Marker(
 ) {
     Text(
         text = label,
-        style = BoardTypography.counter,
+        style = BoardTypography.cardStats,
         color = BoardSignal.targeting,
         modifier = Modifier.testTag(tag),
     )
@@ -215,8 +222,8 @@ private val PoisonColor = Color(0xFF6FBF73)
 
 private val StripShape = RoundedCornerShape(4.dp)
 private const val STRIP_OPACITY = 0.85f
-private val StripPadding = 6.dp
-private val ChipGap = 6.dp
-private val ChipPadding = 4.dp
+private val StripPadding = 10.dp
+private val ChipGap = 8.dp
+private val ChipPadding = 7.dp
 private val ChipBorder = 1.dp
 private val AlarmBorder = 2.dp

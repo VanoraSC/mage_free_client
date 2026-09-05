@@ -66,6 +66,16 @@ and "you are one counter from losing" is the entire value of showing it. The chi
 the board marks it once it is close — which is a *presentation* of a rule the game already fixed, not a
 prediction: ten is ten in every format this client plays.
 
+**Both strips sit in the top right, together.** They are a *scoreboard*: the two seats' numbers are
+read against each other — my life against theirs — so they belong adjacent, in one place a player
+learns once, rather than each floating near its own half. The corner is genuinely free, because each
+side packs its rows toward the centre line and leaves the far top of the opponent's half empty.
+
+**Life is drawn at the design system's own `vitals` size** — *"a life total, the largest thing on the
+board that is not a card"* — which is what that token was defined for and what the first cut missed by
+drawing it at the size of a counter on a card face. It is also what sets the strip's height; everything
+beside it is a smaller number on the same line.
+
 **Expanded floats and never displaces.** §7.4 keeps floating layers for what is transient, and a look
 at a player's emblems is exactly that. It dismisses the way the card preview does, so there is one
 gesture for closing things (§7.1).
@@ -95,6 +105,7 @@ rules.
 ## 8. Acceptance criteria
 
 - [x] Each player's life, library, hand, graveyard, exile and match wins are on the board.
+- [x] Both strips sit together in the top right, in seat order, and cost the battlefield no height.
 - [x] A counter appears only when it is non-zero; poison appears as soon as it is.
 - [x] Poison is marked when it is close to lethal.
 - [x] Monarch and initiative are shown when held.
