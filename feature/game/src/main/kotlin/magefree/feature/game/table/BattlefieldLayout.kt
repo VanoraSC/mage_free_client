@@ -84,6 +84,9 @@ import magefree.designsystem.card.rememberCounterPalette
  *   only being looked at. Lands do not go through it: see [onLandPress].
  * @param hand the viewer's own cards, from [handCards]. Empty for a spectator, and for anyone whose
  *   hand the board is not showing — an empty hand draws nothing rather than an empty strip.
+ * @param vitals each seat, from [tableVitals]. Empty draws nothing — the same rule every region here
+ *   follows.
+ * @param onExpandVitals opens a seat's full list, or `null` for a board that is only being read.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
  * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
@@ -100,6 +103,8 @@ fun BattlefieldLayout(
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)? = null,
     hand: List<TableHandCard> = emptyList(),
     onPlayFromHand: ((String) -> Unit)? = null,
+    vitals: List<TableVitals> = emptyList(),
+    onExpandVitals: ((TableVitals) -> Unit)? = null,
 ) {
     val palette = rememberCounterPalette()
 
@@ -187,6 +192,31 @@ fun BattlefieldLayout(
                 onInspect = onInspect,
                 modifier = Modifier.align(Alignment.BottomEnd).width(mainWidth),
             )
+
+            // **Against the centre line, on the left.** Every other region has already claimed a
+            // corner: lands take the two on the left, the hand takes the bottom right, and the
+            // creatures run down the middle. What is left is the left edge where the two halves meet,
+            // and it happens to be the right place on its own terms — the two seats' numbers read as
+            // one scoreboard when they are adjacent, which is how a player compares them.
+            //
+            // Ordered opponents-then-viewer, so the strips run down the screen the way the seats do.
+            //
+            // Overlaid, like everything else: a strip is one line of text, and reserving a band for it
+            // across the whole width would cost the battlefield far more than the strip occupies.
+            if (vitals.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.align(Alignment.CenterStart).padding(VitalsInset),
+                    verticalArrangement = Arrangement.spacedBy(VitalsGap),
+                ) {
+                    (vitals.filterNot { it.isViewer } + vitals.filter { it.isViewer }).forEach { seat ->
+                        VitalsStrip(
+                            vitals = seat,
+                            palette = palette,
+                            onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -506,3 +536,9 @@ private val RowGap = 3.dp
  * a reservation — and a hand that is not there takes none of it.
  */
 private const val HAND_HEIGHT_SHARE = 0.30f
+
+/** Keeps the vitals off the screen edge, for the same reason the board has a margin at all. */
+private val VitalsInset = 4.dp
+
+/** Between the two seats' strips, so they read as two lines rather than one block. */
+private val VitalsGap = 4.dp

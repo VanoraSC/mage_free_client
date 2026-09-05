@@ -1033,17 +1033,16 @@ the battlefield. Per player:
 - **Life**, with the ±N delta animation (P1 #26).
 - **Library and hand counts.** An empty library is a loss; a hand count is public information.
 - **Graveyard and exile counts**, each opening the zone browser (§7.13).
-- **Player counters** — poison, energy, experience. **Poison is a win condition and we do not show
-  it.** `PlayerView.counters` is a `List<CounterView>` and `:protocol`'s `GamePlayerView` does not
-  have it, so no amount of rendering work reaches it today.
+- **Player counters** — poison, energy, experience. Poison is a win condition, and it now crosses the
+  wire as `GamePlayer.counters` (0088).
 - **Monarch and initiative**, and **designations** (`monarch`, `initiative`, `designationNames`) —
-  also unmapped, also game-deciding.
+  also mapped by 0088, and also game-deciding.
 - **Mana pool**, which §7.7 fills. Already mapped as `GameManaPoolView`.
 - **Match wins** (`wins` / `winsNeeded`), which is what tells the player this is game 2 of 3.
 
-Life, library, hand, graveyard, exile, mana pool and wins are in `:protocol` today. **Player counters,
-monarch, initiative and designations are the gap**, and they are the ones that change the answer to
-"am I about to lose."
+**Everything above is in `:protocol` today.** When this section was written, player counters, monarch,
+initiative, designations and `commandList` were all unmapped, and it said so — that gap was closed by
+0088 and 0089, so what is left here is entirely a rendering job.
 
 #### The vitals overlay
 
@@ -1071,8 +1070,9 @@ Two things follow from putting it here:
   (§7.4), never displaces the battlefield, and closes the way every other floating surface does
   (§7.1).
 
-Its data is EPIC-23's: `counters`, `monarch`, `initiative`, `designationNames` and `commandList` are
-all correct upstream fields the bridge drops today.
+Its data *was* EPIC-23's: `counters`, `monarch`, `initiative`, `designationNames` and `commandList`
+were correct upstream fields the bridge dropped. 0088 and 0089 mapped all five, so the overlay is now
+rendering work with nothing behind it to unblock.
 
 ### 7.16 Getting into and out of a game
 

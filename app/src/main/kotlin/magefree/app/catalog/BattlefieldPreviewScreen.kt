@@ -29,8 +29,11 @@ import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.LandStackHalf
 import magefree.feature.game.table.TableArtResolver
+import magefree.feature.game.table.TableVitals
+import magefree.feature.game.table.VitalsOverlay
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
+import magefree.feature.game.table.tableVitals
 
 /*
  * The battlefield, filling the window.
@@ -71,6 +74,7 @@ fun BattlefieldPreviewScreen(
     var step by remember { mutableIntStateOf(0) }
     var inspected by remember { mutableStateOf<String?>(null) }
     var tappedPlains by remember { mutableIntStateOf(0) }
+    var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
     val board = catalogBoard(step)
 
     // The stacking rule is about a *transition* — a card turning a quarter and travelling into the
@@ -84,6 +88,8 @@ fun BattlefieldPreviewScreen(
                 model = battlefieldModel(state),
                 hand = handCards(state),
                 onPlayFromHand = { id -> inspected = "played $id" },
+                vitals = tableVitals(state),
+                onExpandVitals = { seat -> expandedSeat = seat },
                 artFor = artFor,
                 onInspect = { id -> inspected = id },
                 // The two halves of a stack are two affordances, and the board decides what each
@@ -102,6 +108,10 @@ fun BattlefieldPreviewScreen(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+
+            expandedSeat?.let { seat ->
+                VitalsOverlay(vitals = seat, onDismiss = { expandedSeat = null })
+            }
 
             // The controls float over the board rather than taking a strip beside it, for the same
             // reason §7.4 floats the stack: a band of chrome across the top is board the player
