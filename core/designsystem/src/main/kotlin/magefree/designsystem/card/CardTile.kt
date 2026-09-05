@@ -2,6 +2,7 @@ package magefree.designsystem.card
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,19 @@ import magefree.designsystem.theme.Spacing
  * @param art the card-art slot; when null the built-in [CardArtPlaceholder] is shown.
  * @param onLongPressPeek optional long-press accelerator that peeks at the card.
  * @param peekLabel accessibility label for the long-press action.
+ * @param caption whether to draw the name, cost and type line under the art.
+ *
+ * **On, except where the art already says it.** A deck row or a search result often has no art loaded
+ * and the caption is the whole tile. A hand card is the opposite: the art *is* the card face, with its
+ * name and cost printed on it, so the caption repeats them — and in a hand of twelve it cost a third
+ * of every tile's height to say what the picture said.
+ * @param signal what the game is currently saying about this card, or `null` for none.
+ *
+ * **The signal is drawn the way the Board tier draws it**, in the same colour from the same palette.
+ * A hand card that can be cast and a permanent that can be activated are the same fact — §3.1's
+ * playable-now highlight — and two vocabularies for one fact is one more than a player should have to
+ * learn. It defaults to none, so the deck builder and the card browser, which have no game to signal
+ * about, are unaffected.
  */
 @Composable
 fun CardTile(
@@ -58,6 +72,8 @@ fun CardTile(
     art: CardArtSlot? = null,
     onLongPressPeek: (() -> Unit)? = null,
     peekLabel: String = "Peek at card",
+    caption: Boolean = true,
+    signal: BoardCardSignal? = null,
 ) {
     val summary = card.accessibleSummary
     Surface(
@@ -71,7 +87,13 @@ fun CardTile(
                     onLongPressPeek = onLongPressPeek,
                     tapLabel = "Open card",
                     peekLabel = peekLabel,
-                ),
+                ).let { base ->
+                    if (signal == null) {
+                        base
+                    } else {
+                        base.border(width = SignalBorderWidth, color = signal.color, shape = MageShapes.medium)
+                    }
+                },
         shape = MageShapes.medium,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = Elevation.level1,
@@ -86,6 +108,7 @@ fun CardTile(
             ) {
                 CardArtRegion(card = card, art = art, modifier = Modifier.fillMaxSize())
             }
+            if (!caption) return@Column
             Column(
                 modifier =
                     Modifier
@@ -188,3 +211,6 @@ private fun CardTilePreview() {
         }
     }
 }
+
+/** The same weight the Board tier gives a focal signal, so the two tiers read as one vocabulary. */
+private val SignalBorderWidth = 2.dp

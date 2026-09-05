@@ -100,7 +100,7 @@ class ConnectEntryReachabilityTest {
                     cardsScreen = { Text(CARDS_STAND_IN_LABEL) },
                     // The catalog resolves the Coil-backed art renderer through the DI container, so
                     // it needs a stand-in here for the same reason the other offline screens do.
-                    catalogScreen = { _, _ -> Text(CATALOG_SCREEN_STAND_IN_LABEL) },
+                    catalogScreen = { _, _, _ -> Text(CATALOG_SCREEN_STAND_IN_LABEL) },
                 )
             }
         }

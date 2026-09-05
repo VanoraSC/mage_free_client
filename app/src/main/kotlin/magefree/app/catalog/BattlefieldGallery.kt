@@ -2,6 +2,7 @@ package magefree.app.catalog
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,20 +50,26 @@ import magefree.network.game.PlayableObject
  * technically visible and none of them can be assessed. So this opens the real thing.
  */
 @Composable
-internal fun BattlefieldSection(onOpenPreview: () -> Unit) {
+internal fun BattlefieldSection(
+    onOpenPreview: () -> Unit,
+    onOpenCastMock: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.small)) {
         MageSectionHeader(text = "Battlefield")
         HorizontalDivider()
 
         Text(
             text =
-                "Opens full-window and landscape, because that is the only shape the board is " +
-                    "designed for. Cycles six boards, three of which walk the land-stacking rule " +
-                    "through the moment a Plains is tapped.",
+                "Both open full-window and landscape, because that is the only shape the board is " +
+                    "designed for. The battlefield cycles boards to judge the layout by looking; the " +
+                    "cast mock is judged by doing — read a card, play or cast it, drag one out of hand.",
             style = MaterialTheme.typography.labelMedium,
         )
 
-        MageSecondaryButton(text = "Open the battlefield", onClick = onOpenPreview)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
+            MageSecondaryButton(text = "Open the battlefield", onClick = onOpenPreview)
+            MageSecondaryButton(text = "Cast and inspect", onClick = onOpenCastMock)
+        }
     }
 }
 
@@ -218,10 +225,27 @@ private val Developed =
         gameId = "catalog",
         viewerPlayerId = "me",
         combat = listOf(CombatGroup(defenderId = "them", attackerIds = listOf("bears"), blockerIds = listOf("wurm"))),
+        // A hand of five with two castable. The contrast is the point of the playable highlight: a
+        // hand where everything or nothing is lit shows nothing. The untapped Forests pay for the
+        // Elves and the Hawk; the Dragon and the Djinn are out of reach.
+        hand =
+            listOf(
+                card("hand-elves", "Llanowar Elves", listOf(CardType.Creature), isCreature = true, manaCost = "{G}"),
+                card("hand-hawk", "Suntail Hawk", listOf(CardType.Creature), isCreature = true, manaCost = "{W}"),
+                card("hand-dragon", "Shivan Dragon", listOf(CardType.Creature), isCreature = true, manaCost = "{4}{R}{R}"),
+                card("hand-djinn", "Mahamoti Djinn", listOf(CardType.Creature), isCreature = true, manaCost = "{4}{U}{U}"),
+                card("hand-pacifism", "Pacifism", listOf(CardType.Enchantment), manaCost = "{1}{W}"),
+            ),
         // Every untapped land is playable, which is what a real snapshot says: the server offers all
         // of them at once. Marking only one splits the Forests into two stacks for a reason no game
         // produces, which is a fixture bug that reads as a layout bug.
-        playable = listOf(PlayableObject(objectId = "f4"), PlayableObject(objectId = "f5")),
+        playable =
+            listOf(
+                PlayableObject(objectId = "f4"),
+                PlayableObject(objectId = "f5"),
+                PlayableObject(objectId = "hand-elves"),
+                PlayableObject(objectId = "hand-hawk"),
+            ),
         players =
             listOf(
                 GamePlayer(
@@ -329,6 +353,36 @@ private val Crowded =
             ),
     )
 
+/**
+ * A hand too wide to lay out flat, which is the only way to see the rule the hand is built around.
+ *
+ * Twelve cards at a comfortable tile size do not fit across a phone in landscape. §7.4 forbids the two
+ * obvious answers — scrolling them and hiding them behind a peek edge — so they overlap, and the thing
+ * to check is that the twelfth is on screen and the first still shows enough of itself to be told
+ * apart. Half of them are castable, so the highlight is visible against cards that are not.
+ */
+private val FullHand =
+    GameState(
+        gameId = "catalog",
+        viewerPlayerId = "me",
+        hand =
+            (1..12).map { index ->
+                val name = if (index % 2 == 0) "Llanowar Elves" else "Shivan Dragon"
+                card("draw$index", name, listOf(CardType.Creature), isCreature = true, manaCost = "{G}")
+            },
+        playable = (1..12).filter { it % 2 == 0 }.map { PlayableObject(objectId = "draw$it") },
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "me",
+                    name = "You",
+                    isViewer = true,
+                    battlefield = (1..4).map { index -> land("f$index", "Forest", tapped = index > 2) },
+                ),
+                GamePlayer(playerId = "them", name = "Opponent", battlefield = listOf(land("i1", "Island"))),
+            ),
+    )
+
 /** The worked example the stacking rule was specified against. */
 private const val PLAINS_COUNT = 4
 
@@ -338,6 +392,7 @@ internal val Boards =
         CatalogBoard(label = "Four Plains — tap them", state = plainsBoard(tapped = 0), tappable = true),
         CatalogBoard(label = "Developed — an Aura across the board, two land stacks", state = Developed),
         CatalogBoard(label = "Crowded — nine creatures shrink; twelve lands do not", state = Crowded),
+        CatalogBoard(label = "A hand of twelve — overlapping, none of it off screen", state = FullHand),
     )
 
 /** The Plains board at a given number tapped, for the one board that is played rather than posed. */
@@ -348,3 +403,74 @@ internal const val CATALOG_PLAINS = PLAINS_COUNT
 
 /** The board at [step], wrapping so the preview's one button can cycle forever. */
 internal fun catalogBoard(step: Int): CatalogBoard = Boards[step.mod(Boards.size)]
+
+/**
+ * The board the cast mock uses: a real hand with a mixture the player has to choose between.
+ *
+ * Two lands and three spells, three of them castable — a Forest to play, an Elves and a Hawk to cast,
+ * and a Dragon and a Djinn out of reach. That mixture is what makes the mock worth pressing: the
+ * button says *Play* on one and *Cast* on another, and two cards offer nothing at all.
+ */
+internal fun castMockBoard(): GameState =
+    GameState(
+        gameId = "cast-mock",
+        viewerPlayerId = "me",
+        hand =
+            listOf(
+                card("mock-forest", "Forest", listOf(CardType.Land)),
+                card(
+                    "mock-elves",
+                    "Llanowar Elves",
+                    listOf(CardType.Creature),
+                    isCreature = true,
+                    power = "1",
+                    toughness = "1",
+                    manaCost = "{G}",
+                ),
+                card(
+                    "mock-hawk",
+                    "Suntail Hawk",
+                    listOf(CardType.Creature),
+                    isCreature = true,
+                    power = "1",
+                    toughness = "1",
+                    manaCost = "{W}",
+                ),
+                card(
+                    "mock-dragon",
+                    "Shivan Dragon",
+                    listOf(CardType.Creature),
+                    isCreature = true,
+                    power = "5",
+                    toughness = "5",
+                    manaCost = "{4}{R}{R}",
+                ),
+                card("mock-pacifism", "Pacifism", listOf(CardType.Enchantment), manaCost = "{1}{W}"),
+            ),
+        playable =
+            listOf(
+                PlayableObject(objectId = "mock-forest"),
+                PlayableObject(objectId = "mock-elves"),
+                PlayableObject(objectId = "mock-hawk"),
+            ),
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "me",
+                    name = "You",
+                    isViewer = true,
+                    battlefield =
+                        listOf(
+                            creature("mock-bears", "Grizzly Bears", "2", "2", "{1}{G}"),
+                            land("mock-f1", "Forest"),
+                            land("mock-f2", "Forest"),
+                            land("mock-p1", "Plains", tapped = true),
+                        ),
+                ),
+                GamePlayer(
+                    playerId = "them",
+                    name = "Opponent",
+                    battlefield = listOf(creature("mock-wurm", "Craw Wurm", "6", "4", "{4}{G}{G}"), land("mock-i1", "Island")),
+                ),
+            ),
+    )
