@@ -108,7 +108,9 @@ fun CastMockScreen(
                             },
                         ),
                     onDismiss = { inspecting = null },
-                    art = artFor?.invoke(card.art, card.card),
+                    // Full resolution, not the hand's downsampled image: this is the Full tier, and
+                    // the card is three quarters of the screen tall with printed text on it.
+                    art = artFor?.invoke(card.fullArt, card.card),
                 )
             }
 

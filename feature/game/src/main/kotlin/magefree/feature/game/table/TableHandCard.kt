@@ -52,6 +52,20 @@ data class TableHandCard(
      * what every Magic player and every rules document does.
      */
     val actionLabel: String get() = if (isLand) PLAY_LABEL else CAST_LABEL
+
+    /**
+     * The same printing at full resolution, for a card being *read* rather than glanced at.
+     *
+     * §7.5: *"Only Full loads full-resolution art, which matters for memory and for the first-turn
+     * experience."* A hand tile is a hundred-odd dp wide and a downsampled image is indistinguishable
+     * there; an inspected card fills three quarters of the screen, and at that size the small image is
+     * visibly soft exactly where a player is trying to read printed text.
+     *
+     * A separate request rather than raising the size everywhere, because the two are cached
+     * separately and a board that loaded full-resolution art for every permanent would spend the
+     * memory and the first-turn bandwidth on cards nobody is looking at.
+     */
+    val fullArt: CardArtRequest? get() = art?.copy(size = CardArtSize.LARGE)
 }
 
 /** Lands are *played*, not cast — they never use the stack. */

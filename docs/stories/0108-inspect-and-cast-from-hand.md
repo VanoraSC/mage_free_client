@@ -28,6 +28,7 @@ the picture said.
 | Shown | Source | Note |
 |---|---|---|
 | Name, mana cost, type line | `GameCard` | Cost is drawn with the shipped symbols (0103). |
+| Card image | the same printing at `CardArtSize.LARGE` | Full resolution, which §7.5 gives the Full tier and nothing else. |
 | Power / toughness | `GameCard.power` / `.toughness` | Current values after effects, not the printing's. |
 | Abilities | `GameCard.rules` | **Game-aware**: a creature granted flying until end of turn has it here. |
 | Oracle text | `cards.sqlite` — the bundled Scryfall data | The **printed** text, which is a different thing. A local lookup, no network. |
@@ -68,6 +69,14 @@ it draws the Board tier, sizes itself against the whole attachment assembly, and
 badges. This inspects a *card*, at the Full tier §7.5 reserves for inspection, where the point is to
 read the card face itself. They share a silhouette and almost nothing else, and folding them together
 would mean one component with two disjoint halves.
+
+**The inspected card loads full-resolution art; the hand does not.** §7.5: *"Only Full loads
+full-resolution art, which matters for memory and for the first-turn experience."* A hand tile is a
+hundred-odd dp wide and the downsampled image is indistinguishable there; an inspected card fills three
+quarters of the screen, and at that size the small image is visibly soft exactly where a player is
+trying to read printed text. Two requests rather than one raised size, because they cache separately
+and a board that loaded full-resolution art for every permanent would spend the memory and the
+first-turn bandwidth on cards nobody is looking at.
 
 **The card is sized by height, and the width follows.** A card has one shape; giving it a width and
 letting the height fall out is how a preview ends up either cropped or stretched. So the height is the
@@ -128,6 +137,7 @@ per printing.
 - [x] Hand tiles show the card and nothing else.
 - [x] Tap or long press on a hand card opens a preview; a press elsewhere closes it.
 - [x] The card fills its share of the height and keeps its proportions.
+- [x] The inspected card loads full-resolution art; the hand keeps the downsampled image.
 - [x] The details column shows name, cost in symbols, abilities, power/toughness for a creature, and
       oracle text, scrolling when it must.
 - [x] A playable card offers Play (land) or Cast (spell); an unplayable one offers neither.

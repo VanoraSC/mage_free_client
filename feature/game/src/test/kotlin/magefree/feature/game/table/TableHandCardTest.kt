@@ -1,5 +1,6 @@
 package magefree.feature.game.table
 
+import magefree.cards.art.CardArtSize
 import magefree.designsystem.card.BoardCardSignal
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -152,3 +153,43 @@ private fun land(id: String) = GameCard(id = id, name = "Forest", cardTypes = li
 
 private fun spell(id: String) =
     GameCard(id = id, name = "Grizzly Bears", manaCost = "{1}{G}", cardTypes = listOf(CardType.Creature), isCreature = true)
+
+/**
+ * Which image a card asks for, and why it is not always the same one.
+ *
+ * §7.5 gives full-resolution art to the Full tier and nothing else, for memory and for the first turn
+ * after an install. The failure this guards is quiet in both directions: request the small image for an
+ * inspected card and the printed text is soft exactly where somebody is reading it; request the large
+ * one for every hand tile and the board spends the bandwidth on cards nobody has looked at.
+ */
+class HandCardArtSizeTest {
+    @Test
+    fun `a hand tile asks for the downsampled image and an inspected card for the full one`() {
+        val state = stateWith(hand = listOf(GameCard(id = "a", name = "Forest", setCode = "10E", collectorNumber = "380")))
+
+        val card = handCards(state).single()
+
+        assertEquals(CardArtSize.SMALL, card.art?.size)
+        assertEquals(CardArtSize.LARGE, card.fullArt?.size)
+    }
+
+    @Test
+    fun `both name the same printing, because it is the same card`() {
+        val state = stateWith(hand = listOf(GameCard(id = "a", name = "Forest", setCode = "10E", collectorNumber = "380")))
+
+        val card = handCards(state).single()
+
+        assertEquals(card.art?.setCode, card.fullArt?.setCode)
+        assertEquals(card.art?.collectorNumber, card.fullArt?.collectorNumber)
+    }
+
+    @Test
+    fun `a card the server named no printing for asks for nothing at either size`() {
+        val state = stateWith(hand = listOf(GameCard(id = "t", name = "Saproling")))
+
+        val card = handCards(state).single()
+
+        assertNull(card.art)
+        assertNull(card.fullArt)
+    }
+}
