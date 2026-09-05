@@ -346,6 +346,36 @@ private val Crowded =
             ),
     )
 
+/**
+ * A hand too wide to lay out flat, which is the only way to see the rule the hand is built around.
+ *
+ * Twelve cards at a comfortable tile size do not fit across a phone in landscape. §7.4 forbids the two
+ * obvious answers — scrolling them and hiding them behind a peek edge — so they overlap, and the thing
+ * to check is that the twelfth is on screen and the first still shows enough of itself to be told
+ * apart. Half of them are castable, so the highlight is visible against cards that are not.
+ */
+private val FullHand =
+    GameState(
+        gameId = "catalog",
+        viewerPlayerId = "me",
+        hand =
+            (1..12).map { index ->
+                val name = if (index % 2 == 0) "Llanowar Elves" else "Shivan Dragon"
+                card("draw$index", name, listOf(CardType.Creature), isCreature = true, manaCost = "{G}")
+            },
+        playable = (1..12).filter { it % 2 == 0 }.map { PlayableObject(objectId = "draw$it") },
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "me",
+                    name = "You",
+                    isViewer = true,
+                    battlefield = (1..4).map { index -> land("f$index", "Forest", tapped = index > 2) },
+                ),
+                GamePlayer(playerId = "them", name = "Opponent", battlefield = listOf(land("i1", "Island"))),
+            ),
+    )
+
 /** The worked example the stacking rule was specified against. */
 private const val PLAINS_COUNT = 4
 
@@ -355,6 +385,7 @@ internal val Boards =
         CatalogBoard(label = "Four Plains — tap them", state = plainsBoard(tapped = 0), tappable = true),
         CatalogBoard(label = "Developed — an Aura across the board, two land stacks", state = Developed),
         CatalogBoard(label = "Crowded — nine creatures shrink; twelve lands do not", state = Crowded),
+        CatalogBoard(label = "A hand of twelve — overlapping, none of it off screen", state = FullHand),
     )
 
 /** The Plains board at a given number tapped, for the one board that is played rather than posed. */
