@@ -26,6 +26,7 @@ import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
 import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
+import magefree.designsystem.card.CARD_ASPECT_RATIO
 import magefree.designsystem.card.CounterPalette
 
 /*
@@ -284,7 +285,15 @@ private class LandStackGeometry(
 ) {
     val cardHeight: Dp = cardWidth / BOARD_CARD_ASPECT_RATIO
     private val stepX: Dp = cardWidth * STACK_STEP_X_FRACTION
-    private val stepY: Dp = cardHeight * STACK_STEP_Y_FRACTION
+
+    /**
+     * The downward step, measured against a **whole** card rather than the slice this tier draws.
+     *
+     * What the step exposes is the card behind's name and cost, and those are a fixed part of a card
+     * face. Deriving the step from the cropped height instead would shrink the exposed strip every
+     * time the crop got tighter, which is not a relationship either of them has to the other.
+     */
+    private val stepY: Dp = cardWidth / CARD_ASPECT_RATIO * STACK_STEP_Y_FRACTION
 
     /**
      * How far the turned card's own centre sits below the upright one it lies across.
@@ -296,18 +305,27 @@ private class LandStackGeometry(
     private val turnedDrop: Dp = cardWidth / 2
 
     /**
-     * A turned card is wider than an upright one, so it hangs off both sides of the diagonal. The
-     * whole stack shifts right by that overhang, which keeps every slot at a non-negative offset.
+     * How far the whole stack shifts right to keep every slot at a non-negative offset.
+     *
+     * **Only when a turned card is the wider one.** A turned card is as wide as an upright one is
+     * tall, so on a whole card it hangs off both sides of the diagonal and the stack has to move out
+     * of its own way; on this tier's card — cut below its art box, and so wider than it is tall — it
+     * is *narrower* than the card it lies across and hangs off nothing. Written as a maximum rather
+     * than as a subtraction because that is the difference between the two cases, and the crop already
+     * inverted this arithmetic once.
      */
-    private val turnedOverhang: Dp = (cardHeight - cardWidth) / 2
+    private val turnedOverhang: Dp = maxOf(0.dp, (cardHeight - cardWidth) / 2)
 
     /**
      * **The footprint never changes when a land taps.** It always allows for the turned half, whether
-     * or not anything is in it. A stack that grew as its first land tapped would resize the corner,
+     * or not anything is in it. A stack that grew as its first land tapped would resize the column,
      * which resizes every card on the board — and §7.3 is clear that movement means a game action
      * happened. One land turning must not make the opponent's creatures jump.
+     *
+     * The width is the furthest right edge on the diagonal: an upright card's own, or a turned card's
+     * centred on the same point, whichever reaches further.
      */
-    val totalWidth: Dp = cardHeight + stepX * (PILE_FAN_LIMIT - 1)
+    val totalWidth: Dp = turnedOverhang + stepX * (PILE_FAN_LIMIT - 1) + maxOf(cardWidth, (cardWidth + cardHeight) / 2)
     val totalHeight: Dp = cardHeight / 2 + turnedDrop + cardWidth / 2 + stepY * (PILE_FAN_LIMIT - 1)
 
     /** Slot 0 is furthest back — up and left; slot 2 is the top card, lowest and furthest right. */
@@ -389,7 +407,11 @@ private val CountPadding = 2.dp
  * the kind of duplication that drifts. It is a card *height* across, not a width, because a turned copy
  * lies on its side and hangs off both edges of the diagonal.
  */
-internal fun stackWidthInCards(): Float = 1f / BOARD_CARD_ASPECT_RATIO + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1)
+internal fun stackWidthInCards(): Float {
+    val height = 1f / BOARD_CARD_ASPECT_RATIO
+    val overhang = maxOf(0f, (height - 1f) / 2f)
+    return overhang + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1) + maxOf(1f, (1f + height) / 2f)
+}
 
 /**
  * How tall a stack is, in card widths — again the same whatever is in it.
@@ -397,7 +419,7 @@ internal fun stackWidthInCards(): Float = 1f / BOARD_CARD_ASPECT_RATIO + STACK_S
  * Half an upright card down to the waist, then the turned card laid across it, then the diagonal.
  */
 internal fun stackHeightInCards(): Float {
-    val diagonal = 1f / BOARD_CARD_ASPECT_RATIO * STACK_STEP_Y_FRACTION * (PILE_FAN_LIMIT - 1)
+    val diagonal = STACK_STEP_Y_FRACTION / CARD_ASPECT_RATIO * (PILE_FAN_LIMIT - 1)
     return 1f / BOARD_CARD_ASPECT_RATIO / 2f + 0.5f + 0.5f + diagonal
 }
 

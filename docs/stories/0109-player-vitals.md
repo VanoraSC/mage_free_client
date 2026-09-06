@@ -71,6 +71,10 @@ read against each other — my life against theirs — so they belong adjacent, 
 learns once, rather than each floating near its own half. The corner is genuinely free, because each
 side packs its rows toward the centre line and leaves the far top of the opponent's half empty.
 
+> **Superseded by 0110.** The strips moved to the screen's top and bottom edges during this story's
+> own review, and then into the status rail 0110 introduced — which is where a seat's zones now are,
+> and a player's numbers belong with that player's zones. Everything else in this section stands.
+
 **Life is drawn at the design system's own `vitals` size** — *"a life total, the largest thing on the
 board that is not a card"* — which is what that token was defined for and what the first cut missed by
 drawing it at the size of a counter on a card face. It is also what sets the strip's height; everything

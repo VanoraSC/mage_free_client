@@ -32,10 +32,11 @@ import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.TableArtResolver
-import magefree.feature.game.table.TableHandCard
+import magefree.feature.game.table.TableCard
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
-import magefree.feature.game.table.handPreviewState
+import magefree.feature.game.table.tableCardPreview
+import magefree.feature.game.table.tableGraveyards
 import magefree.feature.game.table.tableVitals
 
 /*
@@ -75,7 +76,7 @@ fun CastMockScreen(
 
     val state = remember { castMockBoard() }
     val hand = remember(state) { handCards(state) }
-    var inspecting by remember { mutableStateOf<TableHandCard?>(null) }
+    var inspecting by remember { mutableStateOf<TableCard?>(null) }
     var oracle by remember { mutableStateOf<String?>(null) }
     var reported by remember { mutableStateOf<String?>(null) }
 
@@ -98,6 +99,9 @@ fun CastMockScreen(
                 onPlayFromHand = { id -> inspecting = hand.firstOrNull { it.id == id } },
                 onInspect = { id -> inspecting = hand.firstOrNull { it.id == id } ?: inspecting },
                 vitals = tableVitals(state),
+                // The rail is part of the board, so the mock draws it: an interaction judged against a
+                // board that is missing a column is judged against the wrong amount of room.
+                graveyards = tableGraveyards(state),
                 phases = PhaseBarState(steps = standardTurnSteps(), currentStepId = StepIds.PRECOMBAT_MAIN),
                 modifier = Modifier.fillMaxSize(),
             )
@@ -105,7 +109,7 @@ fun CastMockScreen(
             inspecting?.let { card ->
                 CardPreview(
                     state =
-                        handPreviewState(
+                        tableCardPreview(
                             card = card,
                             oracleText = oracle,
                             onAct = { id ->

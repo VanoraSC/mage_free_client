@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -33,28 +33,33 @@ import magefree.designsystem.component.phase.PhaseBarState
 import magefree.designsystem.component.phase.PhaseBarStep
 
 /*
- * The battlefield, arranged as §7.4 describes it.
+ * The board, in three columns.
  *
  * ```
- *    ┌──────────────┬───────────────────────────────────┐
- *    │              │  [ other permanents ]             │  back
- *    │  [ lands ]   │  [ creatures ]                    │  front
- *    ├─ opponent ───┼───────────────────────────────────┤
- *    │  [ lands ]   │  [ creatures ]                    │  front
- *    │              │  [ other permanents ]             │  back
- *    └─ you ────────┴───────────────────────────────────┘
+ *  ┌────────┬─────────────┬────────────────────────────┐
+ *  │  opp   │             │   [ other permanents ]     │  back
+ *  │ vitals │  opponent   │   [ creatures ]            │  front
+ *  │  opp   │   lands     ├────────────────────────────┤
+ *  │ grave  ├─────────────┤   [ creatures ]            │  front
+ *  │  ---   │   your      │   [ other permanents ]     │  back
+ *  │ your   │   lands     ├────────────────────────────┤
+ *  │ grave  │             │   phase bar                │
+ *  │ vitals │             │   hand                     │
+ *  └────────┴─────────────┴────────────────────────────┘
  * ```
+ *
+ * **Three columns, because the three things have different jobs.** The status rail is read
+ * occasionally and must never move. The lands are a fixed, bounded cost that grows all game. The
+ * battlefield is what actually changes. The arrangement this replaced gave each *player* half the
+ * screen and put their lands in a corner of it, which meant lands and creatures competed for the same
+ * width — so a fourth kind of land pushed the creatures around for reasons that had nothing to do with
+ * the game. A column of their own is what stops that: the lands can fill it and the battlefield never
+ * notices.
  *
  * **Front means nearest the middle.** Creatures are what a player looks at — they attack, block and
  * change state constantly — so each side puts its creatures against the centre line, where the two
- * sides meet and where combat happens. Non-creature permanents sit behind them, further out.
- *
- * **Lands get a corner, not a row.** They are the most numerous permanents and the least individually
- * interesting, and §7.4 wants the space they take minimised. A zone in the outer corner does that in a
- * way a shared row cannot: it is bounded, so lands can never push the creatures off the board however
- * many of them there are, and it wraps within itself, so they grow *down* into their own quadrant
- * instead of *across* everyone else's. The two zones mirror across the centre line — the opponent's in
- * the top corner, the viewer's in the bottom.
+ * sides meet and where combat happens. Non-creature permanents sit on their own horizontal behind
+ * them, toward the outside, where they are out of the way of the row that changes every combat.
  *
  * **Mirrored, not rotated.** Each side's rows run in the opposite vertical order so the creatures
  * face each other. The cards themselves are drawn the right way up: a player reads an opponent's board
@@ -63,9 +68,8 @@ import magefree.designsystem.component.phase.PhaseBarStep
  *
  * Rules that are easy to lose, and are therefore stated as code rather than intent:
  *
- * - **No empty region holds height.** A side with no lands has no land zone, not an empty one. Today's
- *   board reserves a fixed `StatusRailHeight` and `StackStripHeight` whether or not anything is in
- *   them, and an empty-but-present region is invisible in a screenshot of a full board.
+ * - **No empty region holds height** — on the battlefield. A side with no lands has no land zone, not
+ *   an empty one. The status rail is the deliberate exception, and says so itself.
  * - **No chrome.** No borders, banners, headers or rules between the regions. A region is identified
  *   by its position and its shade of grey.
  * - **A card has a size, and a quiet board does not make it bigger.** Every constraint can only take
@@ -75,7 +79,7 @@ import magefree.designsystem.component.phase.PhaseBarStep
  */
 
 /**
- * Both battlefields, arranged.
+ * The whole board.
  *
  * @param model the two sides, from [battlefieldModel].
  * @param modifier the [Modifier] for the board.
@@ -87,9 +91,10 @@ import magefree.designsystem.component.phase.PhaseBarStep
  *   only being looked at. Lands do not go through it: see [onLandPress].
  * @param hand the viewer's own cards, from [handCards]. Empty for a spectator, and for anyone whose
  *   hand the board is not showing — an empty hand draws nothing rather than an empty strip.
- * @param vitals each seat, from [tableVitals]. Empty draws nothing — the same rule every region here
- *   follows.
+ * @param vitals each seat, from [tableVitals]. Empty draws nothing.
  * @param onExpandVitals opens a seat's full list, or `null` for a board that is only being read.
+ * @param graveyards each seat's graveyard, from [tableGraveyards].
+ * @param onOpenGraveyard called with a seat's id when its graveyard is pressed.
  * @param phases the turn and where in it the game is. Null draws no bar — the same rule as everywhere
  *   else here, and the state a board has before a game starts.
  * @param onToggleStop invoked when a stoppable step is pressed.
@@ -107,10 +112,12 @@ fun BattlefieldLayout(
     artFor: TableArtResolver? = null,
     onInspect: ((String) -> Unit)? = null,
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)? = null,
-    hand: List<TableHandCard> = emptyList(),
+    hand: List<TableCard> = emptyList(),
     onPlayFromHand: ((String) -> Unit)? = null,
     vitals: List<TableVitals> = emptyList(),
     onExpandVitals: ((TableVitals) -> Unit)? = null,
+    graveyards: List<TableGraveyard> = emptyList(),
+    onOpenGraveyard: ((String) -> Unit)? = null,
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
 ) {
@@ -127,232 +134,217 @@ fun BattlefieldLayout(
         val boardWidth = maxWidth - BoardMargin * 2
         val boardHeight = maxHeight - BoardMargin * 2
 
-        // **Every region gets the whole screen, and they overlay where they must.** The first cut cut
-        // the board into horizontal bands — opponent, viewer, hand — which meant the hand's band was
-        // held open across the *full width* even though the hand only ever occupies the middle of it.
-        // The visible result was a land corner floating well above the bottom of the screen with a
-        // rectangle of nothing under it. Bands are simple and they waste the screen, and the screen is
-        // what the player reads the game from.
-        //
-        // So the sides are anchored — opponents to the top, the viewer to the bottom — and each gets
-        // half the board rather than a share of what is left. The hand is placed into the space the
-        // viewer's own rows leave empty, beside the land corner rather than over it.
+        // The bottom of the screen is the hand with the phase bar resting on it. Both belong to the
+        // viewer and both are read between decisions, so they sit together and the board's own rows
+        // stop above them rather than being overlaid by them.
         val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
-        val sideHeight = boardHeight / sides.size.coerceAtLeast(1)
+        val bottomStack = bottomStackHeight(hand, handTile, phases != null)
+        val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
+        val sideHeight = contentHeight / sides.size.coerceAtLeast(1)
 
-        // **The land corner takes what it needs, up to a ceiling.** A share carved off the top would
-        // hold width open on a board with two lands and run out on one with six kinds of them — and
-        // running out is what puts a Swamp on its own line below the Islands, which is the bug this
-        // replaced. So the corner asks for one row of stacks and is capped, never reserved.
-        val landWidth = landCardWidth(sides, boardWidth * LAND_ZONE_CEILING, sideHeight)
-        val landZoneWidth = minOf(landZoneWidth(sides, landWidth), boardWidth * LAND_ZONE_CEILING)
-        val mainWidth = boardWidth - landZoneWidth - if (landZoneWidth > 0.dp) ZoneGap else 0.dp
+        // The rail is a column of cards, so it is a card wide — capped, because on a small screen a
+        // preferred-size card is a bigger share of the width than the rail is worth.
+        val hasRail = graveyards.isNotEmpty() || vitals.isNotEmpty()
+        val railWidth = if (hasRail) minOf(PreferredCardWidth, boardWidth * RAIL_CEILING) else 0.dp
+        val afterRail = boardWidth - railWidth - if (hasRail) ZoneGap else 0.dp
+
+        // **The land column takes what it needs, up to a ceiling.** A share carved off would hold width
+        // open on a board with two lands and run out on one with six kinds of them — and running out is
+        // what puts a Swamp on its own line below the Islands. So it asks for one row of stacks per
+        // side and is capped, never reserved.
+        val landWidth = landCardWidth(sides, afterRail * LAND_ZONE_CEILING, sideHeight)
+        val landZoneWidth = minOf(landZoneWidth(sides, landWidth), afterRail * LAND_ZONE_CEILING)
+        val mainWidth = afterRail - landZoneWidth - if (landZoneWidth > 0.dp) ZoneGap else 0.dp
 
         // One size for everything that is not a land, shared across both sides: a creature on the far
         // side is the same size as one on this side, because the game does not say one is nearer.
         val cardWidth = mainCardWidth(sides, mainWidth, sideHeight)
 
-        Box(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
-            // Opponents against the top edge, sharing it between them.
-            Column(modifier = Modifier.align(Alignment.TopStart).fillMaxWidth()) {
-                model.opponents.forEach { side ->
-                    SideLayout(
-                        side = side,
-                        order = OpponentOrder,
-                        landWidth = landWidth,
-                        cardWidth = cardWidth,
-                        landZoneWidth = landZoneWidth,
-                        palette = palette,
-                        artFor = artFor,
-                        onInspect = onInspect,
-                        onLandPress = onLandPress,
-                        modifier = Modifier.height(sideHeight),
-                    )
-                }
-            }
-
-            // The viewer against the bottom edge, so their land corner is in the actual corner of the
-            // screen rather than wherever a band happened to end.
-            model.viewer?.let { side ->
-                SideLayout(
-                    side = side,
-                    order = ViewerOrder,
-                    landWidth = landWidth,
-                    cardWidth = cardWidth,
-                    landZoneWidth = landZoneWidth,
+        Row(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
+            if (hasRail) {
+                StatusRail(
+                    graveyards = graveyards,
+                    vitals = vitals,
+                    cardWidth = railWidth,
                     palette = palette,
                     artFor = artFor,
+                    onOpenGraveyard = onOpenGraveyard,
+                    onExpandVitals = onExpandVitals,
+                    modifier = Modifier.width(railWidth).fillMaxHeight(),
+                )
+                Spacer(modifier = Modifier.width(ZoneGap))
+            }
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                // The two board columns share what is left above the hand. `weight` rather than the
+                // measured `contentHeight`, so the arithmetic that sized the cards can be an estimate
+                // without the layout inheriting its error.
+                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    if (landZoneWidth > 0.dp) {
+                        LandColumn(
+                            sides = sides,
+                            width = landWidth,
+                            palette = palette,
+                            artFor = artFor,
+                            onLandPress = onLandPress,
+                            modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
+                        )
+                        Spacer(modifier = Modifier.width(ZoneGap))
+                    }
+
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        model.opponents.forEach { side ->
+                            SideRows(
+                                side = side,
+                                order = OpponentOrder,
+                                cardWidth = cardWidth,
+                                palette = palette,
+                                artFor = artFor,
+                                onInspect = onInspect,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                            )
+                        }
+                        model.viewer?.let { side ->
+                            SideRows(
+                                side = side,
+                                order = ViewerOrder,
+                                cardWidth = cardWidth,
+                                palette = palette,
+                                artFor = artFor,
+                                onInspect = onInspect,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                            )
+                        }
+                    }
+                }
+
+                phases?.let { bar ->
+                    PhaseBar(
+                        state = bar,
+                        onToggleStop = { step -> onToggleStop?.invoke(step) },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = PhaseBarGap),
+                    )
+                }
+
+                // The hand hangs off the bottom edge: only the top of a card is read, and the quarter
+                // that falls off screen is the quarter that carries nothing a player in a hurry needs.
+                HandRegion(
+                    cards = hand,
+                    tileWidth = handTile,
+                    artFor = artFor,
+                    onPlay = onPlayFromHand,
                     onInspect = onInspect,
-                    onLandPress = onLandPress,
-                    modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().height(sideHeight),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-
-            // The hand goes in the space the viewer's own rows leave: they pack toward the centre
-            // line, so the bottom of that half is empty. It is placed *beside* the land corner rather
-            // than over it — a hand covering the lands would put the cards you tap for mana under the
-            // cards you tap to spend it.
-            HandRegion(
-                cards = hand,
-                tileWidth = handTile,
-                artFor = artFor,
-                onPlay = onPlayFromHand,
-                onInspect = onInspect,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .width(mainWidth),
-            )
-
-            // The phase bar sits directly on the hand — the two things a player looks at between
-            // decisions, in one place at the bottom of the screen.
-            phases?.let { bar ->
-                PhaseBar(
-                    state = bar,
-                    onToggleStop = { step -> onToggleStop?.invoke(step) },
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = BoardMargin)
-                            .padding(bottom = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile) + PhaseBarGap),
-                )
-            }
-
-            // **A bar at each edge, centred.** Which seat a bar belongs to is said by where it is:
-            // the opponent's along the top, the viewer's along the bottom, the same way the two halves
-            // of the board are arranged. That is what lets the bars drop their name labels.
-            Column(
-                modifier = Modifier.align(Alignment.TopCenter).padding(VitalsInset),
-                verticalArrangement = Arrangement.spacedBy(VitalsGap),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                vitals.filterNot { it.isViewer }.forEach { seat ->
-                    VitalsStrip(
-                        vitals = seat,
-                        palette = palette,
-                        onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
-                    )
-                }
-            }
-
-            // The bottom of the screen is a stack, read upward: the hand hanging over the edge, the
-            // phase bar resting on it, and the viewer's own vitals above that. Each sits clear of the
-            // one below rather than over it — these are the three things a player looks at between
-            // decisions, and any of them covering another would hide something being used.
-            vitals.firstOrNull { it.isViewer }?.let { seat ->
-                VitalsStrip(
-                    vitals = seat,
-                    palette = palette,
-                    onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(VitalsInset)
-                            .padding(bottom = bottomStackHeight(hand, handTile, phases != null)),
-                )
-            }
-        }
-    }
-}
-
-/** One player's half: the land corner, and everything else beside it. */
-@Composable
-private fun SideLayout(
-    side: BattlefieldSide,
-    order: List<BattlefieldRow>,
-    landWidth: Dp,
-    cardWidth: Dp,
-    landZoneWidth: Dp,
-    palette: CounterPalette,
-    artFor: TableArtResolver?,
-    onInspect: ((String) -> Unit)?,
-    onLandPress: ((TableLandStack, LandStackHalf) -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    // The viewer's front row comes first, so packing to the top puts it against the middle; the
-    // opponent's comes last, so theirs packs to the bottom. One rule, mirrored — and the land zone
-    // packs the opposite way, into the outer corner, for the same reason.
-    val isViewer = order === ViewerOrder
-    val towardCentre = if (isViewer) Alignment.Top else Alignment.Bottom
-    val towardCorner = if (isViewer) Alignment.BottomStart else Alignment.TopStart
-
-    Box(modifier = modifier.fillMaxWidth().testTag(BattlefieldTestTags.side(side.playerId))) {
-        // **The rows span the whole width, so their contents centre on the screen.** Sitting beside
-        // the land corner in a row, they were centred in what was *left* of the width, which put the
-        // creatures visibly off to the right. The land corner overlays them instead — it is bounded
-        // and in a corner, and the rows are centred, so the two only meet on a board wide enough that
-        // something had to give anyway.
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(RowGap, towardCentre),
-        ) {
-            order.forEach { row ->
-                val content = side.inRole(row.role)
-                if (content.isNotEmpty()) {
-                    PermanentRow(
-                        permanents = content,
-                        tag = BattlefieldTestTags.row(side.playerId, row.name),
-                        width = cardWidth,
-                        palette = palette,
-                        artFor = artFor,
-                        onInspect = onInspect,
-                    )
-                }
-            }
-        }
-
-        val lands = side.landStacks()
-        // The rule, in the one place it can be broken: a side with no lands emits no zone, so the
-        // corner costs nothing rather than holding an empty box.
-        if (lands.isNotEmpty()) {
-            LandZone(
-                lands = lands,
-                tag = BattlefieldTestTags.row(side.playerId, BattlefieldTestTags.LAND_ZONE),
-                width = landWidth,
-                alignment = towardCorner,
-                palette = palette,
-                artFor = artFor,
-                onLandPress = onLandPress,
-                modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
-            )
         }
     }
 }
 
 /**
- * The lands, in their corner, on one line.
+ * The lands, in their own column, one side above the other.
  *
- * **One line, and it wraps only under protest.** The first cut wrapped freely into a grid, and the
- * result was a Swamp on its own row under the Islands and a Plains on its own row under the Forests —
- * lands of one player scattered down their half instead of reading as one row of stacks. They are the
- * same kind of thing and they belong on the same horizontal. The card size is derived so that one line
- * fits; wrapping remains as the last resort for a board with more kinds of land than anyone plays.
+ * **One line per side, and it wraps only under protest.** The first cut wrapped freely into a grid,
+ * and the result was a Swamp on its own row under the Islands — lands of one player scattered down
+ * their half instead of reading as one row of stacks. They are the same kind of thing and they belong
+ * on the same horizontal. The card size is derived so that one line fits; wrapping remains as the last
+ * resort for a board with more kinds of land than anyone plays.
+ *
+ * Each side packs toward its own outer edge, mirrored across the middle exactly as the battlefield is.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LandZone(
-    lands: List<TableLandStack>,
-    tag: String,
+private fun LandColumn(
+    sides: List<BattlefieldSide>,
     width: Dp,
-    alignment: Alignment,
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier, contentAlignment = alignment) {
-        FlowRow(
-            modifier = Modifier.testTag(tag),
-            horizontalArrangement = Arrangement.spacedBy(StackGap),
-            verticalArrangement = Arrangement.spacedBy(StackGap),
-        ) {
-            lands.forEach { stack ->
-                LandStack(
-                    stack = stack,
-                    width = width,
+    Column(modifier = modifier) {
+        sides.forEach { side ->
+            val lands = side.landStacks()
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                // The viewer is the last side, so their lands pack down toward the bottom corner and
+                // an opponent's up toward the top — the two halves meeting in the middle of the column.
+                contentAlignment = if (side.isViewer) Alignment.BottomStart else Alignment.TopStart,
+            ) {
+                // The rule, in the one place it can be broken: a side with no lands emits no zone, so
+                // the column costs that side nothing rather than holding an empty box.
+                if (lands.isNotEmpty()) {
+                    LandRow(
+                        lands = lands,
+                        tag = BattlefieldTestTags.row(side.playerId, BattlefieldTestTags.LAND_ZONE),
+                        width = width,
+                        palette = palette,
+                        artFor = artFor,
+                        onLandPress = onLandPress,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One side's land stacks, on one line where they fit. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LandRow(
+    lands: List<TableLandStack>,
+    tag: String,
+    width: Dp,
+    palette: CounterPalette,
+    artFor: TableArtResolver?,
+    onLandPress: ((TableLandStack, LandStackHalf) -> Unit)?,
+) {
+    FlowRow(
+        modifier = Modifier.testTag(tag),
+        horizontalArrangement = Arrangement.spacedBy(StackGap),
+        verticalArrangement = Arrangement.spacedBy(StackGap),
+    ) {
+        lands.forEach { stack ->
+            LandStack(
+                stack = stack,
+                width = width,
+                palette = palette,
+                artFor = artFor,
+                onPress = onLandPress?.let { press -> { half -> press(stack, half) } },
+            )
+        }
+    }
+}
+
+/** One player's rows of the battlefield: creatures against the centre line, everything else behind. */
+@Composable
+private fun SideRows(
+    side: BattlefieldSide,
+    order: List<BattlefieldRow>,
+    cardWidth: Dp,
+    palette: CounterPalette,
+    artFor: TableArtResolver?,
+    onInspect: ((String) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    // The viewer's front row comes first, so packing to the top puts it against the middle; the
+    // opponent's comes last, so theirs packs to the bottom. One rule, mirrored.
+    val towardCentre = if (order === ViewerOrder) Alignment.Top else Alignment.Bottom
+
+    Column(
+        modifier = modifier.testTag(BattlefieldTestTags.side(side.playerId)),
+        verticalArrangement = Arrangement.spacedBy(RowGap, towardCentre),
+    ) {
+        order.forEach { row ->
+            val content = side.inRole(row.role)
+            if (content.isNotEmpty()) {
+                PermanentRow(
+                    permanents = content,
+                    tag = BattlefieldTestTags.row(side.playerId, row.name),
+                    width = cardWidth,
                     palette = palette,
                     artFor = artFor,
-                    onPress = onLandPress?.let { press -> { half -> press(stack, half) } },
+                    onInspect = onInspect,
+                    alignment = row.alignment,
                 )
             }
         }
@@ -368,9 +360,10 @@ private fun PermanentRow(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
+    alignment: Alignment,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxWidth(), contentAlignment = alignment) {
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()).testTag(tag),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
@@ -412,8 +405,8 @@ private fun PermanentCard(
  *
  * **Sized so one line of stacks fits.** A stack costs more than a card — up to three staggered faces
  * on the upright side, and a turned half beside it once anything is tapped — so the budget is spent in
- * stack-widths, not card-widths. The whole corner then has to fit inside the side's own height too,
- * because a stack is taller than a card by the same staggering.
+ * stack-widths, not card-widths. The column then has to fit inside one side's own height too, because
+ * a stack is taller than a card by the same staggering.
  *
  * Capped at [PreferredCardWidth] and floored at [MinCardWidth]: a board with two lands draws two
  * ordinary lands rather than two the height of the battlefield, and a board with more kinds of land
@@ -433,12 +426,12 @@ private fun landCardWidth(
     // itself the moment a land taps.
     val widest = stackWidthInCards() * most
     val byWidth = (zoneCeiling - StackGap * (most - 1)) / widest.coerceAtLeast(1f)
-    val byHeight = sideHeight * BOARD_CARD_ASPECT_RATIO / stackHeightInCards()
+    val byHeight = sideHeight / stackHeightInCards()
 
     return minOf(byWidth, byHeight, PreferredCardWidth).coerceAtLeast(MinCardWidth)
 }
 
-/** What the land corner actually asks for at [landWidth] — one line of the busiest side's stacks. */
+/** What the land column actually asks for at [landWidth] — one line of the busiest side's stacks. */
 private fun landZoneWidth(
     sides: List<BattlefieldSide>,
     landWidth: Dp,
@@ -494,14 +487,22 @@ private fun mainCardWidth(
     return minOf(plain, byAssembly).coerceAtLeast(MinCardWidth)
 }
 
-/** One row of a side's main area, and which bucket feeds it. */
+/**
+ * One row of a side's battlefield: which bucket feeds it, and where it sits across the width.
+ *
+ * **Creatures centre and everything else goes to the outside.** They were sharing one centre line and
+ * the non-creature permanents ended up drawn behind the creatures — an artifact is not less important
+ * than a Bear, it is just less busy, and a row that hides it is worse than a row that puts it
+ * somewhere quieter.
+ */
 private data class BattlefieldRow(
     val name: String,
     val role: PermanentRole,
+    val alignment: Alignment,
 )
 
-private val FrontRow = BattlefieldRow(name = "front", role = PermanentRole.Creature)
-private val BackRow = BattlefieldRow(name = "back", role = PermanentRole.Other)
+private val FrontRow = BattlefieldRow(name = "front", role = PermanentRole.Creature, alignment = Alignment.Center)
+private val BackRow = BattlefieldRow(name = "back", role = PermanentRole.Other, alignment = Alignment.CenterEnd)
 
 /** The viewer reads bottom-up: their creatures sit against the centre line, above the rest. */
 private val ViewerOrder = listOf(FrontRow, BackRow)
@@ -513,7 +514,7 @@ private val OpponentOrder = listOf(BackRow, FrontRow)
 object BattlefieldTestTags {
     const val BOARD: String = "battlefield"
 
-    /** The land corner's own row name, for [row]. */
+    /** The land column's own row name, for [row]. */
     const val LAND_ZONE: String = "lands"
 
     /** One player's half. */
@@ -538,12 +539,15 @@ object BattlefieldTestTags {
 }
 
 /**
- * How much of the board's width the land corner may take.
+ * How much of the width left beside the rail the land column may take.
  *
  * A ceiling on the least interesting permanents, which is §7.4's whole point about them. It is not a
- * reservation: a side with no lands draws no zone at all, and the creatures get the width back.
+ * reservation: a board with no lands draws no column at all, and the creatures get the width back.
  */
-private const val LAND_ZONE_CEILING = 0.46f
+private const val LAND_ZONE_CEILING = 0.34f
+
+/** How much of the board's width the status rail may take. It is one card wide, and one card only. */
+private const val RAIL_CEILING = 0.14f
 
 /**
  * The size a card is drawn at when the board has room for it.
@@ -573,40 +577,26 @@ private val RowGap = 3.dp
  */
 private const val HAND_HEIGHT_SHARE = 0.30f
 
-/** Keeps the vitals off the screen edge, for the same reason the board has a margin at all. */
-private val VitalsInset = 4.dp
-
-/** Between the two seats' strips, so they read as two lines rather than one block. */
-private val VitalsGap = 4.dp
-
-/**
- * Room left under the hand for the viewer's own vitals bar.
- *
- * An allowance rather than a measurement: the bar's height comes from its text, and threading a
- * measured value up from it would couple the board's layout pass to a component that draws itself
- * fine without one. Generous enough that a larger font scale still clears it.
- */
-private val VitalsBarAllowance = 56.dp
-
 /** Between the phase bar and the top of the hand it sits on. */
 private val PhaseBarGap = 4.dp
 
 /**
  * How much of the bottom of the screen the hand and the phase bar have already claimed.
  *
- * Used to stack the viewer's vitals above them. An allowance rather than a measurement for the same
- * reason the bar's own height is: threading measured heights up through the layout pass would couple
- * the board to components that draw themselves perfectly well without it.
+ * Used to work out what is left for the board's own columns. An allowance rather than a measurement:
+ * the bar's height comes from its text, and threading a measured value up through the layout pass
+ * would couple the board to components that draw themselves perfectly well without it. The columns are
+ * placed by weight, so an allowance that is slightly off costs a few dp of card size and nothing else.
  */
 private fun bottomStackHeight(
-    hand: List<TableHandCard>,
+    hand: List<TableCard>,
     handTile: Dp,
     hasPhases: Boolean,
 ): Dp {
-    val handPart = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile) + PhaseBarGap
+    val handPart = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile)
     val phasePart = if (hasPhases) PhaseBarAllowance + PhaseBarGap else 0.dp
     return handPart + phasePart
 }
 
-/** Room the phase bar takes, for stacking the vitals above it. */
+/** Room the phase bar takes, for working out what is left above it. */
 private val PhaseBarAllowance = 28.dp

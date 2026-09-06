@@ -11,6 +11,7 @@ import magefree.designsystem.card.BoardCardState
 import magefree.designsystem.card.BoardCounter
 import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.card.CardDisplay
+import magefree.designsystem.card.CardPreviewState
 import magefree.network.game.CardIconType
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -67,6 +68,9 @@ typealias TableArtResolver = @Composable (CardArtRequest?, CardDisplay) -> CardA
  *   not also send. It is carried separately because it decides whether this may stack, and there the
  *   answer has to come from what the server said rather than from what we managed to resolve — a
  *   partial snapshot must not quietly merge two enchanted permanents into one.
+ * @property abilities the server's **game-aware** rules text — a creature granted flying until end of
+ *   turn has it here, and the printing does not. Carried so that inspecting a permanent can show what
+ *   it can do *now*, which is the whole difference between reading a board and reading a card.
  */
 data class TablePermanent(
     val id: String,
@@ -74,6 +78,7 @@ data class TablePermanent(
     val state: BoardCardState,
     val art: CardArtRequest? = null,
     val carriesAttachment: Boolean = false,
+    val abilities: List<String> = emptyList(),
 )
 
 /**
@@ -205,7 +210,45 @@ const val PILE_FAN_LIMIT: Int = 3
 data class BattlefieldModel(
     val viewer: BattlefieldSide?,
     val opponents: List<BattlefieldSide>,
-)
+) {
+    /**
+     * A permanent by its server id, from either side, including the ones folded onto a host.
+     *
+     * Which side a card is on is not something a player asks when they tap it — they tap a card and
+     * expect to read it — so lookup crosses both, and it reaches attachments too because an Aura drawn
+     * on somebody else's creature is still a card somebody may want to read.
+     */
+    fun permanentById(id: String): TablePermanent? =
+        (listOfNotNull(viewer) + opponents)
+            .flatMap { it.permanents }
+            .firstOrNull { it.id == id }
+}
+
+/**
+ * A permanent as the inspect overlay shows it.
+ *
+ * The same overlay a card in hand opens, from the same gesture, because reading a card is one thing
+ * wherever the card is. What differs is only what there is to read: a permanent's abilities are the
+ * server's game-aware text, so a creature that can currently fly says so.
+ *
+ * @param oracleText the **printed** text, which the wire does not carry. Supplied by whoever is
+ *   showing the preview, from the device's own card database.
+ */
+fun permanentPreview(
+    permanent: TablePermanent,
+    oracleText: String? = null,
+): CardPreviewState =
+    CardPreviewState(
+        card = permanent.state.card,
+        power = permanent.state.power,
+        toughness = permanent.state.toughness,
+        abilities = permanent.abilities,
+        oracleText = oracleText,
+        // No action. A permanent's abilities are activated through the server's own prompt (§7.6), and
+        // a button here would be this client deciding what may be done, which is the one thing the
+        // cast flow refuses to do anywhere else.
+        action = null,
+    )
 
 /** The battlefield in [state], arranged. */
 fun battlefieldModel(state: GameState): BattlefieldModel {
@@ -239,6 +282,7 @@ fun battlefieldModel(state: GameState): BattlefieldModel {
                                     ),
                                 art = artRequestOf(permanent.card),
                                 carriesAttachment = permanent.attachments.isNotEmpty(),
+                                abilities = permanent.card.rules,
                             )
                         },
             )

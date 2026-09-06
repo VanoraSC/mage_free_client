@@ -260,6 +260,30 @@ private val Developed =
                     libraryCount = 27,
                     handCount = 5,
                     graveyardCount = 3,
+                    // A real graveyard, because the rail draws the card on top of it and a count
+                    // cannot be drawn. Serra Angel is last, so she is the one on top.
+                    graveyard =
+                        listOf(
+                            card(
+                                "gy-elves",
+                                "Llanowar Elves",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "1",
+                                toughness = "1",
+                                manaCost = "{G}",
+                            ),
+                            card("gy-rod", "Rod of Ruin", listOf(CardType.Artifact), manaCost = "{4}"),
+                            card(
+                                "gy-angel",
+                                "Serra Angel",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "4",
+                                toughness = "4",
+                                manaCost = "{3}{W}{W}",
+                            ),
+                        ),
                     wins = 1,
                     winsNeeded = 2,
                     hasPriority = true,
@@ -314,7 +338,9 @@ private val Developed =
                     life = 20,
                     libraryCount = 31,
                     handCount = 4,
-                    graveyardCount = 1,
+                    // Empty on purpose: the rail draws a placeholder where this seat's graveyard
+                    // would be, and both states have to be on one board to be compared.
+                    graveyardCount = 0,
                     winsNeeded = 2,
                     battlefield =
                         listOf(

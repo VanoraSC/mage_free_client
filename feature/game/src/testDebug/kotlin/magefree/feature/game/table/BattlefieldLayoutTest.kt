@@ -93,6 +93,17 @@ class BattlefieldLayoutTest {
             .fetchSemanticsNode()
             .positionInRoot.y
 
+    private fun left(tag: String): Float =
+        composeTestRule
+            .onNodeWithTag(tag)
+            .fetchSemanticsNode()
+            .positionInRoot.x
+
+    private fun right(tag: String): Float =
+        composeTestRule.onNodeWithTag(tag).fetchSemanticsNode().let { node ->
+            node.positionInRoot.x + node.size.width
+        }
+
     /** The measured width of the first card in a region — the derived size, as actually drawn. */
     private fun cardWidthIn(tag: String): Int =
         composeTestRule
@@ -123,19 +134,22 @@ class BattlefieldLayoutTest {
     }
 
     @Test
-    fun `the land corners mirror across the centre line`() {
-        // The opponent's lands sit above their creatures and mine sit below mine, so the two zones
-        // are in opposite corners. Packing both the same way is the plausible wrong answer: it looks
-        // fine on one side and puts the opponent's lands in the middle of the board.
+    fun `the land column mirrors across the centre line, and stays left of the battlefield`() {
+        // The opponent's lands pack up into the top of the column and mine pack down into the bottom,
+        // so the two halves meet in the middle exactly as the battlefields do. Packing both the same
+        // way is the plausible wrong answer: it looks fine on one side and puts the opponent's lands
+        // in the middle of the board.
         show(twoSided())
 
         assertTrue(
-            "the opponent's lands should be above their creatures",
-            top(lands("them")) < top(BattlefieldTestTags.row("them", "front")),
+            "the opponent's lands should be above mine",
+            top(lands("them")) < top(lands("me")),
         )
+        // And the column is a column: lands never share a horizontal with the creatures, which is what
+        // stops a fourth kind of land from pushing the creatures around.
         assertTrue(
-            "my lands should be below my creatures",
-            top(lands("me")) > top(BattlefieldTestTags.row("me", "front")),
+            "the lands should be left of the creatures",
+            right(lands("me")) <= left(BattlefieldTestTags.row("me", "front")),
         )
     }
 

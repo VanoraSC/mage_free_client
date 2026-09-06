@@ -20,7 +20,7 @@ import org.junit.Test
  * cannot see. A board that decided for itself which cards were castable would be answering a rules
  * question — and it would be wrong in exactly the cases where the answer matters.
  */
-class TableHandCardTest {
+class TableCardTest {
     @Test
     fun `the hand is the server's cards, in the server's order`() {
         val state = stateWith(hand = listOf(card("a", "Forest"), card("b", "Grizzly Bears"), card("c", "Pacifism")))
@@ -71,7 +71,7 @@ class TableHandCardTest {
     fun `a spectator holds nothing`() {
         val state = GameState(gameId = "g", isWatching = true)
 
-        assertEquals(emptyList<TableHandCard>(), handCards(state))
+        assertEquals(emptyList<TableCard>(), handCards(state))
     }
 }
 
@@ -104,7 +104,7 @@ class HandCardActionTest {
                 hand = listOf(land("forest"), spell("bears")),
             ).copy(playable = listOf(PlayableObject(objectId = "forest"), PlayableObject(objectId = "bears")))
 
-        val actions = handCards(state).associate { it.id to handPreviewState(it, onAct = {}).action?.label }
+        val actions = handCards(state).associate { it.id to tableCardPreview(it, onAct = {}).action?.label }
 
         assertEquals(PLAY_LABEL, actions["forest"])
         assertEquals(CAST_LABEL, actions["bears"])
@@ -116,7 +116,7 @@ class HandCardActionTest {
         // a rules question the client cannot answer. Nothing is the honest control.
         val state = stateWith(hand = listOf(spell("bears")))
 
-        assertNull(handPreviewState(handCards(state).single(), onAct = {}).action)
+        assertNull(tableCardPreview(handCards(state).single(), onAct = {}).action)
     }
 
     @Test
@@ -124,7 +124,7 @@ class HandCardActionTest {
         // A board that is being looked at rather than played offers nothing to press.
         val state = stateWith(hand = listOf(land("forest"))).copy(playable = listOf(PlayableObject(objectId = "forest")))
 
-        assertNull(handPreviewState(handCards(state).single(), onAct = null).action)
+        assertNull(tableCardPreview(handCards(state).single(), onAct = null).action)
     }
 
     @Test
@@ -141,7 +141,7 @@ class HandCardActionTest {
                     ),
             )
 
-        val preview = handPreviewState(handCards(state).single())
+        val preview = tableCardPreview(handCards(state).single())
 
         assertEquals("4", preview.power)
         assertEquals("4", preview.toughness)
