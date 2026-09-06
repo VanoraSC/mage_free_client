@@ -190,31 +190,40 @@ fun BattlefieldLayout(
                 artFor = artFor,
                 onPlay = onPlayFromHand,
                 onInspect = onInspect,
-                modifier = Modifier.align(Alignment.BottomEnd).width(mainWidth),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .width(mainWidth)
+                        // Above the viewer's bar rather than under it: the bar is the last line of the
+                        // board and the hand sits on top of it, the way a player holds cards over the
+                        // edge of a table.
+                        .padding(bottom = if (vitals.any { it.isViewer }) VitalsBarAllowance else 0.dp),
             )
 
-            // **Top right, both seats together.** A scoreboard: the two seats' numbers are read
-            // against each other — *my* life against *theirs* — so they belong adjacent and in one
-            // place a player learns once, rather than each floating near its own half.
-            //
-            // Ordered opponents-then-viewer, so the strips run down the screen the way the seats do.
-            //
-            // Overlaid, like everything else: reserving a band for it across the whole width would
-            // cost the battlefield far more than the strip occupies.
-            if (vitals.isNotEmpty()) {
-                Column(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(VitalsInset),
-                    verticalArrangement = Arrangement.spacedBy(VitalsGap),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    (vitals.filterNot { it.isViewer } + vitals.filter { it.isViewer }).forEach { seat ->
-                        VitalsStrip(
-                            vitals = seat,
-                            palette = palette,
-                            onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
-                        )
-                    }
+            // **A bar at each edge, centred.** Which seat a bar belongs to is said by where it is:
+            // the opponent's along the top, the viewer's along the bottom, the same way the two halves
+            // of the board are arranged. That is what lets the bars drop their name labels.
+            Column(
+                modifier = Modifier.align(Alignment.TopCenter).padding(VitalsInset),
+                verticalArrangement = Arrangement.spacedBy(VitalsGap),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                vitals.filterNot { it.isViewer }.forEach { seat ->
+                    VitalsStrip(
+                        vitals = seat,
+                        palette = palette,
+                        onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
+                    )
                 }
+            }
+
+            vitals.firstOrNull { it.isViewer }?.let { seat ->
+                VitalsStrip(
+                    vitals = seat,
+                    palette = palette,
+                    onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(VitalsInset),
+                )
             }
         }
     }
@@ -241,28 +250,14 @@ private fun SideLayout(
     val towardCentre = if (isViewer) Alignment.Top else Alignment.Bottom
     val towardCorner = if (isViewer) Alignment.BottomStart else Alignment.TopStart
 
-    Row(
-        modifier = modifier.fillMaxWidth().testTag(BattlefieldTestTags.side(side.playerId)),
-        horizontalArrangement = Arrangement.spacedBy(ZoneGap),
-    ) {
-        val lands = side.landStacks()
-        // The rule, in the one place it can be broken: a side with no lands emits no zone, so the
-        // corner costs nothing rather than holding an empty box.
-        if (lands.isNotEmpty()) {
-            LandZone(
-                lands = lands,
-                tag = BattlefieldTestTags.row(side.playerId, BattlefieldTestTags.LAND_ZONE),
-                width = landWidth,
-                alignment = towardCorner,
-                palette = palette,
-                artFor = artFor,
-                onLandPress = onLandPress,
-                modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
-            )
-        }
-
+    Box(modifier = modifier.fillMaxWidth().testTag(BattlefieldTestTags.side(side.playerId))) {
+        // **The rows span the whole width, so their contents centre on the screen.** Sitting beside
+        // the land corner in a row, they were centred in what was *left* of the width, which put the
+        // creatures visibly off to the right. The land corner overlays them instead — it is bounded
+        // and in a corner, and the rows are centred, so the two only meet on a board wide enough that
+        // something had to give anyway.
         Column(
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(RowGap, towardCentre),
         ) {
             order.forEach { row ->
@@ -278,6 +273,22 @@ private fun SideLayout(
                     )
                 }
             }
+        }
+
+        val lands = side.landStacks()
+        // The rule, in the one place it can be broken: a side with no lands emits no zone, so the
+        // corner costs nothing rather than holding an empty box.
+        if (lands.isNotEmpty()) {
+            LandZone(
+                lands = lands,
+                tag = BattlefieldTestTags.row(side.playerId, BattlefieldTestTags.LAND_ZONE),
+                width = landWidth,
+                alignment = towardCorner,
+                palette = palette,
+                artFor = artFor,
+                onLandPress = onLandPress,
+                modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
+            )
         }
     }
 }
@@ -541,3 +552,12 @@ private val VitalsInset = 4.dp
 
 /** Between the two seats' strips, so they read as two lines rather than one block. */
 private val VitalsGap = 4.dp
+
+/**
+ * Room left under the hand for the viewer's own vitals bar.
+ *
+ * An allowance rather than a measurement: the bar's height comes from its text, and threading a
+ * measured value up from it would couple the board's layout pass to a component that draws itself
+ * fine without one. Generous enough that a larger font scale still clears it.
+ */
+private val VitalsBarAllowance = 56.dp

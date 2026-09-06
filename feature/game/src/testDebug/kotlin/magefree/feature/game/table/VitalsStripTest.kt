@@ -69,27 +69,38 @@ class VitalsStripTest {
     }
 
     @Test
-    fun `the strips are a scoreboard in the top right, in seat order`() {
-        // Together and in one place a player learns once, because the two seats' numbers are read
-        // against each other. The top right is genuinely free: each side packs its rows toward the
-        // centre line, so the far top of the opponent's half has nothing in it.
+    fun `a bar at each edge, centred, saying which seat it is by where it is`() {
+        // This is what lets the bars carry no name: the opponent's runs along the top and the viewer's
+        // along the bottom, the same way the two halves of the board are arranged. A label repeating
+        // that would cost room on the one line the numbers have.
         show(twoSeats())
 
         val opponent = composeTestRule.onNodeWithTag(VitalsTestTags.strip("them")).fetchSemanticsNode()
         val viewer = composeTestRule.onNodeWithTag(VitalsTestTags.strip("me")).fetchSemanticsNode()
 
         assertTrue(
-            "the opponent's strip should be above the viewer's, at ${opponent.positionInRoot.y} and ${viewer.positionInRoot.y}",
-            opponent.positionInRoot.y < viewer.positionInRoot.y,
+            "the opponent's bar should be at the top, at ${opponent.positionInRoot.y}",
+            opponent.positionInRoot.y < SCREEN_HEIGHT_PX * 0.2f,
         )
         assertTrue(
-            "both should be in the top half, at ${viewer.positionInRoot.y}",
-            viewer.positionInRoot.y < SCREEN_HEIGHT_PX / 2f,
+            "the viewer's bar should be at the bottom, ending at ${viewer.positionInRoot.y + viewer.size.height}",
+            viewer.positionInRoot.y + viewer.size.height > SCREEN_HEIGHT_PX * 0.8f,
         )
-        assertTrue(
-            "both should be against the right edge, ending at ${opponent.positionInRoot.x + opponent.size.width}",
-            opponent.positionInRoot.x + opponent.size.width > SCREEN_WIDTH_PX * 0.5f,
-        )
+        listOf("the opponent's" to opponent, "the viewer's" to viewer).forEach { (who, bar) ->
+            val centre = bar.positionInRoot.x + bar.size.width / 2f
+            assertTrue(
+                "$who bar should be centred, its middle is at $centre of $SCREEN_WIDTH_PX",
+                kotlin.math.abs(centre - SCREEN_WIDTH_PX / 2f) < 8f,
+            )
+        }
+    }
+
+    @Test
+    fun `the bars carry no player name`() {
+        show(twoSeats())
+
+        composeTestRule.onNodeWithText("Me").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Them").assertDoesNotExist()
     }
 
     @Test

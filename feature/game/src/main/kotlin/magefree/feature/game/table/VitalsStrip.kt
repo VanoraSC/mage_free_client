@@ -62,11 +62,9 @@ fun VitalsStrip(
         horizontalArrangement = Arrangement.spacedBy(ChipGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = vitals.name,
-            style = BoardTypography.cardStats,
-            color = if (vitals.hasPriority) BoardSignal.playable else BoardSurface.onSurfaceMuted,
-        )
+        // No name. Which seat a bar belongs to is said by where it is — the opponent's along the top,
+        // the viewer's along the bottom — and a label repeating that costs room on the one line the
+        // numbers have. Priority is shown elsewhere.
 
         // Life gets the design system's own `vitals` token — *"the largest thing on the board that is
         // not a card"* — which is what it was defined for and what the first cut of this missed by
