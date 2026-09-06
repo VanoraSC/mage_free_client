@@ -108,6 +108,35 @@ class BoardCardTest {
     }
 
     @Test
+    fun `the card image is laid out whole, and the face clips the bottom off it`() {
+        // **The crop, asserted at the one place it can go wrong.** The image is measured at a whole
+        // card's height inside a face that is only [BOARD_CARD_CROP] of it, so the card keeps its own
+        // proportions and loses its text box. Give the image the face's height instead — which is what
+        // a plain `Modifier.height` does, because it is clamped by the parent — and the renderer's
+        // centre-crop takes the top and the bottom in equal measure: a card with no title bar, no
+        // name, and no type line, which is a card nobody can read on a board.
+        show(BoardCardState(card = BEARS))
+
+        val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
+        val art =
+            composeTestRule
+                .onNodeWithTag(BoardCardTestTags.ART, useUnmergedTree = true)
+                .fetchSemanticsNode()
+                .size
+
+        assertEquals("the image should be the card's full width", face.width, art.width)
+        val expected = (CARD_WIDTH.value / CARD_ASPECT_RATIO).roundToInt()
+        assertTrue(
+            "the image measured ${art.width}x${art.height}, and a whole card is ${CARD_WIDTH.value.roundToInt()}x$expected",
+            abs(art.height - expected) <= 1,
+        )
+        assertTrue(
+            "the face must be shorter than the image it clips: ${face.height} against ${art.height}",
+            face.height < art.height,
+        )
+    }
+
+    @Test
     fun `a turned attachment keeps its card proportions too`() {
         show(BoardCardState(card = BEARS, attachments = listOf(EQUIPPED_TAPPED)))
 

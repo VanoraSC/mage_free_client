@@ -514,7 +514,14 @@ private fun HostCard(
             // and the bottom in equal measure — a card with no title bar and no type line. Required
             // ignores the clamp, the image fills a box of its own proportions, and the parent's clip
             // takes the bottom and only the bottom.
-            Box(modifier = Modifier.fillMaxWidth().requiredHeight(width / CARD_ASPECT_RATIO).align(Alignment.TopStart)) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .requiredHeight(width / CARD_ASPECT_RATIO)
+                        .align(Alignment.TopStart)
+                        .testTag(BoardCardTestTags.ART),
+            ) {
                 CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
             }
 
@@ -822,6 +829,17 @@ internal fun boardStatsLabel(
 /** Test tags for the parts of the card that carry no text of their own. */
 object BoardCardTestTags {
     const val CARD: String = "board-card"
+
+    /**
+     * The card image itself, which is deliberately **taller than the card it is drawn in**.
+     *
+     * Tagged because that is the whole mechanism of the tier's crop and it is invisible in anything
+     * else: the image is laid out at its own full height and the face clips the bottom of it, so the
+     * card keeps its proportions and loses its text box. Sized to the face instead, the renderer's
+     * centre-crop takes the top and the bottom and the card loses its name — which is exactly the bug
+     * this tag exists to catch.
+     */
+    const val ART: String = "board-card-art"
     const val STATS: String = "board-card-stats"
     const val COUNTERS: String = "board-card-counters"
     const val BADGES: String = "board-card-badges"
