@@ -3,6 +3,7 @@ package magefree.feature.game.table
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -68,7 +69,11 @@ fun HandRegion(
 ) {
     if (cards.isEmpty()) return
 
-    BoxWithConstraints(modifier = modifier.testTag(HandTestTags.HAND)) {
+    // **The region is only as tall as the part of a card that shows.** The tiles are drawn from its
+    // top downward at their full height, so the rest hangs past the bottom of the region — and, since
+    // the region is anchored to the bottom of the board, past the bottom of the screen. That is what
+    // puts the cut at the screen edge rather than at some line chosen above it.
+    BoxWithConstraints(modifier = modifier.height(handVisibleHeight(tileWidth)).testTag(HandTestTags.HAND)) {
         val available = maxWidth - HandPadding * 2
         val step = handStep(count = cards.size, tileWidth = tileWidth, available = available)
         val used = tileWidth + step * (cards.size - 1)
@@ -112,7 +117,7 @@ fun HandRegion(
                         .offset(x = start + step * index)
                         .offset { IntOffset(x = 0, y = dragged.roundToInt()) }
                         .width(tileWidth)
-                        .align(Alignment.CenterStart)
+                        .align(Alignment.TopStart)
                         .then(draggable),
             ) {
                 CardTile(
@@ -200,3 +205,16 @@ private val HandPadding = 8.dp
  * cost of triggering it by accident is a spell on the stack the player did not intend.
  */
 private val DragThreshold = 64.dp
+
+/**
+ * How much of a hand tile is on screen, the rest hanging off the bottom edge.
+ *
+ * A hand sits in front of a player with its far edge over the lip of the table: what they read to
+ * decide is the name, the cost and the art, all in the top of a card, and the bottom is rules text
+ * they would open the card to read properly anyway. Cutting it there buys the battlefield the height
+ * back without taking anything a player was using.
+ */
+private const val HAND_VISIBLE_FRACTION = 0.75f
+
+/** The on-screen height of a hand tile [tileWidth] wide — its full height, cut to what shows. */
+fun handVisibleHeight(tileWidth: Dp): Dp = tileWidth / CARD_ASPECT_RATIO * HAND_VISIBLE_FRACTION

@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
+import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
-import magefree.designsystem.card.CARD_ASPECT_RATIO
 import magefree.designsystem.card.CounterPalette
 
 /*
@@ -282,7 +282,7 @@ private fun StackedCard(
 private class LandStackGeometry(
     val cardWidth: Dp,
 ) {
-    val cardHeight: Dp = cardWidth / CARD_ASPECT_RATIO
+    val cardHeight: Dp = cardWidth / BOARD_CARD_ASPECT_RATIO
     private val stepX: Dp = cardWidth * STACK_STEP_X_FRACTION
     private val stepY: Dp = cardHeight * STACK_STEP_Y_FRACTION
 
@@ -389,7 +389,7 @@ private val CountPadding = 2.dp
  * the kind of duplication that drifts. It is a card *height* across, not a width, because a turned copy
  * lies on its side and hangs off both edges of the diagonal.
  */
-internal fun stackWidthInCards(): Float = 1f / CARD_ASPECT_RATIO + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1)
+internal fun stackWidthInCards(): Float = 1f / BOARD_CARD_ASPECT_RATIO + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1)
 
 /**
  * How tall a stack is, in card widths — again the same whatever is in it.
@@ -397,8 +397,8 @@ internal fun stackWidthInCards(): Float = 1f / CARD_ASPECT_RATIO + STACK_STEP_X_
  * Half an upright card down to the waist, then the turned card laid across it, then the diagonal.
  */
 internal fun stackHeightInCards(): Float {
-    val diagonal = 1f / CARD_ASPECT_RATIO * STACK_STEP_Y_FRACTION * (PILE_FAN_LIMIT - 1)
-    return 1f / CARD_ASPECT_RATIO / 2f + 0.5f + 0.5f + diagonal
+    val diagonal = 1f / BOARD_CARD_ASPECT_RATIO * STACK_STEP_Y_FRACTION * (PILE_FAN_LIMIT - 1)
+    return 1f / BOARD_CARD_ASPECT_RATIO / 2f + 0.5f + 0.5f + diagonal
 }
 
 /**

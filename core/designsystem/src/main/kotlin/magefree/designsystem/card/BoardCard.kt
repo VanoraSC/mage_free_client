@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -291,25 +292,30 @@ fun boardCardWidthFitting(
     // Every dimension of the assembly is a multiple of the card's own width, because the steps are
     // fractions of the card rather than fixed distances. So each constraint is `width <= budget /
     // factor` and the answer is the smallest of them — no searching, no iteration.
-    val ratio = CARD_ASPECT_RATIO
-    val band = ATTACHMENT_BAND_FRACTION / ratio // a band, in units of card width
+    val ratio = BOARD_CARD_ASPECT_RATIO
+    val band = ATTACHMENT_BAND_FRACTION / CARD_ASPECT_RATIO // a band, in units of card width
     val inset = ATTACHMENT_INSET_FRACTION
     val host = if (state.tapped) 1f else 1f / ratio // the host's own height, in units of card width
+    val hostSpan = if (state.tapped) 1f / ratio else 1f // the host's own width, likewise
 
     // Height. The host sits under the upright stack — and the upright attachments are never rotated,
     // so they stay a whole card tall and can reach *below* a tapped host, which is only a card's
     // width tall. Solving only the first constraint is what puts the stack outside the assembly.
+    // A turned one hangs below the host too, being a card's width tall where the host is less.
     val byHostHeight = maxHeight / (band * upright + host)
     val byUprightDepth =
         if (upright == 0) byHostHeight else maxHeight / (band * (upright - 1) + 1f / ratio)
+    val byTurnedDepth =
+        if (turned == 0) byHostHeight else maxHeight / (band * upright + maxOf(0f, (host - 1f) / 2f) + 1f)
 
     // Width. The host plus the stack's sideways drift, and separately the turned reach, which is
-    // measured along the card's height.
-    val byHostWidth = maxWidth / ((if (state.tapped) 1f / ratio else 1f) + inset * upright)
+    // whichever is longer: the card laid on its side, or the host with a band showing past it.
+    val byHostWidth = maxWidth / (hostSpan + inset * upright)
     val byTurnedReach =
-        if (turned == 0) byHostWidth else maxWidth / ((1f + ATTACHMENT_BAND_FRACTION * (turned - 1)) / ratio)
+        if (turned == 0) byHostWidth else maxWidth / (maxOf(1f / ratio, hostSpan + band) + band * (turned - 1))
 
-    return minOf(byHostHeight, byUprightDepth, byHostWidth, byTurnedReach).coerceAtLeast(Dp.Hairline)
+    return minOf(byHostHeight, byUprightDepth, byTurnedDepth, byHostWidth, byTurnedReach)
+        .coerceAtLeast(Dp.Hairline)
 }
 
 /**
@@ -348,7 +354,7 @@ fun BoardCard(
     attachmentArt: (BoardAttachment) -> CardArtSlot? = { null },
     onTap: (() -> Unit)? = null,
 ) {
-    val cardHeight = width / CARD_ASPECT_RATIO
+    val cardHeight = width / BOARD_CARD_ASPECT_RATIO
     val hostWidth = if (state.tapped) cardHeight else width
     val hostHeight = if (state.tapped) width else cardHeight
 
@@ -359,23 +365,29 @@ fun BoardCard(
     val upright = state.attachments.filter { !it.tapped }
     val turned = state.attachments.filter { it.tapped }
 
-    val band = attachmentBandHeight(cardHeight)
+    val band = attachmentBandHeight(width)
     val inset = attachmentInset(width)
 
     val upStack = band * upright.size
     val uprightReach = inset * upright.size
     val hostTop = upStack
 
-    // A turned attachment lies behind the host with its left edge flush against the host's, so the
-    // host covers exactly its own width of it and the rest — the difference between a card's height
-    // and its width — stays in the open on the right. That is where its name and mana cost are: a
-    // quarter turn moves the band from the top edge to the right one.
+    // A turned attachment lies behind the host and reaches past its right edge, and what shows there
+    // is its name and mana cost: a quarter turn moves that band from the card's top edge to its right
+    // one. So the reach is defined by what must stay uncovered — the host's own width plus a band —
+    // rather than by how far the card happens to stick out.
     //
-    // Which is also why several of them step sideways rather than downward. A stack always steps
+    // **Which way it sticks out is not a constant of the design.** A whole card is taller than it is
+    // wide, so a turned one laid flush with the host overhung it on its own; the Board tier's card is
+    // cut below its art and is *wider* than tall, so a turned one is shorter than the host is wide and
+    // has to be pushed out to show anything. Hence [maxOf]: the card's own length where that is more
+    // than a band, a band where it is not.
+    //
+    // Several of them step sideways rather than downward for the same reason. A stack always steps
     // perpendicular to the band it has to expose, so that no card covers another's name: upright
     // cards have a band across the top and step up, turned cards have one down the right and step
     // right. The same rule, rotated with the card.
-    val turnedReach = if (turned.isEmpty()) 0.dp else cardHeight + band * (turned.size - 1)
+    val turnedReach = if (turned.isEmpty()) 0.dp else maxOf(cardHeight, hostWidth + band) + band * (turned.size - 1)
 
     val assemblyWidth = maxOf(hostWidth + uprightReach, turnedReach)
 
@@ -386,7 +398,14 @@ fun BoardCard(
     // attachments spill out of it: the first thing a parent clips is the name band the stack exists
     // to expose.
     val uprightDepth = if (upright.isEmpty()) 0.dp else band * (upright.size - 1) + cardHeight
-    val assemblyHeight = maxOf(hostTop + hostHeight, uprightDepth)
+
+    // A turned card is a card's *width* tall, and the Board tier's host is less than that — so a
+    // turned attachment now hangs below an untapped host instead of only reaching past its side. It is
+    // centred on the host where the host is the taller of the two, and hung from its top edge where it
+    // is not, so the overhang is always downward and never clipped off the top of the assembly.
+    val turnedTop = hostTop + maxOf(0.dp, (hostHeight - width) / 2)
+    val turnedDepth = if (turned.isEmpty()) 0.dp else turnedTop + width
+    val assemblyHeight = maxOf(hostTop + hostHeight, uprightDepth, turnedDepth)
 
     Box(modifier = modifier.size(width = assemblyWidth, height = assemblyHeight)) {
         // Drawn furthest-out first, so the nearest turned card ends up on top and each one behind it
@@ -401,8 +420,10 @@ fun BoardCard(
                     Modifier
                         .align(Alignment.TopStart)
                         .offset(
-                            x = band * index,
-                            y = hostTop + (hostHeight - width) / 2,
+                            // Right edges land at the reach, one band apart, so each card behind
+                            // shows exactly one band of the one in front of it.
+                            x = turnedReach - band * (turned.size - 1 - index) - cardHeight,
+                            y = turnedTop,
                         ),
             )
         }
@@ -479,11 +500,23 @@ private fun HostCard(
                     .let { base -> if (onTap != null) base.cardInspectable(onTap = onTap) else base }
                     .testTag(BoardCardTestTags.CARD),
         ) {
-            // The whole card face, not a crop of its art box. A real card already carries its name and
-            // mana cost in the places a player looks for them, so overlaying our own is redundant —
-            // and an overlay is strictly worse, because it covers the art it is printed on. Power and
-            // toughness are different: they change during a game, and the printed pair goes stale.
-            CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
+            // **The card face, cut below its art box.** A real card carries its name and mana cost in
+            // the places a player looks for them, so overlaying our own would be redundant and worse —
+            // an overlay covers the art it is printed on. What the bottom of the card carries is rules
+            // text, and at battlefield size that is a grey smudge; dropping it buys height for every
+            // card on the board.
+            //
+            // Drawn at its **full** height inside a box only [BOARD_CARD_CROP] of that, top-aligned,
+            // so the image keeps its own proportions and the crop takes the bottom. Scaling it into the
+            // shorter box instead would squash every card on the board.
+            // `requiredHeight`, not `height`: a plain height is clamped by the parent's constraints, so
+            // the box came out the *cropped* height and the renderer's centre-crop then took the top
+            // and the bottom in equal measure — a card with no title bar and no type line. Required
+            // ignores the clamp, the image fills a box of its own proportions, and the parent's clip
+            // takes the bottom and only the bottom.
+            Box(modifier = Modifier.fillMaxWidth().requiredHeight(width / CARD_ASPECT_RATIO).align(Alignment.TopStart)) {
+                CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
+            }
 
             if (state.counters.isNotEmpty()) {
                 Row(
@@ -677,7 +710,7 @@ private fun UprightAttachedCard(
     AttachedCardFace(
         attachment = attachment,
         art = art,
-        bandHeight = attachmentBandHeight(cardHeight),
+        bandHeight = attachmentBandHeight(width),
         modifier = modifier.size(width = width, height = cardHeight),
     )
 }
@@ -705,7 +738,7 @@ private fun TurnedAttachedCard(
         AttachedCardFace(
             attachment = attachment,
             art = art,
-            bandHeight = attachmentBandHeight(cardHeight),
+            bandHeight = attachmentBandHeight(width),
             // requiredSize, not size: the card is taller than this landscape box, and a plain size
             // would be clamped by the box's constraints — squashing the card to a square before the
             // rotation ever happened, which cropped the art. The card keeps its own dimensions and
@@ -843,14 +876,20 @@ private const val COUNTER_GLYPH_FILL = 0.92f
  * 4.dp — the tier that was designed and eyeballed against them renders as it did.
  */
 
-/** The band as a fraction of the card's **height**: 15dp of a 68dp card's 95dp height. */
+/** The band as a fraction of a **whole** card's height: 15dp of a 68dp card's 95dp height. */
 private const val ATTACHMENT_BAND_FRACTION = 0.158f
 
 /** The sideways step as a fraction of the card's **width**: 4dp of 68dp. */
 private const val ATTACHMENT_INSET_FRACTION = 0.059f
 
-/** Tall enough for an attached card's name and mana cost — the reason the stack offsets vertically. */
-private fun attachmentBandHeight(cardHeight: Dp): Dp = cardHeight * ATTACHMENT_BAND_FRACTION
+/**
+ * Tall enough for an attached card's name and mana cost — the reason the stack offsets vertically.
+ *
+ * Measured against the **whole** card the printing came from, not the [BOARD_CARD_CROP] slice this
+ * tier draws. The name plate is a fixed part of a card face, so cropping the card below its art must
+ * not shrink the strip that exposes it: the band is the same 15dp on a 68dp card either way.
+ */
+private fun attachmentBandHeight(width: Dp): Dp = width / CARD_ASPECT_RATIO * ATTACHMENT_BAND_FRACTION
 
 /** The sideways step that makes the stack read as separate cards rather than one block. */
 private fun attachmentInset(width: Dp): Dp = width * ATTACHMENT_INSET_FRACTION

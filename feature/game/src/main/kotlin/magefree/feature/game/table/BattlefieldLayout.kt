@@ -23,11 +23,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSurface
+import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
-import magefree.designsystem.card.CARD_ASPECT_RATIO
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.boardCardWidthFitting
 import magefree.designsystem.card.rememberCounterPalette
+import magefree.designsystem.component.phase.PhaseBar
+import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.PhaseBarStep
 
 /*
  * The battlefield, arranged as §7.4 describes it.
@@ -84,6 +87,12 @@ import magefree.designsystem.card.rememberCounterPalette
  *   only being looked at. Lands do not go through it: see [onLandPress].
  * @param hand the viewer's own cards, from [handCards]. Empty for a spectator, and for anyone whose
  *   hand the board is not showing — an empty hand draws nothing rather than an empty strip.
+ * @param vitals each seat, from [tableVitals]. Empty draws nothing — the same rule every region here
+ *   follows.
+ * @param onExpandVitals opens a seat's full list, or `null` for a board that is only being read.
+ * @param phases the turn and where in it the game is. Null draws no bar — the same rule as everywhere
+ *   else here, and the state a board has before a game starts.
+ * @param onToggleStop invoked when a stoppable step is pressed.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
  * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
@@ -100,6 +109,10 @@ fun BattlefieldLayout(
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)? = null,
     hand: List<TableHandCard> = emptyList(),
     onPlayFromHand: ((String) -> Unit)? = null,
+    vitals: List<TableVitals> = emptyList(),
+    onExpandVitals: ((TableVitals) -> Unit)? = null,
+    phases: PhaseBarState? = null,
+    onToggleStop: ((PhaseBarStep) -> Unit)? = null,
 ) {
     val palette = rememberCounterPalette()
 
@@ -185,8 +198,59 @@ fun BattlefieldLayout(
                 artFor = artFor,
                 onPlay = onPlayFromHand,
                 onInspect = onInspect,
-                modifier = Modifier.align(Alignment.BottomEnd).width(mainWidth),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .width(mainWidth),
             )
+
+            // The phase bar sits directly on the hand — the two things a player looks at between
+            // decisions, in one place at the bottom of the screen.
+            phases?.let { bar ->
+                PhaseBar(
+                    state = bar,
+                    onToggleStop = { step -> onToggleStop?.invoke(step) },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = BoardMargin)
+                            .padding(bottom = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile) + PhaseBarGap),
+                )
+            }
+
+            // **A bar at each edge, centred.** Which seat a bar belongs to is said by where it is:
+            // the opponent's along the top, the viewer's along the bottom, the same way the two halves
+            // of the board are arranged. That is what lets the bars drop their name labels.
+            Column(
+                modifier = Modifier.align(Alignment.TopCenter).padding(VitalsInset),
+                verticalArrangement = Arrangement.spacedBy(VitalsGap),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                vitals.filterNot { it.isViewer }.forEach { seat ->
+                    VitalsStrip(
+                        vitals = seat,
+                        palette = palette,
+                        onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
+                    )
+                }
+            }
+
+            // The bottom of the screen is a stack, read upward: the hand hanging over the edge, the
+            // phase bar resting on it, and the viewer's own vitals above that. Each sits clear of the
+            // one below rather than over it — these are the three things a player looks at between
+            // decisions, and any of them covering another would hide something being used.
+            vitals.firstOrNull { it.isViewer }?.let { seat ->
+                VitalsStrip(
+                    vitals = seat,
+                    palette = palette,
+                    onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(VitalsInset)
+                            .padding(bottom = bottomStackHeight(hand, handTile, phases != null)),
+                )
+            }
         }
     }
 }
@@ -212,28 +276,14 @@ private fun SideLayout(
     val towardCentre = if (isViewer) Alignment.Top else Alignment.Bottom
     val towardCorner = if (isViewer) Alignment.BottomStart else Alignment.TopStart
 
-    Row(
-        modifier = modifier.fillMaxWidth().testTag(BattlefieldTestTags.side(side.playerId)),
-        horizontalArrangement = Arrangement.spacedBy(ZoneGap),
-    ) {
-        val lands = side.landStacks()
-        // The rule, in the one place it can be broken: a side with no lands emits no zone, so the
-        // corner costs nothing rather than holding an empty box.
-        if (lands.isNotEmpty()) {
-            LandZone(
-                lands = lands,
-                tag = BattlefieldTestTags.row(side.playerId, BattlefieldTestTags.LAND_ZONE),
-                width = landWidth,
-                alignment = towardCorner,
-                palette = palette,
-                artFor = artFor,
-                onLandPress = onLandPress,
-                modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
-            )
-        }
-
+    Box(modifier = modifier.fillMaxWidth().testTag(BattlefieldTestTags.side(side.playerId))) {
+        // **The rows span the whole width, so their contents centre on the screen.** Sitting beside
+        // the land corner in a row, they were centred in what was *left* of the width, which put the
+        // creatures visibly off to the right. The land corner overlays them instead — it is bounded
+        // and in a corner, and the rows are centred, so the two only meet on a board wide enough that
+        // something had to give anyway.
         Column(
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(RowGap, towardCentre),
         ) {
             order.forEach { row ->
@@ -249,6 +299,22 @@ private fun SideLayout(
                     )
                 }
             }
+        }
+
+        val lands = side.landStacks()
+        // The rule, in the one place it can be broken: a side with no lands emits no zone, so the
+        // corner costs nothing rather than holding an empty box.
+        if (lands.isNotEmpty()) {
+            LandZone(
+                lands = lands,
+                tag = BattlefieldTestTags.row(side.playerId, BattlefieldTestTags.LAND_ZONE),
+                width = landWidth,
+                alignment = towardCorner,
+                palette = palette,
+                artFor = artFor,
+                onLandPress = onLandPress,
+                modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
+            )
         }
     }
 }
@@ -367,7 +433,7 @@ private fun landCardWidth(
     // itself the moment a land taps.
     val widest = stackWidthInCards() * most
     val byWidth = (zoneCeiling - StackGap * (most - 1)) / widest.coerceAtLeast(1f)
-    val byHeight = sideHeight * CARD_ASPECT_RATIO / stackHeightInCards()
+    val byHeight = sideHeight * BOARD_CARD_ASPECT_RATIO / stackHeightInCards()
 
     return minOf(byWidth, byHeight, PreferredCardWidth).coerceAtLeast(MinCardWidth)
 }
@@ -415,7 +481,7 @@ private fun mainCardWidth(
 
     val byWidth = (mainWidth - CardGap * (busiest - 1)) / busiest
     val rowHeight = (sideHeight - RowGap * (tallest - 1)) / tallest.coerceAtLeast(1)
-    val byHeight = rowHeight * CARD_ASPECT_RATIO
+    val byHeight = rowHeight * BOARD_CARD_ASPECT_RATIO
     val plain = minOf(PreferredCardWidth, byWidth, byHeight)
 
     val byAssembly =
@@ -506,3 +572,41 @@ private val RowGap = 3.dp
  * a reservation — and a hand that is not there takes none of it.
  */
 private const val HAND_HEIGHT_SHARE = 0.30f
+
+/** Keeps the vitals off the screen edge, for the same reason the board has a margin at all. */
+private val VitalsInset = 4.dp
+
+/** Between the two seats' strips, so they read as two lines rather than one block. */
+private val VitalsGap = 4.dp
+
+/**
+ * Room left under the hand for the viewer's own vitals bar.
+ *
+ * An allowance rather than a measurement: the bar's height comes from its text, and threading a
+ * measured value up from it would couple the board's layout pass to a component that draws itself
+ * fine without one. Generous enough that a larger font scale still clears it.
+ */
+private val VitalsBarAllowance = 56.dp
+
+/** Between the phase bar and the top of the hand it sits on. */
+private val PhaseBarGap = 4.dp
+
+/**
+ * How much of the bottom of the screen the hand and the phase bar have already claimed.
+ *
+ * Used to stack the viewer's vitals above them. An allowance rather than a measurement for the same
+ * reason the bar's own height is: threading measured heights up through the layout pass would couple
+ * the board to components that draw themselves perfectly well without it.
+ */
+private fun bottomStackHeight(
+    hand: List<TableHandCard>,
+    handTile: Dp,
+    hasPhases: Boolean,
+): Dp {
+    val handPart = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile) + PhaseBarGap
+    val phasePart = if (hasPhases) PhaseBarAllowance + PhaseBarGap else 0.dp
+    return handPart + phasePart
+}
+
+/** Room the phase bar takes, for stacking the vitals above it. */
+private val PhaseBarAllowance = 28.dp
