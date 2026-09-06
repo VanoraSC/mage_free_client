@@ -25,6 +25,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import magefree.app.game.ImmersiveSystemUi
 import magefree.designsystem.component.MageSecondaryButton
+import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.StepIds
+import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.LandStackHalf
@@ -75,6 +78,8 @@ fun BattlefieldPreviewScreen(
     var inspected by remember { mutableStateOf<String?>(null) }
     var tappedPlains by remember { mutableIntStateOf(0) }
     var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
+    // The stops are the one part of the phase bar a player changes, so the preview keeps them live.
+    var stops by remember { mutableStateOf(setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN)) }
     val board = catalogBoard(step)
 
     // The stacking rule is about a *transition* — a card turning a quarter and travelling into the
@@ -90,6 +95,8 @@ fun BattlefieldPreviewScreen(
                 onPlayFromHand = { id -> inspected = "played $id" },
                 vitals = tableVitals(state),
                 onExpandVitals = { seat -> expandedSeat = seat },
+                phases = PhaseBarState(steps = standardTurnSteps(stops), currentStepId = StepIds.PRECOMBAT_MAIN),
+                onToggleStop = { step -> stops = if (step.id in stops) stops - step.id else stops + step.id },
                 artFor = artFor,
                 onInspect = { id -> inspected = id },
                 // The two halves of a stack are two affordances, and the board decides what each

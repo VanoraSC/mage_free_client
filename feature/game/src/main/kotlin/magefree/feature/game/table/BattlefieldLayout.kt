@@ -23,11 +23,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSurface
+import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
-import magefree.designsystem.card.CARD_ASPECT_RATIO
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.boardCardWidthFitting
 import magefree.designsystem.card.rememberCounterPalette
+import magefree.designsystem.component.phase.PhaseBar
+import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.PhaseBarStep
 
 /*
  * The battlefield, arranged as §7.4 describes it.
@@ -87,6 +90,9 @@ import magefree.designsystem.card.rememberCounterPalette
  * @param vitals each seat, from [tableVitals]. Empty draws nothing — the same rule every region here
  *   follows.
  * @param onExpandVitals opens a seat's full list, or `null` for a board that is only being read.
+ * @param phases the turn and where in it the game is. Null draws no bar — the same rule as everywhere
+ *   else here, and the state a board has before a game starts.
+ * @param onToggleStop invoked when a stoppable step is pressed.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
  * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
@@ -105,6 +111,8 @@ fun BattlefieldLayout(
     onPlayFromHand: ((String) -> Unit)? = null,
     vitals: List<TableVitals> = emptyList(),
     onExpandVitals: ((TableVitals) -> Unit)? = null,
+    phases: PhaseBarState? = null,
+    onToggleStop: ((PhaseBarStep) -> Unit)? = null,
 ) {
     val palette = rememberCounterPalette()
 
@@ -193,12 +201,22 @@ fun BattlefieldLayout(
                 modifier =
                     Modifier
                         .align(Alignment.BottomEnd)
-                        .width(mainWidth)
-                        // Above the viewer's bar rather than under it: the bar is the last line of the
-                        // board and the hand sits on top of it, the way a player holds cards over the
-                        // edge of a table.
-                        .padding(bottom = if (vitals.any { it.isViewer }) VitalsBarAllowance else 0.dp),
+                        .width(mainWidth),
             )
+
+            // The phase bar sits directly on the hand — the two things a player looks at between
+            // decisions, in one place at the bottom of the screen.
+            phases?.let { bar ->
+                PhaseBar(
+                    state = bar,
+                    onToggleStop = { step -> onToggleStop?.invoke(step) },
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = BoardMargin)
+                            .padding(bottom = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile) + PhaseBarGap),
+                )
+            }
 
             // **A bar at each edge, centred.** Which seat a bar belongs to is said by where it is:
             // the opponent's along the top, the viewer's along the bottom, the same way the two halves
@@ -217,12 +235,20 @@ fun BattlefieldLayout(
                 }
             }
 
+            // The bottom of the screen is a stack, read upward: the hand hanging over the edge, the
+            // phase bar resting on it, and the viewer's own vitals above that. Each sits clear of the
+            // one below rather than over it — these are the three things a player looks at between
+            // decisions, and any of them covering another would hide something being used.
             vitals.firstOrNull { it.isViewer }?.let { seat ->
                 VitalsStrip(
                     vitals = seat,
                     palette = palette,
                     onExpand = onExpandVitals?.let { expand -> { expand(seat) } },
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(VitalsInset),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(VitalsInset)
+                            .padding(bottom = bottomStackHeight(hand, handTile, phases != null)),
                 )
             }
         }
@@ -407,7 +433,7 @@ private fun landCardWidth(
     // itself the moment a land taps.
     val widest = stackWidthInCards() * most
     val byWidth = (zoneCeiling - StackGap * (most - 1)) / widest.coerceAtLeast(1f)
-    val byHeight = sideHeight * CARD_ASPECT_RATIO / stackHeightInCards()
+    val byHeight = sideHeight * BOARD_CARD_ASPECT_RATIO / stackHeightInCards()
 
     return minOf(byWidth, byHeight, PreferredCardWidth).coerceAtLeast(MinCardWidth)
 }
@@ -455,7 +481,7 @@ private fun mainCardWidth(
 
     val byWidth = (mainWidth - CardGap * (busiest - 1)) / busiest
     val rowHeight = (sideHeight - RowGap * (tallest - 1)) / tallest.coerceAtLeast(1)
-    val byHeight = rowHeight * CARD_ASPECT_RATIO
+    val byHeight = rowHeight * BOARD_CARD_ASPECT_RATIO
     val plain = minOf(PreferredCardWidth, byWidth, byHeight)
 
     val byAssembly =
@@ -561,3 +587,26 @@ private val VitalsGap = 4.dp
  * fine without one. Generous enough that a larger font scale still clears it.
  */
 private val VitalsBarAllowance = 56.dp
+
+/** Between the phase bar and the top of the hand it sits on. */
+private val PhaseBarGap = 4.dp
+
+/**
+ * How much of the bottom of the screen the hand and the phase bar have already claimed.
+ *
+ * Used to stack the viewer's vitals above them. An allowance rather than a measurement for the same
+ * reason the bar's own height is: threading measured heights up through the layout pass would couple
+ * the board to components that draw themselves perfectly well without it.
+ */
+private fun bottomStackHeight(
+    hand: List<TableHandCard>,
+    handTile: Dp,
+    hasPhases: Boolean,
+): Dp {
+    val handPart = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile) + PhaseBarGap
+    val phasePart = if (hasPhases) PhaseBarAllowance + PhaseBarGap else 0.dp
+    return handPart + phasePart
+}
+
+/** Room the phase bar takes, for stacking the vitals above it. */
+private val PhaseBarAllowance = 28.dp

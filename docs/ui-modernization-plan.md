@@ -574,7 +574,7 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Board** | Battlefield, stack piles | Name, P/T, counters, tap state, status | Downsampled, cropped to the art box |
+| **Board** | Battlefield, stack piles | The printed name plate, P/T, counters, tap state, status | Downsampled, the card cut below its art box |
 | **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 

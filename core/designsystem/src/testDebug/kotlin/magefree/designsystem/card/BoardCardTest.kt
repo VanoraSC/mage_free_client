@@ -22,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -57,7 +58,7 @@ class BoardCardTest {
     }
 
     @Test
-    fun `an untapped card keeps a portrait footprint`() {
+    fun `an untapped card's footprint is the width it was given`() {
         show(BoardCardState(card = BEARS))
 
         composeTestRule.onNodeWithTag(FOOTPRINT).assertWidthIsEqualTo(CARD_WIDTH)
@@ -65,7 +66,7 @@ class BoardCardTest {
     }
 
     @Test
-    fun `a tapped card takes a landscape footprint, not just a rotated picture`() {
+    fun `a tapped card's footprint turns with it, not just its picture`() {
         show(BoardCardState(card = BEARS, tapped = true))
 
         composeTestRule.onNodeWithTag(FOOTPRINT).assertWidthIsEqualTo(cardHeight())
@@ -78,12 +79,31 @@ class BoardCardTest {
         // a plain size modifier is clamped by the parent's constraints — so the card was measured as a
         // square and its art cropped, before the rotation ever turned it. Rotation must move the card,
         // not resize it, and only the card's own measured size can show that.
+        //
+        // **The shape it must keep is the Board tier's, not a Magic card's.** A card cut below its
+        // art box is wider than it is tall, so "keeps its proportions" can no longer be spelled
+        // `height > width`: it has to be the tier's own ratio, which is what the untapped card below
+        // measures too. The card being the same shape either way is the whole claim — rotation moves
+        // it, the footprint around it turns, and the card itself is untouched.
         show(BoardCardState(card = BEARS, tapped = true))
 
         val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
+        val ratio = face.width.toFloat() / face.height.toFloat()
         assertTrue(
-            "a tapped card measured ${face.width}x${face.height}, which is not a card shape",
-            face.height > face.width,
+            "a tapped card measured ${face.width}x${face.height}, a ratio of $ratio",
+            abs(ratio - BOARD_CARD_ASPECT_RATIO) < 0.05f,
+        )
+    }
+
+    @Test
+    fun `an untapped card is the Board tier's own shape, a card cut below its art`() {
+        show(BoardCardState(card = BEARS))
+
+        val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
+        val ratio = face.width.toFloat() / face.height.toFloat()
+        assertTrue(
+            "a card measured ${face.width}x${face.height}, a ratio of $ratio",
+            abs(ratio - BOARD_CARD_ASPECT_RATIO) < 0.05f,
         )
     }
 
@@ -92,9 +112,10 @@ class BoardCardTest {
         show(BoardCardState(card = BEARS, attachments = listOf(EQUIPPED_TAPPED)))
 
         val face = composeTestRule.onNodeWithTag(BoardCardTestTags.ATTACHMENT).fetchSemanticsNode().size
+        val ratio = face.width.toFloat() / face.height.toFloat()
         assertTrue(
-            "a turned attachment measured ${face.width}x${face.height}, so its art is cropped",
-            face.height > face.width,
+            "a turned attachment measured ${face.width}x${face.height}, a ratio of $ratio",
+            abs(ratio - BOARD_CARD_ASPECT_RATIO) < 0.05f,
         )
     }
 
@@ -220,11 +241,12 @@ class BoardCardTest {
     }
 
     @Test
-    fun `a tapped attachment is turned, so it claims width instead of height`() {
+    fun `a tapped attachment is turned, so it reaches out past the host`() {
         // An Equipment tapped for improvise is still equipping. Turned a quarter turn it can only
-        // show its right edge, so it steps sideways — and being longer than the host is wide, it
-        // reaches out past both sides. The assembly has to measure itself around that, or the board
-        // draws a neighbour over it.
+        // show its right edge, so it steps sideways and has to sit far enough out for that edge to
+        // clear the host. It is also a card's *width* tall, which is more than a card cut below its
+        // art box, so it hangs below the host as well. The assembly has to measure itself around
+        // both, or the board draws a neighbour over the name the stack exists to expose.
         composeTestRule.setContent {
             MageTheme {
                 Box {
@@ -250,8 +272,8 @@ class BoardCardTest {
             withTapped.width > bare.width,
         )
         assertEquals(
-            "a turned attachment steps sideways, so it must not add height the way an upright one does",
-            bare.height,
+            "the assembly must claim the height a turned card hangs below the host, which is a card's width",
+            CARD_WIDTH.value.roundToInt(),
             withTapped.height,
         )
     }
@@ -349,7 +371,8 @@ class BoardCardTest {
         composeTestRule.onNodeWithTag(BoardCardTestTags.STATS).assertDoesNotExist()
     }
 
-    private fun cardHeight(): Dp = (CARD_WIDTH.value / CARD_ASPECT_RATIO).roundToInt().dp
+    // The Board tier is a card cut below its art box, so its height comes from its own ratio.
+    private fun cardHeight(): Dp = (CARD_WIDTH.value / BOARD_CARD_ASPECT_RATIO).roundToInt().dp
 
     @Test
     fun `a tapped card's assembly still contains the Auras stacked on it`() {
