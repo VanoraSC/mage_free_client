@@ -120,4 +120,62 @@ class XMageImageSourceTest {
             russian.primaryUrl(CardArtRequest("XLN", "121", size = CardArtSize.LARGE)),
         )
     }
+
+    // ---- tokens, which have no collector number to be found by --------------------------------------
+
+    @Test
+    fun `a token is looked up by name, in the derived token set first`() {
+        // Upstream leaves a token's `cardNumber` empty, so the set-plus-number identity is not there.
+        // Its table's own worked example is `RNA/Zombie` -> https://api.scryfall.com/cards/trna/3, and
+        // the derived request resolves to the same card by name.
+        val urls = source.resolve(tokenArtRequest("RNA", "Zombie Token", CardArtSize.LARGE)!!)
+
+        assertEquals(
+            listOf(
+                "https://api.scryfall.com/cards/named?exact=Zombie&set=trna&format=image",
+                "https://api.scryfall.com/cards/named?exact=Zombie&set=rna&format=image",
+            ),
+            urls,
+        )
+    }
+
+    @Test
+    fun `the bare set is the fallback, because some sets are already token sets`() {
+        // Measured across upstream's table: almost every entry that is not `t` + the set code points at
+        // the set code itself — the promo and supplemental sets, where the token lives in the same set.
+        // Both are offered, in that order, through the same fallback list an ordinary card already uses.
+        val urls = source.resolve(tokenArtRequest("P04", "Spirit Token")!!)
+
+        assertTrue("the derived token set is tried first", urls.first().contains("set=tp04"))
+        assertTrue("the bare set is the fallback", urls.last().contains("set=p04"))
+    }
+
+    @Test
+    fun `XMage's own Token suffix is not part of the name anything else knows`() {
+        // `CardImageUtils` strips it upstream for exactly this reason.
+        assertEquals("Zombie", tokenArtRequest("RNA", "Zombie Token")!!.tokenName)
+        assertEquals("Germ", tokenArtRequest("CMA", "Germ")!!.tokenName)
+    }
+
+    @Test
+    fun `a token name is percent-encoded, so a two-word token is still one query parameter`() {
+        val urls = source.resolve(tokenArtRequest("GRN", "Bird Illusion Token")!!)
+
+        assertTrue(urls.first(), urls.first().startsWith("https://api.scryfall.com/cards/named?exact=Bird%20Illusion&set=tgrn"))
+    }
+
+    @Test
+    fun `a token asks for the same sizes an ordinary card does`() {
+        assertTrue(source.resolve(tokenArtRequest("RNA", "Zombie Token")!!).first().endsWith("&version=small"))
+        assertTrue(
+            source.resolve(tokenArtRequest("RNA", "Zombie Token", CardArtSize.ART_CROP)!!).first().endsWith("&version=art_crop"),
+        )
+    }
+
+    @Test
+    fun `a token with no set has no request at all`() {
+        // The board falls back to the placeholder rather than asking Scryfall for a set it does not have.
+        assertEquals(null, tokenArtRequest("", "Zombie Token"))
+        assertEquals(null, tokenArtRequest("RNA", " Token"))
+    }
 }

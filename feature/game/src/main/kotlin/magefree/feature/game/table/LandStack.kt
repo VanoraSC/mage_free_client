@@ -259,7 +259,18 @@ private fun StackedCard(
     artFor: TableArtResolver?,
     onPress: (() -> Unit)?,
 ) {
-    val permanent = stack.representative
+    // **Each half is drawn from its own copies.** The halves are interchangeable in everything the
+    // stack's key compares, but not in the one signal the key deliberately ignores: an untapped land is
+    // in `canPlayObjects` and a tapped one is not, so drawing every copy from a single representative
+    // put a green *playable* border on lands that had already been used. Which half a card is in is
+    // decided by how far over it is, so a card halfway through a tap changes hands at the midpoint —
+    // which is when it stops being a land you could tap.
+    val permanent =
+        if (turn > 0.5f) {
+            stack.tapped.firstOrNull() ?: stack.representative
+        } else {
+            stack.untapped.firstOrNull() ?: stack.representative
+        }
     Box(
         modifier =
             Modifier

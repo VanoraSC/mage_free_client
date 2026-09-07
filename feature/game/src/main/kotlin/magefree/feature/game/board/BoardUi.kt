@@ -3,6 +3,7 @@ package magefree.feature.game.board
 import magefree.cards.art.CardArtFace
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
+import magefree.cards.art.tokenArtRequest
 import magefree.designsystem.card.CardDisplay
 import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
@@ -617,7 +618,15 @@ internal fun GameCard.toCardUi(): CardUi {
                 typeLine = if (isFaceDown) null else typeLine?.cleanedOrNull(),
                 oracleText = if (isFaceDown) null else rules.mapNotNull { it.cleanedOrNull() }.joinToString("\n").ifBlank { null },
             ),
-        art = if (isFaceDown) null else artRequestOf(setCode, collectorNumber, isShowingAlternateFace = transformed),
+        art =
+            when {
+                isFaceDown -> null
+                // A token has no collector number to be found by, so it is asked for by name — the
+                // same request the battlefield builds, so the detail view of a token shows the same
+                // picture the board does rather than a placeholder beside a drawn card.
+                isToken -> setCode?.let { tokenArtRequest(setCode = it, name = name) }
+                else -> artRequestOf(setCode, collectorNumber, isShowingAlternateFace = transformed)
+            },
         powerToughness = if (isFaceDown) null else pt,
         isCreature = isCreature,
         counters = counters.map { CounterUi(name = it.name, count = it.count) },

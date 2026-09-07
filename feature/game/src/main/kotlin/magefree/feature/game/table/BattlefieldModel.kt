@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import magefree.cards.art.CardArtFace
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
+import magefree.cards.art.tokenArtRequest
 import magefree.designsystem.card.BoardAttachment
 import magefree.designsystem.card.BoardBadge
 import magefree.designsystem.card.BoardCardSignal
@@ -109,8 +110,14 @@ data class TableAttachment(
  * and a tapped side keeps the count in one place and gives a tapping card somewhere to travel *to*.
  *
  * **Everything else is still strict.** A stack promises *these are interchangeable — read one and you
- * have read them all*, so any other difference keeps a land out: counters, badges, combat, playability,
- * and the printing. An attachment keeps it out absolutely.
+ * have read them all*, so any other difference keeps a land out: counters, badges, combat, and the
+ * printing. An attachment keeps it out absolutely.
+ *
+ * **Playability is the exception, and it is one for the same reason tap state is.** What makes an
+ * untapped Swamp playable is that you can still tap it for mana, so a land's playability is a
+ * restatement of which half it is in — and treating it as a difference split every pile the moment one
+ * of its lands was used. Each half is drawn from its own copies, so nothing borrows the other side's
+ * mark.
  *
  * @property untapped the upright copies, in the server's own order.
  * @property tapped the turned copies, in the server's own order.
@@ -204,10 +211,27 @@ private data class LandStackKey(
 /**
  * The key with **tap state removed**, since that is what the stack has two halves for.
  *
+ * **And playability with it, because for a land that is the same fact.** An untapped Swamp is in
+ * `canPlayObjects` — you can tap it for mana — and a tapped one is not, so leaving the signal in the
+ * key split every land the moment one of them was used: four upright Swamps in one stack and five
+ * leaning ones in a second stack beside it, which is precisely the pile the stack exists to avoid.
+ * Found on a real board.
+ *
+ * Only [BoardCardSignal.Playable] is dropped. The others — being targeted, being a threat, being in
+ * combat — are facts about *that* permanent rather than about which half it is in, and a stack that
+ * hid them would be claiming "read one and you have read them all" when it is not true.
+ *
  * `null` for a permanent that may never stack: see the class doc above.
  */
 private fun TablePermanent.landStackKey(): LandStackKey? =
-    if (carriesAttachment) null else LandStackKey(state = state.copy(tapped = false), art = art)
+    if (carriesAttachment) {
+        null
+    } else {
+        LandStackKey(
+            state = state.copy(tapped = false, signals = state.signals - BoardCardSignal.Playable),
+            art = art,
+        )
+    }
 
 private fun TablePermanent.asOwnStack(): TableLandStack =
     if (state.tapped) {
@@ -374,7 +398,11 @@ private fun roleOf(card: GameCard): PermanentRole =
  *
  * **A face-down permanent gets no request.** Its face is not information the viewer is entitled to,
  * and the server may still be sending what the card is; drawing its art would show a card the game
- * says is hidden. A token has no printing to name either, and falls back to the placeholder.
+ * says is hidden.
+ *
+ * **A token is asked for by name**, because upstream leaves its collector number empty — see
+ * [tokenArtRequest]. It still has a set, and that set is the one upstream chose for the token's
+ * *image* rather than the set of the card that made it, which is what makes the lookup work.
  *
  * [GameCard.transformed] is what says a permanent is *currently* showing its back face, and a
  * double-faced card's two faces share one printing — so which face is up is entirely a matter of which
@@ -383,6 +411,7 @@ private fun roleOf(card: GameCard): PermanentRole =
 private fun artRequestOf(card: GameCard): CardArtRequest? {
     if (card.isFaceDown) return null
     val set = card.setCode?.takeIf { it.isNotBlank() } ?: return null
+    if (card.isToken) return tokenArtRequest(setCode = set, name = card.name, size = CardArtSize.ART_CROP)
     val number = card.collectorNumber?.takeIf { it.isNotBlank() } ?: return null
     return CardArtRequest(
         setCode = set,
