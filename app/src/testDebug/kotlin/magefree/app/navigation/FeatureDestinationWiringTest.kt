@@ -122,7 +122,9 @@ class FeatureDestinationWiringTest {
             mapOf(
                 ConnectRoute::class to ":feature:connect — sign-in; without it the APK can never open a session",
                 ShellRoute::class to "the tabbed browsing shell — without it a signed-in user has nowhere to go",
-                GameRoute::class to "the immersive game surface",
+                GameRoute::class to
+                    ":feature:game — the board the room's MatchStarting hand-off opens, outside the " +
+                    "shell's chrome; without it the game id the server sends has nowhere to go",
                 CatalogRoute::class to "the design-system component catalog",
                 DecksRoute::class to
                     ":feature:decks reached without a session — deckbuilding is fully offline, so it is " +
@@ -168,9 +170,6 @@ class FeatureDestinationWiringTest {
                 HostTableNavRoute::class to ":feature:tables — hosting a table from the lobby",
                 JoinTableNavRoute::class to ":feature:tables — joining a lobby table",
                 TableRoomNavRoute::class to ":feature:tables — the table room (seats/ready/start)",
-                GameBoardNavRoute::class to
-                    ":feature:game — the read-only board the room's MatchStarting hand-off opens; " +
-                    "without it the game id the server sends has nowhere to go",
                 ProfileRoute::class to "the Profile tab",
                 SettingsRoute::class to "the Settings tab (which owns sign-out)",
             ),

@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
 import magefree.app.catalog.BattlefieldPreviewRoute
 import magefree.app.catalog.BattlefieldPreviewScreen
@@ -13,15 +14,17 @@ import magefree.app.catalog.CastMockRoute
 import magefree.app.catalog.CastMockScreen
 import magefree.app.catalog.CatalogRoute
 import magefree.app.catalog.ComponentCatalogScreen
+import magefree.app.catalog.LandscapeOnly
 import magefree.app.catalog.rememberBattlefieldArtResolver
 import magefree.app.catalog.rememberCatalogArtResolver
 import magefree.app.catalog.rememberOracleLookup
 import magefree.app.connection.ui.ConnectionStatusBar
 import magefree.app.game.GameRoute
-import magefree.app.game.ImmersiveGameScreen
+import magefree.app.game.ImmersiveSystemUi
 import magefree.feature.connect.ConnectFlow
 import magefree.feature.cards.CardsRoute as CardsFeatureRoute
 import magefree.feature.decks.DecksRoute as DecksLibraryRoute
+import magefree.feature.game.GameBoardRoute as GameBoardFeatureRoute
 
 /**
  * Type-safe route for the tabbed browsing shell — the [AppShell] with its bottom-bar / rail chrome
@@ -47,8 +50,11 @@ data object ConnectRoute
  * - [ConnectRoute] renders the connect + sign-in flow, chrome-free. **The start destination.**
  * - [ShellRoute] renders the full [AppShell], which owns its **own** inner nav controller for the
  *   Home/Decks/Profile/Settings tabs. The connection strip lives inside the shell.
- * - [GameRoute] renders the full-screen [ImmersiveGameScreen] with no shell chrome at all — no
- *   bottom bar / rail, no connection strip — so the game surface is edge-to-edge and immersive.
+ * - [GameRoute] renders the game board with no shell chrome at all — no bottom bar / rail, no
+ *   connection strip — so the board is edge-to-edge, landscape and immersive. It held a placeholder
+ *   until 0112; the chrome-free slot was always what the board was waiting for, because the board's
+ *   card sizes are derived from the window it is given and a navigation rail takes that width off
+ *   the battlefield.
  * - [CatalogRoute] renders the debug-only [ComponentCatalogScreen], also outside the
  *   shell chrome; it is reached from the Settings dev entry.
  *
@@ -172,7 +178,11 @@ fun AppNavHost(
         }
         composable<ShellRoute> {
             AppShell(
-                onEnterGame = { navController.navigate(GameRoute) },
+                // The one entry into a game, hoisted out of the shell graph: the table room's
+                // match-start signal names the game, and the board takes the whole window.
+                onEnterGame = { gameId ->
+                    navController.navigate(GameRoute(gameId = gameId)) { launchSingleTop = true }
+                },
                 onOpenCatalog = { navController.navigate(CatalogRoute) },
                 connectionStatusBar = connectionStatusBar,
                 onSignOut = {
@@ -186,8 +196,21 @@ fun AppNavHost(
                 },
             )
         }
-        composable<GameRoute> {
-            ImmersiveGameScreen(onExit = { navController.popBackStack() })
+        composable<GameRoute> { entry ->
+            // The board, outside the shell's chrome and in the window's own orientation. Both are
+            // scoped to this composition rather than declared in the manifest, so leaving the game —
+            // by the exit, by Back, or by the process being torn down — restores whatever the
+            // portrait screens that still exist were using.
+            LandscapeOnly()
+            ImmersiveSystemUi()
+            GameBoardFeatureRoute(
+                gameId = entry.toRoute<GameRoute>().gameId,
+                onExit = { navController.popBackStack() },
+                // The board's own art tier, resolved here for the same reason the battlefield
+                // preview's is: `:app` owns the catalog lookup, and the feature stays previewable
+                // and testable without a DI container.
+                artFor = rememberBattlefieldArtResolver(),
+            )
         }
         composable<BattlefieldPreviewRoute> {
             // The battlefield needs the whole window and its own orientation, so it is a route of its

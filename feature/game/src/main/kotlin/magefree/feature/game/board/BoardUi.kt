@@ -707,3 +707,17 @@ private fun TurnPhase.label(): String? =
         TurnPhase.End -> "Ending"
         TurnPhase.Unknown -> null
     }
+
+/**
+ * The card [objectId] names, wherever the board is drawing it: the hand, either battlefield, or the
+ * stack. Null when the object is not on the board at all — a target the server offered that lives
+ * somewhere this projection does not carry simply has no detail view.
+ */
+internal fun BoardUi.cardFor(objectId: String): CardUi? {
+    hand.cards.firstOrNull { it.objectId == objectId }?.let { return it.card }
+    (listOfNotNull(viewerSeat) + opponentSeats)
+        .flatMap { it.battlefield }
+        .firstOrNull { it.objectId == objectId }
+        ?.let { return it.card }
+    return stack.entries.firstOrNull { it.objectId == objectId }?.card
+}

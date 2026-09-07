@@ -55,7 +55,7 @@ import magefree.feature.decks.DecksRoute as DecksLibraryRoute
 fun AppShell(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
-    onEnterGame: () -> Unit = {},
+    onEnterGame: (String) -> Unit = {},
     onOpenCatalog: () -> Unit = {},
     onSignOut: () -> Unit = {},
     connectionStatusBar: @Composable () -> Unit = { ConnectionStatusBar() },
@@ -96,7 +96,7 @@ fun AppShell(
     widthClass: WindowWidthClass,
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    onEnterGame: () -> Unit = {},
+    onEnterGame: (String) -> Unit = {},
     onOpenCatalog: () -> Unit = {},
     // deliberate sign-out, surfaced on the Settings destination and hoisted to the root
     // graph, which tears the session down and returns to the connect flow. Defaults to a no-op so the

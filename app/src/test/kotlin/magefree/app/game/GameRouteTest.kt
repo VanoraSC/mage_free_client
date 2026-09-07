@@ -7,9 +7,11 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * Hermetic JVM unit test for the immersive [GameRoute] wiring — part of the `./gradlew check` gate,
- * no Android framework or device required. It pins the  invariant that the game is a
- * distinct route hosted **outside** the top-level tab set (so the shell chrome is excluded on it).
+ * Hermetic JVM unit test for the [GameRoute] wiring — part of the `./gradlew check` gate, no Android
+ * framework or device required. It pins the invariant that the game is a distinct route hosted
+ * **outside** the top-level tab set, so the shell chrome is excluded on it: the board is three columns
+ * sized by the window they are given, and a navigation rail down the left takes that width off the
+ * battlefield.
  */
 class GameRouteTest {
     @Test
@@ -17,7 +19,9 @@ class GameRouteTest {
         val tabRoutes = TopLevelDestination.entries.map { it.route }
         assertFalse(
             "GameRoute must not be one of the tabbed top-level destinations",
-            tabRoutes.contains(GameRoute),
+            // An instance, because the route carries a game id: a tab is a place, and a game is a
+            // place with a game in it.
+            tabRoutes.contains(GameRoute(gameId = "g-1")),
         )
 
         val tabRouteClasses = TopLevelDestination.entries.map { it.routeClass }

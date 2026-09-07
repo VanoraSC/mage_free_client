@@ -77,9 +77,7 @@ data class DeclarationUi(
  *   (the requirements — the board appears before the hand exists), so this only drives a small status
  *   line, never a gate on the board.
  * @property joinError the server's own reason when `joinGame` was declined, else null.
- * @property isHandExpanded whether the peek-and-expand hand is open. **View state, not game
- *   state**: opening the hand looks at cards the player already holds and sends nothing to the server.
- * @property areControlsVisible whether the floating controls are shown. Also view state — and
+ * @property areControlsVisible whether the floating controls are shown. View state — and
  *   hiding them must never hide that the server is waiting, which is why [BoardUi.priority] is drawn by
  *   the board itself rather than by the controls, and why the collapsed toggle restates it.
  * @property controls the floating controls for the outstanding prompt, or null when the server is not
@@ -93,12 +91,16 @@ data class DeclarationUi(
  * @property actionError the server's own reason for declining the last action, else null.
  * @property detailFace the peek state for the tapped card's art — null while no card is
  *   selected, or before the catalog has answered whether it is even a double-faced card.
+ * @property snapshot the server's last whole game view, unprojected. The rebuilt board's tier reads
+ *   a [GameState] directly — `battlefieldModel`, `tableVitals`, `tableZones`, `handCards` and
+ *   `playableElsewhere` are all functions of one — so it is carried alongside [board] rather than
+ *   projected twice into two shapes that could disagree. Null until the first snapshot arrives,
+ *   which is the state a board has while it is still joining.
  */
 data class GameBoardUiState(
     val board: BoardUi,
     val isJoining: Boolean = true,
     val joinError: String? = null,
-    val isHandExpanded: Boolean = false,
     val areControlsVisible: Boolean = true,
     val controls: PromptControlsUi? = null,
     val selectedObjectId: String? = null,
@@ -106,6 +108,7 @@ data class GameBoardUiState(
     val declaration: DeclarationUi? = null,
     val actionError: String? = null,
     val detailFace: CardDetailFaceUi? = null,
+    val snapshot: GameState? = null,
 )
 
 /**
@@ -255,6 +258,7 @@ class GameBoardViewModel
             _uiState.value =
                 previous.copy(
                     board = BoardUi.from(state),
+                    snapshot = state,
                     controls = controlsFor(state, hasPickedTarget = hasPickedTarget),
                     selectedObjectId = if (promptChanged) null else previous.selectedObjectId,
                     cast = previous.cast.advancedBy(state.prompt),
@@ -408,16 +412,6 @@ class GameBoardViewModel
                 .firstOrNull { it.objectId == objectId }
                 ?.let { return it.card.name }
             return UNNAMED_CAST
-        }
-
-        /**
-         * Open or close the peek-and-expand hand.
-         *
-         * View state only: it decides how much of the player's own hand is drawn over the board, and
-         * sends nothing.
-         */
-        fun setHandExpanded(expanded: Boolean) {
-            _uiState.value = _uiState.value.copy(isHandExpanded = expanded)
         }
 
         /**
