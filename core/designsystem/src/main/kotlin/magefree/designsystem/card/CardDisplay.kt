@@ -111,3 +111,26 @@ fun CardArtPlaceholder(
         )
     }
 }
+
+/**
+ * How much of a card's height the **Board** tier keeps.
+ *
+ * A Magic card puts its title bar and its illustration in the top half and its type line, rules text
+ * and flavour below. On the battlefield the text is unreadable at card size anyway — that is what
+ * inspection is for — so keeping the bottom costs height and returns a grey smudge.
+ *
+ * Cut just below the art box: the title, the mana cost and the whole illustration stay, and the type
+ * line down is dropped. The number is where the art box ends on a modern frame; older frames vary by a
+ * percent or two, which shows as a sliver of type line rather than as a cropped illustration.
+ */
+const val BOARD_CARD_CROP: Float = 0.58f
+
+/**
+ * The Board tier's own width-to-height ratio, which is [CARD_ASPECT_RATIO] on a card cut to
+ * [BOARD_CARD_CROP].
+ *
+ * Everything on the battlefield derives its height from this rather than from the full card: the card
+ * itself, the attachment stack behind it, the land stacks, and the board's own sizing. One constant, so
+ * they cannot disagree.
+ */
+const val BOARD_CARD_ASPECT_RATIO: Float = CARD_ASPECT_RATIO / BOARD_CARD_CROP

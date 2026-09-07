@@ -15,6 +15,7 @@ import magefree.network.game.CardType
 import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
 import magefree.network.game.GameCardIcon
+import magefree.network.game.GameCommandObject
 import magefree.network.game.GameCounter
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
@@ -252,6 +253,21 @@ private val Developed =
                     playerId = "me",
                     name = "You",
                     isViewer = true,
+                    // The board most worth checking the vitals against: this seat is two poison from
+                    // losing and holds an emblem, the other has neither. A board where both seats
+                    // carry everything shows nothing about what appears only when it matters.
+                    life = 14,
+                    libraryCount = 27,
+                    handCount = 5,
+                    graveyardCount = 3,
+                    wins = 1,
+                    winsNeeded = 2,
+                    hasPriority = true,
+                    isActive = true,
+                    counters = listOf(GameCounter("poison", 8), GameCounter("energy", 2)),
+                    isMonarch = true,
+                    designationNames = listOf("City's Blessing"),
+                    commandList = listOf(GameCommandObject(id = "emblem-1", name = "Emblem — Elspeth, Knight-Errant")),
                     battlefield =
                         listOf(
                             creature(
@@ -293,6 +309,13 @@ private val Developed =
                 GamePlayer(
                     playerId = "them",
                     name = "Opponent",
+                    // No counters, no designations, no emblem — the contrast that shows a chip appears
+                    // only when there is something to say.
+                    life = 20,
+                    libraryCount = 31,
+                    handCount = 4,
+                    graveyardCount = 1,
+                    winsNeeded = 2,
                     battlefield =
                         listOf(
                             creature(

@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import magefree.app.game.ImmersiveSystemUi
 import magefree.designsystem.card.CardPreview
 import magefree.designsystem.component.MageSecondaryButton
+import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.StepIds
+import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.TableArtResolver
@@ -33,6 +36,7 @@ import magefree.feature.game.table.TableHandCard
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
 import magefree.feature.game.table.handPreviewState
+import magefree.feature.game.table.tableVitals
 
 /*
  * Inspecting a card, and playing it — mocked.
@@ -93,6 +97,8 @@ fun CastMockScreen(
                 // by accident, which is the one mistake a board must not make easy.
                 onPlayFromHand = { id -> inspecting = hand.firstOrNull { it.id == id } },
                 onInspect = { id -> inspecting = hand.firstOrNull { it.id == id } ?: inspecting },
+                vitals = tableVitals(state),
+                phases = PhaseBarState(steps = standardTurnSteps(), currentStepId = StepIds.PRECOMBAT_MAIN),
                 modifier = Modifier.fillMaxSize(),
             )
 
