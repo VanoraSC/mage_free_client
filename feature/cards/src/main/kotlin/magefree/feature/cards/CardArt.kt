@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,6 +70,7 @@ class CoilCardArtRenderer(
     private val imageLoader: ImageLoader,
     private val requestBuilder: (CardArtRequest) -> ImageRequest,
     private val contentScale: ContentScale = ContentScale.Crop,
+    private val alignment: Alignment = Alignment.Center,
 ) : CardArtRenderer {
     @Composable
     override fun Render(
@@ -85,6 +87,7 @@ class CoilCardArtRenderer(
             imageLoader = imageLoader,
             contentDescription = null,
             contentScale = contentScale,
+            alignment = alignment,
             modifier = modifier,
             loading = { CardArtPlaceholder(card = display, modifier = Modifier.fillMaxSize()) },
             error = { CardArtPlaceholder(card = display, modifier = Modifier.fillMaxSize()) },
@@ -103,10 +106,18 @@ class CoilCardArtRenderer(
  * changed rather than just its annotations.
  */
 @Composable
-fun rememberCardArtRenderer(contentScale: ContentScale = ContentScale.Crop): CardArtRenderer {
+fun rememberCardArtRenderer(
+    contentScale: ContentScale = ContentScale.Crop,
+    alignment: Alignment = Alignment.Center,
+): CardArtRenderer {
     val loader: CardImageLoader = koinInject()
     val imageLoader by loader.imageLoader.collectAsStateWithLifecycle()
-    return remember(imageLoader, contentScale) {
-        CoilCardArtRenderer(imageLoader = imageLoader, requestBuilder = loader::buildRequest, contentScale = contentScale)
+    return remember(imageLoader, contentScale, alignment) {
+        CoilCardArtRenderer(
+            imageLoader = imageLoader,
+            requestBuilder = loader::buildRequest,
+            contentScale = contentScale,
+            alignment = alignment,
+        )
     }
 }

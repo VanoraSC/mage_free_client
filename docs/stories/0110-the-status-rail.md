@@ -39,21 +39,24 @@ because it is the same change.
 **In scope**
 - Three columns: the status rail on the left, the land column beside it, the battlefield to the
   right. Opponent above, viewer below, in the two right-hand columns.
-- The status rail: each seat's graveyard, drawn as the top card of it, and each seat's vitals strip.
-- An outlined placeholder the size of a card, reading *Graveyard*, when the graveyard is empty.
-- Tapping a graveyard opens it as a floating, scrollable list of its cards; a press outside closes
-  it; tapping a card in it opens the card preview.
-- Tapping any card on the battlefield opens the card preview.
+- The status rail: each seat's graveyard and its two exile piles, each drawn as the card on top of
+  it, and each seat's vitals.
+- An outlined placeholder the size of a card, naming the pile, when one is empty.
+- Tapping a pile opens it as a floating, scrollable list of its cards; a press outside closes it;
+  tapping a card in it opens the card preview.
+- Tapping any card on the battlefield opens the card preview — including an attached one, from its
+  own exposed band, and an enchanted permanent's preview lists what is on it.
 - Non-creature permanents on their own horizontal — below the viewer's creatures, above the
   opponent's — and toward the outside of the board, so they never sit under a creature.
+- Creature rows centred on the screen rather than on their column, as far as their own slack allows.
 - The land stacks' geometry, re-derived for the Board tier's own card shape.
 
 **Out of scope**
-- **Exile**, revealed and looked-at zones. Same browser, more zones, and each has a question of its
-  own about how piles are named (§7.13); the graveyard has none.
-- **Acting from the graveyard** — flashback and its relatives. That is the cast flow's business
-  (§7.6) and needs a live session to submit to.
-- Sorting or grouping a graveyard. It has the server's order, which is meaningful.
+- **Revealed and looked-at zones.** Same browser, more piles, and each has a question of its own
+  about when it appears and when it goes away.
+- **Acting from a zone** — flashback, plot and their relatives. That is the cast flow's business
+  (§7.6) and needs a live session to submit to. A card the server is offering is *marked* here.
+- Sorting or grouping a pile. Each has the server's order, which is meaningful.
 
 ## 4. Prerequisites & toolchain
 
@@ -68,12 +71,13 @@ whenever a fourth kind of land appeared.
 
 ```
  ┌────────┬─────────────┬────────────────────────────┐
- │  opp   │             │   [ other permanents ]     │  back
+ │ opp    │             │   [ other permanents ]     │  back
  │ vitals │  opponent   │   [ creatures ]            │  front
- │  opp   │   lands     ├────────────────────────────┤
- │ grave  ├─────────────┤   [ creatures ]            │  front
- │  ---   │   your      │   [ other permanents ]     │  back
- │ your   │   lands     ├────────────────────────────┤
+ │ grave  │   lands     ├────────────────────────────┤
+ │ other  │             │                            │
+ │ exile  ├─────────────┤   [ creatures ]            │  front
+ │ exile  │   your      │   [ other permanents ]     │  back
+ │ other  │   lands     ├────────────────────────────┤
  │ grave  │             │   phase bar                │
  │ vitals │             │   hand                     │
  └────────┴─────────────┴────────────────────────────┘
@@ -104,6 +108,35 @@ line and ending up drawn behind creatures. They now sit on their own row, on the
 creatures from the centre line, aligned toward the outside — where there is room, and where they are
 not in the way of the row that changes every combat.
 
+**Exile is two piles, and the second one is the only judgement in this story.** *Other* is exile a
+card is coming back from or can be cast from — plot, suspend, rebound, adventure, foretell, airbend.
+§7.13 establishes that there is no single upstream flag for it and that the reference client has none
+either; two signals together cover it and both are already on the wire — an effect-created zone's
+*name*, and `canPlayObjects`. Neither alone is enough: a plotted card is named always and playable
+only on the turn it can be cast, and an airbent card is nameless and marked only while it is
+castable. The board reads both, and the pile is called *Other* rather than something more confident.
+
+**The creature rows centre on the screen, not on their column.** The battlefield is the third column,
+so centring inside it puts the creatures well right of the middle with a hole where the player is
+looking. Each row slides back toward the screen's own centre — but only as far as its own unused
+width allows, so a row busy enough to need its whole column stays in it and never slides under the
+lands.
+
+**A card's face is drawn width-first and anchored to the top.** That is what makes the tier's crop
+work: the image fills the card's width, keeps its proportions from that alone, and whatever runs past
+the bottom of the face is clipped. `ContentScale.Crop` is the wrong tool for it — it scales an image
+to *cover* the box it is given, so in a box shorter than a card it takes the top and the bottom in
+equal measure and the card loses its title bar; and where the box is not the height the layout
+intended, it silently squashes the card instead. Both of those shipped, one after the other.
+
+**The rail's piles are sized by its height, not its width.** A seat has three of them plus its own
+numbers in half a rail; at the rail's own width they would want three times the height there is.
+
+**The vitals read down, not across.** Life on its own line at the top, the zone counts under it, then
+one counter per line below that, scrolling past what the rail can show. Across a column a card wide,
+a row of chips set one letter per line — which is how *Monarch* came out as a vertical stack of seven
+letters.
+
 **The land stack geometry follows the card, not a card.** Every distance in it is now a fraction of
 the Board tier's own shape rather than of a portrait card, so the crop cannot silently invert it
 again. The same is true of the attachment stack in `BoardCard`.
@@ -132,11 +165,14 @@ again. The same is true of the attachment stack in `BoardCard`.
 
 - [x] The board reads as three columns, with the opponent above and the viewer below in the two
       right-hand ones.
-- [x] Each seat's graveyard is on screen, as its top card or as a placeholder the same size.
-- [x] Each seat's vitals are in the rail, beside that seat's graveyard.
-- [x] Tapping a graveyard opens a scrollable list of it; a press outside closes it; tapping a card in
-      it opens the card preview.
-- [x] Tapping any battlefield card opens the card preview.
+- [x] Each seat's graveyard and its two exile piles are on screen, each as its top card or as a
+      placeholder the same size.
+- [x] Each seat's vitals are in the rail, against that seat's own edge of the screen, reading down.
+- [x] Tapping a pile opens a scrollable list of it; a press outside closes it; tapping a card in it
+      opens the card preview.
+- [x] Tapping any battlefield card opens the card preview, including an attached one, and an
+      enchanted permanent's preview lists what is on it.
+- [x] Creature rows are centred on the screen wherever they have the width to be.
 - [x] Non-creature permanents sit on their own horizontal and never under a creature.
 - [x] Land stacks render correctly at the Board tier's card shape.
 - [x] `./gradlew check` passes and the preview shows all of it.

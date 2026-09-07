@@ -34,19 +34,22 @@ import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
-import magefree.feature.game.table.GraveyardOverlay
 import magefree.feature.game.table.LandStackHalf
 import magefree.feature.game.table.TableArtResolver
+import magefree.feature.game.table.TableAttachment
 import magefree.feature.game.table.TableCard
 import magefree.feature.game.table.TablePermanent
 import magefree.feature.game.table.TableVitals
+import magefree.feature.game.table.TableZonePile
 import magefree.feature.game.table.VitalsOverlay
+import magefree.feature.game.table.ZoneOverlay
+import magefree.feature.game.table.attachmentPreview
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
 import magefree.feature.game.table.permanentPreview
 import magefree.feature.game.table.tableCardPreview
-import magefree.feature.game.table.tableGraveyards
 import magefree.feature.game.table.tableVitals
+import magefree.feature.game.table.tableZones
 
 /*
  * The battlefield, filling the window.
@@ -88,7 +91,7 @@ fun BattlefieldPreviewScreen(
     var inspected by remember { mutableStateOf<String?>(null) }
     var tappedPlains by remember { mutableIntStateOf(0) }
     var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
-    var openGraveyard by remember { mutableStateOf<String?>(null) }
+    var openZone by remember { mutableStateOf<TableZonePile?>(null) }
     var reading by remember { mutableStateOf<ReadingCard?>(null) }
     // The stops are the one part of the phase bar a player changes, so the preview keeps them live.
     var stops by remember { mutableStateOf(setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN)) }
@@ -99,7 +102,7 @@ fun BattlefieldPreviewScreen(
     // stepped through: tapping its Plains taps a Plains, and the animation is the thing being judged.
     val state = if (board.tappable) tappedPlainsBoard(tappedPlains) else board.state
     val model = battlefieldModel(state)
-    val graveyards = tableGraveyards(state)
+    val zones = tableZones(state)
 
     Surface(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().testTag(BattlefieldPreviewTestTags.SCREEN)) {
@@ -109,17 +112,22 @@ fun BattlefieldPreviewScreen(
                 onPlayFromHand = { id -> inspected = "played $id" },
                 vitals = tableVitals(state),
                 onExpandVitals = { seat -> expandedSeat = seat },
-                graveyards = graveyards,
-                onOpenGraveyard = { playerId -> openGraveyard = playerId },
+                zones = zones,
+                onOpenZone = { zone -> openZone = zone },
                 phases = PhaseBarState(steps = standardTurnSteps(stops), currentStepId = StepIds.PRECOMBAT_MAIN),
                 onToggleStop = { step -> stops = if (step.id in stops) stops - step.id else stops + step.id },
                 artFor = artFor,
                 // §7.1: a tap on a card *is* the way to read it, wherever the card is. On the
                 // battlefield there is nothing else a tap could mean until the board is wired to a
                 // session that has actions to offer.
+                // An attachment reports its own id, so the lookup tries both: a press on the Aura's
+                // band opens the Aura, and a press on the creature opens the creature — with the Aura
+                // listed on it, because that is what is happening to it.
                 onInspect = { id ->
                     inspected = id
-                    reading = model.permanentById(id)?.let(::readingOf)
+                    reading =
+                        model.permanentById(id)?.let(::readingOf)
+                            ?: model.attachmentById(id)?.let(::readingOf)
                 },
                 // The two halves of a stack are two affordances, and the board decides what each
                 // means. Here that is: press an upright copy to tap one, press the strip where a
@@ -142,20 +150,18 @@ fun BattlefieldPreviewScreen(
                 VitalsOverlay(vitals = seat, onDismiss = { expandedSeat = null })
             }
 
-            // The graveyard, and the card being read out of it. Two floating layers rather than one:
-            // closing the card puts you back in the zone you opened it from, which is what a player
+            // The zone, and the card being read out of it. Two floating layers rather than one:
+            // closing the card puts you back in the pile you opened it from, which is what a player
             // flicking through a graveyard expects and what a single layer cannot do.
-            openGraveyard?.let { playerId ->
-                graveyards.firstOrNull { it.playerId == playerId }?.let { zone ->
-                    GraveyardOverlay(
-                        graveyard = zone,
-                        onDismiss = { openGraveyard = null },
-                        artFor = artFor,
-                        onInspect = { id ->
-                            reading = zone.cards.firstOrNull { it.id == id }?.let(::readingOf)
-                        },
-                    )
-                }
+            openZone?.let { zone ->
+                ZoneOverlay(
+                    zone = zone,
+                    onDismiss = { openZone = null },
+                    artFor = artFor,
+                    onInspect = { id ->
+                        reading = zone.cards.firstOrNull { it.id == id }?.let(::readingOf)
+                    },
+                )
             }
 
             reading?.let { card ->
@@ -215,6 +221,12 @@ private fun readingOf(permanent: TablePermanent): ReadingCard =
     ReadingCard(state = permanentPreview(permanent), art = permanent.art?.copy(size = CardArtSize.LARGE))
 
 private fun readingOf(card: TableCard): ReadingCard = ReadingCard(state = tableCardPreview(card), art = card.fullArt)
+
+private fun readingOf(attachment: TableAttachment): ReadingCard =
+    ReadingCard(
+        state = attachmentPreview(attachment),
+        art = attachment.art?.copy(size = CardArtSize.LARGE),
+    )
 
 private val ControlPadding = 8.dp
 

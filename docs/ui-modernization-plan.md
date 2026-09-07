@@ -454,12 +454,13 @@ Each player's battlefield reads front-to-back by how much attention the permanen
 
 ```
  ┌────────┬─────────────┬────────────────────────────┐
- │  opp   │             │   [ other permanents ]     │  back
+ │ opp    │             │   [ other permanents ]     │  back
  │ vitals │  opponent   │   [ creatures ]            │  front
- │  opp   │   lands     ├────────────────────────────┤
- │ grave  ├─────────────┤   [ creatures ]            │  front
- │  ---   │   your      │   [ other permanents ]     │  back
- │ your   │   lands     ├────────────────────────────┤
+ │ grave  │   lands     ├────────────────────────────┤
+ │ other  │             │                            │
+ │ exile  ├─────────────┤   [ creatures ]            │  front
+ │ exile  │   your      │   [ other permanents ]     │  back
+ │ other  │   lands     ├────────────────────────────┤
  │ grave  │             │   phase bar                │
  │ vitals │             │   hand                     │
  └────────┴─────────────┴────────────────────────────┘
@@ -478,7 +479,10 @@ Each player's battlefield reads front-to-back by how much attention the permanen
   least individually interesting; **the goal is to minimise the space they take without hurting
   readability**, and a bounded column does that in a way a shared row cannot.
 - **The status rail carries what is not on the battlefield** — each seat's vitals (§7.15) and each
-  seat's graveyard, drawn as the card on top of it and opened by pressing it (§7.13).
+  seat's piles: the graveyard, exile, and the *Other* exile that a card is coming back from or can be
+  cast from. Each is drawn as the card on top of it and opens by being pressed (§7.13). The rail is
+  the one region that keeps its height when it is empty, because it is the one region whose job is to
+  be in a fixed place.
 - **Attached permanents render on what they are attached to**, not in a bucket of their own. An Aura
   or Equipment sits with its host; a fortified or enchanted land stays with the lands.
 
@@ -584,7 +588,7 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Board** | Battlefield, stack piles | The printed name plate, P/T, counters, tap state, status | Downsampled, the card cut below its art box |
+| **Board** | Battlefield, stack piles, rail piles | The printed name plate, P/T, counters, tap state, status | Downsampled, the card cut below its art box — filled to the card's width, anchored to its top, clipped at the bottom |
 | **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 

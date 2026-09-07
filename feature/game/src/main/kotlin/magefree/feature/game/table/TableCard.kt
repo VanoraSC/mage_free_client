@@ -113,6 +113,21 @@ fun graveyardCards(
     return player.graveyard.map { card -> card.toTableCard(playable) }
 }
 
+/**
+ * One player's exiled cards, in the server's own order.
+ *
+ * `GamePlayer.exile` is what that player **owns** in any exile zone — owner, not controller — so a
+ * card of yours an opponent exiled is on your list, which is where a player looks for it.
+ */
+fun exileCards(
+    state: GameState,
+    playerId: String,
+): List<TableCard> {
+    val playable = state.playable.map { it.objectId }.toSet()
+    val player = state.players.firstOrNull { it.playerId == playerId } ?: return emptyList()
+    return player.exile.map { card -> card.toTableCard(playable) }
+}
+
 private fun GameCard.toTableCard(playable: Set<String>): TableCard =
     TableCard(
         id = id,

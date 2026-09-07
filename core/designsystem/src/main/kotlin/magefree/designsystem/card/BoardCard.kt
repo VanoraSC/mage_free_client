@@ -76,6 +76,13 @@ data class BoardAttachment(
     val manaCost: String? = null,
     val tapped: Boolean = false,
     val controlledByOther: Boolean = false,
+    /**
+     * The server's own object id, so a press on the band can name what was pressed.
+     *
+     * Defaults to the name, which is what a board with no server behind it — a preview, a test — has
+     * to identify an attachment by anyway.
+     */
+    val id: String = name,
 )
 
 /**
@@ -342,6 +349,10 @@ fun boardCardWidthFitting(
  * @param attachmentArt resolves the art for each attached card, which is what makes the stack readable
  *   — the exposed band of a real card face is where its name and cost are printed.
  * @param onTap invoked when the card is tapped; null makes the card non-interactive.
+ * @param onAttachmentTap invoked when an attached card's own exposed band is pressed. Separate from
+ *   [onTap] because an attachment is its own permanent: an Equipment on a creature is a card a player
+ *   reads, moves and taps in its own right, and a stack that only ever reported its host would make
+ *   the one card on the board that is drawn smallest the one card that cannot be opened.
  */
 @Composable
 fun BoardCard(
@@ -353,6 +364,7 @@ fun BoardCard(
     art: CardArtSlot? = null,
     attachmentArt: (BoardAttachment) -> CardArtSlot? = { null },
     onTap: (() -> Unit)? = null,
+    onAttachmentTap: ((BoardAttachment) -> Unit)? = null,
 ) {
     val cardHeight = width / BOARD_CARD_ASPECT_RATIO
     val hostWidth = if (state.tapped) cardHeight else width
@@ -416,6 +428,7 @@ fun BoardCard(
                 width = width,
                 cardHeight = cardHeight,
                 art = attachmentArt(turned[index]),
+                onTap = onAttachmentTap?.let { tap -> { tap(turned[index]) } },
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
@@ -436,6 +449,7 @@ fun BoardCard(
                 width = width,
                 cardHeight = cardHeight,
                 art = attachmentArt(attachment),
+                onTap = onAttachmentTap?.let { tap -> { tap(attachment) } },
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)
@@ -713,11 +727,13 @@ private fun UprightAttachedCard(
     cardHeight: Dp,
     art: CardArtSlot?,
     modifier: Modifier = Modifier,
+    onTap: (() -> Unit)? = null,
 ) {
     AttachedCardFace(
         attachment = attachment,
         art = art,
         bandHeight = attachmentBandHeight(width),
+        onTap = onTap,
         modifier = modifier.size(width = width, height = cardHeight),
     )
 }
@@ -737,6 +753,7 @@ private fun TurnedAttachedCard(
     cardHeight: Dp,
     art: CardArtSlot?,
     modifier: Modifier = Modifier,
+    onTap: (() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier.size(width = cardHeight, height = width),
@@ -746,6 +763,7 @@ private fun TurnedAttachedCard(
             attachment = attachment,
             art = art,
             bandHeight = attachmentBandHeight(width),
+            onTap = onTap,
             // requiredSize, not size: the card is taller than this landscape box, and a plain size
             // would be clamped by the box's constraints — squashing the card to a square before the
             // rotation ever happened, which cropped the art. The card keeps its own dimensions and
@@ -765,6 +783,7 @@ private fun AttachedCardFace(
     art: CardArtSlot?,
     bandHeight: Dp,
     modifier: Modifier = Modifier,
+    onTap: (() -> Unit)? = null,
 ) {
     Box(
         modifier =
@@ -772,6 +791,7 @@ private fun AttachedCardFace(
                 .clip(BoardCardShape)
                 .background(BoardSurface.card)
                 .border(width = 1.dp, color = BoardSurface.zoneRaised, shape = BoardCardShape)
+                .let { base -> if (onTap != null) base.cardInspectable(onTap = onTap) else base }
                 .testTag(BoardCardTestTags.ATTACHMENT),
     ) {
         if (art != null) {

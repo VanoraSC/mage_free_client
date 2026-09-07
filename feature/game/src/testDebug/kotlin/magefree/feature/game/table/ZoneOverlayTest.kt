@@ -21,7 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * A graveyard, opened.
+ * A zone, opened.
  *
  * Opening a zone is a look, so the assertions are about it behaving like every other floating surface:
  * every card is there, a press outside puts it down, and a press on a card opens the card. The one
@@ -30,19 +30,19 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, qualifiers = "w891dp-h411dp")
-class GraveyardOverlayTest {
+class ZoneOverlayTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
     private var dismissed = 0
     private val inspected = mutableListOf<String>()
 
-    private fun show(zone: TableGraveyard) {
+    private fun show(zone: TableZonePile) {
         composeTestRule.setContent {
             MageTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    GraveyardOverlay(
-                        graveyard = zone,
+                    ZoneOverlay(
+                        zone = zone,
                         onDismiss = { dismissed += 1 },
                         onInspect = { inspected += it },
                     )
@@ -56,7 +56,7 @@ class GraveyardOverlayTest {
         show(zone())
 
         listOf("gy1", "gy2", "gy3").forEach { id ->
-            composeTestRule.onNodeWithTag(GraveyardOverlayTestTags.card(id)).assertIsDisplayed()
+            composeTestRule.onNodeWithTag(ZoneOverlayTestTags.card(id)).assertIsDisplayed()
         }
     }
 
@@ -66,7 +66,7 @@ class GraveyardOverlayTest {
 
         // A corner, not the centre: the centre of the scrim is behind the panel, and the point of the
         // scrim is the part of it that is *not*.
-        composeTestRule.onNodeWithTag(GraveyardOverlayTestTags.SCRIM).performTouchInput {
+        composeTestRule.onNodeWithTag(ZoneOverlayTestTags.SCRIM).performTouchInput {
             click(Offset(4f, 4f))
         }
 
@@ -77,7 +77,7 @@ class GraveyardOverlayTest {
     fun `a press on a card opens the card, and does not put the zone down`() {
         show(zone())
 
-        composeTestRule.onNodeWithTag(GraveyardOverlayTestTags.card("gy2")).performClick()
+        composeTestRule.onNodeWithTag(ZoneOverlayTestTags.card("gy2")).performClick()
 
         assertEquals(listOf("gy2"), inspected)
         assertEquals("the zone should still be open", 0, dismissed)
@@ -85,15 +85,16 @@ class GraveyardOverlayTest {
 
     @Test
     fun `an opened but empty graveyard says so rather than showing a blank panel`() {
-        show(TableGraveyard(playerId = "me", isViewer = true))
+        show(TableZonePile(playerId = "me", isViewer = true, kind = TableZoneKind.Graveyard))
 
-        composeTestRule.onNodeWithTag(GraveyardOverlayTestTags.EMPTY).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ZoneOverlayTestTags.EMPTY).assertIsDisplayed()
     }
 
     private fun zone() =
-        TableGraveyard(
+        TableZonePile(
             playerId = "me",
             isViewer = true,
+            kind = TableZoneKind.Graveyard,
             cards =
                 listOf(
                     TableCard(id = "gy1", card = CardDisplay(name = "Llanowar Elves")),

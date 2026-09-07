@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -37,12 +38,13 @@ import magefree.designsystem.component.phase.PhaseBarStep
  *
  * ```
  *  ┌────────┬─────────────┬────────────────────────────┐
- *  │  opp   │             │   [ other permanents ]     │  back
+ *  │ opp    │             │   [ other permanents ]     │  back
  *  │ vitals │  opponent   │   [ creatures ]            │  front
- *  │  opp   │   lands     ├────────────────────────────┤
- *  │ grave  ├─────────────┤   [ creatures ]            │  front
- *  │  ---   │   your      │   [ other permanents ]     │  back
- *  │ your   │   lands     ├────────────────────────────┤
+ *  │ grave  │   lands     ├────────────────────────────┤
+ *  │ other  │             │                            │
+ *  │ exile  ├─────────────┤   [ creatures ]            │  front
+ *  │ exile  │   your      │   [ other permanents ]     │  back
+ *  │ other  │   lands     ├────────────────────────────┤
  *  │ grave  │             │   phase bar                │
  *  │ vitals │             │   hand                     │
  *  └────────┴─────────────┴────────────────────────────┘
@@ -93,8 +95,8 @@ import magefree.designsystem.component.phase.PhaseBarStep
  *   hand the board is not showing — an empty hand draws nothing rather than an empty strip.
  * @param vitals each seat, from [tableVitals]. Empty draws nothing.
  * @param onExpandVitals opens a seat's full list, or `null` for a board that is only being read.
- * @param graveyards each seat's graveyard, from [tableGraveyards].
- * @param onOpenGraveyard called with a seat's id when its graveyard is pressed.
+ * @param zones each seat's piles — graveyard and the two exiles — from [tableZones].
+ * @param onOpenZone called with a pile when it is pressed.
  * @param phases the turn and where in it the game is. Null draws no bar — the same rule as everywhere
  *   else here, and the state a board has before a game starts.
  * @param onToggleStop invoked when a stoppable step is pressed.
@@ -116,8 +118,8 @@ fun BattlefieldLayout(
     onPlayFromHand: ((String) -> Unit)? = null,
     vitals: List<TableVitals> = emptyList(),
     onExpandVitals: ((TableVitals) -> Unit)? = null,
-    graveyards: List<TableGraveyard> = emptyList(),
-    onOpenGraveyard: ((String) -> Unit)? = null,
+    zones: List<TableZonePile> = emptyList(),
+    onOpenZone: ((TableZonePile) -> Unit)? = null,
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
 ) {
@@ -144,9 +146,24 @@ fun BattlefieldLayout(
 
         // The rail is a column of cards, so it is a card wide — capped, because on a small screen a
         // preferred-size card is a bigger share of the width than the rail is worth.
-        val hasRail = graveyards.isNotEmpty() || vitals.isNotEmpty()
+        val hasRail = zones.isNotEmpty() || vitals.isNotEmpty()
         val railWidth = if (hasRail) minOf(PreferredCardWidth, boardWidth * RAIL_CEILING) else 0.dp
         val afterRail = boardWidth - railWidth - if (hasRail) ZoneGap else 0.dp
+
+        // **The piles are sized by the rail's height, not its width.** A seat has several of them and
+        // its own numbers above or below, all in half a rail; sized to the rail's width they would
+        // need three times the height there is. So the card is whatever fits, floored — below the
+        // floor a pile marker stops reading as a card at all, and at that point the count on it is
+        // doing the work anyway.
+        val seatZones = zones.groupBy { it.playerId }.values.maxOfOrNull { it.size } ?: 0
+        val railSeatHeight = boardHeight / sides.size.coerceAtLeast(1)
+        val railCardWidth =
+            if (seatZones == 0) {
+                railWidth
+            } else {
+                val perPile = (railSeatHeight - VitalsAllowance - RailGap * seatZones) / seatZones
+                minOf(railWidth, perPile * BOARD_CARD_ASPECT_RATIO).coerceAtLeast(MinRailCardWidth)
+            }
 
         // **The land column takes what it needs, up to a ceiling.** A share carved off would hold width
         // open on a board with two lands and run out on one with six kinds of them — and running out is
@@ -160,15 +177,23 @@ fun BattlefieldLayout(
         // side is the same size as one on this side, because the game does not say one is nearer.
         val cardWidth = mainCardWidth(sides, mainWidth, sideHeight)
 
+        // **The creatures belong on the screen's centre line, not their column's.** The battlefield is
+        // the third column, so centring inside it puts the creatures well right of the middle with a
+        // hole where the player is looking. The rows slide back toward the screen's own centre by the
+        // difference — but only as far as their own slack allows, so a row wide enough to need its
+        // whole column stays in it and never slides under the lands.
+        val leftColumns = boardWidth - mainWidth
+        val centreShift = (leftColumns + mainWidth / 2 - boardWidth / 2).coerceAtLeast(0.dp)
+
         Row(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
             if (hasRail) {
                 StatusRail(
-                    graveyards = graveyards,
+                    zones = zones,
                     vitals = vitals,
-                    cardWidth = railWidth,
+                    cardWidth = railCardWidth,
                     palette = palette,
                     artFor = artFor,
-                    onOpenGraveyard = onOpenGraveyard,
+                    onOpenZone = onOpenZone,
                     onExpandVitals = onExpandVitals,
                     modifier = Modifier.width(railWidth).fillMaxHeight(),
                 )
@@ -198,6 +223,7 @@ fun BattlefieldLayout(
                                 side = side,
                                 order = OpponentOrder,
                                 cardWidth = cardWidth,
+                                centreShift = centreShift,
                                 palette = palette,
                                 artFor = artFor,
                                 onInspect = onInspect,
@@ -209,6 +235,7 @@ fun BattlefieldLayout(
                                 side = side,
                                 order = ViewerOrder,
                                 cardWidth = cardWidth,
+                                centreShift = centreShift,
                                 palette = palette,
                                 artFor = artFor,
                                 onInspect = onInspect,
@@ -321,6 +348,7 @@ private fun SideRows(
     side: BattlefieldSide,
     order: List<BattlefieldRow>,
     cardWidth: Dp,
+    centreShift: Dp,
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
@@ -341,6 +369,9 @@ private fun SideRows(
                     permanents = content,
                     tag = BattlefieldTestTags.row(side.playerId, row.name),
                     width = cardWidth,
+                    // Only the centred rows slide. A row already pinned to the outside edge is where
+                    // it was put on purpose.
+                    centreShift = if (row.alignment == Alignment.Center) centreShift else 0.dp,
                     palette = palette,
                     artFor = artFor,
                     onInspect = onInspect,
@@ -357,15 +388,26 @@ private fun PermanentRow(
     permanents: List<TablePermanent>,
     tag: String,
     width: Dp,
+    centreShift: Dp,
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
     alignment: Alignment,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxWidth(), contentAlignment = alignment) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth(), contentAlignment = alignment) {
+        // How far this row *may* slide left before it would leave its own column: half of whatever
+        // width it is not using. A row that fills the column does not move at all, which is what keeps
+        // it out from under the land column however busy the board gets.
+        val content = width * permanents.size + CardGap * (permanents.size - 1)
+        val slack = ((maxWidth - content) / 2).coerceAtLeast(0.dp)
+
         Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()).testTag(tag),
+            modifier =
+                Modifier
+                    .offset(x = -minOf(centreShift, slack))
+                    .horizontalScroll(rememberScrollState())
+                    .testTag(tag),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -382,7 +424,7 @@ private fun PermanentRow(
     }
 }
 
-/** One permanent, drawn at [width]. */
+/** One permanent, drawn at [width], with whatever is attached to it. */
 @Composable
 private fun PermanentCard(
     permanent: TablePermanent,
@@ -391,11 +433,24 @@ private fun PermanentCard(
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
 ) {
+    // Resolved here rather than inside the card, because loading an image is a composition-time thing
+    // and the card tier takes a plain lambda. Keyed by the server's own id, which is what the card
+    // hands back when a band is pressed.
+    val attachmentSlots =
+        permanent.attached.associate { attachment ->
+            attachment.id to artFor?.invoke(attachment.art, attachment.card)
+        }
+
     BoardCard(
         state = permanent.state,
         width = width,
         art = artFor?.invoke(permanent.art, permanent.state.card),
+        attachmentArt = { attachment -> attachmentSlots[attachment.id] },
         onTap = onInspect?.let { inspect -> { inspect(permanent.id) } },
+        // An attachment is its own permanent and its own card. Reporting the host instead would make
+        // the Aura the one card on the board that cannot be opened — and it is the card most likely to
+        // be the answer to whatever the player is asking.
+        onAttachmentTap = onInspect?.let { inspect -> { attachment -> inspect(attachment.id) } },
         counterPalette = palette,
     )
 }
@@ -600,3 +655,18 @@ private fun bottomStackHeight(
 
 /** Room the phase bar takes, for working out what is left above it. */
 private val PhaseBarAllowance = 28.dp
+
+/**
+ * Room a seat's numbers take in the rail, for working out what is left for its piles.
+ *
+ * An allowance rather than a measurement, for the reason the phase bar's is: the column's height comes
+ * from its text and its counters, and threading a measured value up through the layout pass would
+ * couple the board to a component that draws itself perfectly well without it.
+ */
+private val VitalsAllowance = 92.dp
+
+/** Between the regions of one seat's rail. Mirrors `StatusRail`'s own, which is what it is spacing. */
+private val RailGap = 3.dp
+
+/** Below this a pile marker stops reading as a card, and the count on it is doing the work anyway. */
+private val MinRailCardWidth = 34.dp

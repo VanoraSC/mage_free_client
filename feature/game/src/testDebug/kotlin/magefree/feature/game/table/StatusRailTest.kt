@@ -38,6 +38,7 @@ class StatusRailTest {
     val composeTestRule = createComposeRule()
 
     private val opened = mutableListOf<String>()
+    private val openedKinds = mutableListOf<TableZoneKind>()
 
     private fun show(state: GameState) {
         composeTestRule.setContent {
@@ -46,8 +47,11 @@ class StatusRailTest {
                     BattlefieldLayout(
                         model = battlefieldModel(state),
                         vitals = tableVitals(state),
-                        graveyards = tableGraveyards(state),
-                        onOpenGraveyard = { opened += it },
+                        zones = tableZones(state),
+                        onOpenZone = { zone ->
+                            opened += zone.playerId
+                            openedKinds += zone.kind
+                        },
                     )
                 }
             }
@@ -59,18 +63,18 @@ class StatusRailTest {
         show(twoSeats())
 
         composeTestRule
-            .onNodeWithTag(StatusRailTestTags.graveyardPlaceholder("them"), useUnmergedTree = true)
+            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard), useUnmergedTree = true)
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText(GRAVEYARD_LABEL).assertIsDisplayed()
+        composeTestRule.onNodeWithText(TableZoneKind.Graveyard.label).assertIsDisplayed()
     }
 
     @Test
     fun `a graveyard with cards in it draws the one on top, and how many there are`() {
         show(twoSeats())
 
-        composeTestRule.onNodeWithTag(StatusRailTestTags.graveyard("me")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)).assertIsDisplayed()
         composeTestRule
-            .onNodeWithTag(StatusRailTestTags.graveyardCount("me"), useUnmergedTree = true)
+            .onNodeWithTag(StatusRailTestTags.zoneCount("me", TableZoneKind.Graveyard), useUnmergedTree = true)
             .assertIsDisplayed()
     }
 
@@ -80,9 +84,9 @@ class StatusRailTest {
         // not to trust it.
         show(twoSeats())
 
-        composeTestRule.onNodeWithTag(StatusRailTestTags.graveyard("me")).performClick()
+        composeTestRule.onNodeWithTag(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)).performClick()
         composeTestRule
-            .onNodeWithTag(StatusRailTestTags.graveyardPlaceholder("them"), useUnmergedTree = true)
+            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard), useUnmergedTree = true)
             .performClick()
 
         assertEquals(listOf("me", "them"), opened)
@@ -108,14 +112,58 @@ class StatusRailTest {
     fun `the viewer's own status is at the bottom of the rail and the opponent's at the top`() {
         show(twoSeats())
 
-        val mine = composeTestRule.onNodeWithTag(StatusRailTestTags.graveyard("me")).fetchSemanticsNode()
+        val mine = composeTestRule.onNodeWithTag(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)).fetchSemanticsNode()
         val theirs =
             composeTestRule
-                .onNodeWithTag(StatusRailTestTags.graveyardPlaceholder("them"), useUnmergedTree = true)
+                .onNodeWithTag(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard), useUnmergedTree = true)
                 .fetchSemanticsNode()
 
         assertTrue("the opponent's graveyard should be above mine", theirs.positionInRoot.y < mine.positionInRoot.y)
     }
+
+    @Test
+    fun `the rail mirrors — each seat's numbers against its own edge, its piles running inward`() {
+        // Top down: their numbers, their graveyard, their special exile, their exile — then mine in
+        // the opposite order, ending at my numbers against the bottom edge. The mirror is what lets
+        // both seats' strips carry no name.
+        show(twoSeats())
+
+        val order =
+            listOf(
+                "their numbers" to top(VitalsTestTags.strip("them")),
+                "their graveyard" to top(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard)),
+                "their special exile" to top(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.SpecialExile)),
+                "their exile" to top(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Exile)),
+                "my exile" to top(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.Exile)),
+                "my special exile" to top(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.SpecialExile)),
+                "my graveyard" to top(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)),
+                "my numbers" to top(VitalsTestTags.strip("me")),
+            )
+
+        order.zipWithNext { (aboveName, above), (belowName, below) ->
+            assertTrue("$aboveName should be above $belowName, at $above and $below", above < below)
+        }
+    }
+
+    @Test
+    fun `exile and the special pile are their own regions, and both open`() {
+        show(twoSeats())
+
+        composeTestRule
+            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.Exile), useUnmergedTree = true)
+            .performClick()
+        composeTestRule
+            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.SpecialExile), useUnmergedTree = true)
+            .performClick()
+
+        assertEquals(listOf(TableZoneKind.Exile, TableZoneKind.SpecialExile), openedKinds)
+    }
+
+    private fun top(tag: String): Float =
+        composeTestRule
+            .onNodeWithTag(tag, useUnmergedTree = true)
+            .fetchSemanticsNode()
+            .positionInRoot.y
 
     private fun twoSeats() =
         GameState(

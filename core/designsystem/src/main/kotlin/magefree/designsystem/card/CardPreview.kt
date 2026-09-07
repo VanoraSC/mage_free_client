@@ -74,6 +74,23 @@ data class CardPreviewState(
     val abilities: List<String> = emptyList(),
     val oracleText: String? = null,
     val action: CardPreviewAction? = null,
+    val attachments: List<CardPreviewAttachment> = emptyList(),
+)
+
+/**
+ * A permanent attached to the one being read.
+ *
+ * **An enchanted creature cannot be read without them.** Pacifism is the reason the Craw Wurm is not
+ * attacking, and a panel that listed the Wurm's own abilities and stopped would be describing a card
+ * rather than the permanent on the board. At board size the Aura is a name band behind its host, so
+ * this is the only place its text can actually be read.
+ *
+ * @property rules the server's game-aware text for the attachment itself.
+ */
+data class CardPreviewAttachment(
+    val name: String,
+    val manaCost: String? = null,
+    val rules: List<String> = emptyList(),
 )
 
 /**
@@ -233,6 +250,37 @@ private fun DetailPanel(
                 )
             }
 
+            // Before the oracle text, because what is attached to a permanent is current board state
+            // and the printing is not — and because an Aura is very often the answer to the question
+            // the player opened the card to ask.
+            if (state.attachments.isNotEmpty()) {
+                HorizontalDivider()
+                state.attachments.forEach { attachment ->
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(Spacing.extraSmall),
+                        modifier = Modifier.testTag(CardPreviewTestTags.attachment(attachment.name)),
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.small)) {
+                            Text(
+                                text = attachment.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            attachment.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
+                                SymbolText(text = cost, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                        attachment.rules.forEach { rule ->
+                            SymbolText(
+                                text = rule,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
             state.oracleText?.takeIf { it.isNotBlank() }?.let { oracle ->
                 HorizontalDivider()
                 SymbolText(
@@ -264,6 +312,9 @@ object CardPreviewTestTags {
     const val POWER_TOUGHNESS: String = "card-preview-pt"
     const val ORACLE: String = "card-preview-oracle"
     const val ACTION: String = "card-preview-action"
+
+    /** One attached permanent's block, by its name. */
+    fun attachment(name: String): String = "card-preview-attachment-$name"
 }
 
 /**

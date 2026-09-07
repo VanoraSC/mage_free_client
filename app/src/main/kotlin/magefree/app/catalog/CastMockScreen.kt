@@ -36,8 +36,8 @@ import magefree.feature.game.table.TableCard
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
 import magefree.feature.game.table.tableCardPreview
-import magefree.feature.game.table.tableGraveyards
 import magefree.feature.game.table.tableVitals
+import magefree.feature.game.table.tableZones
 
 /*
  * Inspecting a card, and playing it — mocked.
@@ -101,7 +101,7 @@ fun CastMockScreen(
                 vitals = tableVitals(state),
                 // The rail is part of the board, so the mock draws it: an interaction judged against a
                 // board that is missing a column is judged against the wrong amount of room.
-                graveyards = tableGraveyards(state),
+                zones = tableZones(state),
                 phases = PhaseBarState(steps = standardTurnSteps(), currentStepId = StepIds.PRECOMBAT_MAIN),
                 modifier = Modifier.fillMaxSize(),
             )

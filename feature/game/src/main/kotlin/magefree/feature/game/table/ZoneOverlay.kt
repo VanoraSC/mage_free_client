@@ -32,25 +32,23 @@ import magefree.designsystem.board.BoardTypography
 import magefree.designsystem.card.CardTile
 
 /*
- * A graveyard, opened.
+ * A zone, opened.
  *
- * §7.13's browser, for the one zone that needs no decisions made about it first: a graveyard is one
- * pile with one meaningful order, so there is nothing to group and nothing to name. Exile is the hard
- * case and it is a separate story.
+ * §7.13's browser. A graveyard is one pile with one meaningful order, so there is nothing to group and
+ * nothing to name; exile arrives already split into two piles, for the reason
+ * [TableZoneKind.SpecialExile] gives. Either way what gets here is a list of cards in the server's own
+ * order, and the browser shows it as it is.
  *
  * **Opening a zone is a look, not a decision** (§7.1, §7.4). It floats over the board, it takes
  * nothing from the battlefield, and it closes on a press outside — the same gesture that closes the
  * card preview and the vitals overlay, because a player should not have to learn a way to put down
  * each different thing they picked up.
- *
- * **The cards are in the server's order, newest last.** That is the order they went in, and the top of
- * a graveyard means the last entry to every effect that names one. The browser shows it as it is.
  */
 
 /**
- * The cards in one graveyard.
+ * The cards in one zone.
  *
- * @param graveyard the zone, from [tableGraveyards].
+ * @param zone the pile, from [tableZones].
  * @param onDismiss called on a press outside the panel.
  * @param modifier the [Modifier] for the overlay.
  * @param artFor resolves each card's art from the printing the server named.
@@ -59,8 +57,8 @@ import magefree.designsystem.card.CardTile
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun GraveyardOverlay(
-    graveyard: TableGraveyard,
+fun ZoneOverlay(
+    zone: TableZonePile,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     artFor: TableArtResolver? = null,
@@ -78,7 +76,7 @@ fun GraveyardOverlay(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onDismiss,
-                    ).testTag(GraveyardOverlayTestTags.SCRIM),
+                    ).testTag(ZoneOverlayTestTags.SCRIM),
         )
 
         Column(
@@ -89,27 +87,27 @@ fun GraveyardOverlay(
                     .background(BoardSurface.floating, PanelShape)
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(PanelPadding)
-                    .testTag(GraveyardOverlayTestTags.PANEL),
+                    .testTag(ZoneOverlayTestTags.PANEL),
             verticalArrangement = Arrangement.spacedBy(PanelPadding),
         ) {
             Text(
-                text = "$GRAVEYARD_LABEL — ${graveyard.count}",
+                text = "${zone.kind.label} (${zone.count})",
                 style = BoardTypography.promptBody,
                 color = BoardSurface.onSurface,
-                modifier = Modifier.testTag(GraveyardOverlayTestTags.TITLE),
+                modifier = Modifier.testTag(ZoneOverlayTestTags.TITLE),
             )
 
-            if (graveyard.cards.isEmpty()) {
+            if (zone.cards.isEmpty()) {
                 Text(
                     text = EMPTY_MESSAGE,
                     style = BoardTypography.annotation,
                     color = BoardSurface.onSurfaceMuted,
-                    modifier = Modifier.testTag(GraveyardOverlayTestTags.EMPTY),
+                    modifier = Modifier.testTag(ZoneOverlayTestTags.EMPTY),
                 )
                 return@Column
             }
 
-            // Wrapping rather than one long line: a graveyard is read by scanning it, and a row that
+            // Wrapping rather than one long line: a pile is read by scanning it, and a row that
             // scrolled sideways would put half of a big one off screen in the direction a player is
             // least likely to look. It scrolls down, which is the direction a list of anything does.
             FlowRow(
@@ -117,7 +115,7 @@ fun GraveyardOverlay(
                 horizontalArrangement = Arrangement.spacedBy(TileGap),
                 verticalArrangement = Arrangement.spacedBy(TileGap),
             ) {
-                graveyard.cards.forEach { card ->
+                zone.cards.forEach { card ->
                     CardTile(
                         card = card.card,
                         onTap = { onInspect?.invoke(card.id) },
@@ -127,7 +125,7 @@ fun GraveyardOverlay(
                         modifier =
                             Modifier
                                 .width(TileWidth)
-                                .testTag(GraveyardOverlayTestTags.card(card.id)),
+                                .testTag(ZoneOverlayTestTags.card(card.id)),
                     )
                 }
             }
@@ -136,17 +134,17 @@ fun GraveyardOverlay(
 }
 
 /** Test tags for the overlay, whose parts are told apart by position rather than by text. */
-object GraveyardOverlayTestTags {
-    const val SCRIM: String = "graveyard-scrim"
-    const val PANEL: String = "graveyard-panel"
-    const val TITLE: String = "graveyard-title"
-    const val EMPTY: String = "graveyard-empty"
+object ZoneOverlayTestTags {
+    const val SCRIM: String = "zone-scrim"
+    const val PANEL: String = "zone-panel"
+    const val TITLE: String = "zone-title"
+    const val EMPTY: String = "zone-empty"
 
     /** One card in the zone, by its server object id. */
-    fun card(cardId: String): String = "graveyard-card-$cardId"
+    fun card(cardId: String): String = "zone-card-$cardId"
 }
 
-/** What an opened but empty graveyard says, since the panel is open and has to say something. */
+/** What an opened but empty pile says, since the panel is open and has to say something. */
 private const val EMPTY_MESSAGE = "Nothing here yet."
 
 /**
