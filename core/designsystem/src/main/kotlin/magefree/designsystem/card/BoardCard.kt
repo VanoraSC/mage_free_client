@@ -743,7 +743,7 @@ private fun CardTitleBar(
         Text(
             text = card.name,
             style = BoardTypography.cardName,
-            color = BoardSurface.onSurface,
+            color = BoardSurface.onCardBorder,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
@@ -752,7 +752,7 @@ private fun CardTitleBar(
             SymbolText(
                 text = cost,
                 style = BoardTypography.cardName,
-                color = BoardSurface.onSurface,
+                color = BoardSurface.onCardBorder,
                 maxLines = 1,
             )
         }
@@ -782,7 +782,6 @@ private fun UprightAttachedCard(
     AttachedCardFace(
         attachment = attachment,
         art = art,
-        bandHeight = attachmentBandHeight(width),
         onTap = onTap,
         modifier = modifier.size(width = width, height = cardHeight),
     )
@@ -812,7 +811,6 @@ private fun TurnedAttachedCard(
         AttachedCardFace(
             attachment = attachment,
             art = art,
-            bandHeight = attachmentBandHeight(width),
             onTap = onTap,
             // requiredSize, not size: the card is taller than this landscape box, and a plain size
             // would be clamped by the box's constraints — squashing the card to a square before the
@@ -831,7 +829,6 @@ private fun TurnedAttachedCard(
 private fun AttachedCardFace(
     attachment: BoardAttachment,
     art: CardArtSlot?,
-    bandHeight: Dp,
     modifier: Modifier = Modifier,
     onTap: (() -> Unit)? = null,
 ) {
@@ -839,40 +836,29 @@ private fun AttachedCardFace(
         modifier =
             modifier
                 .clip(BoardCardShape)
-                .background(BoardSurface.card)
-                .border(width = 1.dp, color = BoardSurface.zoneRaised, shape = BoardCardShape)
+                // **The same frame the host has.** An attachment is a card in play, and it was the one
+                // card on the board drawn without a border — which made it read as a picture stuck
+                // behind a creature rather than as a permanent of its own.
+                .background(BoardSurface.cardBorder)
                 .let { base -> if (onTap != null) base.cardInspectable(onTap = onTap) else base }
                 .testTag(BoardCardTestTags.ATTACHMENT),
     ) {
-        if (art != null) {
-            art(Modifier.fillMaxSize())
-        } else {
-            Row(
+        Column(modifier = Modifier.fillMaxSize().padding(CardBorderWidth)) {
+            // The band the stack exposes is this strip, and now it holds what a real card's does. It
+            // used to be a slice of the art, which said which card was under there only if you already
+            // recognised the picture from its top quarter.
+            CardTitleBar(
+                card = CardDisplay(name = attachment.name, manaCost = attachment.manaCost),
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+            Box(
                 modifier =
                     Modifier
-                        .align(Alignment.TopStart)
                         .fillMaxWidth()
-                        .height(bandHeight)
-                        .padding(horizontal = BoardCardPadding),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                        .aspectRatio(CARD_ART_ASPECT_RATIO)
+                        .clip(BoardArtShape),
             ) {
-                Text(
-                    text = attachment.name,
-                    style = BoardTypography.cardName,
-                    color = BoardSurface.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                attachment.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
-                    SymbolText(
-                        text = cost,
-                        style = BoardTypography.counter,
-                        color = BoardSurface.onSurfaceMuted,
-                        maxLines = 1,
-                    )
-                }
+                if (art != null) art(Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize().background(BoardSurface.card))
             }
         }
     }

@@ -194,9 +194,12 @@ class BoardCardTest {
     }
 
     @Test
-    fun `an attachment draws the art it is given, in place of its name band`() {
-        // The degraded path — a name and a cost drawn on a grey rectangle — is what a player sees when
-        // the art has not loaded, and it looked identical to the art path never being wired up at all.
+    fun `an attachment is a card too — its own frame, its own name, its own art`() {
+        // It was the one card on the board drawn without a border, and with its art running to the
+        // edge: a picture stuck behind a creature rather than a permanent of its own. Now it is built
+        // the same way its host is, which also puts a *name* in the band the stack exists to expose —
+        // that band used to be a slice of the illustration, which said which card was under there only
+        // if you already recognised the picture from its top quarter.
         composeTestRule.setContent {
             MageTheme {
                 Box {
@@ -210,7 +213,7 @@ class BoardCardTest {
         }
 
         composeTestRule.onNodeWithTag(ATTACHMENT_ART, useUnmergedTree = true).assertExists()
-        composeTestRule.onNodeWithText("Pacifism").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Pacifism").assertIsDisplayed()
     }
 
     @Test

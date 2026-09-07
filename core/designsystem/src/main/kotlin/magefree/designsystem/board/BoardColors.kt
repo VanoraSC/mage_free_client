@@ -37,13 +37,18 @@ object BoardSurface {
     val table: Color = Color(0xFF333333)
 
     /**
-     * The frame around a card at the Board tier — the black border a real card has.
+     * The frame around a card at the Board tier.
      *
-     * Darker than every other surface here, and that is the point: a card is an object on the table
-     * rather than a region of the interface, and the one thing every Magic card in every set has in
-     * common is that it is bounded in black.
+     * **White, against the table's grey.** A real card's border is black, and black was the first cut
+     * — but the frame here is not only a border: it carries the card's name and its mana cost, and
+     * those are read at a glance across a busy board. Dark text on white is the way that is easiest
+     * to read at this size, and a white edge separates a card from the grey table at least as sharply
+     * as a black one does.
      */
-    val cardBorder: Color = Color(0xFF000000)
+    val cardBorder: Color = Color(0xFFF4F4F4)
+
+    /** Text and symbols on [cardBorder] — a card's name and cost. Near-black, for the contrast. */
+    val onCardBorder: Color = Color(0xFF0B0B0B)
 
     /** A zone sitting on the ground: a battlefield, the hand. */
     val zone: Color = Color(0xFF1E1E1E)

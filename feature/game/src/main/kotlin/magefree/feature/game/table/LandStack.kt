@@ -146,6 +146,26 @@ internal fun LandStack(
         // drawn slots — otherwise the slot it "took" would lose the card that is genuinely in it.
         val takesASlot = stack.tapped.size <= PILE_FAN_LIMIT
         val leaving = geometry.uprightCentre(maxOf(minOf(stack.untapped.size + 1, PILE_FAN_LIMIT) - 1, 0))
+
+        // Past three turned there is no free place for the arrival to take, so it flies to the front
+        // one and is simply gone when it lands — by then the count has taken over saying how many
+        // there are. **Drawn before the turned half, so it travels behind it**, which is where it is
+        // going: drawn after, it flew over the three cards already lying there and then disappeared
+        // underneath them at the instant it landed, which is the same flick the slotted case was fixed
+        // for. Where a card ends up is decided before it starts moving, in both cases.
+        if (arriving && !takesASlot) {
+            StackedCard(
+                stack = stack,
+                geometry = geometry,
+                centre = lerp(leaving, geometry.turnedCentre(0), travel.value),
+                turn = travel.value,
+                width = width,
+                palette = palette,
+                artFor = artFor,
+                onPress = null,
+            )
+        }
+
         for (slot in firstTurnedSlot until PILE_FAN_LIMIT) {
             val newest = slot == firstTurnedSlot && arriving && takesASlot
             StackedCard(
@@ -159,22 +179,6 @@ internal fun LandStack(
                 // A card in flight is not a target. Pressing where it *was* would act on a stack that
                 // has already changed underneath the finger.
                 onPress = if (newest) null else onPress?.let { press -> { press(LandStackHalf.Turned) } },
-            )
-        }
-
-        // Past three turned there is no free place for the arrival to take, so it flies to the front
-        // one and is simply gone when it lands — by then the count has taken over saying how many
-        // there are. Drawn behind the whole turned half, which is where it is going.
-        if (arriving && !takesASlot) {
-            StackedCard(
-                stack = stack,
-                geometry = geometry,
-                centre = lerp(leaving, geometry.turnedCentre(0), travel.value),
-                turn = travel.value,
-                width = width,
-                palette = palette,
-                artFor = artFor,
-                onPress = null,
             )
         }
 
