@@ -205,3 +205,16 @@ const val PAIRING_BLOCKER_QUESTION: String = "— choose which attacker it block
 const val DECLARING_ATTACKERS_TITLE: String = "Declaring attackers"
 
 const val DECLARING_BLOCKERS_TITLE: String = "Declaring blockers"
+
+/**
+ * What a tap on an **already declared** creature is called.
+ *
+ * Upstream answers a declaration and a withdrawal from the same select loop and the same response id:
+ * `selectAttackers` tries the "can attack" filter first and falls through to `removeAttackerIfPossible`,
+ * and `selectBlockers` does the same with `removeBlocker`. So the board sends what it always sends and
+ * only the wording changes — but the wording has to change, or a player who has declared a creature has
+ * no visible way to change their mind.
+ */
+const val WITHDRAW_ATTACKER_ACTION_LABEL: String = "Don't attack with this"
+
+const val WITHDRAW_BLOCKER_ACTION_LABEL: String = "Don't block with this"

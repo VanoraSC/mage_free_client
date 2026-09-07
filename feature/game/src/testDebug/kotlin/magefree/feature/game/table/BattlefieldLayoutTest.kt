@@ -6,13 +6,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import magefree.designsystem.card.BoardCardTestTags
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -112,6 +116,22 @@ class BattlefieldLayoutTest {
             .children
             .first()
             .size.width
+
+    /**
+     * Every card face drawn inside one region, as it actually lands on the screen.
+     *
+     * `boundsInRoot` puts the node's box through the transforms above it *and* through any clip
+     * between it and the root — so a card that has been leaned over reports the wider box a leaning
+     * card occupies, unless something is cutting it off, in which case it reports the cut. That
+     * difference is the whole subject here and it is invisible to anything that only reads sizes.
+     */
+    private fun cardsIn(regionTag: String): List<Rect> =
+        composeTestRule
+            .onAllNodes(
+                hasTestTag(BoardCardTestTags.CARD) and hasAnyAncestor(hasTestTag(regionTag)),
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes()
+            .map { it.boundsInRoot }
 
     private fun lands(playerId: String) = BattlefieldTestTags.row(playerId, BattlefieldTestTags.LAND_ZONE)
 
@@ -315,6 +335,28 @@ class BattlefieldLayoutTest {
     }
 
     @Test
+    fun `a tapped creature is not cut off by the row it is in`() {
+        // Found by playing a game: a lone tapped token had both its corners sliced flat. The row wraps
+        // its cards in a horizontal scroll, and a scroll container clips to its bounds — while a card
+        // leaning forty-five degrees reaches a further √2⁄2 of a card past the box it was laid out in.
+        // The card tier's claim that a square "leans inside its own footprint" is true of the space it
+        // reserves and not of the pixels it draws.
+        //
+        // Measured against the upright card beside it: a leaning card must report a *wider* box than an
+        // upright one of the same size. Clipped, the two measure the same, which is the bug.
+        show(oneSided("me", listOf(bears("upright"), bears("leaning", tapped = true))))
+
+        val cards = cardsIn(BattlefieldTestTags.row("me", "front"))
+        val widest = cards.maxOf { it.width }
+        val narrowest = cards.minOf { it.width }
+
+        assertTrue(
+            "the leaning card measured $widest beside an upright $narrowest — it is being clipped to the upright footprint",
+            widest > narrowest * LEAN_MARGIN,
+        )
+    }
+
+    @Test
     fun `ten of a land cost about what three of it cost`() {
         // The whole point of stacking. Without it the land corner has to shrink its cards to fit ten,
         // and shrinking is exactly what the corner exists to avoid.
@@ -387,9 +429,13 @@ private fun permanent(
     name: String,
     types: List<CardType>,
     isCreature: Boolean = false,
-) = GamePermanent(card = GameCard(id = id, name = name, cardTypes = types, isCreature = isCreature))
+    tapped: Boolean = false,
+) = GamePermanent(card = GameCard(id = id, name = name, cardTypes = types, isCreature = isCreature), isTapped = tapped)
 
-private fun bears() = permanent("bears", "Grizzly Bears", listOf(CardType.Creature), isCreature = true)
+private fun bears(
+    id: String = "bears",
+    tapped: Boolean = false,
+) = permanent(id, "Grizzly Bears", listOf(CardType.Creature), isCreature = true, tapped = tapped)
 
 private fun creature(index: Int) = permanent("creature-$index", "Saproling", listOf(CardType.Creature), isCreature = true)
 
@@ -422,3 +468,12 @@ private fun plains(
  * bug this slack must never hide is a *shrink*, which is a third of a card and not a pixel.
  */
 private const val ROUNDING_SLACK_PX = 2
+
+/**
+ * How much wider a leaning card must measure than an upright one before the lean counts as visible.
+ *
+ * A square turned forty-five degrees is √2 across — about 1.41 — so this is a floor well under the
+ * real figure rather than a restatement of it. What it has to rule out is the clipped case, where the
+ * two measure exactly the same.
+ */
+private const val LEAN_MARGIN = 1.35f

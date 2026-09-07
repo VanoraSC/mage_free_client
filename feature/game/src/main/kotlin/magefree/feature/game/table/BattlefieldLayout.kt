@@ -392,11 +392,23 @@ private fun PermanentRow(
         val content = width * permanents.size + CardGap * (permanents.size - 1)
         val slack = ((maxWidth - content) / 2).coerceAtLeast(0.dp)
 
+        // **The row scrolls only once it has to, because scrolling clips.** A tapped permanent leans
+        // forty-five degrees, and a square on its corner reaches a further √2⁄2 of a card past the box
+        // it was laid out in — the card tier's claim that it "leans inside its own footprint" is true
+        // of the space it *reserves* and not of the pixels it draws. A scroll container clips to its
+        // bounds, so a lone tapped creature in a row exactly its own width had both its corners cut
+        // off. Nothing else on this board clips, so a leaning card is free to overhang its neighbours
+        // by the same margin a real card does when you turn it on a table.
+        //
+        // The scroll stays for the row that genuinely does not fit, which is the one place the board
+        // admits it has run out of space; there the clip is the lesser problem.
+        val scrolls = content > maxWidth
+
         Row(
             modifier =
                 Modifier
                     .offset(x = -minOf(centreShift, slack))
-                    .horizontalScroll(rememberScrollState())
+                    .let { base -> if (scrolls) base.horizontalScroll(rememberScrollState()) else base }
                     .testTag(tag),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
             verticalAlignment = Alignment.CenterVertically,

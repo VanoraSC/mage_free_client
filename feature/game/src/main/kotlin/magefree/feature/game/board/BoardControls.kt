@@ -1,5 +1,6 @@
 package magefree.feature.game.board
 
+import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
@@ -199,6 +200,23 @@ enum class CombatRole {
             Blocking -> DECLARE_BLOCKER_ACTION_LABEL
         }
 
+    /** What a tap on one already declared is called — see [PromptControlsUi.Declaration]. */
+    internal fun withdrawLabel(): String =
+        when (this) {
+            Attacking -> WITHDRAW_ATTACKER_ACTION_LABEL
+            Blocking -> WITHDRAW_BLOCKER_ACTION_LABEL
+        }
+
+    /** The creatures already declared in this role, from the server's own combat groups. */
+    internal fun declaredIn(combat: List<CombatGroup>): Set<String> =
+        combat
+            .flatMap { group ->
+                when (this) {
+                    Attacking -> group.attackerIds
+                    Blocking -> group.blockerIds
+                }
+            }.toSet()
+
     /** What the button that ends the declaration says. */
     internal fun doneLabel(): String =
         when (this) {
@@ -358,17 +376,44 @@ sealed interface PromptControlsUi {
         override val pickableObjectIds: Set<String>,
         override val buttons: List<ControlButton>,
         val role: CombatRole,
+        val withdrawableObjectIds: Set<String> = emptySet(),
     ) : PromptControlsUi {
+        /** A declared creature is also *chosen*, so the board marks it as one. */
+        override val chosenObjectIds: Set<String> get() = withdrawableObjectIds
+
         /**
          * A declaration pick is a `chooseTarget` — the same verb targeting uses, which is what upstream
          * expects here (`HumanPlayer` answers both from the same select loop, and the probes declared
          * live this way). It is sent per tap, never batched: the server re-prompts after each pick with
          * the remaining candidates, exactly as it does for targets.
+         *
+         * **Withdrawing one is the same message again**, which is upstream's own design rather than a
+         * trick: `selectAttackers` matches the id against the "can attack" filter first and, failing
+         * that, against the "is attacking" filter, and calls `removeAttackerIfPossible` on the second.
+         * `selectBlockers` does the identical thing with `removeBlocker`. So the board sends what it
+         * always sends and the server decides which of the two the player meant — which is the only
+         * correct place for that decision to be made.
          */
         override fun actionFor(objectId: String): BoardAction? =
-            if (objectId in pickableObjectIds) BoardAction.ChooseTarget(objectId) else null
+            if (objectId in pickableObjectIds || objectId in withdrawableObjectIds) {
+                BoardAction.ChooseTarget(objectId)
+            } else {
+                null
+            }
 
-        override fun actionLabelFor(objectId: String): String? = if (objectId in pickableObjectIds) role.actionLabel() else null
+        /**
+         * The same tap is called two different things, because it *means* two different things.
+         *
+         * A creature the server offered is being declared; one already declared is being taken back.
+         * Labelling both "Declare as attacker" would leave a player who had changed their mind with no
+         * visible way to change it back — which is what a real game turned up.
+         */
+        override fun actionLabelFor(objectId: String): String? =
+            when (objectId) {
+                in pickableObjectIds -> role.actionLabel()
+                in withdrawableObjectIds -> role.withdrawLabel()
+                else -> null
+            }
     }
 
     /**
@@ -710,6 +755,20 @@ private fun declarationControls(
         // Exactly this role's candidates: never the union of both roles, never `playable`, never a set
         // this app worked out for itself.
         pickableObjectIds = candidates.toSet(),
+        // **Taking one back.** Upstream accepts the same id again and removes the creature from combat
+        // — `removeAttackerIfPossible` / `removeBlocker` — so the only thing missing was the board
+        // offering the tap. A declared creature is not in `possibleAttackers` any more (it can no
+        // longer *be* declared), so this comes from the server's own combat groups instead.
+        //
+        // **Gated on an empty stack, because upstream gates it there**: both branches read
+        // `game.getStack().isEmpty()` before removing, so with something on the stack the tap would be
+        // silently ignored — a dead affordance, offered.
+        withdrawableObjectIds =
+            if (state.stack.isEmpty()) {
+                role.declaredIn(state.combat).intersect(state.viewerControlledIds())
+            } else {
+                emptySet()
+            },
         buttons =
             buildList {
                 // A candidate the board cannot draw is still a candidate — the same promotion every
@@ -833,3 +892,17 @@ private fun GameCard.toCandidate(chosen: Set<String>): CandidateCardUi =
  * lets the player cancel.
  */
 private const val X_ANNOUNCE_CEILING = 20
+
+/**
+ * The permanents the **viewer** controls, by object id.
+ *
+ * A combat group names every attacker and blocker in it, both players' alike, and a player may only
+ * withdraw their own — so the declaration's withdrawable set is the server's combat crossed with this.
+ * The seat is found by `isViewer`, upstream's own per-seat flag, never by index.
+ */
+private fun GameState.viewerControlledIds(): Set<String> =
+    players
+        .firstOrNull { it.isViewer }
+        ?.battlefield
+        ?.mapTo(mutableSetOf()) { it.card.id }
+        .orEmpty()
