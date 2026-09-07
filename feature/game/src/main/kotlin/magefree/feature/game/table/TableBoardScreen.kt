@@ -131,6 +131,21 @@ fun TableBoardScreen(
     // it is remembered here rather than carried in the UI state.
     var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
 
+    // **What a press on a card does.** Ordinarily it raises the card, and the raised card is where the
+    // act is committed — one gesture everywhere, and a look at what you are about to do. While a cost
+    // is being paid it commits directly: the player is tapping their own lands, several in a row, in
+    // the middle of casting something else, and raising each one to press a second button turns four
+    // mana into eight presses and four things to dismiss.
+    //
+    // **The exception is the prompt's own, not this screen's.** `PromptControlsUi.answersOnPress` is
+    // true for mana payment and false everywhere else, so the rule lives with the thing that knows
+    // what a press means. And nothing is skipped: a land with two mana abilities is a real choice, and
+    // upstream asks it — `playManaAbility` sends its own prompt when there is more than one.
+    val press: (String) -> Unit = { id ->
+        val direct = controls?.takeIf { it.answersOnPress }?.actionFor(id)
+        if (direct != null) onAction(direct) else onCardTap(id)
+    }
+
     // Back closes whatever is open over the board, innermost first, before it leaves the board.
     BackHandler(enabled = uiState.selectedObjectId != null) { onCardTap(null) }
     BackHandler(enabled = uiState.selectedObjectId == null && expandedSeat != null) { expandedSeat = null }
@@ -150,9 +165,10 @@ fun TableBoardScreen(
                     stack = tableStack(snapshot),
                     artFor = artFor,
                     // Every press on a card is the same press: it raises the card. What may then be
-                    // done to it is the detail overlay's question, and the server's answer.
-                    onInspect = { id -> onCardTap(id) },
-                    onPlayFromHand = { id -> onCardTap(id) },
+                    // done to it is the preview's question, and the server's answer — except while a
+                    // cost is being paid, where the press *is* the answer. See [press].
+                    onInspect = press,
+                    onPlayFromHand = press,
                     // A stack's two halves name two different permanents, and the board says which.
                     // Pressing an upright copy reaches the one a hand would pick up — which, mid-cast,
                     // is the copy whose mana ability pays for the spell. Pressing a turned one reaches
@@ -164,7 +180,7 @@ fun TableBoardScreen(
                                 LandStackHalf.Upright -> stack.tapActionId
                                 LandStackHalf.Turned -> stack.tapped.lastOrNull()?.id
                             }
-                        onCardTap(id ?: stack.inspectId)
+                        press(id ?: stack.inspectId)
                     },
                     modifier = Modifier.fillMaxSize(),
                 )

@@ -1,7 +1,9 @@
 package magefree.feature.game.table
 
 import android.app.Application
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -12,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import magefree.designsystem.card.CardPreviewTestTags
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.cards.PlaceholderCardArtRenderer
@@ -107,6 +110,19 @@ class TableBoardScreenTest {
                     artRenderer = PlaceholderCardArtRenderer,
                 )
             }
+        }
+    }
+
+    /**
+     * Presses the upright card in a land stack.
+     *
+     * Not the stack's centre: a stack reserves room for its turned half whether or not anything is in
+     * it, so the middle of a one-land stack's box is empty board. This lands on the upright copy at the
+     * top-left of the diagonal, which is where a stack of one draws.
+     */
+    private fun pressUprightLand(stackId: String) {
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack(stackId)).performTouchInput {
+            click(Offset(width * 0.4f, height * 0.25f))
         }
     }
 
@@ -226,6 +242,43 @@ class TableBoardScreenTest {
         val inPanel = hasAnyAncestor(hasTestTag(CardPreviewTestTags.PANEL))
         composeTestRule.onNode(hasText("Pacifism") and inPanel).assertIsDisplayed()
         composeTestRule.onNode(hasText(PACIFISM_TEXT) and inPanel).assertIsDisplayed()
+    }
+
+    // ---- paying a cost --------------------------------------------------------------------------
+
+    @Test
+    fun `while a cost is being paid, pressing a land taps it`() {
+        // Every other press raises the card so the act can be committed on it. Paying is the exception:
+        // the player is tapping their own lands, several in a row, mid-cast, and raising each one to
+        // press a second button turns four mana into eight presses and four things to dismiss.
+        render(payingGame())
+
+        pressUprightLand("y-1")
+
+        assertEquals(listOf<BoardAction>(BoardAction.PlayManaSource("y-1")), actions)
+        assertTrue("nothing is raised — the press was the answer", taps.isEmpty())
+    }
+
+    @Test
+    fun `a source the server has not offered is still only raised`() {
+        // The exception is narrow: it is not "presses act during mana payment", it is "a press that the
+        // server has an answer for acts". A land it did not offer has nothing to send, so it opens.
+        render(payingGame())
+
+        pressUprightLand("o-1")
+
+        assertTrue("nothing may be sent for a source the server did not offer", actions.isEmpty())
+        assertEquals(listOf<String?>("o-1"), taps)
+    }
+
+    @Test
+    fun `outside a cost, pressing a land still raises it`() {
+        render(priorityGame())
+
+        pressUprightLand("y-1")
+
+        assertEquals(listOf<String?>("y-1"), taps)
+        assertTrue(actions.isEmpty())
     }
 
     // ---- the question ---------------------------------------------------------------------------
@@ -447,6 +500,20 @@ class TableBoardScreenTest {
                 ),
         )
     }
+
+    /**
+     * A cost being paid: the server owes mana and has named the sources it will accept.
+     *
+     * Only the viewer's own Forest is offered, which is what makes "a source the server did not offer"
+     * a real assertion rather than a restatement of the fixture.
+     */
+    private fun payingGame() =
+        runningGame().copy(
+            // The server's own list of what may be tapped right now — `canPlayObjects`, never a set
+            // this app worked out.
+            playable = listOf(PlayableObject("y-1")),
+            prompt = GamePrompt.PlayMana(message = "Pay 1 mana"),
+        )
 
     /** The same game with a spell on the stack, pointing at a creature the board is drawing. */
     private fun castingGame() =

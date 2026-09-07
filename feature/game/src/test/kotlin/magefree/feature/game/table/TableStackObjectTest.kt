@@ -2,8 +2,11 @@ package magefree.feature.game.table
 
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
+import magefree.network.game.GamePermanent
+import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,4 +72,104 @@ class TableStackObjectTest {
         rules = rules,
         targets = targets,
     )
+}
+
+/**
+ * Power and toughness, and the objects that do not have them.
+ *
+ * Upstream fills both on **every** object, so a land arrives as a 0/0 and an enchantment as a 0/0.
+ * `BoardUi` gated on `isCreature` from the start and wrote down why; the table tier did not, and every
+ * land on the board drew "0/0" under it. Found by eye once the marks doubled in size.
+ */
+class TableCardStatsTest {
+    @Test
+    fun `a land on the battlefield has no power or toughness`() {
+        val side = battlefieldModel(battlefieldWith(swamp())).viewer!!
+        val land = side.landStacks().single().representative
+
+        assertNull("a Swamp is not a 0/0", land.state.power)
+        assertNull(land.state.toughness)
+    }
+
+    @Test
+    fun `an enchantment on the battlefield has none either`() {
+        val side = battlefieldModel(battlefieldWith(mastery())).viewer!!
+        val enchantment = side.inRole(PermanentRole.Other).single()
+
+        assertNull(enchantment.state.power)
+        assertNull(enchantment.state.toughness)
+    }
+
+    @Test
+    fun `a creature keeps the numbers the server sent`() {
+        // The other half: what makes an object a creature is `isCreature`, upstream's own game-aware
+        // predicate. An animated land is a creature and says so.
+        val side = battlefieldModel(battlefieldWith(bear())).viewer!!
+        val creature = side.inRole(PermanentRole.Creature).single()
+
+        assertEquals("2", creature.state.power)
+        assertEquals("2", creature.state.toughness)
+    }
+
+    @Test
+    fun `a spell on the stack shows none, and a creature spell shows its own`() {
+        assertNull(tableStack(GameState(gameId = "g", stack = listOf(mastery()))).single().state.power)
+        assertEquals("2", tableStack(GameState(gameId = "g", stack = listOf(bear()))).single().state.power)
+    }
+
+    @Test
+    fun `a card in hand shows none unless it is a creature`() {
+        assertNull(handCards(GameState(gameId = "g", hand = listOf(swamp()))).single().power)
+        assertEquals("2", handCards(GameState(gameId = "g", hand = listOf(bear()))).single().power)
+    }
+
+    private fun battlefieldWith(card: GameCard) =
+        GameState(
+            gameId = "g",
+            viewerPlayerId = "me",
+            players =
+                listOf(
+                    GamePlayer(
+                        playerId = "me",
+                        name = "Me",
+                        isViewer = true,
+                        battlefield = listOf(GamePermanent(card = card)),
+                    ),
+                ),
+        )
+
+    /** As the server really sends them: a land is a 0/0, and so is an enchantment. */
+    private fun swamp() =
+        GameCard(
+            id = "swamp",
+            name = "Swamp",
+            setCode = "10E",
+            collectorNumber = "371",
+            power = "0",
+            toughness = "0",
+            cardTypes = listOf(CardType.Land),
+        )
+
+    private fun mastery() =
+        GameCard(
+            id = "mastery",
+            name = "Liliana's Mastery",
+            setCode = "HOU",
+            collectorNumber = "78",
+            power = "0",
+            toughness = "0",
+            cardTypes = listOf(CardType.Enchantment),
+        )
+
+    private fun bear() =
+        GameCard(
+            id = "bear",
+            name = "Grizzly Bears",
+            setCode = "10E",
+            collectorNumber = "268",
+            power = "2",
+            toughness = "2",
+            isCreature = true,
+            cardTypes = listOf(CardType.Creature),
+        )
 }
