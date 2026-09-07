@@ -39,8 +39,14 @@ const val JOIN_FAILED_PREFIX: String = "Couldn't join the game:"
 /** The floating panel's own heading, so the player can see at a glance that it is the server asking. */
 const val CONTROLS_TITLE: String = "The server asks"
 
-/** The visibility toggle's two labels. */
-const val HIDE_CONTROLS_LABEL: String = "Hide controls"
+/**
+ * The visibility toggle's two labels.
+ *
+ * It said "Hide controls", which describes the mechanism rather than the reason: nobody hides the
+ * controls for the sake of hiding them, they do it to look at the board underneath. Naming the result
+ * makes the pair read as one control with two states — the battlefield, or the question.
+ */
+const val HIDE_CONTROLS_LABEL: String = "Show battlefield"
 
 const val SHOW_CONTROLS_LABEL: String = "Show controls"
 

@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,13 +31,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
+import magefree.feature.game.board.BOARD_MENU_LABEL
 import magefree.feature.game.board.BoardAction
+import magefree.feature.game.board.CONCEDE_CONFIRM_LABEL
+import magefree.feature.game.board.CONCEDE_LABEL
 import magefree.feature.game.board.CardDetailOverlay
 import magefree.feature.game.board.FloatingControls
 import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.HiddenControlsToggle
 import magefree.feature.game.board.JOIN_FAILED_PREFIX
 import magefree.feature.game.board.PriorityUi
+import magefree.feature.game.board.QUIT_MATCH_CONFIRM_LABEL
+import magefree.feature.game.board.QUIT_MATCH_LABEL
 import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
 import magefree.feature.game.board.cardFor
 import magefree.feature.game.board.cardInAPile
@@ -177,7 +185,15 @@ fun TableBoardScreen(
 
             StandingStatements(uiState = uiState, modifier = Modifier.align(Alignment.TopStart))
 
-            // The exit and the question share one anchor and one column, so neither has to know where
+            // **The question takes the screen when the screen is where it is answered.** A prompt that
+            // carries its own cards — a library search, a pile — is answered by pressing one of them,
+            // so covering the board costs nothing and the collapse control is there for the moment the
+            // player wants to look. A prompt answered *on* the board keeps its corner, because the
+            // answer to a priority prompt is a card in the hand and a panel over the hand covers the
+            // answer to its own question.
+            val answeredHere = controls != null && controls.candidateCards.isNotEmpty()
+
+            // The menu and the question share one anchor and one column, so neither has to know where
             // the other ended up. Explicitly z-ordered rather than left to declaration order, because
             // a control drawn on top but not *hit* on top is a dead button — the failure mode this
             // layout is one edit away from at all times.
@@ -188,13 +204,11 @@ fun TableBoardScreen(
                         .zIndex(FLOATING_LAYER_Z)
                         .safeDrawingPadding()
                         .padding(ControlsPadding)
-                        .fillMaxWidth(CONTROLS_WIDTH_SHARE),
+                        .fillMaxWidth(if (answeredHere) 1f else CONTROLS_WIDTH_SHARE),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(ControlsPadding),
             ) {
-                FilledIconButton(onClick = onExit, modifier = Modifier.testTag(TableBoardTestTags.EXIT)) {
-                    Icon(imageVector = Icons.Filled.Close, contentDescription = EXIT_BOARD_DESCRIPTION)
-                }
+                BoardCornerMenu(onExit = onExit, onAction = onAction)
 
                 if (uiState.areControlsVisible) {
                     FloatingControls(
@@ -205,6 +219,10 @@ fun TableBoardScreen(
                         artRenderer = artRenderer,
                         onAction = onAction,
                         onHide = { onControlsVisibleChange(false) },
+                        // A card the prompt carried is raised, not answered: the same gesture every
+                        // other card on this board answers to, and the only one that gives a card being
+                        // read for the first time room to be read.
+                        onRaiseCandidate = { objectId -> onCardTap(objectId) },
                     )
                 } else {
                     HiddenControlsToggle(
@@ -224,7 +242,12 @@ fun TableBoardScreen(
             // the same conversion the hand goes through, so it reads identically either way. Without
             // it, pressing a card in a graveyard selected it and drew nothing at all.
             uiState.selectedObjectId?.let { objectId ->
-                (uiState.board.cardFor(objectId) ?: snapshot?.cardInAPile(objectId))?.let { card ->
+                // A third place to look, and the reason is the same as the second's: the board draws
+                // cards the projection does not carry. A prompt's own candidates are not in any zone
+                // the snapshot lists — a library search's cards are the server's answer to a question,
+                // not a pile — so they are resolved from the prompt that carried them.
+                val candidate = controls?.candidateCards?.firstOrNull { it.objectId == objectId }?.card
+                (uiState.board.cardFor(objectId) ?: snapshot?.cardInAPile(objectId) ?: candidate)?.let { card ->
                     CardDetailOverlay(
                         card = card,
                         actionLabel = controls?.actionLabelFor(objectId),
@@ -310,12 +333,12 @@ private fun StandingStatements(
 /** Test tags for the board's own layers, which carry no distinctive text of their own. */
 object TableBoardTestTags {
     const val SCREEN: String = "table-board"
-    const val EXIT: String = "table-board-exit"
+    const val MENU: String = "table-board-menu"
     const val STANDING: String = "table-board-standing"
 }
 
-/** The exit control's screen-reader description, shared with tests so the two agree. */
-const val EXIT_BOARD_DESCRIPTION: String = "Leave the game and return to the app"
+/** What the corner menu calls leaving the board, shared with tests so the two agree. */
+const val LEAVE_BOARD_LABEL: String = "Leave game"
 
 /**
  * The z of each layer over the board.
@@ -339,3 +362,72 @@ private const val DETAIL_LAYER_Z = 3f
 private const val CONTROLS_WIDTH_SHARE = 0.44f
 
 private val ControlsPadding = 8.dp
+
+/**
+ * The board's own corner menu: leaving, conceding, quitting the match.
+ *
+ * **These are not answers to the server's question and they no longer live with them.** The game menu
+ * used to be a button inside the answer panel, and the exit a second floating control beside it — so
+ * the corner held two unrelated things, and the way out of a game was reachable only through a surface
+ * that exists to answer prompts. A player wants to leave at a moment when there may be nothing
+ * outstanding at all.
+ *
+ * Conceding and quitting confirm, because both end something. Leaving does not: the game stays running
+ * and the room is still under the board, so it is a look away rather than a decision.
+ */
+@Composable
+private fun BoardCornerMenu(
+    onExit: () -> Unit,
+    onAction: (BoardAction) -> Unit,
+) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    var confirming by rememberSaveable { mutableStateOf<String?>(null) }
+
+    Box {
+        FilledIconButton(
+            onClick = { open = true },
+            modifier = Modifier.testTag(TableBoardTestTags.MENU),
+        ) {
+            Icon(imageVector = Icons.Filled.Menu, contentDescription = BOARD_MENU_LABEL)
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = {
+                open = false
+                confirming = null
+            },
+        ) {
+            DropdownMenuItem(
+                text = { Text(LEAVE_BOARD_LABEL) },
+                onClick = {
+                    open = false
+                    onExit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(if (confirming == CONCEDE_LABEL) CONCEDE_CONFIRM_LABEL else CONCEDE_LABEL) },
+                onClick = {
+                    if (confirming == CONCEDE_LABEL) {
+                        open = false
+                        confirming = null
+                        onAction(BoardAction.Concede)
+                    } else {
+                        confirming = CONCEDE_LABEL
+                    }
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(if (confirming == QUIT_MATCH_LABEL) QUIT_MATCH_CONFIRM_LABEL else QUIT_MATCH_LABEL) },
+                onClick = {
+                    if (confirming == QUIT_MATCH_LABEL) {
+                        open = false
+                        confirming = null
+                        onAction(BoardAction.QuitMatch)
+                    } else {
+                        confirming = QUIT_MATCH_LABEL
+                    }
+                },
+            )
+        }
+    }
+}
