@@ -736,7 +736,16 @@ private fun CardTitleBar(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.padding(horizontal = BoardCardPadding).testTag(BoardCardTestTags.TITLE),
+        modifier =
+            modifier
+                // **The strip is the card's colour.** A board is read by colour before it is read by
+                // name — what an opponent can answer with, what a creature can be blocked by — and the
+                // art alone does not say it: a green creature and a red one both have trees or fire in
+                // them about as often as not. The colour is the card's own frame, sampled from the
+                // printing (see [CardFrameIdentity]).
+                .background(cardFrameIdentity(card.manaCost, card.typeLine).color)
+                .padding(horizontal = BoardCardPadding)
+                .testTag(BoardCardTestTags.TITLE),
         horizontalArrangement = Arrangement.spacedBy(BoardCardPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
