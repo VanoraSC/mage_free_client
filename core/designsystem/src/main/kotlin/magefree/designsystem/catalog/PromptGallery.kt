@@ -21,6 +21,7 @@ import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.component.phase.PhaseBar
 import magefree.designsystem.component.phase.PhaseBarState
 import magefree.designsystem.component.phase.PhaseBarTurn
+import magefree.designsystem.component.phase.PhaseStop
 import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.component.prompt.AmountPicker
@@ -61,23 +62,25 @@ internal fun PromptGallery(modifier: Modifier = Modifier) {
             onToggleStop = {},
         )
 
-        GalleryNote("Stops on every step the server accepts one for — combat steps take none, so they show none")
+        GalleryNote(
+            "Both kinds of stop, and a locked one — blue fires once and clears itself, red fires every turn, " +
+                "and the mains here are rules rather than settings. Combat steps take no stop, so they show none.",
+        )
         PhaseBar(
             state =
                 PhaseBarState(
                     steps =
                         standardTurnSteps(
                             stops =
-                                setOf(
-                                    StepIds.UPKEEP,
-                                    StepIds.DRAW,
-                                    StepIds.PRECOMBAT_MAIN,
-                                    StepIds.BEGIN_COMBAT,
-                                    StepIds.DECLARE_ATTACKERS,
-                                    StepIds.END_COMBAT,
-                                    StepIds.POSTCOMBAT_MAIN,
-                                    StepIds.END_TURN,
+                                mapOf(
+                                    StepIds.UPKEEP to PhaseStop.Once,
+                                    StepIds.DRAW to PhaseStop.Always,
+                                    StepIds.BEGIN_COMBAT to PhaseStop.Once,
+                                    StepIds.DECLARE_ATTACKERS to PhaseStop.Always,
+                                    StepIds.END_COMBAT to PhaseStop.Always,
+                                    StepIds.END_TURN to PhaseStop.Once,
                                 ),
+                            locked = setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN),
                         ),
                     currentStepId = StepIds.END_TURN,
                 ),

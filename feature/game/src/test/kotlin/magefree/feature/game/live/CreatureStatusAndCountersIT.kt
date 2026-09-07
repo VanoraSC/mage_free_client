@@ -22,6 +22,7 @@ import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
 import magefree.feature.game.board.PermanentUi
 import magefree.feature.game.board.PromptControlsUi
+import magefree.feature.game.board.StopStore
 import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.model.SessionEvent
@@ -158,7 +159,7 @@ class CreatureStatusAndCountersIT {
                 val starting = awaitTable(tableStates, "MatchStarting") { it?.matchStarting != null }!!.matchStarting!!
                 say("match starting; gameId=${starting.gameId}")
 
-                val viewModel = GameBoardViewModel(app.games, ManualPassPolicy, FakeCardCatalog())
+                val viewModel = GameBoardViewModel(app.games, ManualPassPolicy, FakeCardCatalog(), StopStore())
                 jobs +=
                     launch {
                         opponent.games.observeGame(starting.gameId, GameState(starting.gameId)).collect { opponentState = it }

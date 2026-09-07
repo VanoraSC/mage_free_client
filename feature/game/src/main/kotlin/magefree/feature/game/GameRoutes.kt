@@ -56,5 +56,6 @@ fun GameBoardRoute(
         modifier = modifier,
         artFor = artFor,
         onFlipDetailFace = viewModel::flipDetailFace,
+        onPressStop = viewModel::pressStop,
     )
 }

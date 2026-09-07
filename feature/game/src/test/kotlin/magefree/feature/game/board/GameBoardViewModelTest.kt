@@ -982,7 +982,7 @@ class GameBoardViewModelTest {
         client: FakeGameClient,
         policy: PassPolicy = ManualPassPolicy,
         catalog: CardCatalog = FakeCardCatalog(),
-    ) = GameBoardViewModel(client, policy, catalog)
+    ) = GameBoardViewModel(client, policy, catalog, StopStore())
 
     private fun forest(id: String) = GameCard(id = id, name = "Forest", setCode = "M21", collectorNumber = "272")
 

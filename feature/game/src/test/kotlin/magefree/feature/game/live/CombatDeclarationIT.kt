@@ -22,6 +22,7 @@ import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
 import magefree.feature.game.board.PromptControlsUi
+import magefree.feature.game.board.StopStore
 import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.model.SessionEvent
@@ -170,7 +171,7 @@ class CombatDeclarationIT {
                                     noteCombat(who, it)
                                 }
                         }
-                    val viewModel = GameBoardViewModel(session.games, ManualPassPolicy, FakeCardCatalog())
+                    val viewModel = GameBoardViewModel(session.games, ManualPassPolicy, FakeCardCatalog(), StopStore())
                     viewModel.observe(starting.gameId)
                     jobs += launch { drive(who, viewModel) }
                 }

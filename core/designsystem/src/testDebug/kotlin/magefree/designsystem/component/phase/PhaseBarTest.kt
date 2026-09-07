@@ -75,20 +75,55 @@ class PhaseBarTest {
     }
 
     @Test
-    fun `both main phases start stopped, which is upstream's own default`() {
-        val stopped = standardTurnSteps().filter { it.stopSet }.map { it.id }
+    fun `the bar starts with no stops, because the stops belong to the player`() {
+        // It used to default both main phases on, mirroring upstream's own defaults. The caller passes
+        // what the player has set now, and which stops are *rules* is the caller's question too — see
+        // `locked`, which is how the mains come back on the player's own turn.
+        assertEquals(emptyList<String>(), standardTurnSteps().filter { it.stop != PhaseStop.None }.map { it.id })
+    }
 
-        assertEquals(listOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN), stopped)
+    @Test
+    fun `a locked step stops and cannot be pressed`() {
+        // A stop that is a rule rather than a setting: drawn as always stopping, and inert. Your own
+        // main phases are the case — a turn you cannot act in is not a turn you are playing.
+        val main = standardTurnSteps(locked = setOf(StepIds.PRECOMBAT_MAIN)).first { it.id == StepIds.PRECOMBAT_MAIN }
+
+        assertEquals(PhaseStop.Always, main.stop)
+        assertTrue("a rule is not a control", !main.stoppable)
     }
 
     @Test
     fun `a step the server accepts no stop for cannot be given one`() {
         // Combat steps are governed by separate flags upstream, not by the per-step set, so a stop
         // marked here would be a lie about what the game will do.
-        val attackers = standardTurnSteps(stops = setOf(StepIds.DECLARE_ATTACKERS)).first { it.id == StepIds.DECLARE_ATTACKERS }
+        val attackers =
+            standardTurnSteps(stops = mapOf(StepIds.DECLARE_ATTACKERS to PhaseStop.Always))
+                .first { it.id == StepIds.DECLARE_ATTACKERS }
 
         assertTrue("declare attackers must not be stoppable from the bar", !attackers.stoppable)
-        assertTrue("a stop asked for on an unstoppable step must not stick", !attackers.stopSet)
+        assertEquals("a stop asked for on an unstoppable step must not stick", PhaseStop.None, attackers.stop)
+    }
+
+    @Test
+    fun `the two kinds of stop are told apart`() {
+        // One that fires once and clears itself is a different promise from one that fires every turn,
+        // and a player setting them a step apart has to see which they set.
+        show(
+            PhaseBarState(
+                steps =
+                    standardTurnSteps(
+                        stops = mapOf(StepIds.UPKEEP to PhaseStop.Once, StepIds.DRAW to PhaseStop.Always),
+                    ),
+                currentStepId = StepIds.END_TURN,
+            ),
+        )
+
+        composeTestRule
+            .onNodeWithTag(PhaseBarTestTags.onceStopTag(StepIds.UPKEEP), useUnmergedTree = true)
+            .assertExists()
+        composeTestRule
+            .onNodeWithTag(PhaseBarTestTags.stopTag(StepIds.DRAW), useUnmergedTree = true)
+            .assertExists()
     }
 
     @Test
@@ -120,7 +155,12 @@ class PhaseBarTest {
     fun `a set stop is marked on the step it governs`() {
         // A stop is a standing instruction that silently governs turns the player is not looking at,
         // so it belongs on the step rather than in a settings screen.
-        show(PhaseBarState(steps = standardTurnSteps(), currentStepId = StepIds.UPKEEP))
+        show(
+            PhaseBarState(
+                steps = standardTurnSteps(stops = mapOf(StepIds.POSTCOMBAT_MAIN to PhaseStop.Always)),
+                currentStepId = StepIds.UPKEEP,
+            ),
+        )
 
         composeTestRule
             .onNodeWithTag(PhaseBarTestTags.stopTag(StepIds.POSTCOMBAT_MAIN), useUnmergedTree = true)
@@ -131,7 +171,7 @@ class PhaseBarTest {
     fun `a step with no stop carries no marker`() {
         show(
             PhaseBarState(
-                steps = standardTurnSteps(stops = emptySet()),
+                steps = standardTurnSteps(),
                 currentStepId = StepIds.UPKEEP,
             ),
         )

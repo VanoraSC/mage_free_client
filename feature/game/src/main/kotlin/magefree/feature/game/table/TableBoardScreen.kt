@@ -111,6 +111,7 @@ import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
  * @param artFor how the *board* resolves art, which is a different tier and a different request. Null
  *   draws the board's cards as their name plates alone, which is what a test sees.
  * @param onFlipDetailFace peeks at a double-faced card's other side in the detail overlay.
+ * @param onPressStop cycles the stop on one step of the phase bar.
  */
 @Composable
 fun TableBoardScreen(
@@ -123,6 +124,7 @@ fun TableBoardScreen(
     modifier: Modifier = Modifier,
     artFor: TableArtResolver? = null,
     onFlipDetailFace: () -> Unit = {},
+    onPressStop: (String) -> Unit = {},
 ) {
     val snapshot = uiState.snapshot
     val controls = uiState.controls
@@ -161,8 +163,11 @@ fun TableBoardScreen(
                     playableElsewhere = playableElsewhere(snapshot),
                     vitals = vitals,
                     onExpandVitals = { seat -> expandedSeat = seat },
-                    phases = phaseBarState(snapshot),
+                    phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
                     stack = tableStack(snapshot),
+                    // A press on a step cycles its stop for the turn being played. What that then does
+                    // is the pass policy's, which reads the same store this writes.
+                    onToggleStop = { step -> onPressStop(step.id) },
                     artFor = artFor,
                     // Every press on a card is the same press: it raises the card. What may then be
                     // done to it is the preview's question, and the server's answer — except while a

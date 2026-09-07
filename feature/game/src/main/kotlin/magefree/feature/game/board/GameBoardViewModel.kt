@@ -109,6 +109,13 @@ data class GameBoardUiState(
     val actionError: String? = null,
     val detailFace: CardDetailFaceUi? = null,
     val snapshot: GameState? = null,
+    /**
+     * Which priority windows the player has asked to be stopped at, both sides.
+     *
+     * Carried here so the phase bar draws the same stops [StopPassPolicy] is deciding from — one
+     * object, read twice, rather than two that could disagree about what is set.
+     */
+    val stops: BoardStops = BoardStops(),
 )
 
 /**
@@ -171,6 +178,7 @@ class GameBoardViewModel
         private val gameClient: GameClient,
         private val passPolicy: PassPolicy,
         private val cardCatalog: CardCatalog,
+        private val stops: StopStore,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(GameBoardUiState(board = BoardUi(gameId = "")))
 
@@ -225,6 +233,12 @@ class GameBoardViewModel
             gameClient
                 .observeGame(gameId, GameState(gameId))
                 .onEach(::onSnapshot)
+                .launchIn(viewModelScope)
+
+            // The stops outlive the board, so they are collected rather than read once: a stop the
+            // policy consumes has to disappear from the bar without waiting for the next snapshot.
+            stops.stops
+                .onEach { current -> _uiState.value = _uiState.value.copy(stops = current) }
                 .launchIn(viewModelScope)
 
             viewModelScope.launch {
@@ -412,6 +426,22 @@ class GameBoardViewModel
                 .firstOrNull { it.objectId == objectId }
                 ?.let { return it.card.name }
             return UNNAMED_CAST
+        }
+
+        /**
+         * Cycle the stop at [stepId], on the side whose turn is being played.
+         *
+         * **The side is the turn, not a setting.** The bar draws the turn currently being played, so a
+         * press on it is about that turn — which is what makes both sides' stops reachable over one
+         * turn cycle with no second control for choosing a side.
+         *
+         * View state in the sense that it sends the server nothing; a game fact in the sense that it
+         * decides whether the app answers the next question on the player's behalf. It goes through the
+         * store rather than the UI state because the policy reads the same object.
+         */
+        fun pressStop(stepId: String) {
+            val state = latestState ?: return
+            stops.press(isYourTurn = state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId, stepId = stepId)
         }
 
         /**

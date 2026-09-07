@@ -58,14 +58,14 @@ enum class PhaseBarTurn {
  * @param name the full name, for anywhere with room for it.
  * @param stoppable whether the server accepts a stop here. Only seven steps do; the rest are shown so
  *   the turn reads as a whole, but tapping them would be a control the server discards.
- * @param stopSet whether a stop is currently set for this step, on this side of the turn.
+ * @param stop what the player has asked for at this step, on this side of the turn.
  */
 data class PhaseBarStep(
     val id: String,
     val label: String,
     val name: String,
     val stoppable: Boolean = false,
-    val stopSet: Boolean = false,
+    val stop: PhaseStop = PhaseStop.None,
 )
 
 /**
@@ -87,21 +87,26 @@ data class PhaseBarState(
  * related reason — it exists only in some turns, and a bar whose length changed with the board would
  * cost more in instability than it returns in precision.
  *
- * @param stops the ids currently set to stop, so the default reflects a real preference rather than a
- *   guess. Upstream starts with both main phases set.
+ * @param stops what the player has asked for at each step, on the side of the turn being drawn.
+ * @param locked steps whose stop is a **rule** rather than a setting — drawn as always stopping, and
+ *   not pressable. The caller decides which, because which stops are rules is a question about the
+ *   game and not about a bar.
  */
-fun standardTurnSteps(stops: Set<String> = setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN)): List<PhaseBarStep> =
+fun standardTurnSteps(
+    stops: Map<String, PhaseStop> = emptyMap(),
+    locked: Set<String> = emptySet(),
+): List<PhaseBarStep> =
     listOf(
-        step(StepIds.UPKEEP, "UP", "Upkeep", stoppable = true, stops = stops),
-        step(StepIds.DRAW, "DR", "Draw", stoppable = true, stops = stops),
-        step(StepIds.PRECOMBAT_MAIN, "M1", "Precombat main", stoppable = true, stops = stops),
-        step(StepIds.BEGIN_COMBAT, "BC", "Beginning of combat", stoppable = true, stops = stops),
-        step(StepIds.DECLARE_ATTACKERS, "AT", "Declare attackers", stoppable = false, stops = stops),
-        step(StepIds.DECLARE_BLOCKERS, "BL", "Declare blockers", stoppable = false, stops = stops),
-        step(StepIds.COMBAT_DAMAGE, "DM", "Combat damage", stoppable = false, stops = stops),
-        step(StepIds.END_COMBAT, "EC", "End of combat", stoppable = true, stops = stops),
-        step(StepIds.POSTCOMBAT_MAIN, "M2", "Postcombat main", stoppable = true, stops = stops),
-        step(StepIds.END_TURN, "END", "End step", stoppable = true, stops = stops),
+        step(StepIds.UPKEEP, "UP", "Upkeep", stoppable = true, stops = stops, locked = locked),
+        step(StepIds.DRAW, "DR", "Draw", stoppable = true, stops = stops, locked = locked),
+        step(StepIds.PRECOMBAT_MAIN, "M1", "Precombat main", stoppable = true, stops = stops, locked = locked),
+        step(StepIds.BEGIN_COMBAT, "BC", "Beginning of combat", stoppable = true, stops = stops, locked = locked),
+        step(StepIds.DECLARE_ATTACKERS, "AT", "Declare attackers", stoppable = false, stops = stops, locked = locked),
+        step(StepIds.DECLARE_BLOCKERS, "BL", "Declare blockers", stoppable = false, stops = stops, locked = locked),
+        step(StepIds.COMBAT_DAMAGE, "DM", "Combat damage", stoppable = false, stops = stops, locked = locked),
+        step(StepIds.END_COMBAT, "EC", "End of combat", stoppable = true, stops = stops, locked = locked),
+        step(StepIds.POSTCOMBAT_MAIN, "M2", "Postcombat main", stoppable = true, stops = stops, locked = locked),
+        step(StepIds.END_TURN, "END", "End step", stoppable = true, stops = stops, locked = locked),
     )
 
 private fun step(
@@ -109,8 +114,17 @@ private fun step(
     label: String,
     name: String,
     stoppable: Boolean,
-    stops: Set<String>,
-) = PhaseBarStep(id = id, label = label, name = name, stoppable = stoppable, stopSet = stoppable && id in stops)
+    stops: Map<String, PhaseStop>,
+    locked: Set<String>,
+) = PhaseBarStep(
+    id = id,
+    label = label,
+    name = name,
+    // A step upstream accepts no stop for is not made stoppable by a locked one: `locked` is how a
+    // stop that is a *rule* is drawn, and a rule is exactly a stop the player may not press away.
+    stoppable = stoppable && id !in locked,
+    stop = if (id in locked) PhaseStop.Always else stops[id].takeIf { stoppable } ?: PhaseStop.None,
+)
 
 /** The step ids, matching the app schema's own step names. */
 object StepIds {
@@ -208,14 +222,30 @@ private fun StepChip(
         )
         // A stop is a standing instruction that governs turns the player is not looking at, so it is
         // marked on the step it applies to rather than living in a settings screen.
+        //
+        // **Two kinds of stop, two colours.** One that fires once and clears itself is a different
+        // promise from one that fires every turn, and a player setting them a step apart has to be able
+        // to tell at a glance which they set. Colour rather than shape: the mark is a few dp across,
+        // and a shape that small is a smudge.
         Box(
             modifier =
                 Modifier
                     .size(StopDotSize)
                     .background(
-                        color = if (step.stopSet) BoardSignal.pendingCost else Color.Transparent,
+                        color =
+                            when (step.stop) {
+                                PhaseStop.None -> Color.Transparent
+                                PhaseStop.Once -> StopOnceColor
+                                PhaseStop.Always -> StopAlwaysColor
+                            },
                         shape = CircleShape,
-                    ).testTag(if (step.stopSet) PhaseBarTestTags.stopTag(step.id) else PhaseBarTestTags.NO_STOP),
+                    ).testTag(
+                        when (step.stop) {
+                            PhaseStop.None -> PhaseBarTestTags.NO_STOP
+                            PhaseStop.Once -> PhaseBarTestTags.onceStopTag(step.id)
+                            PhaseStop.Always -> PhaseBarTestTags.stopTag(step.id)
+                        },
+                    ),
         )
     }
 }
@@ -225,6 +255,9 @@ object PhaseBarTestTags {
     const val BAR: String = "phase-bar"
     const val CURRENT: String = "phase-bar-current"
     const val NO_STOP: String = "phase-bar-no-stop"
+
+    /** A stop that fires once and clears itself, told apart from one that fires every turn. */
+    fun onceStopTag(stepId: String): String = "phase-bar-once-stop-$stepId"
 
     /** The chip for one step. */
     fun stepTag(id: String): String = "phase-bar-step-$id"
@@ -240,3 +273,42 @@ private val StopDotSize = 4.dp
 
 /** The bar's own height, so a board laying it out knows what it costs before measuring. */
 val PhaseBarHeight = 26.dp
+
+/**
+ * What a player has asked for at one step.
+ *
+ * Upstream's own stop is a boolean — `SkipPrioritySteps` is seven of them per side. The third state is
+ * this client's: *stop the next time this comes round, then forget it* is a thing a player wants
+ * constantly ("let me see their end step **this** turn") and has no upstream equivalent, so it is a
+ * convenience rather than a translation.
+ */
+enum class PhaseStop {
+    /** No stop. The step is passed through when there is nothing to respond to. */
+    None,
+
+    /** Stop the next time this step comes round, then clear itself. */
+    Once,
+
+    /** Stop every time. */
+    Always,
+    ;
+
+    /** The next state a press moves to: none → once → always → none. */
+    fun next(): PhaseStop =
+        when (this) {
+            None -> Once
+            Once -> Always
+            Always -> None
+        }
+}
+
+/**
+ * The two stop colours.
+ *
+ * Blue for the one-shot and red for the standing one, and neither is a board signal: a stop is a thing
+ * the *player* has asked for rather than something the game is telling them, so it deliberately does
+ * not borrow the attacking or blocking colours that mean something on a card.
+ */
+private val StopOnceColor: Color = Color(0xFF60A5FA)
+
+private val StopAlwaysColor: Color = Color(0xFFF87171)
