@@ -122,15 +122,20 @@ fun BattlefieldLayout(
     onExpandVitals: ((TableVitals) -> Unit)? = null,
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
+    stack: List<TableStackObject> = emptyList(),
 ) {
     val palette = rememberCounterPalette()
+    // Where everything is, measured as it is placed, so the target arrows can be drawn between real
+    // positions rather than from a second copy of this layout's arithmetic.
+    val anchors = rememberBoardAnchors()
 
     BoxWithConstraints(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(BoardSurface.table)
-                .testTag(BattlefieldTestTags.BOARD),
+                .testTag(BattlefieldTestTags.BOARD)
+                .then(anchors.rootModifier()),
     ) {
         val sides = model.opponents + listOfNotNull(model.viewer)
         val boardWidth = maxWidth - BoardMargin * 2
@@ -216,9 +221,28 @@ fun BattlefieldLayout(
                                 palette = palette,
                                 artFor = artFor,
                                 onInspect = onInspect,
-                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                anchors = anchors,
+                                modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else OPPONENT_WEIGHT),
                             )
                         }
+
+                        // **The stack opens the centre line, and closes it again.** The gap between the
+                        // two front rows is where a table puts the stack and where the arrows have the
+                        // shortest way to go. It holds no height when nothing is on it — the board's
+                        // own rule — and the height it takes when something is is honest movement,
+                        // because a spell arriving is a game action.
+                        if (stack.isNotEmpty()) {
+                            StackRegion(
+                                stack = stack,
+                                cardWidth = cardWidth,
+                                palette = palette,
+                                artFor = artFor,
+                                anchors = anchors,
+                                onInspect = onInspect,
+                                modifier = Modifier.fillMaxWidth().weight(STACK_WEIGHT),
+                            )
+                        }
+
                         model.viewer?.let { side ->
                             SideRows(
                                 side = side,
@@ -228,7 +252,8 @@ fun BattlefieldLayout(
                                 palette = palette,
                                 artFor = artFor,
                                 onInspect = onInspect,
-                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                anchors = anchors,
+                                modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else VIEWER_WEIGHT),
                             )
                         }
                     }
@@ -255,6 +280,11 @@ fun BattlefieldLayout(
                 )
             }
         }
+
+        // **Over everything, and touching nothing.** The arrows are drawn last so they are not covered
+        // by the cards they run between, and the `Canvas` takes no pointer input, so the cards
+        // underneath answer a press exactly as they did before there were arrows.
+        TargetArrows(stack = stack, anchors = anchors, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -342,6 +372,7 @@ private fun SideRows(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
+    anchors: BoardAnchors,
     modifier: Modifier = Modifier,
 ) {
     // The viewer's front row comes first, so packing to the top puts it against the middle; the
@@ -365,6 +396,7 @@ private fun SideRows(
                     palette = palette,
                     artFor = artFor,
                     onInspect = onInspect,
+                    anchors = anchors,
                     alignment = row.alignment,
                 )
             }
@@ -382,6 +414,7 @@ private fun PermanentRow(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
+    anchors: BoardAnchors,
     alignment: Alignment,
     modifier: Modifier = Modifier,
 ) {
@@ -420,6 +453,7 @@ private fun PermanentRow(
                     palette = palette,
                     artFor = artFor,
                     onInspect = onInspect,
+                    anchors = anchors,
                 )
             }
         }
@@ -434,6 +468,7 @@ private fun PermanentCard(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
+    anchors: BoardAnchors,
 ) {
     // Resolved here rather than inside the card, because loading an image is a composition-time thing
     // and the card tier takes a plain lambda. Keyed by the server's own id, which is what the card
@@ -453,6 +488,8 @@ private fun PermanentCard(
         // the Aura the one card on the board that cannot be opened — and it is the card most likely to
         // be the answer to whatever the player is asking.
         onAttachmentTap = onInspect?.let { inspect -> { attachment -> inspect(attachment.id) } },
+        // Where this permanent is, for an arrow from whatever is targeting it.
+        modifier = anchors.anchorModifier(permanent.id),
         counterPalette = palette,
     )
 }
@@ -699,3 +736,21 @@ private fun bottomStackHeight(
 
 /** Room the phase bar takes, for working out what is left above it. */
 private val PhaseBarAllowance = 28.dp
+
+/*
+ * How the centre column is shared while the stack is on it.
+ *
+ * **The viewer's half gives up less than the opponent's.** Both are compressed, because the stack has
+ * to be big enough to read and the height has to come from somewhere — but the row a player is
+ * deciding *with* is their own, and squeezing both equally makes the wrong one hardest to read. The
+ * opponent's row stays legible; it is being consulted rather than acted on.
+ *
+ * A weight rather than a fixed height, so the same rule holds on a phone and on a tablet. With an
+ * empty stack both sides are one, exactly as they were: no empty region holds height, and no region
+ * that is not there may skew the two halves it is not between.
+ */
+private const val OPPONENT_WEIGHT = 1f
+
+private const val STACK_WEIGHT = 1.4f
+
+private const val VIEWER_WEIGHT = 1.3f

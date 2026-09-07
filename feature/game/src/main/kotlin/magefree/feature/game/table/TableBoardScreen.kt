@@ -29,13 +29,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import magefree.designsystem.card.CardPreview
+import magefree.designsystem.card.CardPreviewFlip
 import magefree.designsystem.theme.Spacing
 import magefree.feature.cards.CardArtRenderer
 import magefree.feature.game.board.BOARD_MENU_LABEL
 import magefree.feature.game.board.BoardAction
 import magefree.feature.game.board.CONCEDE_CONFIRM_LABEL
 import magefree.feature.game.board.CONCEDE_LABEL
-import magefree.feature.game.board.CardDetailOverlay
+import magefree.feature.game.board.FLIP_FACE_LABEL
 import magefree.feature.game.board.FloatingControls
 import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.HiddenControlsToggle
@@ -44,8 +46,6 @@ import magefree.feature.game.board.PriorityUi
 import magefree.feature.game.board.QUIT_MATCH_CONFIRM_LABEL
 import magefree.feature.game.board.QUIT_MATCH_LABEL
 import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
-import magefree.feature.game.board.cardFor
-import magefree.feature.game.board.cardInAPile
 
 /*
  * The rebuilt board, playing a real game.
@@ -59,7 +59,7 @@ import magefree.feature.game.board.cardInAPile
  * ├───────────────────────────────────────────────────────────┤
  * │  FloatingControls / HiddenControlsToggle                  │  the question
  * ├───────────────────────────────────────────────────────────┤
- * │  CardDetailOverlay — the card, and what may be done to it │  the decision
+ * │  CardPreview — the card, everything on it, and what may be done │  the decision
  * └───────────────────────────────────────────────────────────┘
  * ```
  *
@@ -75,7 +75,7 @@ import magefree.feature.game.board.cardInAPile
  * `PromptControlsUi.actionFor`; and every gesture leaves as a [BoardAction] for the ViewModel to
  * translate into one client verb. This screen holds no client.
  *
- * **A press raises a card, and the detail overlay commits it.** One gesture, everywhere — the
+ * **A press raises a card, and the preview commits it.** One gesture, everywhere — the
  * battlefield, the hand, a land stack, a zone window — because a rule with an exception on one
  * surface is a rule a player has to learn twice.
  *
@@ -147,6 +147,7 @@ fun TableBoardScreen(
                     vitals = vitals,
                     onExpandVitals = { seat -> expandedSeat = seat },
                     phases = phaseBarState(snapshot),
+                    stack = tableStack(snapshot),
                     artFor = artFor,
                     // Every press on a card is the same press: it raises the card. What may then be
                     // done to it is the detail overlay's question, and the server's answer.
@@ -241,23 +242,51 @@ fun TableBoardScreen(
             // be pressed in one, so a card out of a graveyard is resolved off the snapshot — through
             // the same conversion the hand goes through, so it reads identically either way. Without
             // it, pressing a card in a graveyard selected it and drew nothing at all.
+            // **The board's own preview, not the portrait board's detail overlay.** What a player wants
+            // from a raised permanent is what it is *now* — the abilities it has after layers, and what
+            // is attached to it, with the text of each — and only the board's own model carries those.
+            // The overlay this replaces took a projection that knows a card and not a permanent, so an
+            // enchanted creature opened with no mention of the Aura that is the reason it is not
+            // attacking.
             uiState.selectedObjectId?.let { objectId ->
-                // A third place to look, and the reason is the same as the second's: the board draws
-                // cards the projection does not carry. A prompt's own candidates are not in any zone
-                // the snapshot lists — a library search's cards are the server's answer to a question,
-                // not a pile — so they are resolved from the prompt that carried them.
-                val candidate = controls?.candidateCards?.firstOrNull { it.objectId == objectId }?.card
-                (uiState.board.cardFor(objectId) ?: snapshot?.cardInAPile(objectId) ?: candidate)?.let { card ->
-                    CardDetailOverlay(
-                        card = card,
+                snapshot?.let { state ->
+                    raisedCard(
+                        objectId = objectId,
+                        snapshot = state,
+                        model = battlefieldModel(state),
+                        stack = tableStack(state),
+                        candidates = controls?.candidateCards.orEmpty(),
                         actionLabel = controls?.actionLabelFor(objectId),
-                        artRenderer = artRenderer,
-                        onCommit = { controls?.actionFor(objectId)?.let(onAction) },
-                        onClose = { onCardTap(null) },
-                        modifier = Modifier.zIndex(DETAIL_LAYER_Z),
-                        detailFace = uiState.detailFace,
-                        onFlip = onFlipDetailFace,
-                    )
+                        onAct = { controls?.actionFor(objectId)?.let(onAction) },
+                    )?.let { raised ->
+                        // The peek at a double-faced card's other side, carried through unchanged from
+                        // the overlay this replaced. It is offered only where the catalog says there
+                        // *is* another face, and it is local: which face the object is actually showing
+                        // stays the server's answer.
+                        val face = uiState.detailFace
+                        val shown =
+                            if (face == null) {
+                                raised
+                            } else {
+                                raised.copy(
+                                    state = raised.state.copy(card = raised.state.card.copy(name = face.displayName)),
+                                    art = raised.art?.copy(face = face.face),
+                                )
+                            }
+                        CardPreview(
+                            state =
+                                shown.state.copy(
+                                    flip =
+                                        face
+                                            ?.takeIf { it.canFlip }
+                                            ?.let { CardPreviewFlip(label = FLIP_FACE_LABEL, onFlip = onFlipDetailFace) },
+                                ),
+                            onDismiss = { onCardTap(null) },
+                            art = artFor?.invoke(shown.art, shown.state.card),
+                            heightShare = DETAIL_HEIGHT_SHARE,
+                            modifier = Modifier.zIndex(DETAIL_LAYER_Z),
+                        )
+                    }
                 }
             }
         }
@@ -431,3 +460,12 @@ private fun BoardCornerMenu(
         }
     }
 }
+
+/**
+ * How much of the height a raised card takes.
+ *
+ * Larger than the tier's own default. A raised card is the one thing on screen at that moment and it
+ * carries more than it used to — a permanent's abilities as they are now, and the text of everything
+ * attached to it — so the panel beside it needs the room to be read rather than skimmed.
+ */
+private const val DETAIL_HEIGHT_SHARE = 0.88f

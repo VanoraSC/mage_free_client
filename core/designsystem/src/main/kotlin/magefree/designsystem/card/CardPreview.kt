@@ -30,6 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.component.MagePrimaryButton
+import magefree.designsystem.component.MageSecondaryButton
 import magefree.designsystem.text.SymbolText
 import magefree.designsystem.theme.MageShapes
 import magefree.designsystem.theme.Spacing
@@ -76,6 +77,7 @@ data class CardPreviewState(
     val action: CardPreviewAction? = null,
     val attachments: List<CardPreviewAttachment> = emptyList(),
     val provenance: CardPreviewProvenance? = null,
+    val flip: CardPreviewFlip? = null,
 )
 
 /**
@@ -121,6 +123,20 @@ data class CardPreviewAttachment(
 data class CardPreviewAction(
     val label: String,
     val onAct: () -> Unit,
+)
+
+/**
+ * Turning a double-faced card over, to read the face that is not up.
+ *
+ * Offered only where there *is* another face — the catalog's own answer, not a guess from the name —
+ * and purely local: it never touches which face the object is actually showing, which is the server's.
+ *
+ * @property label what the control says.
+ * @property onFlip shows the other face.
+ */
+data class CardPreviewFlip(
+    val label: String,
+    val onFlip: () -> Unit,
 )
 
 /**
@@ -340,6 +356,17 @@ private fun DetailPanel(
                 modifier = Modifier.fillMaxWidth().testTag(CardPreviewTestTags.ACTION),
             )
         }
+
+        // **A look, never a move.** Turning the card over here shows the other face and sends nothing:
+        // which face a permanent is actually showing is the server's, and this is the player reading
+        // the half that is currently face down.
+        state.flip?.let { flip ->
+            MageSecondaryButton(
+                text = flip.label,
+                onClick = flip.onFlip,
+                modifier = Modifier.fillMaxWidth().testTag(CardPreviewTestTags.FLIP),
+            )
+        }
     }
 }
 
@@ -355,6 +382,7 @@ object CardPreviewTestTags {
 
     /** Where a card outside the hand is, and what is offering it. */
     const val PROVENANCE: String = "card-preview-provenance"
+    const val FLIP: String = "card-preview-flip"
     const val ACTION: String = "card-preview-action"
 
     /** One attached permanent's block, by its name. */

@@ -2,6 +2,9 @@ package magefree.feature.game.table
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -9,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import magefree.designsystem.card.CardPreviewTestTags
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.feature.game.board.BoardAction
@@ -178,6 +182,50 @@ class TableBoardScreenTest {
         render(runningGame(), selectedObjectId = "ex-1")
 
         composeTestRule.onNodeWithText("Chandra, Torch of Defiance").assertIsDisplayed()
+    }
+
+    // ---- the stack ------------------------------------------------------------------------------
+
+    @Test
+    fun `an empty stack draws no region at all`() {
+        // The board's own rule: no empty region holds height. Most of a game has nothing on the stack,
+        // and a band reserved for it would be a permanent hole in the middle of the battlefield.
+        render(runningGame())
+
+        composeTestRule.onNodeWithTag(StackTestTags.REGION).assertDoesNotExist()
+    }
+
+    @Test
+    fun `something on the stack opens a band between the two sides, and says what it does`() {
+        // The board draws no card text, which is right for a permanent being glanced at and wrong for
+        // the one object the whole game is currently waiting on.
+        render(castingGame())
+
+        composeTestRule.onNodeWithTag(StackTestTags.REGION).assertIsDisplayed()
+        composeTestRule.onNodeWithText(BOLT_TEXT).assertIsDisplayed()
+    }
+
+    @Test
+    fun `pressing a stack object raises it rather than answering anything`() {
+        render(castingGame())
+
+        composeTestRule.onNodeWithTag(StackTestTags.entry("bolt")).performClick()
+
+        assertEquals(listOf<String?>("bolt"), taps)
+        assertTrue("a press on the stack sends nothing", actions.isEmpty())
+    }
+
+    @Test
+    fun `a raised permanent shows what is attached to it and what that attachment says`() {
+        // The detail this replaced took a projection that knows a card and not a permanent, so an
+        // enchanted creature opened with no mention of the Aura that is the reason it cannot attack.
+        render(enchantedGame(), selectedObjectId = "bears")
+
+        // Scoped to the panel: the Aura's name is also on the board, on the band it shows behind its
+        // host, which is exactly the band that is too small to read and the reason this panel lists it.
+        val inPanel = hasAnyAncestor(hasTestTag(CardPreviewTestTags.PANEL))
+        composeTestRule.onNode(hasText("Pacifism") and inPanel).assertIsDisplayed()
+        composeTestRule.onNode(hasText(PACIFISM_TEXT) and inPanel).assertIsDisplayed()
     }
 
     // ---- the question ---------------------------------------------------------------------------
@@ -400,6 +448,47 @@ class TableBoardScreenTest {
         )
     }
 
+    /** The same game with a spell on the stack, pointing at a creature the board is drawing. */
+    private fun castingGame() =
+        runningGame().copy(
+            stack =
+                listOf(
+                    card("bolt", "Lightning Bolt", "Instant", "R").copy(
+                        rules = listOf(BOLT_TEXT),
+                        targets = listOf("o-1"),
+                    ),
+                ),
+        )
+
+    /** A creature with an Aura on it, which is the case a card-shaped detail view cannot describe. */
+    private fun enchantedGame(): GameState {
+        val base = runningGame()
+        return base.copy(
+            players =
+                base.players.map { player ->
+                    if (!player.isViewer) {
+                        player
+                    } else {
+                        player.copy(
+                            battlefield =
+                                listOf(
+                                    GamePermanent(
+                                        card = card("bears", "Grizzly Bears", "Creature — Bear", "1G", listOf(CardType.Creature)),
+                                        attachments = listOf("aura"),
+                                    ),
+                                    GamePermanent(
+                                        card =
+                                            card("aura", "Pacifism", "Enchantment — Aura", "W").copy(rules = listOf(PACIFISM_TEXT)),
+                                        attachedTo = "bears",
+                                        isAttachedToPermanent = true,
+                                    ),
+                                ),
+                        )
+                    }
+                },
+        )
+    }
+
     /** The same game with the viewer holding priority and one card offered — the board being played. */
     private fun priorityGame() =
         runningGame().copy(
@@ -409,3 +498,9 @@ class TableBoardScreenTest {
             prompt = GamePrompt.Select(message = "Select an ability to play"),
         )
 }
+
+/** The server's own text for the spell the stack tests put on it. */
+private const val BOLT_TEXT = "Lightning Bolt deals 3 damage to any target."
+
+/** And for the Aura, which is the whole reason a permanent's detail has to list what is on it. */
+private const val PACIFISM_TEXT = "Enchanted creature can't attack or block."

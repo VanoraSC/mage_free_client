@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
@@ -32,10 +34,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.times
 import magefree.designsystem.board.BoardSignal
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
@@ -477,6 +482,7 @@ fun BoardCard(
 }
 
 /** The permanent itself: art, name, counters, badges, stats, and the signal border. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HostCard(
     state: BoardCardState,
@@ -554,13 +560,15 @@ private fun HostCard(
             }
 
             if (state.counters.isNotEmpty()) {
-                Row(
+                FlowRow(
                     modifier =
                         Modifier
                             .align(Alignment.CenterStart)
                             .padding(BoardCardPadding)
                             .testTag(BoardCardTestTags.COUNTERS),
                     horizontalArrangement = Arrangement.spacedBy(1.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    maxItemsInEachRow = COUNTERS_PER_ROW,
                 ) {
                     state.counters.forEach { counter ->
                         CounterCircle(counter = counter, palette = counterPalette)
@@ -584,7 +592,7 @@ private fun HostCard(
             boardStatsLabel(state.power, state.toughness)?.let { stats ->
                 Text(
                     text = stats,
-                    style = BoardTypography.cardStats,
+                    style = CardFaceStats,
                     color = BoardSurface.onSurface,
                     modifier =
                         Modifier
@@ -669,7 +677,7 @@ internal fun CounterCircle(
         }
         Text(
             text = counterCountLabel(counter.count),
-            style = BoardTypography.counter,
+            style = CardFaceCounter,
             color = ink,
             maxLines = 1,
             textAlign = TextAlign.Center,
@@ -714,7 +722,7 @@ internal fun BadgeSquare(badge: BoardBadge) {
             // rather than keywords, and no font has a picture of them.
             Text(
                 text = badge.shortLabel,
-                style = BoardTypography.counter,
+                style = CardFaceCounter,
                 color = BoardSurface.onSurface,
                 maxLines = 1,
                 textAlign = TextAlign.Center,
@@ -971,14 +979,14 @@ private val BoardCardPadding = 2.dp
 private val FocalBorderWidth = 5.dp
 
 private val SecondaryBorderWidth = 3.dp
-private val CounterCircleSize = 15.dp
-private val BadgeSize = 13.dp
+private val CounterCircleSize = 30.dp
+private val BadgeSize = 26.dp
 
 /** The gap between a counter's symbol and its count, and the chip's own inset from its outline. */
 private val CounterChipPadding = 1.dp
 
 /** The symbol's box inside the chip: the chip's height less its outline and inset on both sides. */
-private val CounterGlyphSize = 11.dp
+private val CounterGlyphSize = 22.dp
 
 /** Room around the glyph, so it does not sit on the plate's outline. */
 private const val BADGE_GLYPH_FILL = 0.74f
@@ -1016,3 +1024,37 @@ private fun attachmentBandHeight(width: Dp): Dp = width / CARD_ASPECT_RATIO * AT
 
 /** The sideways step that makes the stack read as separate cards rather than one block. */
 private fun attachmentInset(width: Dp): Dp = width * ATTACHMENT_INSET_FRACTION
+
+/*
+ * The card face's own text sizes, at twice the tokens they are derived from.
+ *
+ * **The board does not show card text by default**, which is the Board tier's whole idea: a card is
+ * its illustration, its name and its cost. That makes these marks — power and toughness, a counter's
+ * value, a keyword badge — the only channel by which an ability reaches the player at a glance, and at
+ * token size they read as decoration on a card that is now over a hundred dp wide.
+ *
+ * **Derived here rather than doubled in the tokens**, because [BoardTypography.cardStats] and
+ * [BoardTypography.counter] are shared with the vitals strip, the phase bar and the prompt surfaces,
+ * where they are the right size already. What needed to grow is what is drawn *over the art*.
+ *
+ * Nothing shrinks to make room: counters and badges are overlays inside the card's own box and take no
+ * part in [boardCardWidthFitting], which accounts for attachments and nothing else.
+ */
+private val CardFaceStats: TextStyle =
+    BoardTypography.cardStats.copy(fontSize = BoardTypography.cardStats.fontSize * GLYPH_SCALE, lineHeight = TextUnit.Unspecified)
+
+private val CardFaceCounter: TextStyle =
+    BoardTypography.counter.copy(fontSize = BoardTypography.counter.fontSize * GLYPH_SCALE, lineHeight = TextUnit.Unspecified)
+
+/** How much bigger the card face's own marks are than the tokens they come from. */
+private const val GLYPH_SCALE = 2f
+
+/**
+ * How many counter chips sit on one line before the next wraps under it.
+ *
+ * **A counter that does not fit must not be the one that disappears.** At their new size two chips
+ * fill the width of a board card, and a third ran off the edge — which for a poison counter or a
+ * loyalty counter is a game-losing thing to hide. They wrap instead, down the card's left edge, where
+ * there is height to spare and nothing else is drawn.
+ */
+private const val COUNTERS_PER_ROW = 2

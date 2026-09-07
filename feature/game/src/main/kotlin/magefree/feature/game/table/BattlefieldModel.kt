@@ -408,7 +408,7 @@ private fun roleOf(card: GameCard): PermanentRole =
  * double-faced card's two faces share one printing — so which face is up is entirely a matter of which
  * [CardArtFace] is asked for.
  */
-private fun artRequestOf(card: GameCard): CardArtRequest? {
+internal fun artRequestOf(card: GameCard): CardArtRequest? {
     if (card.isFaceDown) return null
     val set = card.setCode?.takeIf { it.isNotBlank() } ?: return null
     if (card.isToken) return tokenArtRequest(setCode = set, name = card.name, size = CardArtSize.ART_CROP)
@@ -526,7 +526,7 @@ private fun signalsOf(
  * which is a hand and zone-browser concern rather than a property of a permanent. So do upstream's two
  * inner-client values, which are not expected from a server at all.
  */
-private fun badgeOf(icon: GameCardIcon): BoardBadge? =
+internal fun badgeOf(icon: GameCardIcon): BoardBadge? =
     when (icon.type) {
         CardIconType.AbilityFlying -> BoardBadge.Flying
         CardIconType.AbilityDefender -> BoardBadge.Defender
