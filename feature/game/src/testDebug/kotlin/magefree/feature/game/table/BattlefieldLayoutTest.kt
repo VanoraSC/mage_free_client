@@ -6,13 +6,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import magefree.designsystem.card.BoardCardTestTags
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -112,6 +116,26 @@ class BattlefieldLayoutTest {
             .children
             .first()
             .size.width
+
+    private fun bounds(tag: String): Rect = composeTestRule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+
+    /**
+     * Every card face drawn inside one land stack, as it actually lands on the screen.
+     *
+     * `boundsInRoot` puts the node's box through the transforms above it, so a card that has been
+     * leaned over reports the upright box that leaning card occupies rather than the box it was laid
+     * out in. That difference is the whole subject of the stack's geometry, and it is invisible to
+     * anything that only reads sizes.
+     */
+    private fun cardsIn(stackId: String): List<Rect> =
+        composeTestRule
+            .onAllNodes(
+                hasTestTag(BoardCardTestTags.CARD) and hasAnyAncestor(hasTestTag(BattlefieldTestTags.stack(stackId))),
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes()
+            .map { it.boundsInRoot }
+
+    private fun cardCentre(stackId: String): Offset = cardsIn(stackId).first().center
 
     private fun lands(playerId: String) = BattlefieldTestTags.row(playerId, BattlefieldTestTags.LAND_ZONE)
 
@@ -307,11 +331,52 @@ class BattlefieldLayoutTest {
         composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p2")).performTouchInput {
             click(Offset(center.x, height * 0.2f))
         }
+        // Low enough to be past the bottom of every upright copy, high enough to still be inside the
+        // leaning one. A leaning card is a diamond, so the very bottom of the stack's box is the one
+        // place in that strip it does *not* reach — its bottom corner is the only thing down there.
         composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p2")).performTouchInput {
-            click(Offset(center.x, height * 0.95f))
+            click(Offset(center.x, height * 0.85f))
         }
 
         assertEquals(listOf(LandStackHalf.Upright, LandStackHalf.Turned), landPresses)
+    }
+
+    @Test
+    fun `a lone land leans where it stood rather than sliding down the diagonal`() {
+        // Shipped wrong: the turned half was anchored to the *front* of the diagonal whatever was in
+        // the upright half, so a player's single tapped land jumped to slot two of an otherwise empty
+        // stack — it read as the card having come loose and drifted away from its place. A tap turns a
+        // card over where it is standing, so a stack of one draws in the same place either way.
+        show(oneSided("me", listOf(plains("up"), island("down", tapped = true))))
+
+        val standing = cardCentre("up").x - left(BattlefieldTestTags.stack("up"))
+        val leaning = cardCentre("down").x - left(BattlefieldTestTags.stack("down"))
+
+        assertTrue(
+            "the upright copy sat $standing into its stack and the leaning one $leaning",
+            kotlin.math.abs(standing - leaning) <= ROUNDING_SLACK_PX,
+        )
+    }
+
+    @Test
+    fun `a leaning card stays inside the room its stack asked for`() {
+        // The other half of the same shipped bug, and the one that made a pile of tapped lands read as
+        // a smear. The footprint modelled a tap as a quarter turn — width and height swapping — which
+        // is a no-op on a square card, so a stack reserved a leaning copy exactly the room an upright
+        // one takes. A square on its corner is √2 across: the overflow drew over the stack beside it.
+        show(oneSided("me", (1..4).map { plains("p$it", tapped = true) }))
+
+        val stack = bounds(BattlefieldTestTags.stack("p1"))
+
+        cardsIn("p1").forEach { card ->
+            assertTrue(
+                "a leaning card drew $card inside a stack of $stack",
+                card.left >= stack.left - ROUNDING_SLACK_PX &&
+                    card.right <= stack.right + ROUNDING_SLACK_PX &&
+                    card.top >= stack.top - ROUNDING_SLACK_PX &&
+                    card.bottom <= stack.bottom + ROUNDING_SLACK_PX,
+            )
+        }
     }
 
     @Test
@@ -411,6 +476,15 @@ private fun plains(
     tapped: Boolean = false,
 ) = GamePermanent(
     card = GameCard(id = id, name = "Plains", setCode = "10E", collectorNumber = "364", cardTypes = listOf(CardType.Land)),
+    isTapped = tapped,
+)
+
+/** A second basic, so a board can hold two land stacks and compare one against the other. */
+private fun island(
+    id: String,
+    tapped: Boolean = false,
+) = GamePermanent(
+    card = GameCard(id = id, name = "Island", setCode = "10E", collectorNumber = "361", cardTypes = listOf(CardType.Land)),
     isTapped = tapped,
 )
 
