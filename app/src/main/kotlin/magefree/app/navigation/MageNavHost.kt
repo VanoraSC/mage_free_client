@@ -203,11 +203,23 @@ fun MageNavHost(
             // live push.
             val startedGameId = roomState.table.resumableGameId
             LaunchedEffect(startedGameId) {
-                // **Out of this graph, not within it.** The board is a root destination now (0112), so
-                // the hand-off is hoisted rather than navigated here: the shell's chrome would take a
-                // navigation rail's width off a landscape board, which is width the battlefield is
-                // sized from. Back returns to this room, because the shell is still under it.
-                startedGameId?.let(onEnterGame)
+                startedGameId?.let { gameId ->
+                    // **The room is popped first, and that pop is load-bearing.** `resumableGameId`
+                    // stays set for as long as the game exists, so a room left composed under the
+                    // board re-fires this the instant the board is popped — and the player is thrown
+                    // straight back onto a board they were trying to leave. Worse after a game ends:
+                    // the bridge will not re-serve a finished game, so the board they land on is the
+                    // empty seed with nothing to wait for, and the loop has no exit.
+                    //
+                    // The board is a root destination now (0112), so this is two steps where it used
+                    // to be one `popUpTo(LobbyRoute)`: pop the room inside the shell's own graph,
+                    // then hoist the game id out to the root graph, which is where the board renders
+                    // without the shell's chrome taking a navigation rail's width off it. Back from a
+                    // live game returns to the lobby rather than to a room whose match has begun —
+                    // the same place it returned to before.
+                    navController.popBackStack<LobbyRoute>(inclusive = false)
+                    onEnterGame(gameId)
+                }
             }
 
             TableRoomFeatureRoute(

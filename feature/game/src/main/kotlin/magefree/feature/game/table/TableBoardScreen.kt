@@ -37,6 +37,7 @@ import magefree.feature.game.board.JOIN_FAILED_PREFIX
 import magefree.feature.game.board.PriorityUi
 import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
 import magefree.feature.game.board.cardFor
+import magefree.feature.game.board.cardInAPile
 
 /*
  * The rebuilt board, playing a real game.
@@ -215,8 +216,15 @@ fun TableBoardScreen(
             }
 
             // The first press raised the card; this is where it is read and committed.
+            //
+            // **Two lookups, because the board draws cards the projection does not carry.** `BoardUi`
+            // knows the hand, the battlefields and the stack; a seat's piles reach it only as counts,
+            // which is all the portrait board drew of them. This board opens the piles and lets a card
+            // be pressed in one, so a card out of a graveyard is resolved off the snapshot — through
+            // the same conversion the hand goes through, so it reads identically either way. Without
+            // it, pressing a card in a graveyard selected it and drew nothing at all.
             uiState.selectedObjectId?.let { objectId ->
-                uiState.board.cardFor(objectId)?.let { card ->
+                (uiState.board.cardFor(objectId) ?: snapshot?.cardInAPile(objectId))?.let { card ->
                     CardDetailOverlay(
                         card = card,
                         actionLabel = controls?.actionLabelFor(objectId),
@@ -234,25 +242,32 @@ fun TableBoardScreen(
 }
 
 /**
- * The statements that must survive whatever else is on screen: that nothing has arrived yet, and that
- * a join was declined.
+ * The statements that must survive whatever else is on screen: that nothing has arrived yet, that a
+ * join was declined, and that the game is over.
  *
- * Both say the same kind of thing — *the board you are looking at is not the game you think it is* —
- * and a player who cannot tell a waiting game from a frozen one has no way to find out except by
- * leaving. Drawn over the board's own top-left corner, above the status rail, because an empty board
- * has nothing there and a joined one has no reason to show either line.
+ * All three say the same kind of thing — *the board you are looking at is not the game you think it
+ * is* — and a player who cannot tell a waiting game from a finished one has no way to find out except
+ * by leaving. Drawn over the board's own top-left corner, above the status rail, because a board in
+ * any of these states has nothing there and an ordinary one has no reason to show any of them.
  *
  * **"Nothing has arrived" is a fact about the snapshot, not about whether there is one.** The
  * subscription opens with an empty `GameState` seed and the flow emits it immediately, so a board
  * that waited for a *null* snapshot would wait forever and say nothing while it did. The server's own
  * `hasSnapshot` is the flag, and it is false on exactly that seed.
+ *
+ * **The result is the server's own line and nothing is inferred from it.** Upstream's `GAME_OVER`
+ * payload is one sentence of prose with no winner id and no reason code, so this shows the sentence.
+ * It is stated rather than merely implied by a board that stopped moving: without it a finished game
+ * and a stalled one look identical, which is exactly the ambiguity the waiting line exists to remove
+ * at the other end of a game.
  */
 @Composable
 private fun StandingStatements(
     uiState: GameBoardUiState,
     modifier: Modifier = Modifier,
 ) {
-    if (uiState.board.hasSnapshot && uiState.joinError == null) return
+    val board = uiState.board
+    if (board.hasSnapshot && uiState.joinError == null && board.resultNotice == null) return
     Column(
         modifier =
             modifier
@@ -261,12 +276,23 @@ private fun StandingStatements(
                 .padding(horizontal = Spacing.medium)
                 .testTag(TableBoardTestTags.STANDING),
     ) {
-        if (!uiState.board.hasSnapshot) {
+        if (!board.hasSnapshot) {
             Text(
                 text = WAITING_FOR_FIRST_SNAPSHOT,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+            )
+        }
+        board.resultNotice?.let { notice ->
+            // Louder than the other two, and it should be: the game ending is the one thing on this
+            // screen a player must not be able to miss, and the board behind it has stopped changing.
+            Text(
+                text = notice,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         uiState.joinError?.let { reason ->

@@ -25,6 +25,7 @@ import magefree.network.game.GameCard
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GamePrompt
+import magefree.network.game.GameResult
 import magefree.network.game.GameState
 import magefree.network.game.PhaseStep
 import magefree.network.game.PlayableObject
@@ -136,6 +137,42 @@ class TableBoardScreenTest {
         render(GameState(gameId = "g-1"), joinError = "table is full")
 
         composeTestRule.onNodeWithText("Couldn't join the game: table is full").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a finished game says so, in the server's own words`() {
+        // Found by playing one: the board simply stopped moving and said nothing, which is
+        // indistinguishable from a stalled one. Upstream's GAME_OVER is a single line of prose with no
+        // winner id and no reason code, so the line is what is shown and nothing is inferred from it.
+        render(runningGame().copy(result = GameResult(message = "pete has won the game")))
+
+        composeTestRule.onNodeWithText("pete has won the game").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a game still being played says nothing about a result`() {
+        render(runningGame())
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.STANDING).assertDoesNotExist()
+    }
+
+    // ---- a card in a pile -----------------------------------------------------------------------
+
+    @Test
+    fun `a card pressed in a graveyard opens the same detail a card in hand opens`() {
+        // Found by playing one: the piles opened, the cards were there, and pressing one did nothing
+        // at all. `BoardUi` carries a graveyard as a *count* — all the portrait board ever drew of one
+        // — so the detail had nothing to show and drew nothing, which is a dead affordance.
+        render(runningGame(), selectedObjectId = "gy-1")
+
+        composeTestRule.onNodeWithText("Ancestral Recall").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a card pressed in an exile pile opens too`() {
+        render(runningGame(), selectedObjectId = "ex-1")
+
+        composeTestRule.onNodeWithText("Chandra, Torch of Defiance").assertIsDisplayed()
     }
 
     // ---- the question ---------------------------------------------------------------------------
@@ -284,6 +321,10 @@ class TableBoardScreenTest {
                                     card = card("y-1", "Forest", "Basic Land — Forest", types = listOf(CardType.Land)),
                                 ),
                             ),
+                        // The piles the rebuilt board opens and lets a card be pressed in. They reach
+                        // `BoardUi` only as counts, which is why the detail has to read the snapshot.
+                        graveyard = listOf(card("gy-1", "Ancestral Recall", "Instant", "U")),
+                        exile = listOf(card("ex-1", "Chandra, Torch of Defiance", "Legendary Planeswalker — Chandra", "2RR")),
                     ),
                 ),
             hand =

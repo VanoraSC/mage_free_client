@@ -721,3 +721,27 @@ internal fun BoardUi.cardFor(objectId: String): CardUi? {
         ?.let { return it.card }
     return stack.entries.firstOrNull { it.objectId == objectId }?.card
 }
+
+/**
+ * The card [objectId] names in one of the **piles** — a graveyard, an exile pile, a revealed set.
+ *
+ * [BoardUi.cardFor] cannot answer for these and is not going to: [SeatUi] carries a graveyard's
+ * *count*, because that is all the portrait board ever drew of one. The rebuilt board opens the piles
+ * and lets a card be pressed in them, so a press there has to reach the same detail view a press in
+ * the hand reaches — and it did not: the card selected and nothing appeared, which is a dead
+ * affordance, the failure this project has been bitten by before.
+ *
+ * Read off the snapshot rather than off a widened projection, because the piles are already on the
+ * wire in full and projecting them a second time would be two shapes of the same cards. The
+ * conversion is [toCardUi], the same one the hand goes through, so a card reads identically wherever
+ * it was pressed.
+ */
+internal fun GameState.cardInAPile(objectId: String): CardUi? {
+    players.forEach { player ->
+        (player.graveyard + player.exile).firstOrNull { it.id == objectId }?.let { return it.toCardUi() }
+    }
+    return (exile + revealed)
+        .flatMap { it.cards }
+        .firstOrNull { it.id == objectId }
+        ?.toCardUi()
+}
