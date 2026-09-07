@@ -30,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -76,8 +77,18 @@ import magefree.feature.cards.CardArtRenderer
  */
 internal val ControlsMaxHeight: Dp = 200.dp
 
+/**
+ * How tall the panel may grow when the prompt is answered **from its own content**.
+ *
+ * A cap that is right for a panel floating over a board the player is about to tap is wrong for one
+ * that *is* the interaction: a library search drawn at two hundred dp is a row of thumbnails, and the
+ * cards in it are cards the player has not seen before. So the question that owns the moment gets the
+ * screen, and the collapse control is how the board is looked at in the middle of answering.
+ */
+internal val ControlsFullHeight: Dp = 420.dp
+
 /** Width of a candidate card the prompt carried itself (a scry card, a pile). */
-internal val CandidateCardWidth: Dp = 72.dp
+internal val CandidateCardWidth: Dp = 132.dp
 
 /**
  * The floating control panel: the outstanding question, the cast in flight, whatever answers the
@@ -96,9 +107,16 @@ internal fun FloatingControls(
     onAction: (BoardAction) -> Unit,
     onHide: () -> Unit,
     modifier: Modifier = Modifier,
+    onRaiseCandidate: (String) -> Unit = {},
 ) {
+    // **The question that owns the moment gets the room.** `PromptControlsUi` already draws the line
+    // this reads: a prompt answered *from its own content* carries cards, and one answered *by touching
+    // the board* does not. So the panel does not need a flag — the cards it is holding say which kind
+    // of question this is, and a search drawn at the other cap is a row of thumbnails.
+    val answeredHere = controls != null && controls.candidateCards.isNotEmpty()
+
     Surface(
-        modifier = modifier.fillMaxWidth().heightIn(max = ControlsMaxHeight),
+        modifier = modifier.fillMaxWidth().heightIn(max = if (answeredHere) ControlsFullHeight else ControlsMaxHeight),
         // Every corner the same radius, deliberately. `Surface` clips to its shape, and a shape whose
         // corners differ (e.g. top-only rounding) produces a **non-simple** outline that hit-testing has
         // to resolve through a path — which Robolectric's graphics shadows cannot do, so every button
@@ -108,7 +126,6 @@ internal fun FloatingControls(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = Elevation.level4,
     ) {
-        var menuExpanded by rememberSaveable { mutableStateOf(false) }
         Column(
             modifier =
                 Modifier
@@ -117,29 +134,16 @@ internal fun FloatingControls(
                     .padding(horizontal = Spacing.medium, vertical = Spacing.small),
             verticalArrangement = Arrangement.spacedBy(Spacing.extraSmall),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = if (controls == null) NO_OUTSTANDING_PROMPT else CONTROLS_TITLE,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                TextButton(onClick = { menuExpanded = !menuExpanded }) { Text(text = BOARD_MENU_LABEL, maxLines = 1) }
+            // **No heading.** "The server asks" said what the panel's existence already said, and the
+            // game menu was in it — an act of a different kind from answering, which the player may
+            // want at a moment when there is nothing to answer at all. Both moved out: the menu into
+            // the board's own corner (0113), and the heading into nothing.
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onHide) { Text(text = HIDE_CONTROLS_LABEL, maxLines = 1) }
             }
 
-            // Kept directly under the header, and out of the answering controls, because leaving a game
-            // is a different kind of act from answering a question — and because it must stay reachable
-            // whatever the prompt is, including one this build cannot answer at all.
-            if (menuExpanded) {
-                BoardMenu(onAction = onAction, onDone = { menuExpanded = false })
+            if (controls == null) {
+                Note(text = NO_OUTSTANDING_PROMPT)
             }
 
             // The spell does not vanish behind each new question.
@@ -224,7 +228,7 @@ internal fun FloatingControls(
                 CandidateRow(
                     candidates = controls.candidateCards,
                     artRenderer = artRenderer,
-                    onPick = { objectId -> controls.actionFor(objectId)?.let(onAction) },
+                    onPick = onRaiseCandidate,
                     isPickable = controls is PromptControlsUi.Targeting,
                 )
             }
@@ -376,6 +380,12 @@ private fun CandidateRow(
                     modifier = Modifier.width(CandidateCardWidth),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
+                    // **The card is the control.** It used to be a picture with a button under it
+                    // carrying the card's name — and for a candidate the board could not name, a
+                    // second button elsewhere in the panel saying "Choice 4". Three ways to offer one
+                    // choice, two of which say less than the picture does. Pressing the card raises it
+                    // instead, which is the same gesture every other card on this board answers to and
+                    // the only one that gives a card being read for the first time room to be read.
                     Surface(
                         shape = RoundedCornerShape(Corner.small),
                         color =
@@ -385,7 +395,13 @@ private fun CandidateRow(
                                 MaterialTheme.colorScheme.surface
                             },
                         tonalElevation = Elevation.level1,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .testTag(BoardControlsTestTags.candidate(candidate.objectId))
+                                .let { base ->
+                                    if (isPickable) base.clickable { onPick(candidate.objectId) } else base
+                                },
                     ) {
                         BoardCardFace(
                             card = candidate.card,
@@ -393,19 +409,13 @@ private fun CandidateRow(
                             modifier = Modifier.padding(Spacing.extraSmall),
                         )
                     }
-                    if (isPickable) {
-                        TextButton(onClick = { onPick(candidate.objectId) }) {
-                            Text(text = candidate.card.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    } else {
-                        Text(
-                            text = candidate.card.name,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    Text(
+                        text = candidate.card.name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
@@ -742,3 +752,9 @@ internal const val UNANSWERABLE_NOTE: String = "Nothing to press: this one can't
  * board says so and offers the *done*, rather than an instruction to tap something that is not there.
  */
 internal const val NOTHING_TO_DECLARE_NOTE: String = "The server names no creature to declare — you can still finish the step."
+
+/** Test tags for the panel's own controls, which are told apart by what they do rather than by text. */
+object BoardControlsTestTags {
+    /** One card the prompt carried, pressable when the prompt is answered by picking one. */
+    fun candidate(objectId: String): String = "candidate-$objectId"
+}

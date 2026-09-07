@@ -12,11 +12,16 @@ import androidx.compose.ui.test.performClick
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.feature.game.board.BoardAction
+import magefree.feature.game.board.BoardControlsTestTags
 import magefree.feature.game.board.BoardUi
+import magefree.feature.game.board.CONCEDE_CONFIRM_LABEL
+import magefree.feature.game.board.CONCEDE_LABEL
 import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.NO_OUTSTANDING_PROMPT
 import magefree.feature.game.board.PASS_LABEL
 import magefree.feature.game.board.PLAY_ACTION_LABEL
+import magefree.feature.game.board.TARGET_ACTION_LABEL
+import magefree.feature.game.board.UNNAMED_CANDIDATE_LABEL
 import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
 import magefree.feature.game.board.WAITING_ON_YOU_WHILE_HIDDEN
 import magefree.feature.game.board.controlsFor
@@ -248,14 +253,57 @@ class TableBoardScreenTest {
     // ---- the exit -------------------------------------------------------------------------------
 
     @Test
-    fun `there is always a way off the board`() {
-        // The board has no top bar to go back from — it takes the whole window — so the exit is a
-        // control of its own, and it is on screen whatever else is.
+    fun `there is always a way off the board, and it is not inside the answer panel`() {
+        // The board has no top bar to go back from — it takes the whole window — so leaving lives in
+        // the corner menu, beside conceding and quitting. All three are acts of a different kind from
+        // answering the server, and a player wants them at moments when there is nothing to answer.
         render(priorityGame())
 
-        composeTestRule.onNodeWithTag(TableBoardTestTags.EXIT).performClick()
+        composeTestRule.onNodeWithTag(TableBoardTestTags.MENU).performClick()
+        composeTestRule.onNodeWithText(LEAVE_BOARD_LABEL).performClick()
 
         assertEquals(1, exits)
+    }
+
+    @Test
+    fun `conceding from the corner menu asks first`() {
+        // It ends the game, so the first press is the question and the second is the answer. Nothing
+        // is sent until the second.
+        render(priorityGame())
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.MENU).performClick()
+        composeTestRule.onNodeWithText(CONCEDE_LABEL).performClick()
+        assertTrue("the first press only asks", actions.isEmpty())
+
+        composeTestRule.onNodeWithText(CONCEDE_CONFIRM_LABEL).performClick()
+        assertEquals(listOf<BoardAction>(BoardAction.Concede), actions)
+    }
+
+    // ---- a question answered from its own content -----------------------------------------------
+
+    @Test
+    fun `a card the prompt carried is pressed, not chosen from a numbered button beside it`() {
+        // Found by playing: the panel drew the cards *and* a "Choice 4" button per card, because
+        // anything the board itself does not draw counted as unnameable. Three ways to offer one
+        // choice, two of which say less than the picture does.
+        render(searchGame())
+
+        composeTestRule.onNodeWithText("$UNNAMED_CANDIDATE_LABEL 1").assertDoesNotExist()
+        composeTestRule.onNodeWithTag(BoardControlsTestTags.candidate("lib-1")).performClick()
+
+        assertEquals("pressing a candidate raises it; the detail commits it", listOf<String?>("lib-1"), taps)
+        assertTrue("nothing may be sent by a press alone", actions.isEmpty())
+    }
+
+    @Test
+    fun `a raised candidate is read at full size and confirmed there`() {
+        // These are cards the player has not seen before — a search is a choice between cards being
+        // read for the first time — so the detail view is the point rather than a formality.
+        render(searchGame(), selectedObjectId = "lib-1")
+
+        composeTestRule.onNodeWithText(TARGET_ACTION_LABEL).performClick()
+
+        assertEquals(listOf<BoardAction>(BoardAction.ChooseTarget("lib-1")), actions)
     }
 
     // ---- fixtures -------------------------------------------------------------------------------
@@ -333,6 +381,24 @@ class TableBoardScreenTest {
                     card("h-2", "Grizzly Bears", "Creature — Bear", "1G", listOf(CardType.Creature)),
                 ),
         )
+
+    /**
+     * A library search: the server asks for a card that is not on the board, and sends the cards.
+     *
+     * The shape that matters is that `cards` and the pickable ids are the same objects — that is what
+     * used to produce a picture and a numbered button for each of them.
+     */
+    private fun searchGame(): GameState {
+        val found = (1..3).map { card("lib-$it", "Island $it", "Basic Land — Island") }
+        return runningGame().copy(
+            prompt =
+                GamePrompt.Target(
+                    message = "Select a card",
+                    targetIds = found.map { it.id },
+                    cards = found,
+                ),
+        )
+    }
 
     /** The same game with the viewer holding priority and one card offered — the board being played. */
     private fun priorityGame() =

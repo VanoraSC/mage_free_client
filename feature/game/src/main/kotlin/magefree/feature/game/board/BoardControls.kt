@@ -547,6 +547,7 @@ internal fun controlsFor(
             // The server's own `chosenTargets` wins where it sends one; the caller's record of what it
             // has sent is the fallback for the (common) case where it sends none.
             val hasPicked = chosen.isNotEmpty() || hasPickedTarget
+            val carried = prompt.cards.filter { it.id in pickable }
             PromptControlsUi.Targeting(
                 message = message,
                 pickableObjectIds = pickable,
@@ -559,13 +560,21 @@ internal fun controlsFor(
                 // to tell them apart (a Marsh Flats activation nobody
                 // could complete). A prompt whose whole candidate set *is* the answer set (e.g.
                 // PICK_ABILITY) is unaffected, since `pickable` there already equals `prompt.cards`.
-                candidateCards = prompt.cards.filter { it.id in pickable }.map { it.toCandidate(chosen) },
+                candidateCards = carried.map { it.toCandidate(chosen) },
                 hasPicked = hasPicked,
                 buttons =
                     buildList {
                         // Candidates the board cannot draw — players, above all — come first, because
-                        // without them this prompt has no answer at all.
-                        addAll(offBoardCandidateButtons(state, pickable, BoardAction::ChooseTarget))
+                        // without them this prompt has no answer at all. A card the prompt carried is
+                        // not one of them: it is drawn, in this panel, and is pressed there.
+                        addAll(
+                            offBoardCandidateButtons(
+                                state = state,
+                                candidateIds = pickable,
+                                action = BoardAction::ChooseTarget,
+                                alsoDrawn = carried.mapTo(mutableSetOf()) { it.id },
+                            ),
+                        )
                         // The player's confirmation *is* the final done — it is not a
                         // client-side accumulator being flushed, because every pick was already sent.
                         // An *optional* prompt (`!prompt.isRequired`) is answerable with zero picks by
@@ -803,6 +812,11 @@ private fun declarationControls(
  * This is the honest definition of "tappable on the board", and it is deliberately the same set
  * [BoardUi.cardFor] resolves a detail view from — if the board cannot draw it, the player cannot tap it,
  * and the affordance has to live somewhere else.
+ *
+ * **It is not the whole of what is drawable**, which is why [offBoardCandidateButtons] takes a second
+ * set. A prompt that carries its own cards — a library search, a pile — has them drawn in the panel,
+ * and a numbered button beside a picture of the same card offers the choice twice and makes the
+ * picture look decorative.
  */
 private fun GameState.drawnObjectIds(): Set<String> =
     buildSet {
@@ -849,8 +863,9 @@ private fun offBoardCandidateButtons(
     state: GameState,
     candidateIds: Collection<String>,
     action: (String) -> BoardAction,
+    alsoDrawn: Set<String> = emptySet(),
 ): List<ControlButton> {
-    val drawn = state.drawnObjectIds()
+    val drawn = state.drawnObjectIds() + alsoDrawn
     var unnamed = 0
     return candidateIds.filterNot { it in drawn }.map { id ->
         val label = state.nameFor(id) ?: "$UNNAMED_CANDIDATE_LABEL ${++unnamed}"
