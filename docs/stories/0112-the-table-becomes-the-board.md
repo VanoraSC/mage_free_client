@@ -52,6 +52,9 @@ with no shell chrome since the shell was written, waiting for exactly this.
 - Retiring the old board's rendering: `GameBoardScreen`, `BoardRegions`, `BoardCards`, and the
   duplicate `StatusRail` that has been sitting alongside the table tier's own.
 - Retiring `ImmersiveGameScreen`, the placeholder the real board replaces.
+- The game's own end: the server's `GAME_OVER` line on screen, and a board that can be left once it
+  has arrived.
+- A card pressed in a seat's pile opening the same detail a card in hand opens.
 
 **Out of scope**
 - **Redesigning the prompt surfaces for the new layout.** Where priority lives, how a cast in flight
@@ -173,5 +176,35 @@ opened it — goes, because the thing it stood in for now exists.
 - [ ] Pressing any card — battlefield, hand, land stack, zone window — opens its detail, and the
       detail offers the action the server allows, if any.
 - [ ] Pressing a seat opens that seat's zone window; a press outside closes it.
-- [ ] Leaving the board restores the previous orientation and the system bars.
+- [ ] Leaving the board restores the previous orientation and the system bars, and does not put you
+      straight back onto it.
+- [ ] When the game ends the board says so, in the server's own words.
 - [ ] The old board's rendering is gone from the tree, and only one `StatusRail` remains.
+
+## 9. Found by playing one
+
+Three defects the first real game turned up, all fixed here.
+
+**Leaving the board threw you straight back onto it.** The room's match-start hand-off used to
+navigate with `popUpTo(LobbyRoute)`, and that pop was load-bearing: `resumableGameId` stays set for
+as long as the game exists, so a room left composed under the board re-fires the hand-off the instant
+the board is popped. Hoisting the navigation to the root graph dropped the pop, because the root
+controller cannot reach a destination inside the shell's graph. It pops the room on the shell's own
+controller first now, then hoists the id. It is worst after a game ends, which is where it was found:
+the bridge will not re-serve a finished game, so the board you are thrown back onto is the empty seed
+with nothing to wait for, and the loop has no exit.
+
+**A finished game said nothing.** `BoardUi.resultNotice` has always carried upstream's own `GAME_OVER`
+line and the portrait board drew it in the notice strip, which this story deleted along with the rest
+of that board's regions. Without it a finished game and a stalled one look identical — the same
+ambiguity the waiting line removes at the other end of a game.
+
+**A card in a graveyard could be pressed and did nothing.** `BoardUi` carries a seat's piles as
+counts, which is all the portrait board ever drew of them, so `cardFor` had nothing to return. The
+piles are on the wire in full, so the detail falls back to the snapshot through the same conversion
+the hand goes through.
+
+**Not fixed here, and not a regression:** a multi-game match does not advance on its own. The
+hand-off pops the room, so nothing is composed to notice game two's id; re-entering the room from the
+lobby picks it up, because `resumableGameId` also reads the table's `activeGameId`. That was true
+before this story and wants a story of its own.
