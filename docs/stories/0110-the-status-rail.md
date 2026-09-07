@@ -130,9 +130,22 @@ the height the arithmetic assumed. A clip has to be right about the frame's prop
 the box it is drawn in, and it fails quietly when either changes.
 
 So the tier requests `art_crop` — the illustration on its own, a different image rather than a crop
-of the card — and draws it edge to edge. Nothing to clip, nothing to line a clip up against, and the
-card's box takes the art's own shape. It is its own cache entry, so the offline prefetch warms it
-alongside the other two sizes; a deck's cards are exactly the cards that end up on a board.
+of the card — and draws it edge to edge in the box the border leaves it. Nothing to clip, nothing to
+line a clip up against. It is its own cache entry, so the offline prefetch warms it alongside the
+other two sizes; a deck's cards are exactly the cards that end up on a board.
+
+**The card is a black-bordered square, and the square is not decoration.** The border is the one
+thing every Magic card in every set has in common, and it is what makes a card read as an object on
+the table rather than a region of the interface — which is why the board's own ground is now a mid
+grey. The art is wider than it is tall, so squaring the box leaves a strip above it, and that strip
+is where the name and the mana cost go: exactly what a real frame puts there, and exactly what the
+art crop leaves out.
+
+**Squaring it makes tapping free.** A rectangle turned to show it is tapped swaps its width and its
+height, so every neighbour shifts the moment a permanent taps — movement §7.3 says has to mean a game
+action, spent on one. A square leans 45° inside its own footprint instead: still the only card on the
+table not square to it, and nothing else on the board moves. It is also what sets the tier's
+legibility floor, since the card now carries a line of text: below 56dp the title bar clips it.
 
 **The rail's piles are sized by its height, not its width.** A seat has three of them plus its own
 numbers in half a rail; at the rail's own width they would want three times the height there is.
@@ -181,6 +194,8 @@ again. The same is true of the attachment stack in `BoardCard`.
 - [x] Non-creature permanents sit on their own horizontal and never under a creature.
 - [x] Land stacks render correctly at the Board tier's card shape.
 - [x] A card on the battlefield shows its illustration, undistorted and uncropped, at any card size.
+- [x] A card is a black-bordered square with its name and cost above the art, on a grey table.
+- [x] A tapped card leans 45° and costs the board no room.
 - [x] `./gradlew check` passes and the preview shows all of it.
 
 ## 9. References

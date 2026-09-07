@@ -51,43 +51,47 @@ class BoardCardTest {
     }
 
     @Test
-    fun `the card face carries the name, so the tier overlays none of its own`() {
+    fun `the black border carries the name and cost, because the art crop has neither`() {
+        // The tier draws the illustration on its own, and a real card prints its name in the part of
+        // the frame the crop leaves out — so the border says it instead. This is the one place the
+        // Board tier writes anything: everything else it shows is either the picture or a number.
         show(BoardCardState(card = BEARS))
 
         composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).assertIsDisplayed()
-        // A real card already prints its name where a player looks for it, and an overlay covers the
-        // art it is printed on. Power and toughness are the exception, because those go stale.
-        composeTestRule.onNodeWithText("Grizzly Bears").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Grizzly Bears").assertIsDisplayed()
+        composeTestRule.onNodeWithTag(BoardCardTestTags.TITLE, useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
-    fun `an untapped card's footprint is the width it was given`() {
-        show(BoardCardState(card = BEARS))
+    fun `a card is square, so a tapped one takes exactly the room an untapped one does`() {
+        // **The point of the square.** A rectangle turned to show it is tapped swaps its width and its
+        // height, so every neighbour shifts the moment a permanent taps — movement §7.3 says has to
+        // mean a game action, spent on one. A square leans without asking the board for anything.
+        composeTestRule.setContent {
+            MageTheme {
+                Box {
+                    BoardCard(state = BoardCardState(card = BEARS), width = CARD_WIDTH, modifier = Modifier.testTag(BARE))
+                    BoardCard(
+                        state = BoardCardState(card = BEARS, tapped = true),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(ENCHANTED),
+                    )
+                }
+            }
+        }
 
-        composeTestRule.onNodeWithTag(FOOTPRINT).assertWidthIsEqualTo(CARD_WIDTH)
-        composeTestRule.onNodeWithTag(FOOTPRINT).assertHeightIsEqualTo(cardHeight())
-    }
-
-    @Test
-    fun `a tapped card's footprint turns with it, not just its picture`() {
-        show(BoardCardState(card = BEARS, tapped = true))
-
-        composeTestRule.onNodeWithTag(FOOTPRINT).assertWidthIsEqualTo(cardHeight())
-        composeTestRule.onNodeWithTag(FOOTPRINT).assertHeightIsEqualTo(CARD_WIDTH)
+        listOf(BARE, ENCHANTED).forEach { tag ->
+            composeTestRule.onNodeWithTag(tag).assertWidthIsEqualTo(CARD_WIDTH)
+            composeTestRule.onNodeWithTag(tag).assertHeightIsEqualTo(cardHeight())
+        }
     }
 
     @Test
     fun `a tapped card keeps its card proportions rather than being squashed to fit`() {
-        // The bug this exists for: the rotated card sits in a landscape box shorter than the card, and
-        // a plain size modifier is clamped by the parent's constraints — so the card was measured as a
-        // square and its art cropped, before the rotation ever turned it. Rotation must move the card,
-        // not resize it, and only the card's own measured size can show that.
-        //
-        // **The shape it must keep is the Board tier's, not a Magic card's.** A card cut below its
-        // art box is wider than it is tall, so "keeps its proportions" can no longer be spelled
-        // `height > width`: it has to be the tier's own ratio, which is what the untapped card below
-        // measures too. The card being the same shape either way is the whole claim — rotation moves
-        // it, the footprint around it turns, and the card itself is untouched.
+        // The bug this exists for: the rotated card sat in a box shorter than the card, and a plain
+        // size modifier is clamped by the parent's constraints — so the card was measured square and
+        // its art cropped, before the rotation ever turned it. Rotation must move the card, not resize
+        // it, and only the card's own measured size can show that.
         show(BoardCardState(card = BEARS, tapped = true))
 
         val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
@@ -111,7 +115,7 @@ class BoardCardTest {
     }
 
     @Test
-    fun `the art fills the card, because the art is what was asked for`() {
+    fun `the art is the art, drawn in the box the border leaves it`() {
         // **The whole crop problem, deleted rather than solved.** This tier requests an art crop, so
         // there is no frame here to cut off: the picture is exactly the card's own box, and the image
         // has nothing to overflow and nothing to be clipped by.
@@ -130,8 +134,21 @@ class BoardCardTest {
                 .fetchSemanticsNode()
                 .size
 
-        assertEquals("the art should be exactly the card's width", face.width, art.width)
-        assertEquals("the art should be exactly the card's height", face.height, art.height)
+        // The art fills the width inside the black border and keeps its own shape; the strip the
+        // square leaves above it is the title bar.
+        assertTrue(
+            "the art should span the card inside its border: ${art.width} of ${face.width}",
+            art.width < face.width && art.width > face.width - BORDER_SLACK_PX,
+        )
+        val expected = (art.width / CARD_ART_ASPECT_RATIO).roundToInt()
+        assertTrue(
+            "the art measured ${art.width}x${art.height}, and its own shape would be ${art.width}x$expected",
+            abs(art.height - expected) <= 1,
+        )
+        assertTrue(
+            "the title bar must have what the art leaves: ${art.height} of ${face.height}",
+            art.height < face.height,
+        )
     }
 
     @Test
@@ -557,6 +574,9 @@ class BoardCardTest {
         const val BARE = "bare"
         const val ENCHANTED = "enchanted"
         const val ATTACHMENT_ART = "attachment-art"
+
+        /** The black frame, both sides, plus a pixel of rounding slack. */
+        const val BORDER_SLACK_PX = 8
 
         val BEARS = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear")
         val FOREST = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")

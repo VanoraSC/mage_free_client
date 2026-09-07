@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -496,36 +498,55 @@ private fun HostCard(
             ?: BoardSurface.zoneRaised
 
     Box(
-        modifier = modifier.size(width = if (state.tapped) cardHeight else width, height = if (state.tapped) width else cardHeight),
+        modifier = modifier.size(width = width, height = cardHeight),
         contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier =
                 Modifier
-                    // requiredSize for the same reason a turned attachment needs it: when tapped, this
-                    // sits in a landscape box shorter than the card, and a plain size would be clamped
-                    // to it — cropping the card before the rotation could turn it.
                     .requiredSize(width = width, height = cardHeight)
+                    // A tapped permanent leans rather than lying down. Half a quarter-turn still reads
+                    // as tapped at a glance — it is the only card on the board that is not square to
+                    // the table — and it very nearly fits the footprint the card already had, which a
+                    // full quarter-turn never could.
                     .graphicsLayer { rotationZ = if (state.tapped) TAPPED_ROTATION_DEGREES else 0f }
                     .clip(BoardCardShape)
-                    .background(BoardSurface.card)
+                    // **The black border a real card has.** Every Magic card in every set is bounded in
+                    // black, and the border is the whole reason a card reads as an object on a table
+                    // rather than as a region of the screen. It is also what the board's grey table is
+                    // grey *for*: a black-bordered card on a near-black ground has no edge at all.
+                    .background(BoardSurface.cardBorder)
                     .border(width = borderWidth, color = borderColor, shape = BoardCardShape)
                     .let { base -> if (onTap != null) base.cardInspectable(onTap = onTap) else base }
                     .testTag(BoardCardTestTags.CARD),
         ) {
-            // **The art, and nothing but the art.** This tier asks for [CardArtSize.ART_CROP] — the
-            // illustration on its own — so there is no frame here to cut off and no clipping to get
-            // right: the picture simply fills the card.
-            //
-            // Two attempts at doing it the other way both shipped and both were wrong, which is the
-            // reason this is now stated as a *request* rather than as layout. Handed a whole card and
-            // told to show its top, the tier first sized the image to the face — where the renderer's
-            // centre-crop took the top and the bottom in equal measure, losing the title bar — and
-            // then measured it at a whole card's height and clipped, where the image was silently
-            // squashed instead whenever the box was not the height the arithmetic assumed. An image
-            // that is already the right picture cannot be cropped to the wrong one.
-            Box(modifier = Modifier.fillMaxSize().testTag(BoardCardTestTags.ART)) {
-                CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
+            Column(modifier = Modifier.fillMaxSize().padding(CardBorderWidth)) {
+                // The title bar takes what the square leaves over the art — which is where a real card
+                // puts its name and cost, and roughly the share of the card it gives them.
+                CardTitleBar(card = state.card, modifier = Modifier.fillMaxWidth().weight(1f))
+
+                // **The art, and nothing but the art.** This tier asks for [CardArtSize.ART_CROP] —
+                // the illustration on its own — so there is no frame here to cut off and no clipping
+                // to get right: the picture simply fills its box.
+                //
+                // Two attempts at doing it the other way both shipped and both were wrong, which is
+                // the reason this is now stated as a *request* rather than as layout. Handed a whole
+                // card and told to show its top, the tier first sized the image to the face — where
+                // the renderer's centre-crop took the top and the bottom in equal measure, losing the
+                // title bar — and then measured it at a whole card's height and clipped, where the
+                // image was silently squashed instead whenever the box was not the height the
+                // arithmetic assumed. An image that is already the right picture cannot be cropped to
+                // the wrong one.
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(CARD_ART_ASPECT_RATIO)
+                            .clip(BoardArtShape)
+                            .testTag(BoardCardTestTags.ART),
+                ) {
+                    CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
+                }
             }
 
             if (state.counters.isNotEmpty()) {
@@ -699,6 +720,46 @@ internal fun BadgeSquare(badge: BoardBadge) {
 }
 
 /**
+ * The strip above the art: what the card is, and what it cost.
+ *
+ * **The one place this tier writes anything of its own.** An art crop carries no name — a real card
+ * prints it above the illustration, and that part of the frame is exactly what the crop leaves out —
+ * so the black border has to say it. It is set small and it truncates: at board size a player is
+ * reading a name they already half-know from the picture, and the inspect view is where a card is
+ * actually read.
+ *
+ * The cost goes through the symbol renderer, because `{1}{G}` written out is punctuation.
+ */
+@Composable
+private fun CardTitleBar(
+    card: CardDisplay,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.padding(horizontal = BoardCardPadding).testTag(BoardCardTestTags.TITLE),
+        horizontalArrangement = Arrangement.spacedBy(BoardCardPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = card.name,
+            style = BoardTypography.cardName,
+            color = BoardSurface.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        card.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
+            SymbolText(
+                text = cost,
+                style = BoardTypography.cardName,
+                color = BoardSurface.onSurface,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
  * One attached permanent, rendered as a whole card behind the host.
  *
  * It is a full-size card rather than a label because that is what it is — an Aura is a permanent, and
@@ -849,14 +910,23 @@ object BoardCardTestTags {
      * this tag exists to catch.
      */
     const val ART: String = "board-card-art"
+
+    /** The name and cost strip the black border carries, since the art crop has neither. */
+    const val TITLE: String = "board-card-title"
     const val STATS: String = "board-card-stats"
     const val COUNTERS: String = "board-card-counters"
     const val BADGES: String = "board-card-badges"
     const val ATTACHMENT: String = "board-card-attachment"
 }
 
-/** A tapped permanent is turned a quarter turn, as on a physical table. */
-private const val TAPPED_ROTATION_DEGREES = 90f
+/**
+ * How far a tapped permanent leans.
+ *
+ * Half of the physical game's quarter-turn. A card at forty-five degrees is unmistakably the only
+ * thing on the table not square to it, which is all a tap has to say — and it costs the board almost
+ * nothing, where a full turn swapped the card's width and height and moved every neighbour.
+ */
+private const val TAPPED_ROTATION_DEGREES = 45f
 
 /** How opaque the name band, badges and stats backing are over arbitrary art. */
 private const val BAND_OPACITY = 0.82f
@@ -871,6 +941,12 @@ private const val RING_STROKE_DP = 1
 private const val RING_DASH_PX = 3f
 
 private val BoardCardShape = RoundedCornerShape(3.dp)
+
+/** The art's own corners, inside the border — a hair rounder than square, so the black frame reads. */
+private val BoardArtShape = RoundedCornerShape(1.dp)
+
+/** How thick the black border is. A real card's is about this share of it at this size. */
+private val CardBorderWidth = 2.dp
 private val BadgeShape = RoundedCornerShape(2.dp)
 private val BoardCardPadding = 2.dp
 private val FocalBorderWidth = 2.dp

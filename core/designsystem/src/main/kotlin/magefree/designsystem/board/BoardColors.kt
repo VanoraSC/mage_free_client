@@ -25,6 +25,26 @@ object BoardSurface {
     /** The board's own ground — the deepest surface, behind everything else. */
     val ground: Color = Color(0xFF0B0B0B)
 
+    /**
+     * The battlefield's table: the grey a card is laid on.
+     *
+     * **Lighter than [ground], and deliberately outside [valueRamp].** The ramp is a chrome ramp —
+     * panels, overlays, the values a *layer* is told apart by — and it runs upward from a near-black
+     * base. The table is not chrome; it is the surface the game is played on, and what has to be told
+     * apart on it is a **card**, which the Board tier now draws inside a [cardBorder] frame. Against a
+     * near-black ground a black-bordered card has no edge at all.
+     */
+    val table: Color = Color(0xFF333333)
+
+    /**
+     * The frame around a card at the Board tier — the black border a real card has.
+     *
+     * Darker than every other surface here, and that is the point: a card is an object on the table
+     * rather than a region of the interface, and the one thing every Magic card in every set has in
+     * common is that it is bounded in black.
+     */
+    val cardBorder: Color = Color(0xFF000000)
+
     /** A zone sitting on the ground: a battlefield, the hand. */
     val zone: Color = Color(0xFF1E1E1E)
 

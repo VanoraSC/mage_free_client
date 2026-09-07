@@ -567,7 +567,9 @@ is not supported anywhere.
 
 **The board itself is grey.** No illustrated battlefield, no themed playmat, no decorative
 background art. A pleasing neutral grey ground, with **zones and other distinctions carried by
-shades of that grey** — value and elevation, not colour or texture.
+shades of that grey** — value and elevation, not colour or texture. Mid grey rather than near-black,
+because the cards on it are bordered in black (§7.5) and a black-bordered card on a black ground has
+no edge at all.
 
 The art on screen is the cards, and the motion on screen is the cards moving (§7.3). That is the
 whole visual budget and it is enough.
@@ -588,7 +590,7 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Board** | Battlefield, stack piles, rail piles | The illustration, P/T, counters, tap state, status | Scryfall's `art_crop` — the illustration on its own, which is a *different image* from the card, not a crop of one |
+| **Board** | Battlefield, stack piles, rail piles | A black-bordered square: name and cost above the illustration, with P/T, counters, tap state and status on it | Scryfall's `art_crop` — the illustration on its own, which is a *different image* from the card, not a crop of one |
 | **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 
@@ -601,6 +603,15 @@ because the box was not the height the arithmetic assumed. A clip has to be righ
 proportions *and* about the box it is drawn in, and it fails silently when either changes; an art
 crop simply fills whatever box it is given. It is also its own cache entry, so the offline prefetch
 warms it alongside the other two (§9's art pipeline).
+
+**The Board card is square, in a black border.** The border is the one thing every Magic card in
+every set has in common, and it is what makes a card read as an object on the table rather than as a
+region of the interface — which is why the board's ground is a mid grey and not the near-black it
+was. The art is wider than it is tall, so squaring the box leaves a strip above it, and that strip
+carries the name and the mana cost: exactly what a real frame puts there, and what the art crop
+leaves out. Squaring it also makes **tapping free** — a rectangle turned to show it is tapped swaps
+its width and height and shifts every neighbour, which is movement §7.3 says must mean a game action.
+A square leans 45° inside its own footprint and nothing else on the board moves.
 
 These are *rendering sizes* and have nothing to do with Magic tokens — see §7.11 for those.
 

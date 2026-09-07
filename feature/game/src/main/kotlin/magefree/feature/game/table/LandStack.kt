@@ -389,8 +389,8 @@ private fun lerp(
 private const val STACK_STEP_X_FRACTION = 0.13f
 private const val STACK_STEP_Y_FRACTION = 0.12f
 
-/** A quarter turn, which is what tapping is. */
-private const val TAPPED_TURN_DEGREES = 90f
+/** The lean a tapped card takes, matching the card tier's own. */
+private const val TAPPED_TURN_DEGREES = 45f
 
 /** Long enough to read as a card turning over, short enough not to hold up the next tap. */
 private const val TAP_TRAVEL_MILLIS = 260

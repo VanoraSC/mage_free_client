@@ -113,22 +113,34 @@ fun CardArtPlaceholder(
 }
 
 /**
- * The **Board** tier's own width-to-height ratio: the shape of a card's illustration.
+ * The shape of a card's **illustration** — Scryfall's own art-crop aspect.
  *
  * A Magic card puts its title bar and its illustration in the top half and its type line, rules text
  * and flavour below. On the battlefield the text is unreadable at card size anyway — that is what
- * inspection is for — so the tier draws the illustration and drops the rest.
+ * inspection is for — so the Board tier draws the illustration and drops the rest.
  *
- * **It is a different image, not a crop of the card.** Scryfall serves the illustration on its own,
- * and asking for that is what makes this simple: an art crop fills whatever box it is given, at any
- * size, with nothing to clip and no frame to line the clip up against. Two goes at cutting a whole
- * card down to its top half both shipped broken — one lost the title bar, the other squashed the card
- * — because a clip has to be right about the frame's proportions *and* about the box it is drawn in,
- * and it fails silently when either changes.
- *
- * The number is Scryfall's own art-crop aspect, so a card's art fills the box it is drawn in with
- * almost nothing trimmed. Everything on the battlefield derives its height from this rather than from
- * the full card: the card itself, the attachment stack behind it, the land stacks, and the board's own
- * sizing. One constant, so they cannot disagree.
+ * **It asks for a different image, not a crop of the card.** Scryfall serves the illustration on its
+ * own, and asking for that is what makes this simple: an art crop fills whatever box it is given, at
+ * any size, with nothing to clip and no frame to line the clip up against. Two goes at cutting a
+ * whole card down to its top half both shipped broken — one lost the title bar, the other squashed
+ * the card — because a clip has to be right about the frame's proportions *and* about the box it is
+ * drawn in, and it fails silently when either changes.
  */
-const val BOARD_CARD_ASPECT_RATIO: Float = 1.37f
+const val CARD_ART_ASPECT_RATIO: Float = 1.37f
+
+/**
+ * The **Board** tier's own width-to-height ratio: **square**.
+ *
+ * A card on the battlefield is its illustration in a black border, and the illustration is wider than
+ * it is tall — so squaring the box leaves a strip above the art, which is exactly where a real card
+ * puts its name and mana cost. The space is not spare; it is the space the card needs.
+ *
+ * **Square is also why a tapped card no longer moves anything.** A rectangle turned a quarter swaps
+ * its width and its height, so every neighbour shifts the moment a permanent taps — movement §7.3
+ * says must mean a game action, spent on one. A square turns to any angle inside the same footprint
+ * (give or take the corners), which is what makes [TAPPED_ROTATION_DEGREES]' half-turn affordable.
+ *
+ * Everything on the battlefield derives its height from this: the card itself, the attachment stack
+ * behind it, the land stacks, and the board's own sizing. One constant, so they cannot disagree.
+ */
+const val BOARD_CARD_ASPECT_RATIO: Float = 1f

@@ -129,7 +129,7 @@ fun BattlefieldLayout(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(BoardSurface.ground)
+                .background(BoardSurface.table)
                 .testTag(BattlefieldTestTags.BOARD),
     ) {
         val sides = model.opponents + listOfNotNull(model.viewer)
@@ -612,8 +612,15 @@ private const val RAIL_CEILING = 0.14f
  */
 private val PreferredCardWidth = 112.dp
 
-/** Below this a card stops being readable, so the row scrolls rather than shrinking further. */
-private val MinCardWidth = 44.dp
+/**
+ * Below this a card stops being readable, so the row scrolls rather than shrinking further.
+ *
+ * Set by the **title bar**, which is the one part of the card that is text: the square leaves it
+ * roughly a quarter of the card's height, and a line of the board's own name style needs 13dp of
+ * that. Under this width the name is clipped mid-line, which looks like a defect rather than like a
+ * small card.
+ */
+private val MinCardWidth = 56.dp
 
 /** Space around the whole board, because a card against the screen edge is awkward to touch. */
 private val BoardMargin = 12.dp
@@ -669,4 +676,4 @@ private val VitalsAllowance = 92.dp
 private val RailGap = 3.dp
 
 /** Below this a pile marker stops reading as a card, and the count on it is doing the work anyway. */
-private val MinRailCardWidth = 34.dp
+private val MinRailCardWidth = 40.dp
