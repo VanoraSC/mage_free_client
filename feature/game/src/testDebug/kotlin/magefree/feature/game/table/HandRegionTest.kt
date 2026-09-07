@@ -13,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import magefree.designsystem.card.BoardCardSignal
+import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -140,17 +142,16 @@ class HandRegionTest {
     }
 
     @Test
-    fun `the hand costs the battlefields no height at all`() {
-        // The rule that replaced the first cut's. Cutting the board into bands — opponent, viewer,
-        // hand — held the hand's band open across the *full width* even though a hand only occupies
-        // the middle of it, and the visible cost was a land corner floating above the bottom of the
-        // screen with a rectangle of nothing under it. The regions overlay instead, so a player
-        // holding twelve cards has exactly as much battlefield as one holding none.
+    fun `a hand of twelve costs the battlefield no more than a hand of one`() {
+        // The hand has a place of its own at the bottom of the screen, and what has to stay true is
+        // that the place does not *grow*: a player holding twelve cards has as much battlefield as one
+        // holding one, because the tiles overlap rather than the strip getting taller. A hand that
+        // took height per card would shrink the board every time somebody drew.
         composeTestRule.setContent {
             MageTheme {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Board(state = stateWith(12, playerId = "holding"), modifier = Modifier.weight(1f))
-                    Board(state = stateWith(0, playerId = "empty"), modifier = Modifier.weight(1f))
+                    Board(state = stateWith(1, playerId = "one"), modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -160,34 +161,38 @@ class HandRegionTest {
                 .onNodeWithTag(BattlefieldTestTags.side("holding"))
                 .fetchSemanticsNode()
                 .size.height
-        val empty =
+        val one =
             composeTestRule
-                .onNodeWithTag(BattlefieldTestTags.side("empty"))
+                .onNodeWithTag(BattlefieldTestTags.side("one"))
                 .fetchSemanticsNode()
                 .size.height
 
         // Within a pixel: the two boards are stacked to share a render, so their halves differ by the
-        // odd row. What matters is that the hand costs nothing, not that it costs exactly nothing.
+        // odd row.
         assertTrue(
-            "with a hand the side measured $holding, without it $empty",
-            kotlin.math.abs(holding - empty) <= 2,
+            "with twelve cards the side measured $holding, with one $one",
+            kotlin.math.abs(holding - one) <= 2,
         )
     }
 
     @Test
-    fun `the hand sits beside the land corner, never over it`() {
+    fun `the hand sits below the lands, never over them`() {
         // A hand covering the lands would put the cards you tap for mana under the cards you tap to
-        // spend it — and the land corner is the one region whose whole purpose is being tappable.
+        // spend it — and the land column is the one region whose whole purpose is being tappable.
         show(stateWith(12, playerId = "me", lands = 3))
 
         val lands =
             composeTestRule
                 .onNodeWithTag(BattlefieldTestTags.row("me", BattlefieldTestTags.LAND_ZONE))
                 .fetchSemanticsNode()
-        val landsRight = lands.positionInRoot.x + lands.size.width
-        val (handLeft, _) = bounds("h0")
+        val landsBottom = lands.positionInRoot.y + lands.size.height
+        val handTop =
+            composeTestRule
+                .onNodeWithTag(HandTestTags.card("h0"))
+                .fetchSemanticsNode()
+                .positionInRoot.y
 
-        assertTrue("the lands end at $landsRight and the hand starts at $handLeft", handLeft >= landsRight)
+        assertTrue("the lands end at $landsBottom and the hand starts at $handTop", handTop >= landsBottom)
     }
 
     @Composable
@@ -227,3 +232,109 @@ private fun stateWith(
             ),
         ),
 )
+
+/**
+ * Cards the server is offering that are **not in the hand**, beside it.
+ *
+ * The whole design is one claim — *these are castable, and they are not in your hand* — and it is
+ * carried entirely by position. So the assertions are about position: the group is to the right of the
+ * hand, and the space between the two groups is clearly more than the space inside either. A layout
+ * that put them in the row would be telling the player they hold cards they do not.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, qualifiers = "w891dp-h411dp")
+class PlayableElsewhereRegionTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    private val played = mutableListOf<String>()
+
+    private fun show(
+        hand: Int,
+        elsewhere: List<TableCard>,
+    ) {
+        composeTestRule.setContent {
+            MageTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    BattlefieldLayout(
+                        model = battlefieldModel(stateWith(hand)),
+                        hand = handCards(stateWith(hand)),
+                        playableElsewhere = elsewhere,
+                        onPlayFromHand = { played += it },
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `they sit to the right of the hand, set further apart than the hand's own cards`() {
+        show(hand = 5, elsewhere = listOf(graveyardCard("gy1"), graveyardCard("gy2")))
+
+        val lastInHand = right("h4")
+        val firstElsewhere = left("gy1")
+        val betweenGroups = firstElsewhere - lastInHand
+        val withinGroup = left("gy2") - right("gy1")
+
+        assertTrue("the group should be right of the hand, at $firstElsewhere against $lastInHand", betweenGroups > 0)
+        assertTrue(
+            "the gap between the groups ($betweenGroups) must beat the gap inside one ($withinGroup)",
+            betweenGroups > withinGroup * 2,
+        )
+    }
+
+    @Test
+    fun `each says which pile it is in, because the gap only says it is not the hand`() {
+        show(hand = 2, elsewhere = listOf(graveyardCard("gy1")))
+
+        composeTestRule
+            .onNodeWithTag(HandTestTags.zoneLabel("gy1"), useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `pressing one asks to play it, the same as a card in hand`() {
+        show(hand = 2, elsewhere = listOf(graveyardCard("gy1")))
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("gy1")).performClick()
+
+        assertEquals(listOf("gy1"), played)
+    }
+
+    @Test
+    fun `a hand with nothing else offered draws only the hand`() {
+        show(hand = 3, elsewhere = emptyList())
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("h0")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HandTestTags.zoneLabel("gy1"), useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `and a group with no hand behind it is still drawn`() {
+        // A player who has emptied their hand can still have a flashback card, and that is exactly the
+        // turn they most need to see it.
+        show(hand = 0, elsewhere = listOf(graveyardCard("gy1")))
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("gy1")).assertIsDisplayed()
+    }
+
+    private fun left(cardId: String): Float =
+        composeTestRule
+            .onNodeWithTag(HandTestTags.card(cardId))
+            .fetchSemanticsNode()
+            .positionInRoot.x
+
+    private fun right(cardId: String): Float =
+        composeTestRule.onNodeWithTag(HandTestTags.card(cardId)).fetchSemanticsNode().let { node ->
+            node.positionInRoot.x + node.size.width
+        }
+
+    private fun graveyardCard(id: String) =
+        TableCard(
+            id = id,
+            card = CardDisplay(name = "Serra Angel", manaCost = "{3}{W}{W}"),
+            signal = BoardCardSignal.Playable,
+            zone = TableCardZone.Graveyard,
+            playableAbilities = listOf("Flashback {3}{W}{W}"),
+        )
+}

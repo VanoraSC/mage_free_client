@@ -20,7 +20,7 @@ import org.junit.Test
  * cannot see. A board that decided for itself which cards were castable would be answering a rules
  * question — and it would be wrong in exactly the cases where the answer matters.
  */
-class TableHandCardTest {
+class TableCardTest {
     @Test
     fun `the hand is the server's cards, in the server's order`() {
         val state = stateWith(hand = listOf(card("a", "Forest"), card("b", "Grizzly Bears"), card("c", "Pacifism")))
@@ -71,7 +71,7 @@ class TableHandCardTest {
     fun `a spectator holds nothing`() {
         val state = GameState(gameId = "g", isWatching = true)
 
-        assertEquals(emptyList<TableHandCard>(), handCards(state))
+        assertEquals(emptyList<TableCard>(), handCards(state))
     }
 }
 
@@ -104,7 +104,7 @@ class HandCardActionTest {
                 hand = listOf(land("forest"), spell("bears")),
             ).copy(playable = listOf(PlayableObject(objectId = "forest"), PlayableObject(objectId = "bears")))
 
-        val actions = handCards(state).associate { it.id to handPreviewState(it, onAct = {}).action?.label }
+        val actions = handCards(state).associate { it.id to tableCardPreview(it, onAct = {}).action?.label }
 
         assertEquals(PLAY_LABEL, actions["forest"])
         assertEquals(CAST_LABEL, actions["bears"])
@@ -116,7 +116,7 @@ class HandCardActionTest {
         // a rules question the client cannot answer. Nothing is the honest control.
         val state = stateWith(hand = listOf(spell("bears")))
 
-        assertNull(handPreviewState(handCards(state).single(), onAct = {}).action)
+        assertNull(tableCardPreview(handCards(state).single(), onAct = {}).action)
     }
 
     @Test
@@ -124,7 +124,7 @@ class HandCardActionTest {
         // A board that is being looked at rather than played offers nothing to press.
         val state = stateWith(hand = listOf(land("forest"))).copy(playable = listOf(PlayableObject(objectId = "forest")))
 
-        assertNull(handPreviewState(handCards(state).single(), onAct = null).action)
+        assertNull(tableCardPreview(handCards(state).single(), onAct = null).action)
     }
 
     @Test
@@ -141,7 +141,7 @@ class HandCardActionTest {
                     ),
             )
 
-        val preview = handPreviewState(handCards(state).single())
+        val preview = tableCardPreview(handCards(state).single())
 
         assertEquals("4", preview.power)
         assertEquals("4", preview.toughness)
@@ -191,5 +191,115 @@ class HandCardArtSizeTest {
 
         assertNull(card.art)
         assertNull(card.fullArt)
+    }
+}
+
+/**
+ * What the viewer may cast that is **not in their hand**.
+ *
+ * Flashback, escape, plot, adventure and their many relatives, which the reference client shows only
+ * as a badge on the card inside its own zone window — so noticing one means opening the window first.
+ * The assertions worth having are about the two halves a client could get wrong on its own: *which*
+ * cards these are, which is the server's list and not a search for flashback text, and *where* each
+ * one is, which is the difference between a card you hold and a card you do not.
+ */
+class PlayableElsewhereTest {
+    @Test
+    fun `a card the server offers from a graveyard is offered beside the hand`() {
+        val elsewhere = playableElsewhere(board(offers = listOf("gy-angel")))
+
+        assertEquals(listOf("gy-angel"), elsewhere.map { it.id })
+        assertEquals(TableCardZone.Graveyard, elsewhere.single().zone)
+    }
+
+    @Test
+    fun `and one from exile, with the pile it is in`() {
+        val elsewhere = playableElsewhere(board(offers = listOf("x-djinn")))
+
+        assertEquals(TableCardZone.Exile, elsewhere.single().zone)
+    }
+
+    @Test
+    fun `a card in the hand is not in the group, however offered it is`() {
+        // It is in the hand, so the hand draws it. Drawing it twice would have the player counting a
+        // card they hold once as two things they can do.
+        val elsewhere = playableElsewhere(board(offers = listOf("h-forest", "gy-angel")))
+
+        assertEquals(listOf("gy-angel"), elsewhere.map { it.id })
+    }
+
+    @Test
+    fun `a graveyard card the server is not offering is not in the group`() {
+        // The whole rule: this is `canPlayObjects` filtered by where the card is, and never a guess
+        // about what flashback means.
+        assertEquals(emptyList<String>(), playableElsewhere(board(offers = emptyList())).map { it.id })
+    }
+
+    @Test
+    fun `the reasons are the server's own, carried through untouched`() {
+        val card = playableElsewhere(board(offers = listOf("gy-angel"))).single()
+
+        assertEquals(listOf("Flashback {3}{W}{W}"), card.playableAbilities)
+    }
+
+    @Test
+    fun `reading one says where it is and what is offering it`() {
+        val preview = tableCardPreview(playableElsewhere(board(offers = listOf("gy-angel"))).single())
+
+        assertEquals("Graveyard", preview.provenance?.zone)
+        assertEquals(listOf("Flashback {3}{W}{W}"), preview.provenance?.reasons)
+    }
+
+    @Test
+    fun `reading a card in hand says none of that, because there is nothing to say`() {
+        val preview = tableCardPreview(handCards(board(offers = listOf("h-forest"))).single())
+
+        assertNull("a card in hand has no provenance to report", preview.provenance)
+    }
+
+    @Test
+    fun `a wire that carries no ability names still says where the card is`() {
+        // An older bridge sends ids and no names. Half the answer is still the half that matters most.
+        val nameless = board(offers = listOf("gy-angel"), withNames = false)
+        val preview = tableCardPreview(playableElsewhere(nameless).single())
+
+        assertEquals("Graveyard", preview.provenance?.zone)
+        assertEquals(emptyList<String>(), preview.provenance?.reasons)
+    }
+
+    private fun board(
+        offers: List<String>,
+        withNames: Boolean = true,
+    ) = GameState(
+        gameId = "g",
+        viewerPlayerId = "me",
+        hand = listOf(GameCard(id = "h-forest", name = "Forest")),
+        playable =
+            offers.map { id ->
+                PlayableObject(
+                    objectId = id,
+                    abilityIds = listOf("ab-$id"),
+                    abilityNames = if (withNames) listOf(REASONS.getValue(id)) else emptyList(),
+                )
+            },
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "me",
+                    name = "Me",
+                    isViewer = true,
+                    graveyard = listOf(GameCard(id = "gy-rod", name = "Rod of Ruin"), GameCard(id = "gy-angel", name = "Serra Angel")),
+                    exile = listOf(GameCard(id = "x-djinn", name = "Mahamoti Djinn")),
+                ),
+            ),
+    )
+
+    private companion object {
+        val REASONS =
+            mapOf(
+                "h-forest" to "Play Forest",
+                "gy-angel" to "Flashback {3}{W}{W}",
+                "x-djinn" to "You may cast this card from exile (plotted)",
+            )
     }
 }

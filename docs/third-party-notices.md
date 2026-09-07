@@ -3,6 +3,28 @@
 Assets and libraries this project redistributes, and the terms they arrive under. Anything merely
 *fetched at runtime* — card art, for instance — is not listed here, because it is not redistributed.
 
+This project itself is MIT — see [`LICENSE`](../LICENSE).
+
+---
+
+## XMage zone icons
+
+**Files:** `core/designsystem/src/main/res/drawable/zone_hand.png`, `zone_library.png`,
+`zone_graveyard.png`, `zone_exile.png`
+**Project:** [XMage](https://github.com/magefree/mage) — the server this client talks to, and the
+reference client it is measured against.
+
+Copied unmodified from `Mage.Client/src/main/resources/info/` (`hand.png`, `library.png`, `grave.png`,
+`exile.png`), where they are the icons upstream's own player panel draws beside each zone count.
+
+**XMage is MIT** (`LICENSE.txt`, "Copyright (c) 2010 betasteward@gmail.com"), so redistribution is
+permitted on the same terms this project uses. The copyright notice travels in this file.
+
+**Why upstream's rather than the Mana font's:** the font has no zone glyphs. It covers mana symbols,
+card types, keyword abilities and counters, and a graveyard is none of those — upstream draws these as
+bitmaps for the same reason. Taking the same four pictures also means a player who has used the
+desktop client recognises them here.
+
 ---
 
 ## Mana font

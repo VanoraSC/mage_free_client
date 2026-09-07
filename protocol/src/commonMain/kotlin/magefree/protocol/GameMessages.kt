@@ -1275,11 +1275,18 @@ public data class GameManaPoolView(
  * One entry of `GameView.canPlayObjects` — **the server's answer** to "may this be played right now".
  * [objectId] is the card/permanent, [abilityIds] the specific playable abilities on it (a land with two
  * mana abilities has two). The app must not infer playability from anything else.
+ *
+ * [abilityNames] is upstream's own short text for each of those abilities, in the same order —
+ * `PlayableObjectStats.getPlayableAbilityNames()`, which is `ability.toString()` clipped to fifty
+ * characters. It is what answers *why* a card in a graveyard can be cast, and the reference client
+ * shows exactly this list in the tooltip on its playable-count icon. Not every deployment sends it, so
+ * it may be shorter than [abilityIds] or empty; a reader pairs by index and shows what it has.
  */
 @Serializable
 public data class GamePlayableObject(
     val objectId: String,
     val abilityIds: List<String> = emptyList(),
+    val abilityNames: List<String> = emptyList(),
 )
 
 /** One option of a [ChooseAbilityPrompt]: the ability's [abilityId] and the server's rendered [text]. */

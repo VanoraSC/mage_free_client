@@ -20,6 +20,10 @@ import magefree.feature.game.table.TableArtResolver
  */
 @Composable
 fun rememberBattlefieldArtResolver(): TableArtResolver {
+    // The ordinary centre-crop renderer, which is correct here because every request the board makes
+    // is already the picture it wants: the Board tier asks for an art crop, the hand and the inspect
+    // view ask for a whole card, and each is drawn in a box of its own shape. Cropping only ever
+    // trims a hair off one edge. It was the *requests* that were wrong before, not the scaling.
     val renderer = rememberCardArtRenderer()
     return remember(renderer) { { request, display -> renderer.slotFor(request = request, display = display) } }
 }

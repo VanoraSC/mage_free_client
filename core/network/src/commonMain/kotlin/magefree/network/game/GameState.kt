@@ -510,10 +510,16 @@ data class ManaPool(
  * @property objectId the card/permanent that may be played or activated.
  * @property abilityIds the specific abilities on it that are playable (a land with two mana abilities has
  *   two). Answering a [GamePrompt.ChooseAbility] names one of these.
+ * @property abilityNames upstream's own short text for each of those abilities, in the same order. This
+ *   is what answers *why* something outside the hand may be cast — a card in a graveyard the server is
+ *   offering says nothing about flashback on its own — and it is the same list the reference client
+ *   puts in the tooltip of its playable-count icon. May be shorter than [abilityIds] or empty; pair by
+ *   index and show what there is.
  */
 data class PlayableObject(
     val objectId: String,
     val abilityIds: List<String> = emptyList(),
+    val abilityNames: List<String> = emptyList(),
 )
 
 /**

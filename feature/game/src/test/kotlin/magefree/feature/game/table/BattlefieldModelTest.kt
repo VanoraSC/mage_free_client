@@ -13,6 +13,7 @@ import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
 import magefree.network.game.PlayableObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,6 +68,26 @@ class BattlefieldModelTest {
                 .state.attachments
                 .map { it.name },
         )
+    }
+
+    @Test
+    fun `reading an enchanted creature reads what is enchanting it`() {
+        // Pacifism is the reason the creature is not attacking, and at board size the Aura is a name
+        // band behind its host — so the host's own panel is the only place its text can be read. A
+        // panel that listed the creature's abilities and stopped would be describing a card rather
+        // than the permanent on the board.
+        val model = battlefieldModel(stateWith(viewer = listOf(enchantedBears(), pacifismOn("bears"))))
+        val preview = permanentPreview(model.viewer!!.permanents.single())
+
+        assertEquals(listOf("Pacifism"), preview.attachments.map { it.name })
+    }
+
+    @Test
+    fun `an attachment is findable by its own id, so its band can be pressed`() {
+        val model = battlefieldModel(stateWith(viewer = listOf(enchantedBears(), pacifismOn("bears"))))
+
+        assertEquals("Pacifism", model.attachmentById("pacifism")?.card?.name)
+        assertNull("a host is not an attachment", model.attachmentById("bears"))
     }
 
     @Test

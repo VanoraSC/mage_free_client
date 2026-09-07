@@ -26,6 +26,7 @@ import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
 import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
+import magefree.designsystem.card.CARD_ASPECT_RATIO
 import magefree.designsystem.card.CounterPalette
 
 /*
@@ -145,6 +146,26 @@ internal fun LandStack(
         // drawn slots — otherwise the slot it "took" would lose the card that is genuinely in it.
         val takesASlot = stack.tapped.size <= PILE_FAN_LIMIT
         val leaving = geometry.uprightCentre(maxOf(minOf(stack.untapped.size + 1, PILE_FAN_LIMIT) - 1, 0))
+
+        // Past three turned there is no free place for the arrival to take, so it flies to the front
+        // one and is simply gone when it lands — by then the count has taken over saying how many
+        // there are. **Drawn before the turned half, so it travels behind it**, which is where it is
+        // going: drawn after, it flew over the three cards already lying there and then disappeared
+        // underneath them at the instant it landed, which is the same flick the slotted case was fixed
+        // for. Where a card ends up is decided before it starts moving, in both cases.
+        if (arriving && !takesASlot) {
+            StackedCard(
+                stack = stack,
+                geometry = geometry,
+                centre = lerp(leaving, geometry.turnedCentre(0), travel.value),
+                turn = travel.value,
+                width = width,
+                palette = palette,
+                artFor = artFor,
+                onPress = null,
+            )
+        }
+
         for (slot in firstTurnedSlot until PILE_FAN_LIMIT) {
             val newest = slot == firstTurnedSlot && arriving && takesASlot
             StackedCard(
@@ -158,22 +179,6 @@ internal fun LandStack(
                 // A card in flight is not a target. Pressing where it *was* would act on a stack that
                 // has already changed underneath the finger.
                 onPress = if (newest) null else onPress?.let { press -> { press(LandStackHalf.Turned) } },
-            )
-        }
-
-        // Past three turned there is no free place for the arrival to take, so it flies to the front
-        // one and is simply gone when it lands — by then the count has taken over saying how many
-        // there are. Drawn behind the whole turned half, which is where it is going.
-        if (arriving && !takesASlot) {
-            StackedCard(
-                stack = stack,
-                geometry = geometry,
-                centre = lerp(leaving, geometry.turnedCentre(0), travel.value),
-                turn = travel.value,
-                width = width,
-                palette = palette,
-                artFor = artFor,
-                onPress = null,
             )
         }
 
@@ -284,7 +289,15 @@ private class LandStackGeometry(
 ) {
     val cardHeight: Dp = cardWidth / BOARD_CARD_ASPECT_RATIO
     private val stepX: Dp = cardWidth * STACK_STEP_X_FRACTION
-    private val stepY: Dp = cardHeight * STACK_STEP_Y_FRACTION
+
+    /**
+     * The downward step, measured against a **whole** card rather than the slice this tier draws.
+     *
+     * What the step exposes is the card behind's name and cost, and those are a fixed part of a card
+     * face. Deriving the step from the cropped height instead would shrink the exposed strip every
+     * time the crop got tighter, which is not a relationship either of them has to the other.
+     */
+    private val stepY: Dp = cardWidth / CARD_ASPECT_RATIO * STACK_STEP_Y_FRACTION
 
     /**
      * How far the turned card's own centre sits below the upright one it lies across.
@@ -296,18 +309,27 @@ private class LandStackGeometry(
     private val turnedDrop: Dp = cardWidth / 2
 
     /**
-     * A turned card is wider than an upright one, so it hangs off both sides of the diagonal. The
-     * whole stack shifts right by that overhang, which keeps every slot at a non-negative offset.
+     * How far the whole stack shifts right to keep every slot at a non-negative offset.
+     *
+     * **Only when a turned card is the wider one.** A turned card is as wide as an upright one is
+     * tall, so on a whole card it hangs off both sides of the diagonal and the stack has to move out
+     * of its own way; on this tier's card — the illustration alone, and so wider than it is tall — it
+     * is *narrower* than the card it lies across and hangs off nothing. Written as a maximum rather
+     * than as a subtraction because that is the difference between the two cases, and the crop already
+     * inverted this arithmetic once.
      */
-    private val turnedOverhang: Dp = (cardHeight - cardWidth) / 2
+    private val turnedOverhang: Dp = maxOf(0.dp, (cardHeight - cardWidth) / 2)
 
     /**
      * **The footprint never changes when a land taps.** It always allows for the turned half, whether
-     * or not anything is in it. A stack that grew as its first land tapped would resize the corner,
+     * or not anything is in it. A stack that grew as its first land tapped would resize the column,
      * which resizes every card on the board — and §7.3 is clear that movement means a game action
      * happened. One land turning must not make the opponent's creatures jump.
+     *
+     * The width is the furthest right edge on the diagonal: an upright card's own, or a turned card's
+     * centred on the same point, whichever reaches further.
      */
-    val totalWidth: Dp = cardHeight + stepX * (PILE_FAN_LIMIT - 1)
+    val totalWidth: Dp = turnedOverhang + stepX * (PILE_FAN_LIMIT - 1) + maxOf(cardWidth, (cardWidth + cardHeight) / 2)
     val totalHeight: Dp = cardHeight / 2 + turnedDrop + cardWidth / 2 + stepY * (PILE_FAN_LIMIT - 1)
 
     /** Slot 0 is furthest back — up and left; slot 2 is the top card, lowest and furthest right. */
@@ -371,8 +393,8 @@ private fun lerp(
 private const val STACK_STEP_X_FRACTION = 0.13f
 private const val STACK_STEP_Y_FRACTION = 0.12f
 
-/** A quarter turn, which is what tapping is. */
-private const val TAPPED_TURN_DEGREES = 90f
+/** The lean a tapped card takes, matching the card tier's own. */
+private const val TAPPED_TURN_DEGREES = 45f
 
 /** Long enough to read as a card turning over, short enough not to hold up the next tap. */
 private const val TAP_TRAVEL_MILLIS = 260
@@ -389,7 +411,11 @@ private val CountPadding = 2.dp
  * the kind of duplication that drifts. It is a card *height* across, not a width, because a turned copy
  * lies on its side and hangs off both edges of the diagonal.
  */
-internal fun stackWidthInCards(): Float = 1f / BOARD_CARD_ASPECT_RATIO + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1)
+internal fun stackWidthInCards(): Float {
+    val height = 1f / BOARD_CARD_ASPECT_RATIO
+    val overhang = maxOf(0f, (height - 1f) / 2f)
+    return overhang + STACK_STEP_X_FRACTION * (PILE_FAN_LIMIT - 1) + maxOf(1f, (1f + height) / 2f)
+}
 
 /**
  * How tall a stack is, in card widths — again the same whatever is in it.
@@ -397,7 +423,7 @@ internal fun stackWidthInCards(): Float = 1f / BOARD_CARD_ASPECT_RATIO + STACK_S
  * Half an upright card down to the waist, then the turned card laid across it, then the diagonal.
  */
 internal fun stackHeightInCards(): Float {
-    val diagonal = 1f / BOARD_CARD_ASPECT_RATIO * STACK_STEP_Y_FRACTION * (PILE_FAN_LIMIT - 1)
+    val diagonal = STACK_STEP_Y_FRACTION / CARD_ASPECT_RATIO * (PILE_FAN_LIMIT - 1)
     return 1f / BOARD_CARD_ASPECT_RATIO / 2f + 0.5f + 0.5f + diagonal
 }
 

@@ -9,6 +9,7 @@ import magefree.cards.art.ArtWarmer
 import magefree.cards.art.CardArtFace
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
+import magefree.cards.art.PREFETCH_SIZES
 import magefree.cards.art.PrefetchStatus
 import magefree.cards.model.CardFaces
 import magefree.cards.model.CardPrinting
@@ -80,12 +81,20 @@ class DeckArtDownloaderTest {
             advanceUntilIdle()
 
             val displayed = setOf(builderSize(), addGridSize())
-            assertEquals("every size the deck surfaces request must be warmed", displayed, warmer.warmed.map { it.size }.toSet())
-            assertEquals(displayed.size, warmer.warmed.size)
+            val warmedSizes = warmer.warmed.map { it.size }.toSet()
+            assertTrue(
+                "every size the deck surfaces request must be warmed: $displayed against $warmedSizes",
+                warmedSizes.containsAll(displayed),
+            )
+            // A download warms every size there is, not only the two these screens ask for: the board
+            // draws an art crop, which is a different picture and its own cache entry, and a deck's
+            // cards are exactly the cards that will be on a board.
+            assertEquals(PREFETCH_SIZES, warmedSizes)
+            assertEquals("one image per size, for the one card", PREFETCH_SIZES.size, warmer.warmed.size)
 
             val progress = downloader.progress.value
             assertEquals(PrefetchStatus.COMPLETED, progress.status)
-            assertEquals("the total must count the real targets", displayed.size, progress.total)
+            assertEquals("the total must count the real targets", PREFETCH_SIZES.size, progress.total)
         }
 
     @Test
@@ -117,6 +126,6 @@ class DeckArtDownloaderTest {
                     assertTrue("missing $expected in ${warmer.warmed}", warmer.warmed.contains(expected))
                 }
             }
-            assertEquals(displayed.size * 2, warmer.warmed.size)
+            assertEquals("both faces, at every size a download warms", PREFETCH_SIZES.size * 2, warmer.warmed.size)
         }
 }

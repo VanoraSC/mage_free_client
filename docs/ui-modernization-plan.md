@@ -453,22 +453,36 @@ which means larger cards, which is the difference between reading the board and 
 Each player's battlefield reads front-to-back by how much attention the permanent needs:
 
 ```
-   ┌─ opponent's battlefield (mirrored) ──────────────┐
-   │  [ lands ]        [ other permanents ]           │   back
-   │            [ creatures ]                         │   front
-   ├──────────────────────────────────────────────────┤
-   │            [ creatures ]                         │   front
-   │  [ lands ]        [ other permanents ]           │   back
-   └─ your battlefield ───────────────────────────────┘
+ ┌────────┬─────────────┬────────────────────────────┐
+ │ opp    │             │   [ other permanents ]     │  back
+ │ vitals │  opponent   │   [ creatures ]            │  front
+ │ grave  │   lands     ├────────────────────────────┤
+ │ other  │             │                            │
+ │ exile  ├─────────────┤   [ creatures ]            │  front
+ │ exile  │   your      │   [ other permanents ]     │  back
+ │ other  │   lands     ├────────────────────────────┤
+ │ grave  │             │   phase bar                │
+ │ vitals │             │   hand                     │
+ └────────┴─────────────┴────────────────────────────┘
 ```
 
+- **Three columns, because the three things have different jobs.** The status rail is read
+  occasionally and must never move; the lands are a fixed, bounded cost that grows all game; the
+  battlefield is what actually changes. Lands sharing the battlefield's width meant a fourth kind of
+  land pushed the creatures around, which is a move with no game behind it.
 - **Creatures in front.** They attack, block, and change state constantly — they are what the player
   looks at.
-- **Non-creature permanents behind the creatures**, beside the lands. Present and readable, but not
-  competing with the things that are about to matter in combat.
-- **Lands to the side, at the back, piled tightly.** Lands are the most numerous permanents and the
+- **Non-creature permanents on their own horizontal behind the creatures**, toward the outside.
+  Present and readable, but not competing with — or drawn behind — the things that are about to
+  matter in combat.
+- **Lands in a column of their own, piled tightly.** Lands are the most numerous permanents and the
   least individually interesting; **the goal is to minimise the space they take without hurting
-  readability.**
+  readability**, and a bounded column does that in a way a shared row cannot.
+- **The status rail carries what is not on the battlefield** — each seat's vitals (§7.15) and each
+  seat's piles: the graveyard, exile, and the *Other* exile that a card is coming back from or can be
+  cast from. Each is drawn as the card on top of it and opens by being pressed (§7.13). The rail is
+  the one region that keeps its height when it is empty, because it is the one region whose job is to
+  be in a fixed place.
 - **Attached permanents render on what they are attached to**, not in a bucket of their own. An Aura
   or Equipment sits with its host; a fortified or enchanted land stays with the lands.
 
@@ -553,7 +567,9 @@ is not supported anywhere.
 
 **The board itself is grey.** No illustrated battlefield, no themed playmat, no decorative
 background art. A pleasing neutral grey ground, with **zones and other distinctions carried by
-shades of that grey** — value and elevation, not colour or texture.
+shades of that grey** — value and elevation, not colour or texture. Mid grey rather than near-black,
+because the cards on it are bordered in black (§7.5) and a black-bordered card on a black ground has
+no edge at all.
 
 The art on screen is the cards, and the motion on screen is the cards moving (§7.3). That is the
 whole visual budget and it is enough.
@@ -574,11 +590,28 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Board** | Battlefield, stack piles | The printed name plate, P/T, counters, tap state, status | Downsampled, the card cut below its art box |
-| **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
+| **Board** | Battlefield, hand, stack piles, rail piles | A framed square: name and cost above the illustration, on a strip in the card's own frame colour, with P/T, counters, tap state and status | Scryfall's `art_crop` — the illustration on its own, which is a *different image* from the card, not a crop of one |
+| **Tile** | Zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 
 Only **Full** loads full-resolution art, which matters for memory and for the first-turn experience.
+
+**Board asks for a different picture, not a smaller one.** A tier that shows only a card's
+illustration requests only the illustration. The alternative — take a whole card and cut the frame
+off it — shipped broken twice: once losing the title bar to a centre-crop, once squashing the card
+because the box was not the height the arithmetic assumed. A clip has to be right about the frame's
+proportions *and* about the box it is drawn in, and it fails silently when either changes; an art
+crop simply fills whatever box it is given. It is also its own cache entry, so the offline prefetch
+warms it alongside the other two (§9's art pipeline).
+
+**The Board card is square, in a black border.** The border is the one thing every Magic card in
+every set has in common, and it is what makes a card read as an object on the table rather than as a
+region of the interface — which is why the board's ground is a mid grey and not the near-black it
+was. The art is wider than it is tall, so squaring the box leaves a strip above it, and that strip
+carries the name and the mana cost: exactly what a real frame puts there, and what the art crop
+leaves out. Squaring it also makes **tapping free** — a rectangle turned to show it is tapped swaps
+its width and height and shifts every neighbour, which is movement §7.3 says must mean a game action.
+A square leans 45° inside its own footprint and nothing else on the board moves.
 
 These are *rendering sizes* and have nothing to do with Magic tokens — see §7.11 for those.
 
@@ -960,10 +993,11 @@ thing the overlay does not do is let you *cast* from there, which Commander need
 **name** and id. The two exile views are complementary and both are needed: `PlayerView.exile`
 answers "what of mine is exiled," `GameView.exiles` answers "which pile is it in."
 
-**The bridge maps almost none of this.** `GameViewMapper` reduces the graveyard to
-`graveyardCount = player.graveyard?.size ?: 0` and discards the cards; `commandList` is not mapped
-at all. Only `GameView.exiles` survives, as `GameState.exile: List<GameZone>` with `name` and
-`zoneId` — mapped, and never rendered.
+**The bridge maps all of it now.** When this section was written `GameViewMapper` reduced the
+graveyard to `graveyardCount` and discarded the cards, and `commandList` was not mapped at all.
+`GamePlayer` today carries `graveyard`, `exile` and `commandList` as full lists, alongside
+`GameState.exile: List<GameZone>` with each pile's `name` and `zoneId`. Story 0110 renders the
+graveyard, in the status rail (§7.4); the exile piles are still mapped and unrendered.
 
 #### Telling special exiles apart
 
@@ -977,6 +1011,23 @@ effect-created zones named `"<effect> - Exile"`. Two independent signals disting
 - **`canPlayObjects`**, for anything castable right now — already mapped as `GameStateView.playable`.
   This is what the reference client uses: `GamePanel` marks `setPlayableStats` on card views in both
   `PlayerView.exile` and `GameView.exiles`.
+
+#### Castable from somewhere else, shown beside the hand
+
+**A card you can cast is a card you can cast, wherever it is.** Flashback, escape, plot, adventure,
+foretell, disturb, a Snapcaster's grant, an opponent's Gonti exile — the reference client marks these
+on the card *inside its own zone window*, which means noticing one requires opening the window first.
+A player who does not think to look is playing a smaller game than the one in front of them.
+
+So everything `canPlayObjects` names that is **not in the hand** is drawn in the hand's own row, to
+the right of it and set clearly apart, with the pile it is in written on the card. The gap says *not
+in your hand*; the label says *where*; and the two together are what stops a player counting a card
+they do not hold. Opening one names the zone and lists **why** — upstream's own
+`PlayableObjectStats.getPlayableAbilityNames()`, the same short ability texts the reference client
+puts in the tooltip of its playable-count icon, carried on `GamePlayableObject.abilityNames`.
+
+Nothing here reasons about what flashback is. It is the server's list, filtered by where each card
+turns out to be.
 
 **Neither signal alone is sufficient, and together they still do not cover everything.** Airbend
 does not create a named zone — it calls `moveCards(Zone.EXILED)` into the general exile and grants an
@@ -1425,10 +1476,12 @@ costs far less than a design bent around a budget nobody has measured a need for
 
 Two things are worth doing anyway, because they are about the experience rather than the frame:
 
-1. **Art pipeline.** Two decoded sizes — Board tier and Full tier (§7.5) — never one, since decoding
-   full-resolution card art for a battlefield is wasteful on memory to no visible benefit. Prefetch
-   our own deck at match start — we submitted it, so we know exactly what is in it and the first turn
-   need not wait on the network. The opponent's deck is hidden and cannot be prefetched.
+1. **Art pipeline.** Three decoded images — the Board tier's art crop, the Tile tier's downsampled
+   card, and the Full tier's (§7.5) — never one, since decoding full-resolution card art for a
+   battlefield is wasteful on memory to no visible benefit. Each is its own cache entry, and the
+   offline prefetch warms all three. Prefetch our own deck at match start — we submitted it, so we
+   know exactly what is in it and the first turn need not wait on the network. The opponent's deck is
+   hidden and cannot be prefetched.
 2. **Snapshot payload size.** [`architecture.md`](architecture.md) open question #7 — how much of
    `GameView` a phone needs per frame, and whether to delta it — is still open. It matters for
    mobile data, not for rendering. Measure real payloads before deciding anything.

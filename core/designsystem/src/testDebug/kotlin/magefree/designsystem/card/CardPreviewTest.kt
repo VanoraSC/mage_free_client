@@ -125,6 +125,24 @@ class CardPreviewTest {
         composeTestRule.onNodeWithTag(CardPreviewTestTags.CARD).performClick()
         assertEquals("pressing the card puts it down", 2, dismissed)
     }
+
+    @Test
+    fun `a card from somewhere that is not the hand says where it is and why it is castable`() {
+        // The one case where "can I cast this" and "is this in my hand" have different answers. A
+        // player told only the first is about to plan around a card they do not hold.
+        show(bears().copy(provenance = CardPreviewProvenance(zone = "Graveyard", reasons = listOf("Flashback 3WW"))))
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.PROVENANCE, useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Graveyard").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Flashback 3WW").assertIsDisplayed()
+    }
+
+    @Test
+    fun `an ordinary card in hand says neither, because there is nothing to say`() {
+        show(bears())
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.PROVENANCE, useUnmergedTree = true).assertDoesNotExist()
+    }
 }
 
 private const val SCREEN_HEIGHT_PX = 411f

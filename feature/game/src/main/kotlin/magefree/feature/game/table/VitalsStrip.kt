@@ -5,10 +5,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSignal
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
+import magefree.designsystem.board.BoardZone
+import magefree.designsystem.board.ZoneIcon
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.counterDigitColor
 
@@ -45,6 +53,7 @@ import magefree.designsystem.card.counterDigitColor
  * @param onExpand opens the full list, or `null` for a strip that is only being read.
  * @param modifier the [Modifier] for the strip.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VitalsStrip(
     vitals: TableVitals,
@@ -52,24 +61,23 @@ fun VitalsStrip(
     modifier: Modifier = Modifier,
     onExpand: (() -> Unit)? = null,
 ) {
-    Row(
+    Column(
         modifier =
             modifier
                 .background(BoardSurface.zone.copy(alpha = STRIP_OPACITY), StripShape)
                 .let { base -> onExpand?.let { base.clickable(onClick = it) } ?: base }
-                .padding(horizontal = StripPadding, vertical = ChipPadding)
+                .padding(horizontal = ChipPadding, vertical = ChipPadding)
                 .testTag(VitalsTestTags.strip(vitals.playerId)),
-        horizontalArrangement = Arrangement.spacedBy(ChipGap),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(RowGap),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // No name. Which seat a bar belongs to is said by where it is — the opponent's along the top,
-        // the viewer's along the bottom — and a label repeating that costs room on the one line the
-        // numbers have. Priority is shown elsewhere.
+        // No name. Which seat a column belongs to is said by where it is — the opponent's at the top of
+        // the rail, the viewer's at the bottom — and a label repeating that costs room the numbers
+        // need. Priority is shown elsewhere.
 
         // Life gets the design system's own `vitals` token — *"the largest thing on the board that is
-        // not a card"* — which is what it was defined for and what the first cut of this missed by
-        // drawing it at the size of a counter on a card face. It is also what sets the strip's height:
-        // everything beside it is a smaller number on the same line.
+        // not a card"* — which is what it was defined for. It is on its own line at the top because it
+        // is the number a player checks most and the only one they check from across the table.
         Chip(
             label = "${vitals.life}",
             fill = LifeColor,
@@ -77,31 +85,27 @@ fun VitalsStrip(
             style = BoardTypography.vitals,
         )
 
-        // Library before the rest: an empty one is a loss on the next draw, which is the only zone
-        // count that is itself a game state rather than a number.
-        Chip(
-            label = "${vitals.libraryCount}",
-            fill = if (vitals.isDecking) BoardSignal.threat else BoardSurface.zone,
-            tag = VitalsTestTags.library(vitals.playerId),
-            outlined = !vitals.isDecking,
-        )
-        ZoneCount(label = "H", count = vitals.handCount, tag = VitalsTestTags.hand(vitals.playerId))
-        ZoneCount(label = "G", count = vitals.graveyardCount, tag = VitalsTestTags.graveyard(vitals.playerId))
-        ZoneCount(label = "X", count = vitals.exileCount, tag = VitalsTestTags.exile(vitals.playerId))
-
-        vitals.counters.forEach { counter ->
-            Chip(
-                label = "${counter.count}",
-                fill = if (counter.isPoison) PoisonColor else palette.colorFor(counter.name),
-                tag = VitalsTestTags.counter(vitals.playerId, counter.name),
-                // The one thing the board says about a counter beyond how many: ten poison is a loss,
-                // so a player near it needs to know without doing arithmetic.
-                alarming = counter.isNearLethal,
+        // **A picture and a number per zone**, in the order a player reads them: what I am holding,
+        // what I have left to draw, what has died, what is gone. The pictures are upstream's own, so
+        // anybody who has played on the desktop client already knows them — and four of them fit on a
+        // rail where four labelled numbers did not. Wrapped rather than clipped all the same.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(ChipGap, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(RowGap),
+        ) {
+            ZoneCount(zone = BoardZone.Hand, count = vitals.handCount, tag = VitalsTestTags.hand(vitals.playerId))
+            // The library shows even at zero, and it is the only one that does: an empty library is a
+            // loss on the next draw, which is a game state rather than an absence.
+            ZoneCount(
+                zone = BoardZone.Library,
+                count = vitals.libraryCount,
+                tag = VitalsTestTags.library(vitals.playerId),
+                always = true,
+                alarming = vitals.isDecking,
             )
+            ZoneCount(zone = BoardZone.Graveyard, count = vitals.graveyardCount, tag = VitalsTestTags.graveyard(vitals.playerId))
+            ZoneCount(zone = BoardZone.Exile, count = vitals.exileCount, tag = VitalsTestTags.exile(vitals.playerId))
         }
-
-        if (vitals.isMonarch) Marker("Monarch", VitalsTestTags.monarch(vitals.playerId))
-        if (vitals.hasInitiative) Marker("Initiative", VitalsTestTags.initiative(vitals.playerId))
 
         if (vitals.floatingMana > 0) {
             Chip(
@@ -111,31 +115,75 @@ fun VitalsStrip(
             )
         }
 
+        // **One counter per row, and the rows scroll.** A player with poison, energy and experience
+        // has three numbers that each mean something different, and a row of bare circles makes them
+        // a puzzle. Down the column each gets its own line; past what the rail can show, the column
+        // scrolls rather than growing, because the rail's height belongs to the board.
+        if (vitals.counters.isNotEmpty() || vitals.isMonarch || vitals.hasInitiative) {
+            Column(
+                modifier = Modifier.heightIn(max = CountersHeight).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(RowGap),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                vitals.counters.forEach { counter ->
+                    Chip(
+                        label = "${counter.count}",
+                        fill = if (counter.isPoison) PoisonColor else palette.colorFor(counter.name),
+                        tag = VitalsTestTags.counter(vitals.playerId, counter.name),
+                        // The one thing the board says about a counter beyond how many: ten poison is
+                        // a loss, so a player near it needs to know without doing arithmetic.
+                        alarming = counter.isNearLethal,
+                    )
+                }
+
+                if (vitals.isMonarch) Marker("Monarch", VitalsTestTags.monarch(vitals.playerId))
+                if (vitals.hasInitiative) Marker("Initiative", VitalsTestTags.initiative(vitals.playerId))
+            }
+        }
+
         if (vitals.showsWins) {
             Text(
                 text = "${vitals.wins}/${vitals.winsNeeded}",
                 style = BoardTypography.cardStats,
                 color = BoardSurface.onSurfaceMuted,
+                maxLines = 1,
                 modifier = Modifier.testTag(VitalsTestTags.wins(vitals.playerId)),
             )
         }
     }
 }
 
-/** A zone's count, which is only worth its room once there is something in it. */
+/**
+ * A zone's icon and its count, which is only worth its room once there is something in it.
+ *
+ * @param always keeps it when the count is zero, for the one zone where zero is a fact rather than an
+ *   absence.
+ * @param alarming marks it the way the board marks near-lethal poison: something is about to end the
+ *   game.
+ */
 @Composable
 private fun ZoneCount(
-    label: String,
+    zone: BoardZone,
     count: Int,
     tag: String,
+    always: Boolean = false,
+    alarming: Boolean = false,
 ) {
-    if (count <= 0) return
-    Text(
-        text = "$label$count",
-        style = BoardTypography.cardStats,
-        color = BoardSurface.onSurfaceMuted,
+    if (count <= 0 && !always) return
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(ZoneIconGap),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.testTag(tag),
-    )
+    ) {
+        ZoneIcon(zone = zone)
+        Text(
+            text = "$count",
+            style = BoardTypography.cardStats,
+            color = if (alarming) BoardSignal.threat else BoardSurface.onSurfaceMuted,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
 }
 
 /** One number on a coloured ground, which is the whole collapsed vocabulary. */
@@ -180,6 +228,10 @@ private fun Marker(
         text = label,
         style = BoardTypography.cardStats,
         color = BoardSignal.targeting,
+        // One line or nothing. In a column a card wide, a wrapping word sets one letter per line,
+        // which is how "Monarch" came out as a vertical stack of seven letters.
+        maxLines = 1,
+        softWrap = false,
         modifier = Modifier.testTag(tag),
     )
 }
@@ -221,7 +273,16 @@ private val PoisonColor = Color(0xFF6FBF73)
 private val StripShape = RoundedCornerShape(4.dp)
 private const val STRIP_OPACITY = 0.85f
 private val StripPadding = 10.dp
-private val ChipGap = 8.dp
+private val ChipGap = 5.dp
+
+/** Between a zone's picture and its number. Tight: they are one thing. */
+private val ZoneIconGap = 2.dp
+
+/** Between the lines of the column. */
+private val RowGap = 3.dp
+
+/** As tall as the counters may get before they scroll — the rail's height belongs to the board. */
+private val CountersHeight = 66.dp
 private val ChipPadding = 7.dp
 private val ChipBorder = 1.dp
 private val AlarmBorder = 2.dp
