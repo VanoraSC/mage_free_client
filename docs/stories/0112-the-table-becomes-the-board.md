@@ -148,7 +148,10 @@ opened it — goes, because the thing it stood in for now exists.
     no snapshot at all, and `observeGame` opens with an empty seed that arrives immediately. It reads
     the server's own `hasSnapshot` now, which is what that seed is false for.
 - **Unit:** the snapshot is carried whole and the seed is distinguishable from a game
-  (`GameBoardViewModelTest`).
+  (`GameBoardViewModelTest`); every `PhaseStep` the server can send maps onto a step the bar draws or
+  onto none, the steps nobody receives priority in map onto none, first-strike damage shares the
+  combat-damage step, and whose turn it is comes from the active seat rather than from priority
+  (`TablePhasesTest`).
 - **Hermetic Compose (`TableBoardScreenTest`):** the board, the rail and the hand render from a
   snapshot; the waiting line shows on the seed and not on a game; a declined join keeps the server's
   reason; a priority prompt draws its controls; a quiet game says there is nothing to answer; hiding
