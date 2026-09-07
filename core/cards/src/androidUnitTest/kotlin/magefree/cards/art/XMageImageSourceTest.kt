@@ -48,6 +48,22 @@ class XMageImageSourceTest {
     }
 
     @Test
+    fun `art crop asks Scryfall for the illustration alone`() {
+        // Not an upstream size — upstream's client draws whole cards, so it never asks for one. It is
+        // the image the board's own tier wants, and Scryfall serves it from the same endpoint. A
+        // *different picture*, not a crop of the small one, so it is its own cache entry.
+        val urls = source.resolve(CardArtRequest("XLN", "121", size = CardArtSize.ART_CROP))
+
+        assertEquals(
+            listOf(
+                "https://api.scryfall.com/cards/xln/121/en?format=image&version=art_crop",
+                "https://api.scryfall.com/cards/xln/121?format=image&version=art_crop&include_variations=true",
+            ),
+            urls,
+        )
+    }
+
+    @Test
     fun `dfc back face appends face back - grounded in XMage direct-link table`() {
         // XMage's directDownloadLinks uses exactly this shape, e.g. sld/1543/en?format=image&face=back.
         // Delver of Secrets // Insectile Aberration (ISD #51).

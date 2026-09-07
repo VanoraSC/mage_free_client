@@ -12,10 +12,24 @@ enum class CardArtFace {
     BACK,
 }
 
-/** Image quality to request. Small is the list/grid thumbnail; large is the detail view. */
+/**
+ * Which image of a printing to request.
+ *
+ * [SMALL] and [LARGE] are the same picture — the whole card face, frame and all — at two
+ * resolutions. [ART_CROP] is a **different picture**: Scryfall's crop of the illustration alone, with
+ * no frame, no name plate and no text box.
+ *
+ * That distinction is what the board is built on. A tier that wants only the art must ask for only
+ * the art, rather than being handed a whole card and made to clip the parts it does not want: the
+ * clip has to be right against the frame's proportions, and it is silently wrong the moment anything
+ * about the box it is drawn in changes. An art crop simply fills whatever box it is given.
+ */
 enum class CardArtSize {
     SMALL,
     LARGE,
+
+    /** The illustration on its own, as Scryfall crops it. Roughly 4:3, and never a whole card. */
+    ART_CROP,
 }
 
 /**

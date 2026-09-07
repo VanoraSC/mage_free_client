@@ -74,6 +74,15 @@ data class TableCard(
      * memory and the first-turn bandwidth on cards nobody is looking at.
      */
     val fullArt: CardArtRequest? get() = art?.copy(size = CardArtSize.LARGE)
+
+    /**
+     * The same printing as an art crop, for a card drawn at the **Board** tier.
+     *
+     * The rail draws the top of a pile the way the battlefield draws a permanent — the illustration
+     * and nothing else — and that is a different image from the whole card [art] carries for the
+     * hand, not a crop of it.
+     */
+    val boardArt: CardArtRequest? get() = art?.copy(size = CardArtSize.ART_CROP)
 }
 
 /** Lands are *played*, not cast — they never use the stack. */

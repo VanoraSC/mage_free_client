@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -391,7 +390,7 @@ fun BoardCard(
     //
     // **Which way it sticks out is not a constant of the design.** A whole card is taller than it is
     // wide, so a turned one laid flush with the host overhung it on its own; the Board tier's card is
-    // cut below its art and is *wider* than tall, so a turned one is shorter than the host is wide and
+    // its illustration and is *wider* than tall, so a turned one is shorter than the host is wide and
     // has to be pushed out to show anything. Hence [maxOf]: the card's own length where that is more
     // than a band, a band where it is not.
     //
@@ -514,28 +513,18 @@ private fun HostCard(
                     .let { base -> if (onTap != null) base.cardInspectable(onTap = onTap) else base }
                     .testTag(BoardCardTestTags.CARD),
         ) {
-            // **The card face, cut below its art box.** A real card carries its name and mana cost in
-            // the places a player looks for them, so overlaying our own would be redundant and worse —
-            // an overlay covers the art it is printed on. What the bottom of the card carries is rules
-            // text, and at battlefield size that is a grey smudge; dropping it buys height for every
-            // card on the board.
+            // **The art, and nothing but the art.** This tier asks for [CardArtSize.ART_CROP] — the
+            // illustration on its own — so there is no frame here to cut off and no clipping to get
+            // right: the picture simply fills the card.
             //
-            // Drawn at its **full** height inside a box only [BOARD_CARD_CROP] of that, top-aligned,
-            // so the image keeps its own proportions and the crop takes the bottom. Scaling it into the
-            // shorter box instead would squash every card on the board.
-            // `requiredHeight`, not `height`: a plain height is clamped by the parent's constraints, so
-            // the box came out the *cropped* height and the renderer's centre-crop then took the top
-            // and the bottom in equal measure — a card with no title bar and no type line. Required
-            // ignores the clamp, the image fills a box of its own proportions, and the parent's clip
-            // takes the bottom and only the bottom.
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .requiredHeight(width / CARD_ASPECT_RATIO)
-                        .align(Alignment.TopStart)
-                        .testTag(BoardCardTestTags.ART),
-            ) {
+            // Two attempts at doing it the other way both shipped and both were wrong, which is the
+            // reason this is now stated as a *request* rather than as layout. Handed a whole card and
+            // told to show its top, the tier first sized the image to the face — where the renderer's
+            // centre-crop took the top and the bottom in equal measure, losing the title bar — and
+            // then measured it at a whole card's height and clipped, where the image was silently
+            // squashed instead whenever the box was not the height the arithmetic assumed. An image
+            // that is already the right picture cannot be cropped to the wrong one.
+            Box(modifier = Modifier.fillMaxSize().testTag(BoardCardTestTags.ART)) {
                 CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
             }
 
@@ -923,9 +912,9 @@ private const val ATTACHMENT_INSET_FRACTION = 0.059f
 /**
  * Tall enough for an attached card's name and mana cost — the reason the stack offsets vertically.
  *
- * Measured against the **whole** card the printing came from, not the [BOARD_CARD_CROP] slice this
- * tier draws. The name plate is a fixed part of a card face, so cropping the card below its art must
- * not shrink the strip that exposes it: the band is the same 15dp on a 68dp card either way.
+ * Measured against the **whole** card the printing came from, not the art crop this tier draws. The
+ * band is where a real card's name plate is, and that is a fixed part of a card face — so it is the
+ * same 15dp on a 68dp card whatever picture the tier happens to be showing.
  */
 private fun attachmentBandHeight(width: Dp): Dp = width / CARD_ASPECT_RATIO * ATTACHMENT_BAND_FRACTION
 

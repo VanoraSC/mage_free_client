@@ -187,7 +187,7 @@ private fun ZonePile(
             BoardCard(
                 state = BoardCardState(card = top.card),
                 width = cardWidth,
-                art = artFor?.invoke(top.art, top.card),
+                art = artFor?.invoke(top.boardArt, top.card),
                 onTap = onOpen,
                 modifier = Modifier.testTag(StatusRailTestTags.zone(zone.playerId, zone.kind)),
             )

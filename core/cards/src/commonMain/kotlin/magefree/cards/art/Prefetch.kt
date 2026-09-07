@@ -22,12 +22,13 @@ sealed interface PrefetchScope {
 /**
  * The image sizes a bulk pre-download warms: **every** [CardArtSize], because every one of them is a
  * size the UI displays — SMALL is the browse/add results thumbnail, LARGE the inspection view and the
- * builder's deck rows.
+ * builder's deck rows, and ART_CROP is every card on a battlefield.
  *
- * This matters because the art cache is keyed by resolved URL and [XMageImageSource] appends
- * `version=small` for SMALL, so SMALL and LARGE are **different cache entries**. Warming one size
- * leaves every surface that displays the other blank offline, which defeats the point of the feature
- *. Derived from [CardArtSize.entries] so a new size cannot be silently missed.
+ * This matters because the art cache is keyed by resolved URL and [XMageImageSource] appends a
+ * `version` parameter for all but LARGE, so each size is a **different cache entry** — and ART_CROP
+ * is not even the same picture. Warming one size leaves every surface that displays another blank
+ * offline, which defeats the point of the feature. Derived from [CardArtSize.entries] so a new size
+ * cannot be silently missed.
  */
 val PREFETCH_SIZES: Set<CardArtSize> = CardArtSize.entries.toSet()
 

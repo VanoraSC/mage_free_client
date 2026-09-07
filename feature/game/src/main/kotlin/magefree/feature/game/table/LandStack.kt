@@ -309,7 +309,7 @@ private class LandStackGeometry(
      *
      * **Only when a turned card is the wider one.** A turned card is as wide as an upright one is
      * tall, so on a whole card it hangs off both sides of the diagonal and the stack has to move out
-     * of its own way; on this tier's card — cut below its art box, and so wider than it is tall — it
+     * of its own way; on this tier's card — the illustration alone, and so wider than it is tall — it
      * is *narrower* than the card it lies across and hangs off nothing. Written as a maximum rather
      * than as a subtraction because that is the difference between the two cases, and the crop already
      * inverted this arithmetic once.

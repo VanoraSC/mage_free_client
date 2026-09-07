@@ -99,7 +99,7 @@ class BoardCardTest {
     }
 
     @Test
-    fun `an untapped card is the Board tier's own shape, a card cut below its art`() {
+    fun `an untapped card is the Board tier's own shape, the shape of a card's art`() {
         show(BoardCardState(card = BEARS))
 
         val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
@@ -111,13 +111,16 @@ class BoardCardTest {
     }
 
     @Test
-    fun `the card image is laid out whole, and the face clips the bottom off it`() {
-        // **The crop, asserted at the one place it can go wrong.** The image is measured at a whole
-        // card's height inside a face that is only [BOARD_CARD_CROP] of it, so the card keeps its own
-        // proportions and loses its text box. Give the image the face's height instead — which is what
-        // a plain `Modifier.height` does, because it is clamped by the parent — and the renderer's
-        // centre-crop takes the top and the bottom in equal measure: a card with no title bar, no
-        // name, and no type line, which is a card nobody can read on a board.
+    fun `the art fills the card, because the art is what was asked for`() {
+        // **The whole crop problem, deleted rather than solved.** This tier requests an art crop, so
+        // there is no frame here to cut off: the picture is exactly the card's own box, and the image
+        // has nothing to overflow and nothing to be clipped by.
+        //
+        // Two goes at doing it the other way both shipped. Sized to the face, the renderer's
+        // centre-crop took the top and the bottom of a whole card in equal measure and the title bar
+        // was lost; measured at a whole card's height and clipped, the card was silently squashed
+        // instead whenever the box was not the height the arithmetic assumed. An image drawn anywhere
+        // but edge to edge of its own box is the shape of both bugs, so that is what is asserted.
         show(BoardCardState(card = BEARS))
 
         val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
@@ -127,16 +130,8 @@ class BoardCardTest {
                 .fetchSemanticsNode()
                 .size
 
-        assertEquals("the image should be the card's full width", face.width, art.width)
-        val expected = (CARD_WIDTH.value / CARD_ASPECT_RATIO).roundToInt()
-        assertTrue(
-            "the image measured ${art.width}x${art.height}, and a whole card is ${CARD_WIDTH.value.roundToInt()}x$expected",
-            abs(art.height - expected) <= 1,
-        )
-        assertTrue(
-            "the face must be shorter than the image it clips: ${face.height} against ${art.height}",
-            face.height < art.height,
-        )
+        assertEquals("the art should be exactly the card's width", face.width, art.width)
+        assertEquals("the art should be exactly the card's height", face.height, art.height)
     }
 
     @Test
@@ -361,10 +356,19 @@ class BoardCardTest {
     }
 
     @Test
-    fun `an upright attachment claims height and a turned one claims width`() {
+    fun `an upright attachment steps up and a turned one steps out`() {
+        // The two stacks step perpendicular to the band each has to expose, and *that* is the rule —
+        // not which of the two assemblies happens to be taller. On a whole card the upright stack was
+        // always the taller of the two; at the Board tier a card is wider than it is tall, so a turned
+        // attachment is a card's *width* tall and out-measures it. Both facts below hold either way.
         composeTestRule.setContent {
             MageTheme {
                 Box {
+                    BoardCard(
+                        state = BoardCardState(card = BEARS),
+                        width = CARD_WIDTH,
+                        modifier = Modifier.testTag(SMALL),
+                    )
                     BoardCard(
                         state = BoardCardState(card = BEARS, attachments = listOf(PACIFISM)),
                         width = CARD_WIDTH,
@@ -379,11 +383,15 @@ class BoardCardTest {
             }
         }
 
+        val plain = composeTestRule.onNodeWithTag(SMALL).fetchSemanticsNode().size
         val upright = composeTestRule.onNodeWithTag(BARE).fetchSemanticsNode().size
         val turned = composeTestRule.onNodeWithTag(ENCHANTED).fetchSemanticsNode().size
 
-        assertTrue("the upright stack is the taller one", upright.height > turned.height)
-        assertTrue("the turned stack is the wider one", turned.width > upright.width)
+        assertTrue("an upright attachment claims height above the host", upright.height > plain.height)
+        assertTrue("a turned attachment claims width past the host", turned.width > plain.width)
+        // The step, not the reach: an upright stack drifts a few dp right so the cards read as
+        // separate, and that is nothing beside the width a turned card puts past the host's edge.
+        assertTrue("and it is the turned one that claims the width", turned.width > upright.width)
     }
 
     @Test
@@ -453,7 +461,7 @@ class BoardCardTest {
         composeTestRule.onNodeWithTag(BoardCardTestTags.STATS).assertDoesNotExist()
     }
 
-    // The Board tier is a card cut below its art box, so its height comes from its own ratio.
+    // The Board tier is a card drawn as its illustration, so its height comes from its own ratio.
     private fun cardHeight(): Dp = (CARD_WIDTH.value / BOARD_CARD_ASPECT_RATIO).roundToInt().dp
 
     @Test

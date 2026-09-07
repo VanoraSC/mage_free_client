@@ -29,10 +29,10 @@ own surface and its own story". This is that story, for the graveyard; exile fol
 `GameViewMapper`, in the server's own order. §7.13's claim that "the bridge maps almost none of this"
 is out of date — graveyard, exile and `commandList` are all mapped — and is corrected here.
 
-**The Board tier's crop broke two things that assumed a portrait card.** A card cut below its art box
-is wider than it is tall, and the land stack's fixed-slot geometry was derived from a card being
-taller than wide. That is why lands currently render scattered and overlapping. It is fixed here
-because it is the same change.
+**The Board tier's shape broke two things that assumed a portrait card.** A card drawn as its
+illustration is wider than it is tall, and both the land stack's fixed-slot geometry and the
+attachment stack's were derived from a card being taller than wide. That is why lands were rendering
+scattered and overlapping. Fixed here, because it is the same change.
 
 ## 3. Scope
 
@@ -122,12 +122,17 @@ looking. Each row slides back toward the screen's own centre — but only as far
 width allows, so a row busy enough to need its whole column stays in it and never slides under the
 lands.
 
-**A card's face is drawn width-first and anchored to the top.** That is what makes the tier's crop
-work: the image fills the card's width, keeps its proportions from that alone, and whatever runs past
-the bottom of the face is clipped. `ContentScale.Crop` is the wrong tool for it — it scales an image
-to *cover* the box it is given, so in a box shorter than a card it takes the top and the bottom in
-equal measure and the card loses its title bar; and where the box is not the height the layout
-intended, it silently squashes the card instead. Both of those shipped, one after the other.
+**The Board tier asks Scryfall for the illustration, and there is no crop at all.** Two goes at
+cutting a whole card down to its top half both shipped broken: sized to the face, the renderer's
+centre-crop took the top and the bottom in equal measure and the title bar went with it; measured at
+a whole card's height and clipped, the card was silently squashed instead wherever the box was not
+the height the arithmetic assumed. A clip has to be right about the frame's proportions *and* about
+the box it is drawn in, and it fails quietly when either changes.
+
+So the tier requests `art_crop` — the illustration on its own, a different image rather than a crop
+of the card — and draws it edge to edge. Nothing to clip, nothing to line a clip up against, and the
+card's box takes the art's own shape. It is its own cache entry, so the offline prefetch warms it
+alongside the other two sizes; a deck's cards are exactly the cards that end up on a board.
 
 **The rail's piles are sized by its height, not its width.** A seat has three of them plus its own
 numbers in half a rail; at the rail's own width they would want three times the height there is.
@@ -175,6 +180,7 @@ again. The same is true of the attachment stack in `BoardCard`.
 - [x] Creature rows are centred on the screen wherever they have the width to be.
 - [x] Non-creature permanents sit on their own horizontal and never under a creature.
 - [x] Land stacks render correctly at the Board tier's card shape.
+- [x] A card on the battlefield shows its illustration, undistorted and uncropped, at any card size.
 - [x] `./gradlew check` passes and the preview shows all of it.
 
 ## 9. References

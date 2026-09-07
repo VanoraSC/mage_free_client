@@ -113,24 +113,22 @@ fun CardArtPlaceholder(
 }
 
 /**
- * How much of a card's height the **Board** tier keeps.
+ * The **Board** tier's own width-to-height ratio: the shape of a card's illustration.
  *
  * A Magic card puts its title bar and its illustration in the top half and its type line, rules text
  * and flavour below. On the battlefield the text is unreadable at card size anyway — that is what
- * inspection is for — so keeping the bottom costs height and returns a grey smudge.
+ * inspection is for — so the tier draws the illustration and drops the rest.
  *
- * Cut just below the art box: the title, the mana cost and the whole illustration stay, and the type
- * line down is dropped. The number is where the art box ends on a modern frame; older frames vary by a
- * percent or two, which shows as a sliver of type line rather than as a cropped illustration.
- */
-const val BOARD_CARD_CROP: Float = 0.58f
-
-/**
- * The Board tier's own width-to-height ratio, which is [CARD_ASPECT_RATIO] on a card cut to
- * [BOARD_CARD_CROP].
+ * **It is a different image, not a crop of the card.** Scryfall serves the illustration on its own,
+ * and asking for that is what makes this simple: an art crop fills whatever box it is given, at any
+ * size, with nothing to clip and no frame to line the clip up against. Two goes at cutting a whole
+ * card down to its top half both shipped broken — one lost the title bar, the other squashed the card
+ * — because a clip has to be right about the frame's proportions *and* about the box it is drawn in,
+ * and it fails silently when either changes.
  *
- * Everything on the battlefield derives its height from this rather than from the full card: the card
- * itself, the attachment stack behind it, the land stacks, and the board's own sizing. One constant, so
- * they cannot disagree.
+ * The number is Scryfall's own art-crop aspect, so a card's art fills the box it is drawn in with
+ * almost nothing trimmed. Everything on the battlefield derives its height from this rather than from
+ * the full card: the card itself, the attachment stack behind it, the land stacks, and the board's own
+ * sizing. One constant, so they cannot disagree.
  */
-const val BOARD_CARD_ASPECT_RATIO: Float = CARD_ASPECT_RATIO / BOARD_CARD_CROP
+const val BOARD_CARD_ASPECT_RATIO: Float = 1.37f

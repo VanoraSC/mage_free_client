@@ -88,6 +88,10 @@ class ScryfallImageSource(
             CardArtSize.LARGE -> url
             // ScryfallImageSourceSmall.innerModifyUrlString: format=image -> format=image&version=small
             CardArtSize.SMALL -> url.replaceFirst("format=image", "format=image&version=small")
+            // Not an upstream size — upstream's client draws whole cards everywhere, so it never asks
+            // for one. Scryfall's own image endpoint serves it from the same URL, and it is the image
+            // the Board tier actually wants: the illustration, with no frame to crop off.
+            CardArtSize.ART_CROP -> url.replaceFirst("format=image", "format=image&version=art_crop")
         }
 
     private companion object {

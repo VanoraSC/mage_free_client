@@ -588,11 +588,19 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Board** | Battlefield, stack piles, rail piles | The printed name plate, P/T, counters, tap state, status | Downsampled, the card cut below its art box — filled to the card's width, anchored to its top, clipped at the bottom |
+| **Board** | Battlefield, stack piles, rail piles | The illustration, P/T, counters, tap state, status | Scryfall's `art_crop` — the illustration on its own, which is a *different image* from the card, not a crop of one |
 | **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 
 Only **Full** loads full-resolution art, which matters for memory and for the first-turn experience.
+
+**Board asks for a different picture, not a smaller one.** A tier that shows only a card's
+illustration requests only the illustration. The alternative — take a whole card and cut the frame
+off it — shipped broken twice: once losing the title bar to a centre-crop, once squashing the card
+because the box was not the height the arithmetic assumed. A clip has to be right about the frame's
+proportions *and* about the box it is drawn in, and it fails silently when either changes; an art
+crop simply fills whatever box it is given. It is also its own cache entry, so the offline prefetch
+warms it alongside the other two (§9's art pipeline).
 
 These are *rendering sizes* and have nothing to do with Magic tokens — see §7.11 for those.
 
@@ -1440,10 +1448,12 @@ costs far less than a design bent around a budget nobody has measured a need for
 
 Two things are worth doing anyway, because they are about the experience rather than the frame:
 
-1. **Art pipeline.** Two decoded sizes — Board tier and Full tier (§7.5) — never one, since decoding
-   full-resolution card art for a battlefield is wasteful on memory to no visible benefit. Prefetch
-   our own deck at match start — we submitted it, so we know exactly what is in it and the first turn
-   need not wait on the network. The opponent's deck is hidden and cannot be prefetched.
+1. **Art pipeline.** Three decoded images — the Board tier's art crop, the Tile tier's downsampled
+   card, and the Full tier's (§7.5) — never one, since decoding full-resolution card art for a
+   battlefield is wasteful on memory to no visible benefit. Each is its own cache entry, and the
+   offline prefetch warms all three. Prefetch our own deck at match start — we submitted it, so we
+   know exactly what is in it and the first turn need not wait on the network. The opponent's deck is
+   hidden and cannot be prefetched.
 2. **Snapshot payload size.** [`architecture.md`](architecture.md) open question #7 — how much of
    `GameView` a phone needs per frame, and whether to delta it — is still open. It matters for
    mobile data, not for rendering. Measure real payloads before deciding anything.

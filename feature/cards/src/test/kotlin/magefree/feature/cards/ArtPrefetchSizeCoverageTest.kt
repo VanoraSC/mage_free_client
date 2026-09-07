@@ -20,6 +20,7 @@ import magefree.cards.art.CardArtCachePolicyRepository
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
 import magefree.cards.art.CatalogPrefetchTargetSource
+import magefree.cards.art.PREFETCH_SIZES
 import magefree.cards.art.PrefetchScope
 import magefree.cards.art.PrefetchStatus
 import magefree.cards.model.CardId
@@ -35,11 +36,16 @@ import java.util.Collections
 /**
  * "Download all art" must warm **every size the UI actually asks for**.
  *
- * The Coil cache key is the resolved URL and `applySize` appends `version=small` for SMALL, so SMALL
- * and LARGE are separate cache entries: warming only one leaves the other's surface blank offline.
- * The expected sizes here are **derived from the production mapping** — the browse/add grid's size
- * comes from [toCardRow] and the inspection view's from [CardInspectionViewModel] — so this test
- * tracks the UI rather than restating a constant.
+ * The Coil cache key is the resolved URL and `applySize` appends a `version` for everything but
+ * LARGE, so each size is a separate cache entry: warming only one leaves the others' surfaces blank
+ * offline. The sizes checked here are **derived from the production mapping** — the browse/add grid's
+ * from [toCardRow] and the inspection view's from [CardInspectionViewModel] — so this test tracks the
+ * UI rather than restating a constant.
+ *
+ * It cannot track all of it. The board asks for an art crop, which is a different picture and its own
+ * cache entry, and deriving that would mean reaching into `:feature:game` from here. So what this
+ * asserts is that the sizes it *can* derive are covered, and that a run warms one image per size —
+ * the claim that every size is one some surface wants belongs to `PREFETCH_SIZES` itself.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ArtPrefetchSizeCoverageTest {
@@ -111,14 +117,22 @@ class ArtPrefetchSizeCoverageTest {
 
             val displayed = setOf(gridSize(), inspectionSize(catalog))
             val warmedSizes = warmer.warmed.map { it.size }.toSet()
-            assertEquals("every size the UI requests must be warmed", displayed, warmedSizes)
-            // The one card's front art, once per displayed size.
-            assertEquals(displayed.size, warmer.warmed.size)
+            assertTrue(
+                "every size the UI requests must be warmed: $displayed against $warmedSizes",
+                warmedSizes.containsAll(displayed),
+            )
+            // Containment rather than equality, because this module cannot see every surface that
+            // displays art. The board asks for [CardArtSize.ART_CROP] — a different picture, its own
+            // cache entry, and one this test would have to reach into `:feature:game` to derive. What
+            // is checkable from here is that the two browse sizes are covered, and that a run warms
+            // one image per size and no more.
+            assertEquals(PREFETCH_SIZES, warmedSizes)
+            assertEquals("one image per size, for the one card", PREFETCH_SIZES.size, warmer.warmed.size)
 
             val progress = manager.progress.value
             assertEquals(PrefetchStatus.COMPLETED, progress.status)
-            assertEquals("the total must count the real targets, not one size's worth", displayed.size, progress.total)
-            assertEquals(displayed.size, progress.warmed)
+            assertEquals("the total must count the real targets, not one size's worth", PREFETCH_SIZES.size, progress.total)
+            assertEquals(PREFETCH_SIZES.size, progress.warmed)
             assertEquals(1f, progress.fraction)
         }
 

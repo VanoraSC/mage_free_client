@@ -388,7 +388,10 @@ private fun artRequestOf(card: GameCard): CardArtRequest? {
         setCode = set,
         collectorNumber = number,
         face = if (card.transformed) CardArtFace.BACK else CardArtFace.FRONT,
-        size = CardArtSize.SMALL,
+        // The illustration on its own. Everything on a battlefield is drawn at the Board tier, which
+        // shows the art and nothing else — so it asks for the art and nothing else, rather than being
+        // handed a whole card and made to cut the frame off it.
+        size = CardArtSize.ART_CROP,
     )
 }
 
