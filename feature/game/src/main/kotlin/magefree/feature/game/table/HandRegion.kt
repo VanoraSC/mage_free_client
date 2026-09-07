@@ -18,8 +18,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import magefree.designsystem.card.CARD_ASPECT_RATIO
-import magefree.designsystem.card.CardTile
+import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
+import magefree.designsystem.card.BoardCard
+import magefree.designsystem.card.BoardCardState
 import kotlin.math.roundToInt
 
 /*
@@ -40,9 +41,9 @@ import kotlin.math.roundToInt
  * of the card and not of anything here, which is exactly why it is written down: the layout depends on
  * it and cannot enforce it.
  *
- * **The tiles carry no caption.** The art *is* the card face, with the name and cost printed on it, so
- * a caption underneath repeated them — and in a hand of twelve it cost a third of every tile's height
- * to say what the picture already said.
+ * **A hand card is a board card.** A card does not change what it looks like by being in a hand: it
+ * is the same object, and choosing one to cast means comparing it against what is already on the
+ * table. So the hand draws the Board tier, frame and title bar and all.
  */
 
 /**
@@ -120,15 +121,18 @@ fun HandRegion(
                         .align(Alignment.TopStart)
                         .then(draggable),
             ) {
-                CardTile(
-                    card = card.card,
+                // **The same card the battlefield draws.** A card does not change what it looks like
+                // by being in a hand: it is the same object, and a player picking one to cast is
+                // comparing it against what is already on the table. Two tiers for the two places was
+                // a difference the game does not have — and it was the difference between reading a
+                // name off a black-on-white strip and reading it off a printed frame at a quarter of
+                // the size.
+                BoardCard(
+                    state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal)),
+                    width = tileWidth,
+                    art = artFor?.invoke(card.boardArt, card.card),
                     onTap = { onPlay?.invoke(card.id) },
-                    onLongPressPeek = onInspect?.let { inspect -> { inspect(card.id) } },
-                    art = artFor?.invoke(card.art, card.card),
-                    // No caption: the card face already prints its name and cost, and repeating them
-                    // underneath cost a third of every tile's height to say what the picture said.
-                    caption = false,
-                    signal = card.signal,
+                    onLongPress = onInspect?.let { inspect -> { inspect(card.id) } },
                     modifier = Modifier.testTag(HandTestTags.card(card.id)),
                 )
             }
@@ -148,7 +152,7 @@ fun HandRegion(
  * follows from its ratio. That is also why it can be larger than it was: the caption used to take a
  * third of the tile to repeat what the art already printed.
  */
-fun handTileWidth(heightBudget: Dp): Dp = minOf(PreferredTileWidth, heightBudget * CARD_ASPECT_RATIO).coerceAtLeast(MinTileWidth)
+fun handTileWidth(heightBudget: Dp): Dp = minOf(PreferredTileWidth, heightBudget * BOARD_CARD_ASPECT_RATIO).coerceAtLeast(MinTileWidth)
 
 /**
  * How far apart the tiles are placed.
@@ -217,4 +221,4 @@ private val DragThreshold = 64.dp
 private const val HAND_VISIBLE_FRACTION = 0.75f
 
 /** The on-screen height of a hand tile [tileWidth] wide — its full height, cut to what shows. */
-fun handVisibleHeight(tileWidth: Dp): Dp = tileWidth / CARD_ASPECT_RATIO * HAND_VISIBLE_FRACTION
+fun handVisibleHeight(tileWidth: Dp): Dp = tileWidth / BOARD_CARD_ASPECT_RATIO * HAND_VISIBLE_FRACTION

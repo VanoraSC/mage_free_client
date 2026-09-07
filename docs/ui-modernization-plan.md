@@ -590,8 +590,8 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Board** | Battlefield, stack piles, rail piles | A black-bordered square: name and cost above the illustration, with P/T, counters, tap state and status on it | Scryfall's `art_crop` — the illustration on its own, which is a *different image* from the card, not a crop of one |
-| **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
+| **Board** | Battlefield, hand, stack piles, rail piles | A framed square: name and cost above the illustration, on a strip in the card's own frame colour, with P/T, counters, tap state and status | Scryfall's `art_crop` — the illustration on its own, which is a *different image* from the card, not a crop of one |
+| **Tile** | Zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 
 Only **Full** loads full-resolution art, which matters for memory and for the first-turn experience.

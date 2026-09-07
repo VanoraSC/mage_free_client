@@ -525,12 +525,12 @@ private fun mainCardWidth(
         }
         if (populated > tallest) tallest = populated
     }
-    if (busiest == 0) return PreferredCardWidth
+    if (busiest == 0) return PreferredMainCardWidth
 
     val byWidth = (mainWidth - CardGap * (busiest - 1)) / busiest
     val rowHeight = (sideHeight - RowGap * (tallest - 1)) / tallest.coerceAtLeast(1)
     val byHeight = rowHeight * BOARD_CARD_ASPECT_RATIO
-    val plain = minOf(PreferredCardWidth, byWidth, byHeight)
+    val plain = minOf(PreferredMainCardWidth, byWidth, byHeight)
 
     val byAssembly =
         sides
@@ -605,12 +605,24 @@ private const val LAND_ZONE_CEILING = 0.34f
 private const val RAIL_CEILING = 0.14f
 
 /**
- * The size a card is drawn at when the board has room for it.
+ * The size a **land** is drawn at when the board has room for it.
  *
  * A ceiling, not a target: it is what a quiet board looks like, and every other constraint can only
- * take it down.
+ * take it down. Smaller than the battlefield's own, because §7.4's whole point about lands is that
+ * they are the most numerous permanents and the least individually interesting — a land is read by
+ * which land it is, and that is the one thing its picture says at any size.
  */
 private val PreferredCardWidth = 112.dp
+
+/**
+ * The size everything that is **not** a land is drawn at when the board has room for it.
+ *
+ * Half again the land's. These are the cards a player actually reads — what is attacking, what is
+ * enchanted, what a creature's stats have become — and they are the ones carrying counters, badges and
+ * an attachment stack on top of the picture. The land column is bounded, so the width this takes comes
+ * out of empty board rather than out of the lands.
+ */
+private val PreferredMainCardWidth = 168.dp
 
 /**
  * Below this a card stops being readable, so the row scrolls rather than shrinking further.
@@ -626,7 +638,15 @@ private val MinCardWidth = 56.dp
 private val BoardMargin = 12.dp
 
 private val ZoneGap = 8.dp
-private val CardGap = 3.dp
+
+/**
+ * Between two permanents that are not attached to each other.
+ *
+ * Wide enough that a row reads as separate cards. A card carrying an attachment already overlaps its
+ * own stack on purpose, and the gap has to be clearly more than that overlap or the two kinds of
+ * adjacency — *these are one permanent* and *these are two* — look the same.
+ */
+private val CardGap = 10.dp
 private val StackGap = 8.dp
 private val RowGap = 3.dp
 

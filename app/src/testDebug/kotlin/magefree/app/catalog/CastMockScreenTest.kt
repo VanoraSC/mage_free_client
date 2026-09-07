@@ -3,6 +3,9 @@ package magefree.app.catalog
 import android.app.Application
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -46,7 +49,11 @@ class CastMockScreenTest {
         composeTestRule.onNodeWithTag(HandTestTags.card("mock-elves")).performClick()
 
         composeTestRule.onNodeWithTag(CardPreviewTestTags.CARD).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Llanowar Elves").assertIsDisplayed()
+        // Scoped to the panel: the hand card behind it now carries the name too, since a card in hand
+        // is drawn as the same card the battlefield draws.
+        composeTestRule
+            .onNode(hasText("Llanowar Elves") and hasAnyAncestor(hasTestTag(CardPreviewTestTags.PANEL)))
+            .assertIsDisplayed()
     }
 
     @Test

@@ -365,6 +365,7 @@ fun BoardCard(
     art: CardArtSlot? = null,
     attachmentArt: (BoardAttachment) -> CardArtSlot? = { null },
     onTap: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     onAttachmentTap: ((BoardAttachment) -> Unit)? = null,
 ) {
     val cardHeight = width / BOARD_CARD_ASPECT_RATIO
@@ -469,6 +470,7 @@ fun BoardCard(
             counterPalette = counterPalette,
             art = art,
             onTap = onTap,
+            onLongPress = onLongPress,
             modifier = Modifier.align(Alignment.TopStart).offset(x = 0.dp, y = hostTop),
         )
     }
@@ -484,6 +486,7 @@ private fun HostCard(
     counterPalette: CounterPalette,
     art: CardArtSlot?,
     onTap: (() -> Unit)?,
+    onLongPress: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val focal = focalSignal(state.signals, focus)
@@ -517,8 +520,9 @@ private fun HostCard(
                     // grey *for*: a black-bordered card on a near-black ground has no edge at all.
                     .background(BoardSurface.cardBorder)
                     .border(width = borderWidth, color = borderColor, shape = BoardCardShape)
-                    .let { base -> if (onTap != null) base.cardInspectable(onTap = onTap) else base }
-                    .testTag(BoardCardTestTags.CARD),
+                    .let { base ->
+                        if (onTap == null) base else base.cardInspectable(onTap = onTap, onLongPressPeek = onLongPress)
+                    }.testTag(BoardCardTestTags.CARD),
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(CardBorderWidth)) {
                 // The title bar takes what the square leaves over the art — which is where a real card
