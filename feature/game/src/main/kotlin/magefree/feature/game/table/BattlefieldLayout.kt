@@ -217,7 +217,14 @@ fun BattlefieldLayout(
                         Spacer(modifier = Modifier.width(ZoneGap))
                     }
 
-                    Column(modifier = Modifier.fillMaxSize()) {
+                    // **A gap on the centre line.** Each side packs its creatures against the middle,
+                    // so without one the two front rows touch and the board reads as one crowd of
+                    // creatures rather than as two armies facing each other — which is the single most
+                    // important thing a glance at a battlefield has to answer.
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(CentreLineGap),
+                    ) {
                         model.opponents.forEach { side ->
                             SideRows(
                                 side = side,
@@ -622,7 +629,7 @@ private val PreferredCardWidth = 112.dp
  * an attachment stack on top of the picture. The land column is bounded, so the width this takes comes
  * out of empty board rather than out of the lands.
  */
-private val PreferredMainCardWidth = 168.dp
+internal val PreferredMainCardWidth = 252.dp
 
 /**
  * Below this a card stops being readable, so the row scrolls rather than shrinking further.
@@ -651,6 +658,15 @@ private val StackGap = 8.dp
 private val RowGap = 3.dp
 
 /**
+ * Between the two sides, on the centre line.
+ *
+ * Much larger than [RowGap], and that is the point: the gap between one player's rows says *these
+ * belong together*, and the gap between the two players says *these do not*. Read at a glance they
+ * have to be obviously different distances, or a board is one crowd of creatures.
+ */
+private val CentreLineGap = 20.dp
+
+/**
  * How much of the board's height the hand is sized against.
  *
  * A share rather than a fixed dp, because the board derives everything else from its own size too. It
@@ -660,7 +676,7 @@ private val RowGap = 3.dp
 private const val HAND_HEIGHT_SHARE = 0.30f
 
 /** Between the phase bar and the top of the hand it sits on. */
-private val PhaseBarGap = 4.dp
+private val PhaseBarGap = 14.dp
 
 /**
  * How much of the bottom of the screen the hand and the phase bar have already claimed.

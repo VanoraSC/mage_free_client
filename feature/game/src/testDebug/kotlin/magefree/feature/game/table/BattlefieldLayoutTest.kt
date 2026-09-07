@@ -172,18 +172,23 @@ class BattlefieldLayoutTest {
     }
 
     @Test
-    fun `however many lands there are, they take nothing from the creatures`() {
-        // The whole reason lands have a bounded corner rather than a row. A shared row makes a
+    fun `however many lands there are, they take all but nothing from the creatures`() {
+        // The whole reason lands have a bounded column rather than a row. A shared row makes a
         // twelve-land board shrink its creatures to fit lands the player barely looks at.
+        //
+        // **Within a pixel, not to the pixel.** This was exact while every board clamped its cards at
+        // a ceiling neither could reach; now that the preferred size is larger than the board can give,
+        // a creature is sized by the width actually left over, and the land column is part of what is
+        // taken out of it first. What the bounded column buys is that the difference between one land
+        // and twelve is a rounding error rather than a third of a card.
         showPair(
             left = oneSided("few", listOf(bears(), forest("f0"))),
             right = oneSided("many", listOf(bears()) + List(12) { forest("f$it") }),
         )
 
-        assertEquals(
-            cardWidthIn(BattlefieldTestTags.row("few", "front")),
-            cardWidthIn(BattlefieldTestTags.row("many", "front")),
-        )
+        val few = cardWidthIn(BattlefieldTestTags.row("few", "front"))
+        val many = cardWidthIn(BattlefieldTestTags.row("many", "front"))
+        assertTrue("one land drew $few and twelve drew $many", kotlin.math.abs(few - many) <= ROUNDING_SLACK_PX)
     }
 
     @Test
@@ -192,15 +197,21 @@ class BattlefieldLayoutTest {
         // going, so an opening board of two lands drew two lands the height of the battlefield.
         // Nothing about a game says a Forest matters more when there is only one of it. A card has a
         // size; the board shrinks it when it gets busy and never grows it when it gets quiet.
+        //
+        // **Never past the preferred size**, and no bigger than a board with four creatures on it.
+        // The equality this used to assert held only while both boards clamped at a ceiling; the
+        // preferred size is now larger than an 891x411 board can give a row, so both are sized by the
+        // space instead and land within a pixel of each other by different arithmetic. The half of
+        // the rule about a *busy* board shrinking is asserted by the test below this one.
         showPair(
             left = oneSided("sparse", listOf(creature(0))),
             right = oneSided("some", List(4) { creature(it) }),
         )
 
-        assertEquals(
-            cardWidthIn(BattlefieldTestTags.row("sparse", "front")),
-            cardWidthIn(BattlefieldTestTags.row("some", "front")),
-        )
+        val sparse = cardWidthIn(BattlefieldTestTags.row("sparse", "front"))
+        val some = cardWidthIn(BattlefieldTestTags.row("some", "front"))
+        assertTrue("a sparse board drew $sparse, past the preferred $PreferredMainCardWidth", sparse <= PreferredMainCardWidth.value)
+        assertTrue("a sparse board drew $sparse against a busier board's $some", sparse - some <= ROUNDING_SLACK_PX)
     }
 
     @Test
@@ -402,3 +413,12 @@ private fun plains(
     card = GameCard(id = id, name = "Plains", setCode = "10E", collectorNumber = "364", cardTypes = listOf(CardType.Land)),
     isTapped = tapped,
 )
+
+/**
+ * How far two card widths may differ and still count as the same size.
+ *
+ * A card's width is a division of the space left over, rounded to a pixel, so two boards that differ
+ * only in something the layout bounds — how many lands they hold — land within one of each other. The
+ * bug this slack must never hide is a *shrink*, which is a third of a card and not a pixel.
+ */
+private const val ROUNDING_SLACK_PX = 2
