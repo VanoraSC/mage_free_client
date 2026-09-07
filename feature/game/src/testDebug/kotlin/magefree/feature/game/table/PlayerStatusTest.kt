@@ -38,7 +38,7 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, qualifiers = "w891dp-h411dp")
-class VitalsStripTest {
+class PlayerStatusTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -145,24 +145,24 @@ class VitalsStripTest {
         composeTestRule.setContent {
             MageTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    VitalsOverlay(vitals = tableVitals(state).first { it.isViewer }, onDismiss = { expanded += "closed" })
+                    PlayerOverlay(vitals = tableVitals(state).first { it.isViewer }, onDismiss = { expanded += "closed" })
                 }
             }
         }
 
-        composeTestRule.onNodeWithTag(VitalsOverlayTestTags.counter("poison")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(VitalsOverlayTestTags.counter("energy")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(VitalsOverlayTestTags.designation("Monarch")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(VitalsOverlayTestTags.designation("City's Blessing")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(VitalsOverlayTestTags.command("Emblem — Elspeth")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.counter("poison")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.counter("energy")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.designation("Monarch")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.designation("City's Blessing")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.command("Emblem — Elspeth")).assertIsDisplayed()
         composeTestRule.onNodeWithText("Life").assertIsDisplayed()
 
         // A press outside closes it; a press on the panel does not, for the reason the card preview
         // learned — the panel is where the content is and a stray press must not take it away.
-        composeTestRule.onNodeWithTag(VitalsOverlayTestTags.PANEL).performClick()
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.PANEL).performClick()
         assertEquals(emptyList<String>(), expanded)
 
-        composeTestRule.onNodeWithTag(VitalsOverlayTestTags.SCRIM).performTouchInput { click(topLeft) }
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.SCRIM).performTouchInput { click(topLeft) }
         assertEquals(listOf("closed"), expanded)
     }
 }

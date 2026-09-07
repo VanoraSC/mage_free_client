@@ -1,5 +1,6 @@
 package magefree.feature.game.table
 
+import magefree.designsystem.board.BoardZone
 import magefree.network.game.GameState
 
 /*
@@ -21,15 +22,17 @@ import magefree.network.game.GameState
  */
 enum class TableZoneKind(
     val label: String,
+    /** The picture the rail and the player window draw beside it, where upstream has one. */
+    val icon: BoardZone? = null,
 ) {
-    Graveyard("Graveyard"),
+    Graveyard("Graveyard", BoardZone.Graveyard),
 
     /**
      * Exile as a player thinks of it: cards that are gone.
      *
      * Everything the server put in the general exile pile that is not doing anything special.
      */
-    Exile("Exile"),
+    Exile("Exile", BoardZone.Exile),
 
     /**
      * **Cards exiled in a way that means something.** Plot, suspend, rebound, adventure, foretell,
@@ -43,7 +46,28 @@ enum class TableZoneKind(
      * cast, and an airbent card is nameless and only marked while it is castable — so the board uses
      * both and says so rather than pretending to a certainty it has not got.
      */
-    SpecialExile("Other"),
+    SpecialExile("Other", BoardZone.Exile),
+
+    /**
+     * A hand.
+     *
+     * **Only the viewer's has cards in it.** Upstream sends every other seat a *count* — that is the
+     * whole point of a hand — so an opponent's column is the count and nothing under it. It is drawn
+     * anyway, because "four cards, none of which I have seen" is an answer and an absent column is not.
+     */
+    Hand("Hand", BoardZone.Hand),
+
+    /**
+     * Everything this seat has been **shown**, from `GameView.revealed`.
+     *
+     * **The wire does not say whose hand a reveal came out of**, and neither does upstream: a revealed
+     * set is `player.revealCards(sourceObject.getIdName(), ...)` — named after the *effect* that caused
+     * it, carrying a name and cards and no player id at all. `RevealedView` has no seat on it. So this
+     * is one pile of what has been revealed in this game, shown in every seat's window, and it is not
+     * labelled as anybody's hand. Calling it "their hand" would be the client asserting something the
+     * server never said, and it would be wrong the moment the reveal was off the top of a library.
+     */
+    Revealed("Revealed"),
 }
 
 /**
@@ -60,9 +84,16 @@ data class TableZonePile(
     val isViewer: Boolean,
     val kind: TableZoneKind,
     val cards: List<TableCard> = emptyList(),
+    /**
+     * Cards the server counted but did not send — an opponent's hand, and nothing else today.
+     *
+     * Kept apart from [cards] because they are a different fact: *there are four of them* and *here
+     * they are* are different answers, and a column that showed four blanks would be inventing cards.
+     */
+    val hidden: Int = 0,
 ) {
-    /** How many cards are in it, which the rail shows even when it is drawing one of them. */
-    val count: Int get() = cards.size
+    /** How many cards are in it, seen or not. */
+    val count: Int get() = cards.size + hidden
 
     /**
      * The card on top — the server's last entry.
@@ -84,11 +115,27 @@ data class TableZonePile(
  */
 fun tableZones(state: GameState): List<TableZonePile> {
     val special = specialExileIds(state)
+    val revealed = revealedCards(state)
     return state.players
         .sortedBy { it.isViewer }
         .flatMap { player ->
             val exiled = exileCards(state, player.playerId)
             listOf(
+                TableZonePile(
+                    playerId = player.playerId,
+                    isViewer = player.isViewer,
+                    kind = TableZoneKind.Hand,
+                    // Only the viewer's own. Every other seat sends a count and no cards, which is
+                    // what a hand is.
+                    cards = if (player.isViewer) handCards(state) else emptyList(),
+                    hidden = if (player.isViewer) 0 else player.handCount,
+                ),
+                TableZonePile(
+                    playerId = player.playerId,
+                    isViewer = player.isViewer,
+                    kind = TableZoneKind.Revealed,
+                    cards = revealed,
+                ),
                 TableZonePile(
                     playerId = player.playerId,
                     isViewer = player.isViewer,
@@ -110,6 +157,20 @@ fun tableZones(state: GameState): List<TableZonePile> {
             )
         }
 }
+
+/**
+ * Everything `GameView.revealed` is currently showing, flattened.
+ *
+ * One pile out of many named sets, because the names are the *effects* that caused each reveal and not
+ * the zones they came from — a player reading this wants to know what has been seen, not which card
+ * made them see it. The card that revealed them is in the game log, which is where a question about
+ * provenance is actually answered.
+ */
+private fun revealedCards(state: GameState): List<TableCard> =
+    state.revealed
+        .flatMap { zone -> zone.cards }
+        .distinctBy { it.id }
+        .map { card -> card.asTableCard(state, TableCardZone.Revealed) }
 
 /**
  * The cards in exile that are there for a reason the player has to keep track of.

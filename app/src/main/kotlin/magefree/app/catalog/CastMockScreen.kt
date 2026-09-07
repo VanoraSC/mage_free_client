@@ -38,7 +38,6 @@ import magefree.feature.game.table.handCards
 import magefree.feature.game.table.playableElsewhere
 import magefree.feature.game.table.tableCardPreview
 import magefree.feature.game.table.tableVitals
-import magefree.feature.game.table.tableZones
 
 /*
  * Inspecting a card, and playing it — mocked.
@@ -106,7 +105,6 @@ fun CastMockScreen(
                 vitals = tableVitals(state),
                 // The rail is part of the board, so the mock draws it: an interaction judged against a
                 // board that is missing a column is judged against the wrong amount of room.
-                zones = tableZones(state),
                 phases = PhaseBarState(steps = standardTurnSteps(), currentStepId = StepIds.PRECOMBAT_MAIN),
                 modifier = Modifier.fillMaxSize(),
             )

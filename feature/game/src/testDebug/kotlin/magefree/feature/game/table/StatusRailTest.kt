@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
@@ -26,10 +25,10 @@ import org.robolectric.annotation.Config
 /**
  * The status rail on the board.
  *
- * The rail is the one region that keeps its height when it is empty, and that is the assertion worth
- * having: an empty graveyard draws a named placeholder the size of the card that is not there. A rail
- * that drew nothing would look correct on every board that has had something die on it, which is every
- * board anybody builds to check this.
+ * It is a column of numbers and nothing else. It drew the top card of every pile for a while, which
+ * cost four card-heights of a column one card wide and left every pile too small to read — so the
+ * assertions here are about what replaced that: the counts are on the rail, the rail is narrow, and
+ * pressing a seat is what gets you the cards.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, qualifiers = "w891dp-h411dp")
@@ -37,8 +36,7 @@ class StatusRailTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val opened = mutableListOf<String>()
-    private val openedKinds = mutableListOf<TableZoneKind>()
+    private val expanded = mutableListOf<String>()
 
     private fun show(state: GameState) {
         composeTestRule.setContent {
@@ -47,11 +45,7 @@ class StatusRailTest {
                     BattlefieldLayout(
                         model = battlefieldModel(state),
                         vitals = tableVitals(state),
-                        zones = tableZones(state),
-                        onOpenZone = { zone ->
-                            opened += zone.playerId
-                            openedKinds += zone.kind
-                        },
+                        onExpandVitals = { expanded += it.playerId },
                     )
                 }
             }
@@ -59,41 +53,41 @@ class StatusRailTest {
     }
 
     @Test
-    fun `an empty graveyard is a named placeholder, not nothing`() {
+    fun `every zone a player has a count of is on the rail`() {
         show(twoSeats())
 
-        composeTestRule
-            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard), useUnmergedTree = true)
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText(TableZoneKind.Graveyard.label).assertIsDisplayed()
+        listOf(
+            VitalsTestTags.hand("me"),
+            VitalsTestTags.library("me"),
+            VitalsTestTags.graveyard("me"),
+            VitalsTestTags.exile("me"),
+        ).forEach { tag ->
+            composeTestRule.onNodeWithTag(tag, useUnmergedTree = true).assertIsDisplayed()
+        }
     }
 
     @Test
-    fun `a graveyard with cards in it draws the one on top, and how many there are`() {
-        show(twoSeats())
+    fun `an empty library still shows, because an empty library is a game state`() {
+        // Every other count disappears at zero. This one is a loss on the next draw, so it does not.
+        show(twoSeats(libraryCount = 0, exileCount = 0))
 
-        composeTestRule.onNodeWithTag(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)).assertIsDisplayed()
-        composeTestRule
-            .onNodeWithTag(StatusRailTestTags.zoneCount("me", TableZoneKind.Graveyard), useUnmergedTree = true)
-            .assertIsDisplayed()
+        composeTestRule.onNodeWithTag(VitalsTestTags.library("me"), useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(VitalsTestTags.exile("me"), useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
-    fun `pressing a graveyard asks to open it — including an empty one`() {
-        // An empty zone is an answer, and a control that only sometimes responds teaches the player
-        // not to trust it.
+    fun `pressing a seat opens that seat`() {
         show(twoSeats())
 
-        composeTestRule.onNodeWithTag(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)).performClick()
-        composeTestRule
-            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard), useUnmergedTree = true)
-            .performClick()
+        composeTestRule.onNodeWithTag(VitalsTestTags.strip("them")).performClick()
 
-        assertEquals(listOf("me", "them"), opened)
+        assertEquals(listOf("them"), expanded)
     }
 
     @Test
-    fun `the rail is one column on the left, clear of the battlefield`() {
+    fun `the rail is one narrow column on the left, clear of the battlefield`() {
+        // Narrow is the point: it holds numbers, and it held a card's width while it was drawing the
+        // top of every pile.
         show(twoSeats())
 
         val rail = composeTestRule.onNodeWithTag(StatusRailTestTags.RAIL).fetchSemanticsNode()
@@ -106,90 +100,54 @@ class StatusRailTest {
             "the rail ends at ${rail.positionInRoot.x + rail.size.width}, the creatures start at ${creatures.positionInRoot.x}",
             rail.positionInRoot.x + rail.size.width <= creatures.positionInRoot.x,
         )
+        assertTrue("a rail ${rail.size.width}px wide is not a column of numbers", rail.size.width <= MAX_RAIL_PX)
     }
 
     @Test
-    fun `the viewer's own status is at the bottom of the rail and the opponent's at the top`() {
+    fun `the viewer's numbers are at the bottom and the opponent's at the top`() {
         show(twoSeats())
 
-        val mine = composeTestRule.onNodeWithTag(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)).fetchSemanticsNode()
-        val theirs =
-            composeTestRule
-                .onNodeWithTag(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard), useUnmergedTree = true)
-                .fetchSemanticsNode()
+        val mine = composeTestRule.onNodeWithTag(VitalsTestTags.strip("me")).fetchSemanticsNode()
+        val theirs = composeTestRule.onNodeWithTag(VitalsTestTags.strip("them")).fetchSemanticsNode()
 
-        assertTrue("the opponent's graveyard should be above mine", theirs.positionInRoot.y < mine.positionInRoot.y)
+        assertTrue("the opponent's numbers should be above mine", theirs.positionInRoot.y < mine.positionInRoot.y)
     }
 
-    @Test
-    fun `the rail mirrors — each seat's numbers against its own edge, its piles running inward`() {
-        // Top down: their numbers, their graveyard, their special exile, their exile — then mine in
-        // the opposite order, ending at my numbers against the bottom edge. The mirror is what lets
-        // both seats' strips carry no name.
-        show(twoSeats())
-
-        val order =
+    private fun twoSeats(
+        libraryCount: Int = 30,
+        exileCount: Int = 1,
+    ) = GameState(
+        gameId = "g1",
+        players =
             listOf(
-                "their numbers" to top(VitalsTestTags.strip("them")),
-                "their graveyard" to top(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Graveyard)),
-                "their special exile" to top(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.SpecialExile)),
-                "their exile" to top(StatusRailTestTags.zonePlaceholder("them", TableZoneKind.Exile)),
-                "my exile" to top(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.Exile)),
-                "my special exile" to top(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.SpecialExile)),
-                "my graveyard" to top(StatusRailTestTags.zone("me", TableZoneKind.Graveyard)),
-                "my numbers" to top(VitalsTestTags.strip("me")),
-            )
-
-        order.zipWithNext { (aboveName, above), (belowName, below) ->
-            assertTrue("$aboveName should be above $belowName, at $above and $below", above < below)
-        }
-    }
-
-    @Test
-    fun `exile and the special pile are their own regions, and both open`() {
-        show(twoSeats())
-
-        composeTestRule
-            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.Exile), useUnmergedTree = true)
-            .performClick()
-        composeTestRule
-            .onNodeWithTag(StatusRailTestTags.zonePlaceholder("me", TableZoneKind.SpecialExile), useUnmergedTree = true)
-            .performClick()
-
-        assertEquals(listOf(TableZoneKind.Exile, TableZoneKind.SpecialExile), openedKinds)
-    }
-
-    private fun top(tag: String): Float =
-        composeTestRule
-            .onNodeWithTag(tag, useUnmergedTree = true)
-            .fetchSemanticsNode()
-            .positionInRoot.y
-
-    private fun twoSeats() =
-        GameState(
-            gameId = "g1",
-            players =
-                listOf(
-                    GamePlayer(
-                        playerId = "me",
-                        name = "You",
-                        isViewer = true,
-                        life = 20,
-                        graveyardCount = 2,
-                        graveyard = listOf(card("gy1", "Llanowar Elves"), card("gy2", "Serra Angel")),
-                        battlefield = listOf(GamePermanent(card = card("bears", "Grizzly Bears"))),
-                    ),
-                    GamePlayer(
-                        playerId = "them",
-                        name = "Opponent",
-                        life = 20,
-                        battlefield = listOf(GamePermanent(card = card("wurm", "Craw Wurm"))),
-                    ),
+                GamePlayer(
+                    playerId = "me",
+                    name = "You",
+                    isViewer = true,
+                    life = 20,
+                    libraryCount = libraryCount,
+                    handCount = 4,
+                    graveyardCount = 2,
+                    exileCount = exileCount,
+                    battlefield = listOf(GamePermanent(card = card("bears", "Grizzly Bears"))),
                 ),
-        )
+                GamePlayer(
+                    playerId = "them",
+                    name = "Opponent",
+                    life = 20,
+                    libraryCount = libraryCount,
+                    battlefield = listOf(GamePermanent(card = card("wurm", "Craw Wurm"))),
+                ),
+            ),
+    )
 
     private fun card(
         id: String,
         name: String,
     ) = GameCard(id = id, name = name, cardTypes = listOf(CardType.Creature), isCreature = true)
+
+    private companion object {
+        /** A column of four numbers and a life total. Past this it is holding something else. */
+        const val MAX_RAIL_PX = 100
+    }
 }

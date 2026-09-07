@@ -109,6 +109,9 @@ enum class TableCardZone(
     Hand("Hand"),
     Graveyard("Graveyard"),
     Exile("Exile"),
+
+    /** Shown to this seat by some effect. Transient: upstream clears its reveals on the next update. */
+    Revealed("Revealed"),
     ;
 
     /** Whether a card here is somewhere a player would not expect to be casting from. */
@@ -127,7 +130,7 @@ const val CAST_LABEL: String = "Cast"
  * Empty for a spectator, who has no hand — and empty is a real state the board draws as nothing rather
  * than as an empty region, which is §7.4's rule about regions that hold height.
  */
-fun handCards(state: GameState): List<TableCard> = state.hand.map { card -> card.toTableCard(state, TableCardZone.Hand) }
+fun handCards(state: GameState): List<TableCard> = state.hand.map { card -> card.asTableCard(state, TableCardZone.Hand) }
 
 /**
  * One player's graveyard, in the server's own order.
@@ -145,7 +148,7 @@ fun graveyardCards(
     playerId: String,
 ): List<TableCard> {
     val player = state.players.firstOrNull { it.playerId == playerId } ?: return emptyList()
-    return player.graveyard.map { card -> card.toTableCard(state, TableCardZone.Graveyard) }
+    return player.graveyard.map { card -> card.asTableCard(state, TableCardZone.Graveyard) }
 }
 
 /**
@@ -159,10 +162,10 @@ fun exileCards(
     playerId: String,
 ): List<TableCard> {
     val player = state.players.firstOrNull { it.playerId == playerId } ?: return emptyList()
-    return player.exile.map { card -> card.toTableCard(state, TableCardZone.Exile) }
+    return player.exile.map { card -> card.asTableCard(state, TableCardZone.Exile) }
 }
 
-private fun GameCard.toTableCard(
+internal fun GameCard.asTableCard(
     state: GameState,
     zone: TableCardZone,
 ): TableCard {

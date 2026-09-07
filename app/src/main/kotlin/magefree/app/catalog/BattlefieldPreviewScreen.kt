@@ -35,14 +35,12 @@ import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.LandStackHalf
+import magefree.feature.game.table.PlayerOverlay
 import magefree.feature.game.table.TableArtResolver
 import magefree.feature.game.table.TableAttachment
 import magefree.feature.game.table.TableCard
 import magefree.feature.game.table.TablePermanent
 import magefree.feature.game.table.TableVitals
-import magefree.feature.game.table.TableZonePile
-import magefree.feature.game.table.VitalsOverlay
-import magefree.feature.game.table.ZoneOverlay
 import magefree.feature.game.table.attachmentPreview
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
@@ -92,7 +90,6 @@ fun BattlefieldPreviewScreen(
     var inspected by remember { mutableStateOf<String?>(null) }
     var tappedPlains by remember { mutableIntStateOf(0) }
     var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
-    var openZone by remember { mutableStateOf<TableZonePile?>(null) }
     var reading by remember { mutableStateOf<ReadingCard?>(null) }
     // The stops are the one part of the phase bar a player changes, so the preview keeps them live.
     var stops by remember { mutableStateOf(setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN)) }
@@ -114,8 +111,6 @@ fun BattlefieldPreviewScreen(
                 onPlayFromHand = { id -> inspected = "played $id" },
                 vitals = tableVitals(state),
                 onExpandVitals = { seat -> expandedSeat = seat },
-                zones = zones,
-                onOpenZone = { zone -> openZone = zone },
                 phases = PhaseBarState(steps = standardTurnSteps(stops), currentStepId = StepIds.PRECOMBAT_MAIN),
                 onToggleStop = { step -> stops = if (step.id in stops) stops - step.id else stops + step.id },
                 artFor = artFor,
@@ -148,20 +143,18 @@ fun BattlefieldPreviewScreen(
                 modifier = Modifier.fillMaxSize(),
             )
 
+            // One window per seat, and the card being read out of it. Two floating layers rather than
+            // one: closing the card puts you back in the window you opened it from, which is what a
+            // player flicking through a graveyard expects and what a single layer cannot do.
             expandedSeat?.let { seat ->
-                VitalsOverlay(vitals = seat, onDismiss = { expandedSeat = null })
-            }
-
-            // The zone, and the card being read out of it. Two floating layers rather than one:
-            // closing the card puts you back in the pile you opened it from, which is what a player
-            // flicking through a graveyard expects and what a single layer cannot do.
-            openZone?.let { zone ->
-                ZoneOverlay(
-                    zone = zone,
-                    onDismiss = { openZone = null },
+                val seatZones = zones.filter { it.playerId == seat.playerId }
+                PlayerOverlay(
+                    vitals = seat,
+                    onDismiss = { expandedSeat = null },
+                    zones = seatZones,
                     artFor = artFor,
                     onInspect = { id ->
-                        reading = zone.cards.firstOrNull { it.id == id }?.let(::readingOf)
+                        reading = seatZones.flatMap { it.cards }.firstOrNull { it.id == id }?.let(::readingOf)
                     },
                 )
             }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSignal
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
+import magefree.designsystem.board.BoardZone
+import magefree.designsystem.board.ZoneIcon
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.counterDigitColor
 
@@ -82,24 +85,26 @@ fun VitalsStrip(
             style = BoardTypography.vitals,
         )
 
-        // The zone counts on one line under it, in the order a player reads them: what I am holding,
-        // what has died, what I have left to draw, what is gone. Wrapped rather than clipped, because
-        // the rail is one card wide and four numbers do not always fit across it.
+        // **A picture and a number per zone**, in the order a player reads them: what I am holding,
+        // what I have left to draw, what has died, what is gone. The pictures are upstream's own, so
+        // anybody who has played on the desktop client already knows them — and four of them fit on a
+        // rail where four labelled numbers did not. Wrapped rather than clipped all the same.
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(ChipGap, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(RowGap),
         ) {
-            ZoneCount(label = "H", count = vitals.handCount, tag = VitalsTestTags.hand(vitals.playerId))
-            ZoneCount(label = "G", count = vitals.graveyardCount, tag = VitalsTestTags.graveyard(vitals.playerId))
-            // The library is a chip rather than a label: an empty one is a loss on the next draw, and
-            // that is the only zone count that is itself a game state rather than a number.
-            Chip(
-                label = "L${vitals.libraryCount}",
-                fill = if (vitals.isDecking) BoardSignal.threat else BoardSurface.zone,
+            ZoneCount(zone = BoardZone.Hand, count = vitals.handCount, tag = VitalsTestTags.hand(vitals.playerId))
+            // The library shows even at zero, and it is the only one that does: an empty library is a
+            // loss on the next draw, which is a game state rather than an absence.
+            ZoneCount(
+                zone = BoardZone.Library,
+                count = vitals.libraryCount,
                 tag = VitalsTestTags.library(vitals.playerId),
-                outlined = !vitals.isDecking,
+                always = true,
+                alarming = vitals.isDecking,
             )
-            ZoneCount(label = "X", count = vitals.exileCount, tag = VitalsTestTags.exile(vitals.playerId))
+            ZoneCount(zone = BoardZone.Graveyard, count = vitals.graveyardCount, tag = VitalsTestTags.graveyard(vitals.playerId))
+            ZoneCount(zone = BoardZone.Exile, count = vitals.exileCount, tag = VitalsTestTags.exile(vitals.playerId))
         }
 
         if (vitals.floatingMana > 0) {
@@ -148,22 +153,37 @@ fun VitalsStrip(
     }
 }
 
-/** A zone's count, which is only worth its room once there is something in it. */
+/**
+ * A zone's icon and its count, which is only worth its room once there is something in it.
+ *
+ * @param always keeps it when the count is zero, for the one zone where zero is a fact rather than an
+ *   absence.
+ * @param alarming marks it the way the board marks near-lethal poison: something is about to end the
+ *   game.
+ */
 @Composable
 private fun ZoneCount(
-    label: String,
+    zone: BoardZone,
     count: Int,
     tag: String,
+    always: Boolean = false,
+    alarming: Boolean = false,
 ) {
-    if (count <= 0) return
-    Text(
-        text = "$label$count",
-        style = BoardTypography.cardStats,
-        color = BoardSurface.onSurfaceMuted,
-        maxLines = 1,
-        softWrap = false,
+    if (count <= 0 && !always) return
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(ZoneIconGap),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.testTag(tag),
-    )
+    ) {
+        ZoneIcon(zone = zone)
+        Text(
+            text = "$count",
+            style = BoardTypography.cardStats,
+            color = if (alarming) BoardSignal.threat else BoardSurface.onSurfaceMuted,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
 }
 
 /** One number on a coloured ground, which is the whole collapsed vocabulary. */
@@ -254,6 +274,9 @@ private val StripShape = RoundedCornerShape(4.dp)
 private const val STRIP_OPACITY = 0.85f
 private val StripPadding = 10.dp
 private val ChipGap = 5.dp
+
+/** Between a zone's picture and its number. Tight: they are one thing. */
+private val ZoneIconGap = 2.dp
 
 /** Between the lines of the column. */
 private val RowGap = 3.dp

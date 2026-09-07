@@ -52,11 +52,51 @@ class TableZonesTest {
     fun `every seat gets every pile, opponents before the viewer`() {
         val zones = tableZones(state())
 
-        assertEquals(listOf("them", "them", "them", "me", "me", "me"), zones.map { it.playerId })
+        assertEquals(listOf("them", "me"), zones.map { it.playerId }.distinct())
         assertEquals(
-            listOf(TableZoneKind.Graveyard, TableZoneKind.SpecialExile, TableZoneKind.Exile),
+            listOf(
+                TableZoneKind.Hand,
+                TableZoneKind.Revealed,
+                TableZoneKind.Graveyard,
+                TableZoneKind.SpecialExile,
+                TableZoneKind.Exile,
+            ),
             zones.filter { it.playerId == "me" }.map { it.kind },
         )
+    }
+
+    @Test
+    fun `an opponent's hand is a count with no cards under it`() {
+        // The whole point of a hand. Four cards this player has not been shown is an answer, and it is
+        // a different one from an empty hand — so the count is carried apart from the cards.
+        val theirs = tableZones(state()).first { it.playerId == "them" && it.kind == TableZoneKind.Hand }
+
+        assertEquals(emptyList<String>(), theirs.cards.map { it.id })
+        assertEquals(2, theirs.hidden)
+        assertEquals("the count is what there is to say", 2, theirs.count)
+    }
+
+    @Test
+    fun `the viewer's own hand is cards, not a count`() {
+        val mine = tableZones(state()).first { it.playerId == "me" && it.kind == TableZoneKind.Hand }
+
+        assertEquals(listOf("h-forest"), mine.cards.map { it.id })
+        assertEquals(0, mine.hidden)
+    }
+
+    @Test
+    fun `what has been revealed is one pile, on every seat`() {
+        // `RevealedView` carries a name and cards and no player id — upstream names a reveal after the
+        // *effect* that caused it — so the board shows what has been seen and does not claim whose it
+        // was. Saying "their hand" would be asserting something the server never sent.
+        val zones = tableZones(state())
+
+        listOf("me", "them").forEach { seat ->
+            assertEquals(
+                listOf("rev-duress"),
+                zones.first { it.playerId == seat && it.kind == TableZoneKind.Revealed }.cards.map { it.id },
+            )
+        }
     }
 
     @Test
@@ -125,6 +165,9 @@ class TableZonesTest {
         defaultZoneName: String = "Plots of You - Exile",
     ) = GameState(
         gameId = "g1",
+        hand = listOf(card("h-forest", "Forest")),
+        // A reveal, named after the effect that caused it, which is all upstream sends.
+        revealed = listOf(GameZone(name = "Duress", cards = listOf(card("rev-duress", "Shivan Dragon")))),
         playable = listOfNotNull(playable?.let { PlayableObject(objectId = it) }),
         // The pile the plotted card sits in, named by the effect that made it. The general exile pile
         // is not listed at all, which is the ordinary case: `GamePlayer.exile` still carries the card.
@@ -145,7 +188,7 @@ class TableZonesTest {
                     exileCount = 2,
                     exile = listOf(card("x-air", "Air Elemental"), card("x-dragon", "Shivan Dragon")),
                 ),
-                GamePlayer(playerId = "them", name = "Opponent"),
+                GamePlayer(playerId = "them", name = "Opponent", handCount = 2),
             ),
     )
 

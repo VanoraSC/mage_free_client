@@ -37,17 +37,17 @@ import magefree.designsystem.component.phase.PhaseBarStep
  * The board, in three columns.
  *
  * ```
- *  ┌────────┬─────────────┬────────────────────────────┐
- *  │ opp    │             │   [ other permanents ]     │  back
- *  │ vitals │  opponent   │   [ creatures ]            │  front
- *  │ grave  │   lands     ├────────────────────────────┤
- *  │ other  │             │                            │
- *  │ exile  ├─────────────┤   [ creatures ]            │  front
- *  │ exile  │   your      │   [ other permanents ]     │  back
- *  │ other  │   lands     ├────────────────────────────┤
- *  │ grave  │             │   phase bar                │
- *  │ vitals │             │   hand                     │
- *  └────────┴─────────────┴────────────────────────────┘
+ *  ┌──────┬───────────────┬──────────────────────────────┐
+ *  │ opp  │               │   [ other permanents ]       │  back
+ *  │ 20   │   opponent    │   [ creatures ]              │  front
+ *  │ ♦7 ▤5│    lands      ├──────────────────────────────┤
+ *  │ ✝2 ✖0│               │                              │
+ *  │      ├───────────────┤   [ creatures ]              │  front
+ *  │ 14   │    your       │   [ other permanents ]       │  back
+ *  │ ♦5 ▤3│    lands      ├──────────────────────────────┤
+ *  │ ✝1 ✖2│               │   phase bar                  │
+ *  │      │               │   hand        [ elsewhere ]  │
+ *  └──────┴───────────────┴──────────────────────────────┘
  * ```
  *
  * **Three columns, because the three things have different jobs.** The status rail is read
@@ -96,9 +96,8 @@ import magefree.designsystem.component.phase.PhaseBarStep
  * @param hand the viewer's own cards, from [handCards]. Empty for a spectator, and for anyone whose
  *   hand the board is not showing — an empty hand draws nothing rather than an empty strip.
  * @param vitals each seat, from [tableVitals]. Empty draws nothing.
- * @param onExpandVitals opens a seat's full list, or `null` for a board that is only being read.
- * @param zones each seat's piles — graveyard and the two exiles — from [tableZones].
- * @param onOpenZone called with a pile when it is pressed.
+ * @param onExpandVitals opens a seat's full window — its status and every one of its piles — or `null`
+ *   for a board that is only being read.
  * @param phases the turn and where in it the game is. Null draws no bar — the same rule as everywhere
  *   else here, and the state a board has before a game starts.
  * @param onToggleStop invoked when a stoppable step is pressed.
@@ -121,8 +120,6 @@ fun BattlefieldLayout(
     onPlayFromHand: ((String) -> Unit)? = null,
     vitals: List<TableVitals> = emptyList(),
     onExpandVitals: ((TableVitals) -> Unit)? = null,
-    zones: List<TableZonePile> = emptyList(),
-    onOpenZone: ((TableZonePile) -> Unit)? = null,
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
 ) {
@@ -147,26 +144,12 @@ fun BattlefieldLayout(
         val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
         val sideHeight = contentHeight / sides.size.coerceAtLeast(1)
 
-        // The rail is a column of cards, so it is a card wide — capped, because on a small screen a
-        // preferred-size card is a bigger share of the width than the rail is worth.
-        val hasRail = zones.isNotEmpty() || vitals.isNotEmpty()
-        val railWidth = if (hasRail) minOf(PreferredCardWidth, boardWidth * RAIL_CEILING) else 0.dp
+        // **The rail is a column of numbers, so it is as narrow as numbers are.** It was a card wide
+        // while it drew the top card of every pile; those became counts, and the width they were using
+        // went back to the battlefield.
+        val hasRail = vitals.isNotEmpty()
+        val railWidth = if (hasRail) RailWidth else 0.dp
         val afterRail = boardWidth - railWidth - if (hasRail) ZoneGap else 0.dp
-
-        // **The piles are sized by the rail's height, not its width.** A seat has several of them and
-        // its own numbers above or below, all in half a rail; sized to the rail's width they would
-        // need three times the height there is. So the card is whatever fits, floored — below the
-        // floor a pile marker stops reading as a card at all, and at that point the count on it is
-        // doing the work anyway.
-        val seatZones = zones.groupBy { it.playerId }.values.maxOfOrNull { it.size } ?: 0
-        val railSeatHeight = boardHeight / sides.size.coerceAtLeast(1)
-        val railCardWidth =
-            if (seatZones == 0) {
-                railWidth
-            } else {
-                val perPile = (railSeatHeight - VitalsAllowance - RailGap * seatZones) / seatZones
-                minOf(railWidth, perPile * BOARD_CARD_ASPECT_RATIO).coerceAtLeast(MinRailCardWidth)
-            }
 
         // **The land column takes what it needs, up to a ceiling.** A share carved off would hold width
         // open on a board with two lands and run out on one with six kinds of them — and running out is
@@ -191,13 +174,9 @@ fun BattlefieldLayout(
         Row(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
             if (hasRail) {
                 StatusRail(
-                    zones = zones,
                     vitals = vitals,
-                    cardWidth = railCardWidth,
                     palette = palette,
-                    artFor = artFor,
-                    onOpenZone = onOpenZone,
-                    onExpandVitals = onExpandVitals,
+                    onExpand = onExpandVitals,
                     modifier = Modifier.width(railWidth).fillMaxHeight(),
                 )
                 Spacer(modifier = Modifier.width(ZoneGap))
@@ -612,8 +591,14 @@ object BattlefieldTestTags {
  */
 private const val LAND_ZONE_CEILING = 0.34f
 
-/** How much of the board's width the status rail may take. It is one card wide, and one card only. */
-private const val RAIL_CEILING = 0.14f
+/**
+ * How wide the status rail is.
+ *
+ * A fixed width rather than a share, because what is in it is fixed: a life total, four zone counts,
+ * and a chip per counter. It is sized to the widest of those and not to the screen — a rail that grew
+ * on a larger phone would be taking width from the battlefield to hold the same four numbers.
+ */
+private val RailWidth = 76.dp
 
 /**
  * The size a **land** is drawn at when the board has room for it.
@@ -702,18 +687,3 @@ private fun bottomStackHeight(
 
 /** Room the phase bar takes, for working out what is left above it. */
 private val PhaseBarAllowance = 28.dp
-
-/**
- * Room a seat's numbers take in the rail, for working out what is left for its piles.
- *
- * An allowance rather than a measurement, for the reason the phase bar's is: the column's height comes
- * from its text and its counters, and threading a measured value up through the layout pass would
- * couple the board to a component that draws itself perfectly well without it.
- */
-private val VitalsAllowance = 92.dp
-
-/** Between the regions of one seat's rail. Mirrors `StatusRail`'s own, which is what it is spacing. */
-private val RailGap = 3.dp
-
-/** Below this a pile marker stops reading as a card, and the count on it is doing the work anyway. */
-private val MinRailCardWidth = 40.dp
