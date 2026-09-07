@@ -50,6 +50,9 @@ scattered and overlapping. Fixed here, because it is the same change.
   opponent's — and toward the outside of the board, so they never sit under a creature.
 - Creature rows centred on the screen rather than on their column, as far as their own slack allows.
 - The land stacks' geometry, re-derived for the Board tier's own card shape.
+- Everything the server is offering that is **not in the hand** — flashback, plot and their relatives
+  — drawn beside the hand and set apart from it, each labelled with the pile it is in, and each saying
+  when opened what is making it castable.
 
 **Out of scope**
 - **Revealed and looked-at zones.** Same browser, more piles, and each has a question of its own
@@ -107,6 +110,19 @@ wherever it is.
 line and ending up drawn behind creatures. They now sit on their own row, on the far side of the
 creatures from the centre line, aligned toward the outside — where there is room, and where they are
 not in the way of the row that changes every combat.
+
+**A card you can cast is a card you can cast, wherever it is.** Everything `canPlayObjects` names that
+is not in the hand is drawn in the hand's own row, to the right of it and set clearly apart, with the
+pile it is in written on the card. The reference client marks these on the card *inside its own zone
+window* — so noticing one means opening the window first, and a player who does not think to look is
+playing a smaller game than the one in front of them.
+
+The gap says *not in your hand*, the label says *where*, and opening one says **why**: upstream's own
+`PlayableObjectStats.getPlayableAbilityNames()`, the short ability texts its playable-count icon shows
+in a tooltip. Those names were not on the wire, so `GamePlayableObject` carries them now — without
+them the board can say a graveyard card is castable and nothing more, which is the half of the answer
+that raises the question rather than settling it. Nothing here reasons about what flashback *is*: it
+is the server's list, filtered by where each card turns out to be.
 
 **Exile is two piles, and the second one is the only judgement in this story.** *Other* is exile a
 card is coming back from or can be cast from — plot, suspend, rebound, adventure, foretell, airbend.
@@ -196,6 +212,8 @@ again. The same is true of the attachment stack in `BoardCard`.
 - [x] A card on the battlefield shows its illustration, undistorted and uncropped, at any card size.
 - [x] A card is a black-bordered square with its name and cost above the art, on a grey table.
 - [x] A tapped card leans 45° and costs the board no room.
+- [x] Cards castable from outside the hand are drawn beside it, labelled with their pile, and say what
+      is offering them when opened.
 - [x] `./gradlew check` passes and the preview shows all of it.
 
 ## 9. References

@@ -91,6 +91,8 @@ import magefree.designsystem.component.phase.PhaseBarStep
  *   card is actually readable at the size it was given.
  * @param onInspect called with a permanent's id when its card is tapped, or `null` for a board that is
  *   only being looked at. Lands do not go through it: see [onLandPress].
+ * @param playableElsewhere what the server is offering that is not in hand, from [playableElsewhere] —
+ *   drawn beside the hand and set apart from it.
  * @param hand the viewer's own cards, from [handCards]. Empty for a spectator, and for anyone whose
  *   hand the board is not showing — an empty hand draws nothing rather than an empty strip.
  * @param vitals each seat, from [tableVitals]. Empty draws nothing.
@@ -115,6 +117,7 @@ fun BattlefieldLayout(
     onInspect: ((String) -> Unit)? = null,
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)? = null,
     hand: List<TableCard> = emptyList(),
+    playableElsewhere: List<TableCard> = emptyList(),
     onPlayFromHand: ((String) -> Unit)? = null,
     vitals: List<TableVitals> = emptyList(),
     onExpandVitals: ((TableVitals) -> Unit)? = null,
@@ -264,6 +267,7 @@ fun BattlefieldLayout(
                 // that falls off screen is the quarter that carries nothing a player in a hurry needs.
                 HandRegion(
                     cards = hand,
+                    elsewhere = playableElsewhere,
                     tileWidth = handTile,
                     artFor = artFor,
                     onPlay = onPlayFromHand,

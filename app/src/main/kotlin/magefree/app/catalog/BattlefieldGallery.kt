@@ -536,6 +536,19 @@ internal fun castMockBoard(): GameState =
                 PlayableObject(objectId = "mock-forest"),
                 PlayableObject(objectId = "mock-elves"),
                 PlayableObject(objectId = "mock-hawk"),
+                // Two castable from somewhere that is not the hand, which is the case the group beside
+                // the hand exists for. The names are upstream's own: `PlayableObjectStats` clips
+                // `ability.toString()` to fifty characters, and this is what that looks like.
+                PlayableObject(
+                    objectId = "mock-gy-angel",
+                    abilityIds = listOf("ab-flashback"),
+                    abilityNames = listOf("Flashback {3}{W}{W}"),
+                ),
+                PlayableObject(
+                    objectId = "mock-x-djinn",
+                    abilityIds = listOf("ab-plot"),
+                    abilityNames = listOf("You may cast this card from exile (plotted)"),
+                ),
             ),
         players =
             listOf(
@@ -543,6 +556,33 @@ internal fun castMockBoard(): GameState =
                     playerId = "me",
                     name = "You",
                     isViewer = true,
+                    graveyardCount = 2,
+                    graveyard =
+                        listOf(
+                            card("mock-gy-rod", "Rod of Ruin", listOf(CardType.Artifact), manaCost = "{4}"),
+                            card(
+                                "mock-gy-angel",
+                                "Serra Angel",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "4",
+                                toughness = "4",
+                                manaCost = "{3}{W}{W}",
+                            ),
+                        ),
+                    exileCount = 1,
+                    exile =
+                        listOf(
+                            card(
+                                "mock-x-djinn",
+                                "Mahamoti Djinn",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "5",
+                                toughness = "6",
+                                manaCost = "{4}{U}{U}",
+                            ),
+                        ),
                     battlefield =
                         listOf(
                             creature("mock-bears", "Grizzly Bears", "2", "2", "{1}{G}"),

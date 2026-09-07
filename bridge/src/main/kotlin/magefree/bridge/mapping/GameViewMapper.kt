@@ -276,6 +276,12 @@ public object GameViewMapper {
      * The server's own playability answer: `canPlayObjects` → one [GamePlayableObject] per object, with
      * the ids of the abilities that make it playable. A `null` list (the view was not built for the
      * player holding priority) maps to **empty** — "nothing for you to do", never a guess.
+     *
+     * The **names** come across too, from the same `PlayableObjectStats`. They are upstream's own short
+     * text per ability, and they are the only thing that answers *why* a card outside the hand can be
+     * cast: an app told a graveyard card is playable and nothing more can say that it is, and cannot
+     * say that it is flashback. `getPlayableAbilityIds` and `getPlayableAbilityNames` walk the same
+     * four buckets in the same order, so the two lists pair by index.
      */
     private fun mapPlayable(view: GameView): List<GamePlayableObject> =
         view.canPlayObjects
@@ -285,6 +291,7 @@ public object GameViewMapper {
                 GamePlayableObject(
                     objectId = objectId?.toString().orEmpty(),
                     abilityIds = stats?.playableAbilityIds.orEmpty().map { it.toString() },
+                    abilityNames = stats?.playableAbilityNames.orEmpty(),
                 )
             }
 

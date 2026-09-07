@@ -1012,6 +1012,23 @@ effect-created zones named `"<effect> - Exile"`. Two independent signals disting
   This is what the reference client uses: `GamePanel` marks `setPlayableStats` on card views in both
   `PlayerView.exile` and `GameView.exiles`.
 
+#### Castable from somewhere else, shown beside the hand
+
+**A card you can cast is a card you can cast, wherever it is.** Flashback, escape, plot, adventure,
+foretell, disturb, a Snapcaster's grant, an opponent's Gonti exile — the reference client marks these
+on the card *inside its own zone window*, which means noticing one requires opening the window first.
+A player who does not think to look is playing a smaller game than the one in front of them.
+
+So everything `canPlayObjects` names that is **not in the hand** is drawn in the hand's own row, to
+the right of it and set clearly apart, with the pile it is in written on the card. The gap says *not
+in your hand*; the label says *where*; and the two together are what stops a player counting a card
+they do not hold. Opening one names the zone and lists **why** — upstream's own
+`PlayableObjectStats.getPlayableAbilityNames()`, the same short ability texts the reference client
+puts in the tooltip of its playable-count icon, carried on `GamePlayableObject.abilityNames`.
+
+Nothing here reasons about what flashback is. It is the server's list, filtered by where each card
+turns out to be.
+
 **Neither signal alone is sufficient, and together they still do not cover everything.** Airbend
 does not create a named zone — it calls `moveCards(Zone.EXILED)` into the general exile and grants an
 `AsThoughEffectType.CAST_FROM_NOT_OWN_HAND_ZONE` letting the owner cast it for `{2}`. So an airbent

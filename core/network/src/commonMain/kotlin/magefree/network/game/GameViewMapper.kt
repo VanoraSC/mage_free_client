@@ -329,7 +329,8 @@ internal object GameViewMapper {
     private fun GameManaPoolView.toManaPool(): ManaPool =
         ManaPool(white = white, blue = blue, black = black, red = red, green = green, colorless = colorless)
 
-    private fun GamePlayableObject.toPlayable(): PlayableObject = PlayableObject(objectId = objectId, abilityIds = abilityIds)
+    private fun GamePlayableObject.toPlayable(): PlayableObject =
+        PlayableObject(objectId = objectId, abilityIds = abilityIds, abilityNames = abilityNames)
 
     private fun GameAbilityChoice.toAbilityChoice(): AbilityChoice = AbilityChoice(abilityId = abilityId, text = text)
 

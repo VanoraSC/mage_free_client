@@ -1,11 +1,15 @@
 package magefree.feature.game.table
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -18,6 +22,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import magefree.designsystem.board.BoardSurface
+import magefree.designsystem.board.BoardTypography
 import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
 import magefree.designsystem.card.BoardCardState
@@ -67,20 +73,47 @@ fun HandRegion(
     artFor: TableArtResolver? = null,
     onPlay: ((String) -> Unit)? = null,
     onInspect: ((String) -> Unit)? = null,
+    elsewhere: List<TableCard> = emptyList(),
 ) {
-    if (cards.isEmpty()) return
+    if (cards.isEmpty() && elsewhere.isEmpty()) return
 
     // **The region is only as tall as the part of a card that shows.** The tiles are drawn from its
     // top downward at their full height, so the rest hangs past the bottom of the region — and, since
     // the region is anchored to the bottom of the board, past the bottom of the screen. That is what
     // puts the cut at the screen edge rather than at some line chosen above it.
     BoxWithConstraints(modifier = modifier.height(handVisibleHeight(tileWidth)).testTag(HandTestTags.HAND)) {
-        val available = maxWidth - HandPadding * 2
+        // **The other group is laid out first, from the right edge inward.** It is small — a game with
+        // three castable graveyard cards at once is a rare game — and it is fixed, so the hand takes
+        // what is left and keeps its own centring. Sizing the hand around a group that grows would
+        // make drawing a card shuffle the other group, which says something the game did not.
+        val elsewhereWidth =
+            if (elsewhere.isEmpty()) {
+                0.dp
+            } else {
+                tileWidth + (tileWidth + TileGap) * (elsewhere.size - 1) + ElsewhereGap
+            }
+
+        val available = maxWidth - HandPadding * 2 - elsewhereWidth
         val step = handStep(count = cards.size, tileWidth = tileWidth, available = available)
         val used = tileWidth + step * (cards.size - 1)
 
         // Centred, so a two-card hand is not pinned to one corner of the space it has.
         val start = HandPadding + ((available - used) / 2).coerceAtLeast(0.dp)
+
+        elsewhere.forEachIndexed { index, card ->
+            ElsewhereCard(
+                card = card,
+                tileWidth = tileWidth,
+                artFor = artFor,
+                onPlay = onPlay,
+                onInspect = onInspect,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = -(tileWidth + TileGap) * (elsewhere.size - 1 - index))
+                        .width(tileWidth),
+            )
+        }
 
         cards.forEachIndexed { index, card ->
             // Placed absolutely, each from the region's own left edge. Nesting them in a wrapper that
@@ -155,6 +188,51 @@ fun HandRegion(
 fun handTileWidth(heightBudget: Dp): Dp = minOf(PreferredTileWidth, heightBudget * BOARD_CARD_ASPECT_RATIO).coerceAtLeast(MinTileWidth)
 
 /**
+ * A card the server is offering that is **not** in the hand.
+ *
+ * Drawn as the same card, in the same row, because it is the same decision: it is one of the things
+ * this player can cast right now. Set apart by the gap beside it and by the mark on it, because it is
+ * *not in hand* — and a player who read it as a hand card would be counting a card they do not hold.
+ */
+@Composable
+private fun ElsewhereCard(
+    card: TableCard,
+    tileWidth: Dp,
+    artFor: TableArtResolver?,
+    onPlay: ((String) -> Unit)?,
+    onInspect: ((String) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        BoardCard(
+            state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal)),
+            width = tileWidth,
+            art = artFor?.invoke(card.boardArt, card.card),
+            onTap = { onPlay?.invoke(card.id) },
+            onLongPress = onInspect?.let { inspect -> { inspect(card.id) } },
+            modifier = Modifier.testTag(HandTestTags.card(card.id)),
+        )
+
+        // Which pile it is in, on the card. The gap says *not in hand*; this says *where*, which is
+        // the next question and the one a player has to answer before they can plan around it.
+        Text(
+            text = card.zone.label,
+            style = BoardTypography.annotation,
+            color = BoardSurface.onSurface,
+            maxLines = 1,
+            softWrap = false,
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(ZoneLabelInset)
+                    .background(BoardSurface.zone.copy(alpha = ZONE_LABEL_OPACITY), ZoneLabelShape)
+                    .padding(horizontal = ZoneLabelInset)
+                    .testTag(HandTestTags.zoneLabel(card.id)),
+        )
+    }
+}
+
+/**
  * How far apart the tiles are placed.
  *
  * A whole tile plus a gap while they fit; otherwise exactly enough that the last one ends at the right
@@ -178,6 +256,9 @@ object HandTestTags {
 
     /** One card, by the id an action on it would name. */
     fun card(cardId: String): String = "hand-card-$cardId"
+
+    /** The pile a card beside the hand is actually in. */
+    fun zoneLabel(cardId: String): String = "hand-zone-$cardId"
 }
 
 /**
@@ -200,6 +281,18 @@ private val MinTileWidth = 56.dp
 private val MinStep = 14.dp
 
 private val TileGap = 4.dp
+
+/**
+ * Between the hand and the cards that are not in it.
+ *
+ * Several times [TileGap], because that is the whole job: the eye has to read one group as the hand
+ * and the other as something else at a glance, without counting.
+ */
+private val ElsewhereGap = 40.dp
+
+private val ZoneLabelInset = 2.dp
+private val ZoneLabelShape = RoundedCornerShape(2.dp)
+private const val ZONE_LABEL_OPACITY = 0.85f
 private val HandPadding = 8.dp
 
 /**

@@ -13,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import magefree.designsystem.card.BoardCardSignal
+import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -230,3 +232,109 @@ private fun stateWith(
             ),
         ),
 )
+
+/**
+ * Cards the server is offering that are **not in the hand**, beside it.
+ *
+ * The whole design is one claim — *these are castable, and they are not in your hand* — and it is
+ * carried entirely by position. So the assertions are about position: the group is to the right of the
+ * hand, and the space between the two groups is clearly more than the space inside either. A layout
+ * that put them in the row would be telling the player they hold cards they do not.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, qualifiers = "w891dp-h411dp")
+class PlayableElsewhereRegionTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    private val played = mutableListOf<String>()
+
+    private fun show(
+        hand: Int,
+        elsewhere: List<TableCard>,
+    ) {
+        composeTestRule.setContent {
+            MageTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    BattlefieldLayout(
+                        model = battlefieldModel(stateWith(hand)),
+                        hand = handCards(stateWith(hand)),
+                        playableElsewhere = elsewhere,
+                        onPlayFromHand = { played += it },
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `they sit to the right of the hand, set further apart than the hand's own cards`() {
+        show(hand = 5, elsewhere = listOf(graveyardCard("gy1"), graveyardCard("gy2")))
+
+        val lastInHand = right("h4")
+        val firstElsewhere = left("gy1")
+        val betweenGroups = firstElsewhere - lastInHand
+        val withinGroup = left("gy2") - right("gy1")
+
+        assertTrue("the group should be right of the hand, at $firstElsewhere against $lastInHand", betweenGroups > 0)
+        assertTrue(
+            "the gap between the groups ($betweenGroups) must beat the gap inside one ($withinGroup)",
+            betweenGroups > withinGroup * 2,
+        )
+    }
+
+    @Test
+    fun `each says which pile it is in, because the gap only says it is not the hand`() {
+        show(hand = 2, elsewhere = listOf(graveyardCard("gy1")))
+
+        composeTestRule
+            .onNodeWithTag(HandTestTags.zoneLabel("gy1"), useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun `pressing one asks to play it, the same as a card in hand`() {
+        show(hand = 2, elsewhere = listOf(graveyardCard("gy1")))
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("gy1")).performClick()
+
+        assertEquals(listOf("gy1"), played)
+    }
+
+    @Test
+    fun `a hand with nothing else offered draws only the hand`() {
+        show(hand = 3, elsewhere = emptyList())
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("h0")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(HandTestTags.zoneLabel("gy1"), useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `and a group with no hand behind it is still drawn`() {
+        // A player who has emptied their hand can still have a flashback card, and that is exactly the
+        // turn they most need to see it.
+        show(hand = 0, elsewhere = listOf(graveyardCard("gy1")))
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("gy1")).assertIsDisplayed()
+    }
+
+    private fun left(cardId: String): Float =
+        composeTestRule
+            .onNodeWithTag(HandTestTags.card(cardId))
+            .fetchSemanticsNode()
+            .positionInRoot.x
+
+    private fun right(cardId: String): Float =
+        composeTestRule.onNodeWithTag(HandTestTags.card(cardId)).fetchSemanticsNode().let { node ->
+            node.positionInRoot.x + node.size.width
+        }
+
+    private fun graveyardCard(id: String) =
+        TableCard(
+            id = id,
+            card = CardDisplay(name = "Serra Angel", manaCost = "{3}{W}{W}"),
+            signal = BoardCardSignal.Playable,
+            zone = TableCardZone.Graveyard,
+            playableAbilities = listOf("Flashback {3}{W}{W}"),
+        )
+}

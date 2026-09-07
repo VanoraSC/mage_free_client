@@ -75,6 +75,25 @@ data class CardPreviewState(
     val oracleText: String? = null,
     val action: CardPreviewAction? = null,
     val attachments: List<CardPreviewAttachment> = emptyList(),
+    val provenance: CardPreviewProvenance? = null,
+)
+
+/**
+ * Where a card is, when that is not where a player would assume.
+ *
+ * **Only shown for a card outside the hand.** "Can I cast this" and "is this in my hand" have the same
+ * answer almost always, and the times they do not — flashback, plot, adventure, an opponent's Gonti
+ * exile — are exactly the times a player is about to make a mistake for want of being told. A card
+ * offered from a graveyard has to say so, and has to say what is offering it.
+ *
+ * @property zone the pile the card is actually in.
+ * @property reasons the server's own short text for each ability making it playable. Empty is a real
+ *   state — an older bridge does not send the names — and the panel then says where the card is and
+ *   nothing more, which is still the half that matters most.
+ */
+data class CardPreviewProvenance(
+    val zone: String,
+    val reasons: List<String> = emptyList(),
 )
 
 /**
@@ -212,6 +231,28 @@ private fun DetailPanel(
                 color = MaterialTheme.colorScheme.onSurface,
             )
 
+            // Directly under the name, because it changes what the name means: this is not a card in
+            // your hand, and everything below is about a card that is somewhere else.
+            state.provenance?.let { provenance ->
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(Spacing.extraSmall),
+                    modifier = Modifier.testTag(CardPreviewTestTags.PROVENANCE),
+                ) {
+                    Text(
+                        text = provenance.zone,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    provenance.reasons.forEach { reason ->
+                        SymbolText(
+                            text = reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
             state.card.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
                 SymbolText(text = cost, style = MaterialTheme.typography.titleSmall)
             }
@@ -311,6 +352,9 @@ object CardPreviewTestTags {
     const val ABILITIES: String = "card-preview-abilities"
     const val POWER_TOUGHNESS: String = "card-preview-pt"
     const val ORACLE: String = "card-preview-oracle"
+
+    /** Where a card outside the hand is, and what is offering it. */
+    const val PROVENANCE: String = "card-preview-provenance"
     const val ACTION: String = "card-preview-action"
 
     /** One attached permanent's block, by its name. */

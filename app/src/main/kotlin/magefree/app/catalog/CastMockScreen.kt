@@ -35,6 +35,7 @@ import magefree.feature.game.table.TableArtResolver
 import magefree.feature.game.table.TableCard
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
+import magefree.feature.game.table.playableElsewhere
 import magefree.feature.game.table.tableCardPreview
 import magefree.feature.game.table.tableVitals
 import magefree.feature.game.table.tableZones
@@ -76,6 +77,9 @@ fun CastMockScreen(
 
     val state = remember { castMockBoard() }
     val hand = remember(state) { handCards(state) }
+    val elsewhere = remember(state) { playableElsewhere(state) }
+    // One list for the lookup: a card beside the hand is opened by the same tap as one in it.
+    val offered = remember(hand, elsewhere) { hand + elsewhere }
     var inspecting by remember { mutableStateOf<TableCard?>(null) }
     var oracle by remember { mutableStateOf<String?>(null) }
     var reported by remember { mutableStateOf<String?>(null) }
@@ -96,8 +100,9 @@ fun CastMockScreen(
                 // and in a hand the two are the same first move: you look at the card, and the action
                 // is offered on the card you are looking at. That keeps a tap from casting something
                 // by accident, which is the one mistake a board must not make easy.
-                onPlayFromHand = { id -> inspecting = hand.firstOrNull { it.id == id } },
-                onInspect = { id -> inspecting = hand.firstOrNull { it.id == id } ?: inspecting },
+                onPlayFromHand = { id -> inspecting = offered.firstOrNull { it.id == id } },
+                onInspect = { id -> inspecting = offered.firstOrNull { it.id == id } ?: inspecting },
+                playableElsewhere = elsewhere,
                 vitals = tableVitals(state),
                 // The rail is part of the board, so the mock draws it: an interaction judged against a
                 // board that is missing a column is judged against the wrong amount of room.

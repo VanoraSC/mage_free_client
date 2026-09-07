@@ -47,6 +47,7 @@ import magefree.feature.game.table.attachmentPreview
 import magefree.feature.game.table.battlefieldModel
 import magefree.feature.game.table.handCards
 import magefree.feature.game.table.permanentPreview
+import magefree.feature.game.table.playableElsewhere
 import magefree.feature.game.table.tableCardPreview
 import magefree.feature.game.table.tableVitals
 import magefree.feature.game.table.tableZones
@@ -109,6 +110,7 @@ fun BattlefieldPreviewScreen(
             BattlefieldLayout(
                 model = model,
                 hand = handCards(state),
+                playableElsewhere = playableElsewhere(state),
                 onPlayFromHand = { id -> inspected = "played $id" },
                 vitals = tableVitals(state),
                 onExpandVitals = { seat -> expandedSeat = seat },
