@@ -330,6 +330,17 @@ sealed interface PromptControlsUi {
     val isAnswerable: Boolean get() = true
 
     /**
+     * Whether a press on a board object **is** the answer, rather than raising the card so the answer
+     * can be given on it.
+     *
+     * False everywhere but mana payment, and deliberately so: the board's rule is that a press raises
+     * a card and the raised card is where an act is committed, which is what gives a player a look at
+     * what they are about to do. Paying a cost is the exception because there is nothing to look at —
+     * the player is tapping their own lands, in a row, in the middle of casting something else.
+     */
+    val answersOnPress: Boolean get() = false
+
+    /**
      * The action a tap on the board object [objectId] means right now, or null when tapping it means
      * nothing to the server. Card detail uses it to decide whether it can offer a play button.
      */
@@ -449,6 +460,22 @@ sealed interface PromptControlsUi {
         override val pickableObjectIds: Set<String>,
         override val buttons: List<ControlButton>,
     ) : PromptControlsUi {
+        /**
+         * **Tapping a land for mana is the press, not a step before it.**
+         *
+         * Paying a cost is the one prompt where the player is not choosing *between* things they have
+         * to read first. They are tapping lands they already know, several in a row, in the middle of
+         * casting — and raising each one into a full-screen card to press a second button turns four
+         * mana into eight presses and four things to dismiss.
+         *
+         * **Nothing is skipped by doing it.** A land with more than one mana ability is a real choice,
+         * and upstream makes it: `playManaAbility` asks with its own `GAME_CHOOSE_ABILITY` when there
+         * is more than one, and this app answers that prompt like any other. So the press sends the
+         * source and the server decides whether there is anything left to ask — which is the only
+         * place that decision can correctly be made.
+         */
+        override val answersOnPress: Boolean get() = true
+
         override fun actionFor(objectId: String): BoardAction? =
             if (objectId in pickableObjectIds) BoardAction.PlayManaSource(objectId) else null
 

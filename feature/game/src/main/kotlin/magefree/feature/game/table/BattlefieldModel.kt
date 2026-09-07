@@ -408,7 +408,7 @@ private fun roleOf(card: GameCard): PermanentRole =
  * double-faced card's two faces share one printing — so which face is up is entirely a matter of which
  * [CardArtFace] is asked for.
  */
-private fun artRequestOf(card: GameCard): CardArtRequest? {
+internal fun artRequestOf(card: GameCard): CardArtRequest? {
     if (card.isFaceDown) return null
     val set = card.setCode?.takeIf { it.isNotBlank() } ?: return null
     if (card.isToken) return tokenArtRequest(setCode = set, name = card.name, size = CardArtSize.ART_CROP)
@@ -484,8 +484,8 @@ private fun boardCardState(
                 typeLine = card.typeLine,
                 oracleText = card.rules.joinToString("\n").takeIf { it.isNotBlank() },
             ),
-        power = card.power,
-        toughness = card.toughness,
+        power = card.shownPower,
+        toughness = card.shownToughness,
         counters = card.counters.map { BoardCounter(name = it.name, count = it.count) },
         badges = card.icons.mapNotNull(::badgeOf),
         attachments = attachments,
@@ -526,7 +526,7 @@ private fun signalsOf(
  * which is a hand and zone-browser concern rather than a property of a permanent. So do upstream's two
  * inner-client values, which are not expected from a server at all.
  */
-private fun badgeOf(icon: GameCardIcon): BoardBadge? =
+internal fun badgeOf(icon: GameCardIcon): BoardBadge? =
     when (icon.type) {
         CardIconType.AbilityFlying -> BoardBadge.Flying
         CardIconType.AbilityDefender -> BoardBadge.Defender
@@ -577,3 +577,29 @@ private class CombatAssignment(
         }
     }
 }
+
+/*
+ * Power and toughness, shown only where they mean something.
+ *
+ * **A noncreature permanent's power and toughness are `"0"`, not absent.** Upstream fills both on
+ * every object, so a Swamp arrives as a 0/0 and a Liliana's Mastery as a 0/0, and a board that carried
+ * them through drew "0/0" on every land and every enchantment. `BoardUi` gated on this from the start
+ * and wrote down why; the table tier did not, and the marks doubling in size is what made it
+ * impossible to miss.
+ *
+ * **The predicate is the server's own**, `GameCard.isCreature` — upstream's `CardView.isCreature()`,
+ * which is game state and not printing. An animated land *is* a creature and says so, and stops being
+ * one when the effect ends. Reading the type line instead would put rules interpretation in the client
+ * and would be wrong for exactly the cards that make this worth getting right.
+ *
+ * The strings stay strings and nothing parses them: `*` is a real power.
+ */
+
+/** This object's power, or `null` where a power is not a thing it has. */
+internal val GameCard.shownPower: String? get() = if (showsStats) power else null
+
+/** This object's toughness, on the same terms. */
+internal val GameCard.shownToughness: String? get() = if (showsStats) toughness else null
+
+private val GameCard.showsStats: Boolean
+    get() = isCreature && !power.isNullOrBlank() && !toughness.isNullOrBlank()
