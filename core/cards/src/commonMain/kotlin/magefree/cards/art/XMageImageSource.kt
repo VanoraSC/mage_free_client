@@ -67,6 +67,8 @@ class ScryfallImageSource(
 ) : XMageImageSource {
     override fun resolve(request: CardArtRequest): List<String> {
         val set = scryfallSetCode(request.setCode)
+        request.tokenName?.let { return resolveToken(set, it, request) }
+
         val cn = transformCollectorNumber(request.collectorNumber)
         val faceSuffix = if (request.face == CardArtFace.BACK) "&face=back" else ""
 
@@ -76,6 +78,35 @@ class ScryfallImageSource(
         val alternative = "$API_BASE/$set/$cn?format=image&include_variations=true$faceSuffix"
 
         return listOf(base, alternative)
+            .map { applySize(it, request.size) }
+            .distinct()
+    }
+
+    /**
+     * A token, looked up by name within its set.
+     *
+     * **Two candidates, and the order is the measured one.** Across every entry in upstream's own
+     * token table, 2,502 of 2,661 images live in `t` + the set code — a set of the form `trna`,
+     * `tgrn`, `tdom` — and almost all of the remainder live in the set code itself, which is what
+     * happens where the set *is* a token or promo set (`sld`, `mpr`, `p04`). So the derived set is
+     * tried first and the bare one second, through the same fallback list an ordinary card's
+     * `include_variations` alternative already uses.
+     *
+     * `cards/named` is the endpoint rather than `cards/search` because search hides tokens behind
+     * `include_extras` and named does not. `exact` is used rather than `fuzzy`: a fuzzy miss returns
+     * *some other card*, which would put the wrong picture on the board rather than no picture.
+     *
+     * Emblems do not resolve, and are not made to: upstream names one `Emblem Nixilis` where Scryfall
+     * names it `Ob Nixilis Reignited Emblem`, and guessing between those is how a board ends up
+     * confidently showing the wrong card.
+     */
+    private fun resolveToken(
+        set: String,
+        name: String,
+        request: CardArtRequest,
+    ): List<String> {
+        val exact = "exact=${encodeQuery(name)}"
+        return listOf("$NAMED_BASE?$exact&set=t$set&format=image", "$NAMED_BASE?$exact&set=$set&format=image")
             .map { applySize(it, request.size) }
             .distinct()
     }
@@ -96,7 +127,32 @@ class ScryfallImageSource(
 
     private companion object {
         const val API_BASE = "https://api.scryfall.com/cards"
+        const val NAMED_BASE = "https://api.scryfall.com/cards/named"
         const val DEFAULT_LANGUAGE = "en"
+
+        /**
+         * Percent-encodes a token's name for a query string.
+         *
+         * Deliberately small and explicit rather than a platform URL encoder: this is `commonMain`,
+         * and the alphabet a Magic token name draws from is narrow — letters, digits, spaces, and the
+         * odd apostrophe, comma or hyphen. Everything outside the unreserved set is escaped by its
+         * UTF-8 bytes, which is what the query grammar asks for.
+         */
+        fun encodeQuery(value: String): String =
+            buildString {
+                value.encodeToByteArray().forEach { byte ->
+                    val code = byte.toInt() and 0xFF
+                    val char = code.toChar()
+                    if (char.isLetterOrDigit() && code < 0x80 || char in UNRESERVED) {
+                        append(char)
+                    } else {
+                        append('%').append(HEX[code shr 4]).append(HEX[code and 0x0F])
+                    }
+                }
+            }
+
+        const val UNRESERVED = "-_.~"
+        const val HEX = "0123456789ABCDEF"
 
         /** `ScryfallImageSupportCards.findScryfallSetCode` — the xmage set code, lower-cased. */
         fun scryfallSetCode(xmageCode: String): String = xmageCode.lowercase()

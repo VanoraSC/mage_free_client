@@ -1,14 +1,17 @@
 package magefree.app.di
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.testing.TestNavHostController
 import magefree.app.MageApp
 import magefree.app.navigation.CardsRoute
 import magefree.app.navigation.DecksRoute
-import magefree.app.navigation.GameBoardNavRoute
 import magefree.app.navigation.HostTableNavRoute
 import magefree.app.navigation.JoinTableNavRoute
 import magefree.app.navigation.LobbyRoute
@@ -22,6 +25,7 @@ import org.junit.runner.RunWith
 import org.koin.core.context.stopKoin
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import magefree.feature.game.GameBoardRoute as GameBoardFeatureRoute
 
 /**
  * **Every `koinViewModel()` call site, resolved for real.**
@@ -33,8 +37,8 @@ import org.robolectric.annotation.Config
  * the screen. This test closes the difference by **rendering the destination**.
  *
  * It matters because the sibling Compose tests cannot cover it: `CardSearchTypingTest`,
- * `AddCardsTypingTest` and `GameBoardScreenTest` all construct their ViewModels directly and pass
- * them in — deliberately, since they test typing and rendering rather than wiring. Nothing else in
+ * `AddCardsTypingTest` and `TableBoardScreenTest` all construct their state directly and pass it in —
+ * deliberately, since they test typing and rendering rather than wiring. Nothing else in
  * the suite exercises `koinViewModel()` at all, which left 18 call sites verified only by opening
  * each screen by hand.
  *
@@ -85,7 +89,6 @@ class ScreenViewModelResolutionTest {
                     gameType = "Two Player Duel",
                     role = "Spectator",
                 ),
-            "game board (GameBoardViewModel)" to GameBoardNavRoute(gameId = "g-1"),
         )
 
     @Test
@@ -99,7 +102,22 @@ class ScreenViewModelResolutionTest {
                     TestNavHostController(context).apply { navigatorProvider.addNavigator(ComposeNavigator()) }
                 }
             navController = nav
-            MageTheme { MageNavHost(navController = nav) }
+            MageTheme {
+                Column {
+                    MageNavHost(navController = nav, modifier = Modifier.weight(1f))
+                    // **The board, composed directly rather than navigated to.** 0112 moved it out to
+                    // the root graph, so the loop below — which drives the shell's own host — can no
+                    // longer reach it, and dropping it would have quietly retired the only coverage
+                    // `GameBoardViewModel`'s `koinViewModel()` call site has. Composing the route is
+                    // what this test is actually about; that the root graph mounts it is
+                    // `FeatureDestinationWiringTest`'s question, and it asks it.
+                    //
+                    // It is in the same composition rather than in a class of its own because Koin's
+                    // container is process-wide: a second Robolectric class calling `stopKoin` closes
+                    // it under whichever of the two runs second, whichever order they are in.
+                    GameBoardFeatureRoute(gameId = "g-1", onExit = {}, modifier = Modifier.height(1.dp))
+                }
+            }
         }
         composeTestRule.waitForIdle()
 

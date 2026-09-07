@@ -3,6 +3,7 @@ package magefree.feature.game.board
 import magefree.cards.art.CardArtFace
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
+import magefree.cards.art.tokenArtRequest
 import magefree.designsystem.card.CardDisplay
 import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
@@ -617,7 +618,15 @@ internal fun GameCard.toCardUi(): CardUi {
                 typeLine = if (isFaceDown) null else typeLine?.cleanedOrNull(),
                 oracleText = if (isFaceDown) null else rules.mapNotNull { it.cleanedOrNull() }.joinToString("\n").ifBlank { null },
             ),
-        art = if (isFaceDown) null else artRequestOf(setCode, collectorNumber, isShowingAlternateFace = transformed),
+        art =
+            when {
+                isFaceDown -> null
+                // A token has no collector number to be found by, so it is asked for by name — the
+                // same request the battlefield builds, so the detail view of a token shows the same
+                // picture the board does rather than a placeholder beside a drawn card.
+                isToken -> setCode?.let { tokenArtRequest(setCode = it, name = name) }
+                else -> artRequestOf(setCode, collectorNumber, isShowingAlternateFace = transformed)
+            },
         powerToughness = if (isFaceDown) null else pt,
         isCreature = isCreature,
         counters = counters.map { CounterUi(name = it.name, count = it.count) },
@@ -707,3 +716,41 @@ private fun TurnPhase.label(): String? =
         TurnPhase.End -> "Ending"
         TurnPhase.Unknown -> null
     }
+
+/**
+ * The card [objectId] names, wherever the board is drawing it: the hand, either battlefield, or the
+ * stack. Null when the object is not on the board at all — a target the server offered that lives
+ * somewhere this projection does not carry simply has no detail view.
+ */
+internal fun BoardUi.cardFor(objectId: String): CardUi? {
+    hand.cards.firstOrNull { it.objectId == objectId }?.let { return it.card }
+    (listOfNotNull(viewerSeat) + opponentSeats)
+        .flatMap { it.battlefield }
+        .firstOrNull { it.objectId == objectId }
+        ?.let { return it.card }
+    return stack.entries.firstOrNull { it.objectId == objectId }?.card
+}
+
+/**
+ * The card [objectId] names in one of the **piles** — a graveyard, an exile pile, a revealed set.
+ *
+ * [BoardUi.cardFor] cannot answer for these and is not going to: [SeatUi] carries a graveyard's
+ * *count*, because that is all the portrait board ever drew of one. The rebuilt board opens the piles
+ * and lets a card be pressed in them, so a press there has to reach the same detail view a press in
+ * the hand reaches — and it did not: the card selected and nothing appeared, which is a dead
+ * affordance, the failure this project has been bitten by before.
+ *
+ * Read off the snapshot rather than off a widened projection, because the piles are already on the
+ * wire in full and projecting them a second time would be two shapes of the same cards. The
+ * conversion is [toCardUi], the same one the hand goes through, so a card reads identically wherever
+ * it was pressed.
+ */
+internal fun GameState.cardInAPile(objectId: String): CardUi? {
+    players.forEach { player ->
+        (player.graveyard + player.exile).firstOrNull { it.id == objectId }?.let { return it.toCardUi() }
+    }
+    return (exile + revealed)
+        .flatMap { it.cards }
+        .firstOrNull { it.id == objectId }
+        ?.toCardUi()
+}

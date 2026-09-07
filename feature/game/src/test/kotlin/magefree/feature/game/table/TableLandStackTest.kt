@@ -47,6 +47,25 @@ class TableLandStackTest {
     }
 
     @Test
+    fun `a land the server is still offering stacks with one it is not`() {
+        // The worked example above passes with `playable` empty, which is not how a real game arrives:
+        // an untapped Swamp is in `canPlayObjects` — you can tap it for mana — and a tapped one is not.
+        // With that signal left in the stack's key, using a land split the pile in two, and a board of
+        // nine Swamps drew four upright in one stack and five leaning in another beside it. Found on a
+        // real board, and invisible to every fixture that forgot to say what the server was offering.
+        val permanents = (1..5).map { plains("t$it", tapped = true) } + (1..4).map { plains("u$it") }
+        val state =
+            stateWith(permanents).copy(
+                // Exactly what the server sends: only the untapped ones can still be tapped for mana.
+                playable = (1..4).map { PlayableObject("u$it") },
+            )
+
+        val stack = battlefieldModel(state).viewer!!.landStacks().single()
+
+        assertEquals(4 to 5, stack.untapped.size to stack.tapped.size)
+    }
+
+    @Test
     fun `different lands are different stacks`() {
         val side = sideWith(listOf(plains("p1"), plains("p2"), forest("f1")))
 
@@ -79,13 +98,20 @@ class TableLandStackTest {
     }
 
     @Test
-    fun `a playable land is not the same as an unplayable one`() {
-        // The board draws the playable signal on one and not the other, so stacking them would be
-        // showing a highlight over three lands when the server offered one.
+    fun `playability does not split a land stack, because for a land it restates tap state`() {
+        // **This test used to assert the opposite** — that a playable land and an unplayable one were
+        // different stacks, on the reasoning that stacking them would draw a highlight over lands the
+        // server had not offered. The reasoning held for the fixture and not for a game: what makes a
+        // land unplayable is that it is *tapped*, so the rule split every pile the moment one of its
+        // lands was used. A board of nine Swamps drew four upright in one stack and five leaning in
+        // another beside it.
+        //
+        // The halves already carry the distinction, and each is drawn from its own copies, so nothing
+        // borrows a mark from the other side.
         val state = stateWith((1..4).map { plains("p$it") }).copy(playable = listOf(PlayableObject(objectId = "p1")))
         val side = battlefieldModel(state).viewer!!
 
-        assertEquals(listOf(1, 3), side.landStacks().map { it.count }.sorted())
+        assertEquals(listOf(4), side.landStacks().map { it.count })
     }
 
     @Test

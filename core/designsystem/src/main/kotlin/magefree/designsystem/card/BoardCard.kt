@@ -930,8 +930,14 @@ private const val TAPPED_ROTATION_DEGREES = 45f
 /** How opaque the name band, badges and stats backing are over arbitrary art. */
 private const val BAND_OPACITY = 0.82f
 
-/** How much a secondary signal's colour is dimmed so it never competes with the focal one. */
-private const val SECONDARY_BORDER_ALPHA = 0.45f
+/**
+ * How far a secondary signal is faded, so it never competes with the focal one.
+ *
+ * It was 0.45, which on top of a one-dp line left the mark barely there at all. A secondary signal is
+ * still *true*, and the thing that says it is not the focus is that it is thinner — fading it almost
+ * out as well said it twice and cost the player the fact.
+ */
+private const val SECONDARY_BORDER_ALPHA = 0.85f
 
 /** The largest count rendered in full; above it the circle shows a capped form. */
 private const val MAX_SHOWN_COUNT = 99
@@ -948,8 +954,23 @@ private val BoardArtShape = RoundedCornerShape(1.dp)
 private val CardBorderWidth = 2.dp
 private val BadgeShape = RoundedCornerShape(2.dp)
 private val BoardCardPadding = 2.dp
-private val FocalBorderWidth = 2.dp
-private val SecondaryBorderWidth = 1.dp
+
+/*
+ * How heavy a signal's border is.
+ *
+ * **Sized against the card, not against a hairline.** These were 2dp and 1dp, which is what a border
+ * is on a chip or a text field — and on a board card sixty to two hundred dp wide, drawn over a black
+ * card border on a grey table, a two-dp line is a change of shade rather than a mark. Attacking and
+ * playable were both reported as barely visible on a real board, and they are the two the player is
+ * scanning for: which of my creatures is in combat, and what can I do right now.
+ *
+ * The focal one is deliberately much heavier than the secondary one. They are not two levels of the
+ * same thing — the focal signal is what the board is *about* at this moment, and the secondary is
+ * something else that is also true — so the difference between them has to survive a glance.
+ */
+private val FocalBorderWidth = 5.dp
+
+private val SecondaryBorderWidth = 3.dp
 private val CounterCircleSize = 15.dp
 private val BadgeSize = 13.dp
 

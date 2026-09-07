@@ -20,12 +20,6 @@ import magefree.designsystem.theme.MageTheme
 const val SETTINGS_SCREEN_LABEL: String = "Settings"
 
 /**
- * Visible label on the temporary developer entry into the immersive game mode. Shared with tests so
- * the two agree; clearly marked as a stub so it reads as non-production.
- */
-const val ENTER_GAME_STUB_LABEL: String = "Enter game (dev stub)"
-
-/**
  * Visible label on the developer entry into the design-system component catalog. Shared
  * with tests so the two agree; clearly marked as a dev-only affordance.
  */
@@ -43,15 +37,13 @@ const val SIGN_OUT_LABEL: String = "Sign out"
  * Placeholder for the Settings destination. Real preferences (DataStore-backed) arrive later;
  * only proves the shell can reach this route.
  *
- * A clearly-marked **dev stub** ([ENTER_GAME_STUB_LABEL]) navigates into the
- * immersive [GameRoute][magefree.app.game.GameRoute]. This is a temporary entry point only — real
- * entry into the game comes from the lobby/table flows and this button is expected to
- * be removed then.
+ * It carried a dev stub into the immersive game placeholder until 0112, which said the stub would go
+ * once real entry from the lobby and table flows landed. It has: the table room's match-start signal
+ * opens the board, and the placeholder the stub reached no longer exists.
  */
 @Composable
 fun SettingsPlaceholderScreen(
     modifier: Modifier = Modifier,
-    onEnterGame: () -> Unit = {},
     onOpenCatalog: () -> Unit = {},
     onSignOut: () -> Unit = {},
 ) {
@@ -64,18 +56,6 @@ fun SettingsPlaceholderScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         Text(text = SETTINGS_SCREEN_LABEL, style = MaterialTheme.typography.headlineMedium)
-
-        // Temporary developer affordance to reach the immersive game route; removed
-        // once real entry from lobby/table lands.
-        OutlinedButton(
-            onClick = onEnterGame,
-            modifier =
-                Modifier
-                    .padding(top = 24.dp)
-                    .heightIn(min = 48.dp),
-        ) {
-            Text(text = ENTER_GAME_STUB_LABEL, textAlign = TextAlign.Center)
-        }
 
         // Debug-only affordance to open the design-system component catalog — a visual-QA
         // surface, not a production feature.

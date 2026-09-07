@@ -305,9 +305,10 @@ class FeatureWiringGuardTest {
                                 "magefree.feature.decks.builder.BuilderViewModel",
                             ),
                     ),
-                // the read-only game board, reached from the table room's MatchStarting
-                // hand-off (MageNavHost's GameBoardNavRoute). without it the hand-off ended at a
-                // terminal "Match starting…" screen and no destination consumed the game id at all.
+                // the game board, reached from the table room's MatchStarting hand-off, which 0112
+                // hoisted out of the shell graph into the root graph's own GameRoute so the board
+                // gets the whole window. Without it the hand-off ended at a terminal "Match
+                // starting…" screen and no destination consumed the game id at all.
                 ":feature:game" to
                     FeatureEntry(
                         entryPointClass = "magefree.feature.game.GameRoutesKt",

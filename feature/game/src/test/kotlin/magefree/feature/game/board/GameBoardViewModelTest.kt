@@ -180,7 +180,6 @@ class GameBoardViewModelTest {
 
             client.emitGameState(dealtState())
             client.emitGameState(dealtState().copy(viewerHasPriority = true, playable = listOf(PlayableObject("h-1"))))
-            viewModel.setHandExpanded(true)
             viewModel.setControlsVisible(false)
             viewModel.selectCard("h-1")
 
@@ -569,18 +568,28 @@ class GameBoardViewModelTest {
         }
 
     @Test
-    fun `expanding the hand is a view change and sends the server nothing`() =
+    fun `the snapshot is carried whole, because the board renders from it`() =
         runTest {
+            // The table tier's models are all functions of a `GameState` — `battlefieldModel`,
+            // `tableVitals`, `tableZones`, `handCards`, `playableElsewhere` — so the board is drawn
+            // from the server's own view rather than from a second projection of it. Carrying it is
+            // what makes that possible, and its absence before the first emission is what the board's
+            // "waiting for the first update" line is about.
             val client = FakeGameClient()
             val viewModel = viewModel(client)
             viewModel.observe(GAME_ID)
 
-            viewModel.setHandExpanded(true)
-            assertTrue(viewModel.uiState.value.isHandExpanded)
-            viewModel.setHandExpanded(false)
-            assertFalse(viewModel.uiState.value.isHandExpanded)
+            // The subscription opens with an empty seed and the flow emits it at once, so what says
+            // "nothing has arrived" is the server's own `hasSnapshot` and never the absence of a
+            // snapshot. A board that waited for a null one would wait for ever.
+            assertEquals(GameState(GAME_ID), viewModel.uiState.value.snapshot)
+            assertFalse("the seed is not a game", viewModel.uiState.value.board.hasSnapshot)
 
-            assertEquals("looking at your own hand is not a game action", listOf("join:$GAME_ID"), client.calls)
+            val state = dealtState()
+            client.emitGameState(state)
+
+            assertEquals(state, viewModel.uiState.value.snapshot)
+            assertTrue(viewModel.uiState.value.board.hasSnapshot)
         }
 
     @Test

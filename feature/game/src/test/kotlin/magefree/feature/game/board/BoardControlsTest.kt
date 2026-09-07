@@ -2,6 +2,7 @@ package magefree.feature.game.board
 
 import magefree.network.game.AbilityChoice
 import magefree.network.game.ChoiceOption
+import magefree.network.game.CombatGroup
 import magefree.network.game.GameCard
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
@@ -236,6 +237,52 @@ class BoardControlsTest {
         assertTrue("a declaration is its own projection, not a priority window", controls is PromptControlsUi.Declaration)
         assertEquals(CombatRole.Attacking, (controls as PromptControlsUi.Declaration).role)
         assertEquals(DECLARE_ATTACKER_ACTION_LABEL, controls.actionLabelFor("y-1"))
+    }
+
+    @Test
+    fun `a creature already attacking can be taken back out of combat`() {
+        // Found by playing a game: a declared attacker vanishes from `possibleAttackers` — it can no
+        // longer *be* declared — so the board offered no tap on it and the player had no way to change
+        // their mind. Upstream has always accepted it: `selectAttackers` matches the id against the
+        // "can attack" filter first and falls through to `removeAttackerIfPossible`, which is the same
+        // response id and the same message. Only the board's wording changes.
+        val controls = controlsFor(declaringWithOneDeclared(CombatRole.Attacking))!! as PromptControlsUi.Declaration
+
+        assertEquals("the declared one is gone from the server's candidates", setOf("y-2"), controls.pickableObjectIds)
+        assertEquals(setOf("y-1"), controls.withdrawableObjectIds)
+        assertEquals(BoardAction.ChooseTarget("y-1"), controls.actionFor("y-1"))
+        assertEquals(WITHDRAW_ATTACKER_ACTION_LABEL, controls.actionLabelFor("y-1"))
+        assertEquals("declaring a fresh one is still what it was", DECLARE_ATTACKER_ACTION_LABEL, controls.actionLabelFor("y-2"))
+    }
+
+    @Test
+    fun `a creature already blocking can be taken back out of combat too`() {
+        val controls = controlsFor(declaringWithOneDeclared(CombatRole.Blocking))!! as PromptControlsUi.Declaration
+
+        assertEquals(setOf("y-1"), controls.withdrawableObjectIds)
+        assertEquals(WITHDRAW_BLOCKER_ACTION_LABEL, controls.actionLabelFor("y-1"))
+    }
+
+    @Test
+    fun `only your own creatures may be taken back`() {
+        // A combat group names both players' creatures. Withdrawing is a thing you do to your own.
+        val controls = controlsFor(declaringWithOneDeclared(CombatRole.Attacking))!! as PromptControlsUi.Declaration
+
+        assertNull("the opponent's attacker is not yours to withdraw", controls.actionFor("o-1"))
+    }
+
+    @Test
+    fun `nothing may be taken back while something is on the stack`() {
+        // Upstream's own gate: both `removeAttackerIfPossible` and `removeBlocker` are reached only
+        // when `game.getStack().isEmpty()`. Offering the tap anyway would be a control the server
+        // silently ignores.
+        val state = declaringWithOneDeclared(CombatRole.Attacking)
+        val controls =
+            controlsFor(state.copy(stack = listOf(GameCard(id = "s-1", name = "Giant Growth"))))!!
+                as PromptControlsUi.Declaration
+
+        assertEquals(emptySet<String>(), controls.withdrawableObjectIds)
+        assertNull(controls.actionFor("y-1"))
     }
 
     @Test
@@ -824,6 +871,39 @@ class BoardControlsTest {
             // No special button: blocking has no shortcut.
             options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-1", "y-2"))),
         )
+
+    /**
+     * A declaration with `y-1` already in combat, as the server really sends it: the declared creature
+     * is **gone from the candidates**, because it can no longer be declared, and appears only in the
+     * combat groups. The opponent has one in there too, which is what makes "only your own" a real
+     * assertion rather than a restatement of the fixture.
+     */
+    private fun declaringWithOneDeclared(role: CombatRole): GameState {
+        val base =
+            if (role == CombatRole.Attacking) {
+                declarationState(
+                    message = "Select attackers",
+                    idsKey = PromptOptions.POSSIBLE_ATTACKERS,
+                    options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_ATTACKERS to listOf("y-2"))),
+                )
+            } else {
+                declarationState(
+                    message = "Select blockers",
+                    idsKey = PromptOptions.POSSIBLE_BLOCKERS,
+                    options = PromptOptions(ids = mapOf(PromptOptions.POSSIBLE_BLOCKERS to listOf("y-2"))),
+                )
+            }
+        return base.copy(
+            combat =
+                listOf(
+                    if (role == CombatRole.Attacking) {
+                        CombatGroup(defenderId = "p-opp", attackerIds = listOf("y-1", "o-1"))
+                    } else {
+                        CombatGroup(defenderId = "p-you", attackerIds = listOf("o-1"), blockerIds = listOf("y-1", "o-1"))
+                    },
+                ),
+        )
+    }
 
     private fun creature(
         id: String,

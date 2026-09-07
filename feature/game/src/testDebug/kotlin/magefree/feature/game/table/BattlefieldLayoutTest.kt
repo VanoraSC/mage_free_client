@@ -120,22 +120,27 @@ class BattlefieldLayoutTest {
     private fun bounds(tag: String): Rect = composeTestRule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
 
     /**
-     * Every card face drawn inside one land stack, as it actually lands on the screen.
+     * Every card face drawn inside one region, as it actually lands on the screen.
      *
-     * `boundsInRoot` puts the node's box through the transforms above it, so a card that has been
-     * leaned over reports the upright box that leaning card occupies rather than the box it was laid
-     * out in. That difference is the whole subject of the stack's geometry, and it is invisible to
-     * anything that only reads sizes.
+     * `boundsInRoot` puts the node's box through the transforms above it *and* through any clip
+     * between it and the root — so a card that has been leaned over reports the wider box a leaning
+     * card occupies, unless something is cutting it off, in which case it reports the cut. Both
+     * halves of that matter, and each was a defect: a land stack that reserved a leaning copy the
+     * room an upright one takes, and a creature row that clipped one to it.
+     *
+     * The region is any tagged ancestor, so the same helper answers for a stack and for a row.
      */
-    private fun cardsIn(stackId: String): List<Rect> =
+    private fun cardsIn(regionTag: String): List<Rect> =
         composeTestRule
             .onAllNodes(
-                hasTestTag(BoardCardTestTags.CARD) and hasAnyAncestor(hasTestTag(BattlefieldTestTags.stack(stackId))),
+                hasTestTag(BoardCardTestTags.CARD) and hasAnyAncestor(hasTestTag(regionTag)),
                 useUnmergedTree = true,
             ).fetchSemanticsNodes()
             .map { it.boundsInRoot }
 
-    private fun cardCentre(stackId: String): Offset = cardsIn(stackId).first().center
+    private fun cardsInStack(stackId: String): List<Rect> = cardsIn(BattlefieldTestTags.stack(stackId))
+
+    private fun cardCentre(stackId: String): Offset = cardsInStack(stackId).first().center
 
     private fun lands(playerId: String) = BattlefieldTestTags.row(playerId, BattlefieldTestTags.LAND_ZONE)
 
@@ -342,6 +347,28 @@ class BattlefieldLayoutTest {
     }
 
     @Test
+    fun `a tapped creature is not cut off by the row it is in`() {
+        // Found by playing a game: a lone tapped token had both its corners sliced flat. The row wraps
+        // its cards in a horizontal scroll, and a scroll container clips to its bounds — while a card
+        // leaning forty-five degrees reaches a further √2⁄2 of a card past the box it was laid out in.
+        // The card tier's claim that a square "leans inside its own footprint" is true of the space it
+        // reserves and not of the pixels it draws.
+        //
+        // Measured against the upright card beside it: a leaning card must report a *wider* box than an
+        // upright one of the same size. Clipped, the two measure the same, which is the bug.
+        show(oneSided("me", listOf(bears("upright"), bears("leaning", tapped = true))))
+
+        val cards = cardsIn(BattlefieldTestTags.row("me", "front"))
+        val widest = cards.maxOf { it.width }
+        val narrowest = cards.minOf { it.width }
+
+        assertTrue(
+            "the leaning card measured $widest beside an upright $narrowest — it is being clipped to the upright footprint",
+            widest > narrowest * LEAN_MARGIN,
+        )
+    }
+
+    @Test
     fun `a lone land leans where it stood rather than sliding down the diagonal`() {
         // Shipped wrong: the turned half was anchored to the *front* of the diagonal whatever was in
         // the upright half, so a player's single tapped land jumped to slot two of an otherwise empty
@@ -368,7 +395,7 @@ class BattlefieldLayoutTest {
 
         val stack = bounds(BattlefieldTestTags.stack("p1"))
 
-        cardsIn("p1").forEach { card ->
+        cardsInStack("p1").forEach { card ->
             assertTrue(
                 "a leaning card drew $card inside a stack of $stack",
                 card.left >= stack.left - ROUNDING_SLACK_PX &&
@@ -452,9 +479,13 @@ private fun permanent(
     name: String,
     types: List<CardType>,
     isCreature: Boolean = false,
-) = GamePermanent(card = GameCard(id = id, name = name, cardTypes = types, isCreature = isCreature))
+    tapped: Boolean = false,
+) = GamePermanent(card = GameCard(id = id, name = name, cardTypes = types, isCreature = isCreature), isTapped = tapped)
 
-private fun bears() = permanent("bears", "Grizzly Bears", listOf(CardType.Creature), isCreature = true)
+private fun bears(
+    id: String = "bears",
+    tapped: Boolean = false,
+) = permanent(id, "Grizzly Bears", listOf(CardType.Creature), isCreature = true, tapped = tapped)
 
 private fun creature(index: Int) = permanent("creature-$index", "Saproling", listOf(CardType.Creature), isCreature = true)
 
@@ -496,3 +527,12 @@ private fun island(
  * bug this slack must never hide is a *shrink*, which is a third of a card and not a pixel.
  */
 private const val ROUNDING_SLACK_PX = 2
+
+/**
+ * How much wider a leaning card must measure than an upright one before the lean counts as visible.
+ *
+ * A square turned forty-five degrees is √2 across — about 1.41 — so this is a floor well under the
+ * real figure rather than a restatement of it. What it has to rule out is the clipped case, where the
+ * two measure exactly the same.
+ */
+private const val LEAN_MARGIN = 1.35f

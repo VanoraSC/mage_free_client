@@ -20,7 +20,6 @@ import magefree.feature.tables.join.JoinTarget
 import magefree.feature.tables.room.TableRoomViewModel
 import org.koin.androidx.compose.koinViewModel
 import magefree.feature.cards.CardsRoute as CardsFeatureRoute
-import magefree.feature.game.GameBoardRoute as GameBoardFeatureRoute
 import magefree.feature.lobby.LobbyRoute as LobbyFeatureRoute
 import magefree.feature.tables.HostTableRoute as HostTableFeatureRoute
 import magefree.feature.tables.JoinTableRoute as JoinTableFeatureRoute
@@ -76,26 +75,6 @@ data class TableRoomNavRoute(
     val role: String,
 )
 
-/**
- * Type-safe route for the read-only game board (`:feature:game`).
- *
- * It carries the **game** id, which is a different identifier from the table id the room is keyed by:
- * the server mints it when the match starts and delivers it on the table's `MatchStarting` push
- * (`magefree.network.table.MatchStarting.gameId`). That push is the only producer of a game id in the
- * whole app, and until now nothing consumed it — the room rendered a terminal "Match starting…"
- * screen and the hand-off stopped there.
- *
- * Mounted here, inside the shell graph, rather than beside the immersive [magefree.app.game.GameRoute]:
- * the board is reached from the room, which lives in this graph, and keeping it here means Back behaves
- * and the connection strip stays visible over a live game. The trade-off is that the shell's tab chrome
- * takes vertical space from a portrait board; moving the board outside the chrome is a deliberate
- * follow-up, not something to improvise here.
- */
-@Serializable
-data class GameBoardNavRoute(
-    val gameId: String,
-)
-
 /** Map the feature's [RoomArgs] hand-off onto the type-safe [TableRoomNavRoute]. */
 private fun RoomArgs.toNavRoute(): TableRoomNavRoute =
     TableRoomNavRoute(tableId = tableId, tableName = tableName, gameType = gameType, role = role.name)
@@ -113,7 +92,7 @@ private fun RoomArgs.toNavRoute(): TableRoomNavRoute =
 fun MageNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    onEnterGame: () -> Unit = {},
+    onEnterGame: (String) -> Unit = {},
     onOpenCatalog: () -> Unit = {},
     onSignOut: () -> Unit = {},
     decksScreen: @Composable () -> Unit = {},
@@ -225,10 +204,21 @@ fun MageNavHost(
             val startedGameId = roomState.table.resumableGameId
             LaunchedEffect(startedGameId) {
                 startedGameId?.let { gameId ->
-                    navController.navigate(GameBoardNavRoute(gameId = gameId)) {
-                        popUpTo(LobbyRoute) { inclusive = false }
-                        launchSingleTop = true
-                    }
+                    // **The room is popped first, and that pop is load-bearing.** `resumableGameId`
+                    // stays set for as long as the game exists, so a room left composed under the
+                    // board re-fires this the instant the board is popped — and the player is thrown
+                    // straight back onto a board they were trying to leave. Worse after a game ends:
+                    // the bridge will not re-serve a finished game, so the board they land on is the
+                    // empty seed with nothing to wait for, and the loop has no exit.
+                    //
+                    // The board is a root destination now (0112), so this is two steps where it used
+                    // to be one `popUpTo(LobbyRoute)`: pop the room inside the shell's own graph,
+                    // then hoist the game id out to the root graph, which is where the board renders
+                    // without the shell's chrome taking a navigation rail's width off it. Back from a
+                    // live game returns to the lobby rather than to a room whose match has begun —
+                    // the same place it returned to before.
+                    navController.popBackStack<LobbyRoute>(inclusive = false)
+                    onEnterGame(gameId)
                 }
             }
 
@@ -244,13 +234,6 @@ fun MageNavHost(
                 viewModel = roomViewModel,
             )
         }
-        composable<GameBoardNavRoute> { entry ->
-            val route = entry.toRoute<GameBoardNavRoute>()
-            GameBoardFeatureRoute(
-                gameId = route.gameId,
-                onExit = { navController.popBackStack() },
-            )
-        }
         composable<DecksRoute> {
             // the Decks tab hosts the deck library + builder (`:feature:decks`), provided by
             // the caller so the shell can stay Hilt-free in tests. Card browse remains reachable from the
@@ -263,10 +246,6 @@ fun MageNavHost(
         composable<ProfileRoute> { ProfilePlaceholderScreen() }
         composable<SettingsRoute> {
             SettingsPlaceholderScreen(
-                // Stub entry into the immersive game route. The table room does not open the board
-                // yet: the real entry is the room's match-start signal, which belongs to the in-game
-                // the game layer (see `magefree.network.table.MatchStarting`).
-                onEnterGame = onEnterGame,
                 // Debug-only entry into the design-system component catalog.
                 onOpenCatalog = onOpenCatalog,
                 // the shell's one deliberate exit from the session. Hoisted all the way to
