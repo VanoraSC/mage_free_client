@@ -3,15 +3,18 @@ package magefree.designsystem.card
 import android.app.Application
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.theme.MageTheme
@@ -108,6 +111,35 @@ class BoardCardTest {
     }
 
     @Test
+    fun `the card image is laid out whole, and the face clips the bottom off it`() {
+        // **The crop, asserted at the one place it can go wrong.** The image is measured at a whole
+        // card's height inside a face that is only [BOARD_CARD_CROP] of it, so the card keeps its own
+        // proportions and loses its text box. Give the image the face's height instead — which is what
+        // a plain `Modifier.height` does, because it is clamped by the parent — and the renderer's
+        // centre-crop takes the top and the bottom in equal measure: a card with no title bar, no
+        // name, and no type line, which is a card nobody can read on a board.
+        show(BoardCardState(card = BEARS))
+
+        val face = composeTestRule.onNodeWithTag(BoardCardTestTags.CARD).fetchSemanticsNode().size
+        val art =
+            composeTestRule
+                .onNodeWithTag(BoardCardTestTags.ART, useUnmergedTree = true)
+                .fetchSemanticsNode()
+                .size
+
+        assertEquals("the image should be the card's full width", face.width, art.width)
+        val expected = (CARD_WIDTH.value / CARD_ASPECT_RATIO).roundToInt()
+        assertTrue(
+            "the image measured ${art.width}x${art.height}, and a whole card is ${CARD_WIDTH.value.roundToInt()}x$expected",
+            abs(art.height - expected) <= 1,
+        )
+        assertTrue(
+            "the face must be shorter than the image it clips: ${face.height} against ${art.height}",
+            face.height < art.height,
+        )
+    }
+
+    @Test
     fun `a turned attachment keeps its card proportions too`() {
         show(BoardCardState(card = BEARS, attachments = listOf(EQUIPPED_TAPPED)))
 
@@ -117,6 +149,56 @@ class BoardCardTest {
             "a turned attachment measured ${face.width}x${face.height}, a ratio of $ratio",
             abs(ratio - BOARD_CARD_ASPECT_RATIO) < 0.05f,
         )
+    }
+
+    @Test
+    fun `an attachment is its own card, so its band reports itself and not its host`() {
+        // The band an attachment stack exists to expose is the *only* part of that card on screen, so
+        // if pressing it opened the host instead, the Aura would be the one card on the board a player
+        // could not read. It is also the card most likely to be the answer to whatever they asked.
+        val pressed = mutableListOf<String>()
+        val hosts = mutableListOf<Int>()
+        composeTestRule.setContent {
+            MageTheme {
+                Box {
+                    BoardCard(
+                        state = BoardCardState(card = BEARS, attachments = listOf(PACIFISM)),
+                        width = CARD_WIDTH,
+                        onTap = { hosts += 1 },
+                        onAttachmentTap = { attachment -> pressed += attachment.id },
+                    )
+                }
+            }
+        }
+
+        // On the band, not in the middle: the middle of an attached card is behind its host, which is
+        // the whole reason the stack steps at all. Pressing there *should* reach the host.
+        composeTestRule.onNodeWithTag(BoardCardTestTags.ATTACHMENT, useUnmergedTree = true).performTouchInput {
+            click(Offset(centerX, 2f))
+        }
+
+        assertEquals(listOf("Pacifism"), pressed)
+        assertEquals("the host must not also fire", emptyList<Int>(), hosts)
+    }
+
+    @Test
+    fun `an attachment draws the art it is given, in place of its name band`() {
+        // The degraded path — a name and a cost drawn on a grey rectangle — is what a player sees when
+        // the art has not loaded, and it looked identical to the art path never being wired up at all.
+        composeTestRule.setContent {
+            MageTheme {
+                Box {
+                    BoardCard(
+                        state = BoardCardState(card = BEARS, attachments = listOf(PACIFISM)),
+                        width = CARD_WIDTH,
+                        attachmentArt = { { modifier -> Box(modifier.testTag(ATTACHMENT_ART)) } },
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag(ATTACHMENT_ART, useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("Pacifism").assertDoesNotExist()
     }
 
     @Test
@@ -466,6 +548,7 @@ class BoardCardTest {
         const val LARGE = "footprint-large"
         const val BARE = "bare"
         const val ENCHANTED = "enchanted"
+        const val ATTACHMENT_ART = "attachment-art"
 
         val BEARS = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear")
         val FOREST = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")

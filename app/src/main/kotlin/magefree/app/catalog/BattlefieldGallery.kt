@@ -20,6 +20,7 @@ import magefree.network.game.GameCounter
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
+import magefree.network.game.GameZone
 import magefree.network.game.PlayableObject
 
 /*
@@ -226,6 +227,15 @@ private val Developed =
         gameId = "catalog",
         viewerPlayerId = "me",
         combat = listOf(CombatGroup(defenderId = "them", attackerIds = listOf("bears"), blockerIds = listOf("wurm"))),
+        // A named exile pile, which is what makes one of the two exiled cards *special*: it is
+        // plotted, so it is coming back. Upstream names the zone after the effect that made it.
+        exile =
+            listOf(
+                GameZone(
+                    name = "Plots of You - Exile",
+                    cards = listOf(card("x-djinn", "Mahamoti Djinn", listOf(CardType.Creature), isCreature = true, manaCost = "{4}{U}{U}")),
+                ),
+            ),
         // A hand of five with two castable. The contrast is the point of the playable highlight: a
         // hand where everything or nothing is lit shows nothing. The untapped Forests pay for the
         // Elves and the Hawk; the Dragon and the Djinn are out of reach.
@@ -260,6 +270,55 @@ private val Developed =
                     libraryCount = 27,
                     handCount = 5,
                     graveyardCount = 3,
+                    // A real graveyard, because the rail draws the card on top of it and a count
+                    // cannot be drawn. Serra Angel is last, so she is the one on top.
+                    graveyard =
+                        listOf(
+                            card(
+                                "gy-elves",
+                                "Llanowar Elves",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "1",
+                                toughness = "1",
+                                manaCost = "{G}",
+                            ),
+                            card("gy-rod", "Rod of Ruin", listOf(CardType.Artifact), manaCost = "{4}"),
+                            card(
+                                "gy-angel",
+                                "Serra Angel",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "4",
+                                toughness = "4",
+                                manaCost = "{3}{W}{W}",
+                            ),
+                        ),
+                    // One card plainly exiled and one plotted, so the rail's two exile piles are
+                    // both occupied and visibly different. The plot is what "Other" is for: it is
+                    // coming back, and that is not the same fact as a card being gone.
+                    exileCount = 2,
+                    exile =
+                        listOf(
+                            card(
+                                "x-air",
+                                "Air Elemental",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "4",
+                                toughness = "4",
+                                manaCost = "{3}{U}{U}",
+                            ),
+                            card(
+                                "x-djinn",
+                                "Mahamoti Djinn",
+                                listOf(CardType.Creature),
+                                isCreature = true,
+                                power = "5",
+                                toughness = "6",
+                                manaCost = "{4}{U}{U}",
+                            ),
+                        ),
                     wins = 1,
                     winsNeeded = 2,
                     hasPriority = true,
@@ -314,7 +373,9 @@ private val Developed =
                     life = 20,
                     libraryCount = 31,
                     handCount = 4,
-                    graveyardCount = 1,
+                    // Empty on purpose: the rail draws a placeholder where this seat's graveyard
+                    // would be, and both states have to be on one board to be compared.
+                    graveyardCount = 0,
                     winsNeeded = 2,
                     battlefield =
                         listOf(

@@ -453,22 +453,36 @@ which means larger cards, which is the difference between reading the board and 
 Each player's battlefield reads front-to-back by how much attention the permanent needs:
 
 ```
-   ┌─ opponent's battlefield (mirrored) ──────────────┐
-   │  [ lands ]        [ other permanents ]           │   back
-   │            [ creatures ]                         │   front
-   ├──────────────────────────────────────────────────┤
-   │            [ creatures ]                         │   front
-   │  [ lands ]        [ other permanents ]           │   back
-   └─ your battlefield ───────────────────────────────┘
+ ┌────────┬─────────────┬────────────────────────────┐
+ │ opp    │             │   [ other permanents ]     │  back
+ │ vitals │  opponent   │   [ creatures ]            │  front
+ │ grave  │   lands     ├────────────────────────────┤
+ │ other  │             │                            │
+ │ exile  ├─────────────┤   [ creatures ]            │  front
+ │ exile  │   your      │   [ other permanents ]     │  back
+ │ other  │   lands     ├────────────────────────────┤
+ │ grave  │             │   phase bar                │
+ │ vitals │             │   hand                     │
+ └────────┴─────────────┴────────────────────────────┘
 ```
 
+- **Three columns, because the three things have different jobs.** The status rail is read
+  occasionally and must never move; the lands are a fixed, bounded cost that grows all game; the
+  battlefield is what actually changes. Lands sharing the battlefield's width meant a fourth kind of
+  land pushed the creatures around, which is a move with no game behind it.
 - **Creatures in front.** They attack, block, and change state constantly — they are what the player
   looks at.
-- **Non-creature permanents behind the creatures**, beside the lands. Present and readable, but not
-  competing with the things that are about to matter in combat.
-- **Lands to the side, at the back, piled tightly.** Lands are the most numerous permanents and the
+- **Non-creature permanents on their own horizontal behind the creatures**, toward the outside.
+  Present and readable, but not competing with — or drawn behind — the things that are about to
+  matter in combat.
+- **Lands in a column of their own, piled tightly.** Lands are the most numerous permanents and the
   least individually interesting; **the goal is to minimise the space they take without hurting
-  readability.**
+  readability**, and a bounded column does that in a way a shared row cannot.
+- **The status rail carries what is not on the battlefield** — each seat's vitals (§7.15) and each
+  seat's piles: the graveyard, exile, and the *Other* exile that a card is coming back from or can be
+  cast from. Each is drawn as the card on top of it and opens by being pressed (§7.13). The rail is
+  the one region that keeps its height when it is empty, because it is the one region whose job is to
+  be in a fixed place.
 - **Attached permanents render on what they are attached to**, not in a bucket of their own. An Aura
   or Equipment sits with its host; a fortified or enchanted land stays with the lands.
 
@@ -574,7 +588,7 @@ Keeping the ground grey is what makes §3.1's highlight vocabulary legible at ca
 
 | Tier | Where | Shows | Art |
 |---|---|---|---|
-| **Board** | Battlefield, stack piles | The printed name plate, P/T, counters, tap state, status | Downsampled, the card cut below its art box |
+| **Board** | Battlefield, stack piles, rail piles | The printed name plate, P/T, counters, tap state, status | Downsampled, the card cut below its art box — filled to the card's width, anchored to its top, clipped at the bottom |
 | **Tile** | Hand, zone browsers, deck lists | Name, cost, type line, P/T | Downsampled full card |
 | **Full** | Inspection, mulligan, sideboard | Oracle text, current modifications, activatable abilities, flip control | Full resolution |
 
@@ -960,10 +974,11 @@ thing the overlay does not do is let you *cast* from there, which Commander need
 **name** and id. The two exile views are complementary and both are needed: `PlayerView.exile`
 answers "what of mine is exiled," `GameView.exiles` answers "which pile is it in."
 
-**The bridge maps almost none of this.** `GameViewMapper` reduces the graveyard to
-`graveyardCount = player.graveyard?.size ?: 0` and discards the cards; `commandList` is not mapped
-at all. Only `GameView.exiles` survives, as `GameState.exile: List<GameZone>` with `name` and
-`zoneId` — mapped, and never rendered.
+**The bridge maps all of it now.** When this section was written `GameViewMapper` reduced the
+graveyard to `graveyardCount` and discarded the cards, and `commandList` was not mapped at all.
+`GamePlayer` today carries `graveyard`, `exile` and `commandList` as full lists, alongside
+`GameState.exile: List<GameZone>` with each pile's `name` and `zoneId`. Story 0110 renders the
+graveyard, in the status rail (§7.4); the exile piles are still mapped and unrendered.
 
 #### Telling special exiles apart
 

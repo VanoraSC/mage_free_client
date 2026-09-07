@@ -69,28 +69,25 @@ class VitalsStripTest {
     }
 
     @Test
-    fun `a bar at each edge, centred, saying which seat it is by where it is`() {
-        // This is what lets the bars carry no name: the opponent's runs along the top and the viewer's
-        // along the bottom, the same way the two halves of the board are arranged. A label repeating
-        // that would cost room on the one line the numbers have.
+    fun `a strip per seat in the rail, saying which seat it is by where it is`() {
+        // This is what lets the strips carry no name: they are in the status rail, the opponent's at
+        // the top of it and the viewer's at the bottom, the same way the two halves of the board are
+        // arranged. A label repeating that would cost room the numbers need.
         show(twoSeats())
 
         val opponent = composeTestRule.onNodeWithTag(VitalsTestTags.strip("them")).fetchSemanticsNode()
         val viewer = composeTestRule.onNodeWithTag(VitalsTestTags.strip("me")).fetchSemanticsNode()
+        val rail = composeTestRule.onNodeWithTag(StatusRailTestTags.RAIL).fetchSemanticsNode()
 
         assertTrue(
-            "the opponent's bar should be at the top, at ${opponent.positionInRoot.y}",
-            opponent.positionInRoot.y < SCREEN_HEIGHT_PX * 0.2f,
+            "the opponent's strip should be above the viewer's",
+            opponent.positionInRoot.y < viewer.positionInRoot.y,
         )
-        assertTrue(
-            "the viewer's bar should be at the bottom, ending at ${viewer.positionInRoot.y + viewer.size.height}",
-            viewer.positionInRoot.y + viewer.size.height > SCREEN_HEIGHT_PX * 0.8f,
-        )
-        listOf("the opponent's" to opponent, "the viewer's" to viewer).forEach { (who, bar) ->
-            val centre = bar.positionInRoot.x + bar.size.width / 2f
+        listOf("the opponent's" to opponent, "the viewer's" to viewer).forEach { (who, strip) ->
             assertTrue(
-                "$who bar should be centred, its middle is at $centre of $SCREEN_WIDTH_PX",
-                kotlin.math.abs(centre - SCREEN_WIDTH_PX / 2f) < 8f,
+                "$who strip should be inside the rail, which ends at ${rail.positionInRoot.x + rail.size.width}",
+                strip.positionInRoot.x >= rail.positionInRoot.x &&
+                    strip.positionInRoot.x < rail.positionInRoot.x + rail.size.width,
             )
         }
     }

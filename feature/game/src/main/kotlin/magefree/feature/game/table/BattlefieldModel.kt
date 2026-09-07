@@ -11,6 +11,8 @@ import magefree.designsystem.card.BoardCardState
 import magefree.designsystem.card.BoardCounter
 import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.card.CardDisplay
+import magefree.designsystem.card.CardPreviewAttachment
+import magefree.designsystem.card.CardPreviewState
 import magefree.network.game.CardIconType
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -67,6 +69,9 @@ typealias TableArtResolver = @Composable (CardArtRequest?, CardDisplay) -> CardA
  *   not also send. It is carried separately because it decides whether this may stack, and there the
  *   answer has to come from what the server said rather than from what we managed to resolve — a
  *   partial snapshot must not quietly merge two enchanted permanents into one.
+ * @property abilities the server's **game-aware** rules text — a creature granted flying until end of
+ *   turn has it here, and the printing does not. Carried so that inspecting a permanent can show what
+ *   it can do *now*, which is the whole difference between reading a board and reading a card.
  */
 data class TablePermanent(
     val id: String,
@@ -74,6 +79,24 @@ data class TablePermanent(
     val state: BoardCardState,
     val art: CardArtRequest? = null,
     val carriesAttachment: Boolean = false,
+    val abilities: List<String> = emptyList(),
+    val attached: List<TableAttachment> = emptyList(),
+)
+
+/**
+ * One permanent attached to another, as everything but the Board tier needs it.
+ *
+ * [BoardCardState.attachments] carries what the *card* draws — a name, a cost, whether it is turned.
+ * This carries what everything else needs: the printing to draw its face from, and the server's own
+ * text for it, so that reading the host reads what is on the host too.
+ *
+ * @property id the server's object id, which is what a press on the attachment's band names.
+ */
+data class TableAttachment(
+    val id: String,
+    val card: CardDisplay,
+    val art: CardArtRequest? = null,
+    val abilities: List<String> = emptyList(),
 )
 
 /**
@@ -205,7 +228,85 @@ const val PILE_FAN_LIMIT: Int = 3
 data class BattlefieldModel(
     val viewer: BattlefieldSide?,
     val opponents: List<BattlefieldSide>,
-)
+) {
+    /**
+     * A permanent by its server id, from either side, including the ones folded onto a host.
+     *
+     * Which side a card is on is not something a player asks when they tap it — they tap a card and
+     * expect to read it — so lookup crosses both, and it reaches attachments too because an Aura drawn
+     * on somebody else's creature is still a card somebody may want to read.
+     */
+    fun permanentById(id: String): TablePermanent? =
+        (listOfNotNull(viewer) + opponents)
+            .flatMap { it.permanents }
+            .firstOrNull { it.id == id }
+
+    /**
+     * An attached permanent by its id, from either side.
+     *
+     * Attachments are folded onto their hosts and so are not in anybody's `permanents` list, but they
+     * are still cards on the board with their own faces and their own text. A press on the band that
+     * an attachment stack exists to expose has to be able to find one.
+     */
+    fun attachmentById(id: String): TableAttachment? =
+        (listOfNotNull(viewer) + opponents)
+            .flatMap { side -> side.permanents.flatMap { it.attached } }
+            .firstOrNull { it.id == id }
+}
+
+/**
+ * A permanent as the inspect overlay shows it.
+ *
+ * The same overlay a card in hand opens, from the same gesture, because reading a card is one thing
+ * wherever the card is. What differs is only what there is to read: a permanent's abilities are the
+ * server's game-aware text, so a creature that can currently fly says so.
+ *
+ * @param oracleText the **printed** text, which the wire does not carry. Supplied by whoever is
+ *   showing the preview, from the device's own card database.
+ */
+fun permanentPreview(
+    permanent: TablePermanent,
+    oracleText: String? = null,
+): CardPreviewState =
+    CardPreviewState(
+        card = permanent.state.card,
+        power = permanent.state.power,
+        toughness = permanent.state.toughness,
+        abilities = permanent.abilities,
+        oracleText = oracleText,
+        // What is on the permanent is part of reading the permanent. Pacifism is the reason the Craw
+        // Wurm is not attacking, and at board size the Aura is a name band behind its host — so this
+        // is the only place its text can be read at all.
+        attachments =
+            permanent.attached.map { attachment ->
+                CardPreviewAttachment(
+                    name = attachment.card.name,
+                    manaCost = attachment.card.manaCost,
+                    rules = attachment.abilities,
+                )
+            },
+        // No action. A permanent's abilities are activated through the server's own prompt (§7.6), and
+        // a button here would be this client deciding what may be done, which is the one thing the
+        // cast flow refuses to do anywhere else.
+        action = null,
+    )
+
+/**
+ * An attached permanent as the inspect overlay shows it.
+ *
+ * The same overlay as its host's, because it is a card in play like any other — it is only drawn
+ * smaller. It carries no attachments of its own: nothing in Magic attaches to an Aura.
+ */
+fun attachmentPreview(
+    attachment: TableAttachment,
+    oracleText: String? = null,
+): CardPreviewState =
+    CardPreviewState(
+        card = attachment.card,
+        abilities = attachment.abilities,
+        oracleText = oracleText,
+        action = null,
+    )
 
 /** The battlefield in [state], arranged. */
 fun battlefieldModel(state: GameState): BattlefieldModel {
@@ -239,6 +340,8 @@ fun battlefieldModel(state: GameState): BattlefieldModel {
                                     ),
                                 art = artRequestOf(permanent.card),
                                 carriesAttachment = permanent.attachments.isNotEmpty(),
+                                abilities = permanent.card.rules,
+                                attached = attachedCardsOf(permanent, everyPermanent),
                             )
                         },
             )
@@ -309,6 +412,27 @@ private fun attachmentsOf(
             manaCost = attached.card.manaCost,
             tapped = attached.isTapped,
             controlledByOther = attached.attachedControllerDiffers,
+            id = attached.card.id,
+        )
+    }
+
+/** The same attachments, with the printings and text the card tier has no room for. */
+private fun attachedCardsOf(
+    permanent: GamePermanent,
+    everyPermanent: Map<String, GamePermanent>,
+): List<TableAttachment> =
+    permanent.attachments.mapNotNull { id ->
+        val attached = everyPermanent[id] ?: return@mapNotNull null
+        TableAttachment(
+            id = attached.card.id,
+            card =
+                CardDisplay(
+                    name = attached.card.name,
+                    manaCost = attached.card.manaCost,
+                    typeLine = attached.card.typeLine,
+                ),
+            art = artRequestOf(attached.card),
+            abilities = attached.card.rules,
         )
     }
 

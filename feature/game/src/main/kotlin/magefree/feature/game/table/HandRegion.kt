@@ -60,7 +60,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun HandRegion(
-    cards: List<TableHandCard>,
+    cards: List<TableCard>,
     tileWidth: Dp,
     modifier: Modifier = Modifier,
     artFor: TableArtResolver? = null,
