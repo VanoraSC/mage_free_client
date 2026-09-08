@@ -52,6 +52,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.StartMatch
 import magefree.protocol.StopWatching
 import magefree.protocol.SubmitDeck
@@ -287,6 +288,13 @@ public class SessionCoordinator(
                             } else {
                                 closing?.live?.close()
                             }
+                        }
+
+                        // The player's stops. Applied to the live upstream user, because the skipping
+                        // is the server's: `HumanPlayer.priority()` reads its own copy and passes
+                        // without ever sending the client a prompt.
+                        is SetPriorityStops -> {
+                            bound?.live?.setPriorityStops(message)
                         }
 
                         is GetServerInfo -> {

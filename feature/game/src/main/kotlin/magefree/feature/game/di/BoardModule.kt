@@ -3,25 +3,32 @@ package magefree.feature.game.di
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
 import magefree.feature.game.board.PassPolicy
+import magefree.feature.game.board.StopStore
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 /**
  * Koin provisioning for `:feature:game` (was Hilt's `BoardModule`).
  *
- * It binds one thing beyond the ViewModel: the [PassPolicy] the board answers priority prompts with
- *. That is the whole point of the seam — **when stops and configurable
- * auto-pass arrive, this binding is what changes**, and nothing in the ViewModel or on the screen
- * has to.
+ * **The pass policy stays manual, and stops did not change that.** The seam was written expecting
+ * auto-pass to arrive as a policy here; it arrived somewhere else entirely. `HumanPlayer.priority()`
+ * reads the player's own `UserSkipPrioritySteps` on the *server* and passes without ever sending the
+ * client a prompt, so a client-side policy can only decline questions it was asked — and the questions
+ * a stop is about are the ones it never receives. The stops are sent upstream instead
+ * (`GameClient.setPriorityStops`), and every prompt that does arrive is one the player asked for.
  *
- * Hilt scoped the policy to `ViewModelComponent`, because it belongs to one board's lifetime. Koin's
- * equivalent is a `factory`: a fresh instance per resolution, which is what the ViewModel scope gave.
- * A future policy that reads persisted stop settings would take them as parameters here.
+ * The store is a `single`: stops belong to the player, and a match plays several games through several
+ * boards. Set once, played with.
  */
 val boardModule =
     module {
-        /** Everything explicit and manual, as this release ships. */
+        /** What the player has asked to be stopped at. Outlives any one game. */
+        single { StopStore() }
+
+        /** Everything explicit and manual: the skipping the player wants is the server's to do. */
         factory<PassPolicy> { ManualPassPolicy }
 
-        viewModel { GameBoardViewModel(gameClient = get(), passPolicy = get(), cardCatalog = get()) }
+        viewModel {
+            GameBoardViewModel(gameClient = get(), passPolicy = get(), cardCatalog = get(), stops = get())
+        }
     }

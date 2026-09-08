@@ -1,11 +1,14 @@
 package magefree.feature.game.table
 
 import magefree.designsystem.component.phase.PhaseBarTurn
+import magefree.designsystem.component.phase.PhaseStop
 import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
+import magefree.feature.game.board.BoardStops
 import magefree.network.game.GameState
 import magefree.network.game.PhaseStep
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -69,6 +72,83 @@ class TablePhasesTest {
         val unnamed = stateAt(PhaseStep.PrecombatMain).copy(activePlayerId = null, viewerPlayerId = null)
 
         assertEquals(PhaseBarTurn.Opponents, phaseBarState(unnamed).turn)
+    }
+
+    @Test
+    fun `the combat steps are locked stops on either side of the turn`() {
+        // Not a choice this app makes: `SkipPrioritySteps.isPhaseStepSet` has seven cases and a
+        // `default: return true`, so the server always gives priority in declare attackers, declare
+        // blockers and combat damage. That is the mandatory window after blockers and before damage,
+        // and it needs no condition on there having been an attack — with no attackers those steps do
+        // not happen at all.
+        val theirTurn = stateAt(PhaseStep.Upkeep).copy(activePlayerId = "p-opp")
+
+        listOf(stateAt(PhaseStep.Upkeep), theirTurn).forEach { state ->
+            val locked = lockedStops(state)
+            assertTrue("declare attackers always stops", StepIds.DECLARE_ATTACKERS in locked)
+            assertTrue("declare blockers always stops", StepIds.DECLARE_BLOCKERS in locked)
+            assertTrue("combat damage always stops", StepIds.COMBAT_DAMAGE in locked)
+        }
+    }
+
+    @Test
+    fun `your own main phases are locked, and an opponent's are not`() {
+        // A turn you cannot act in is not a turn you are playing — but that is only true of *your*
+        // turn. Watching an opponent's main phase is exactly the thing a player turns off.
+        val yours = lockedStops(stateAt(PhaseStep.PrecombatMain))
+        val theirs = lockedStops(stateAt(PhaseStep.PrecombatMain).copy(activePlayerId = "p-opp"))
+
+        assertTrue(StepIds.PRECOMBAT_MAIN in yours)
+        assertTrue(StepIds.POSTCOMBAT_MAIN in yours)
+        assertFalse(StepIds.PRECOMBAT_MAIN in theirs)
+        assertFalse(StepIds.POSTCOMBAT_MAIN in theirs)
+    }
+
+    @Test
+    fun `a locked step is drawn as a standing stop the player cannot press away`() {
+        // The bar and the server have to agree: a step the server will always stop at must not offer a
+        // control that says otherwise.
+        val steps =
+            phaseBarState(
+                stateAt(PhaseStep.PrecombatMain),
+                locked = lockedStops(stateAt(PhaseStep.PrecombatMain)),
+            ).steps.associateBy { it.id }
+
+        val main1 = steps.getValue(StepIds.PRECOMBAT_MAIN)
+        assertEquals(PhaseStop.Always, main1.stop)
+        assertFalse("a rule is not a setting", main1.stoppable)
+        assertEquals(PhaseStop.Always, steps.getValue(StepIds.DECLARE_BLOCKERS).stop)
+        assertFalse(steps.getValue(StepIds.DECLARE_BLOCKERS).stoppable)
+    }
+
+    @Test
+    fun `an unlocked step still shows what the player set`() {
+        val stops = BoardStops(mapOf(StepIds.UPKEEP to PhaseStop.Once))
+
+        val steps =
+            phaseBarState(
+                stateAt(PhaseStep.Upkeep),
+                stops = stops,
+                locked = lockedStops(stateAt(PhaseStep.Upkeep)),
+            ).steps.associateBy { it.id }
+
+        assertEquals(PhaseStop.Once, steps.getValue(StepIds.UPKEEP).stop)
+        assertTrue(steps.getValue(StepIds.UPKEEP).stoppable)
+    }
+
+    @Test
+    fun `the mark is the same whoever's turn it is`() {
+        // One row of marks, one meaning. A bar that drew a different mark on each side made the same
+        // press mean different things depending on when it was made, which is exactly what confused
+        // the player: a stop pressed on your own turn that let the opponent's step go past.
+        val stops = BoardStops(mapOf(StepIds.END_TURN to PhaseStop.Always))
+        val theirTurn = stateAt(PhaseStep.EndTurn).copy(activePlayerId = "p-opp")
+
+        val onYours = phaseBarState(stateAt(PhaseStep.EndTurn), stops = stops).steps.associateBy { it.id }
+        val onTheirs = phaseBarState(theirTurn, stops = stops).steps.associateBy { it.id }
+
+        assertEquals(PhaseStop.Always, onYours.getValue(StepIds.END_TURN).stop)
+        assertEquals(PhaseStop.Always, onTheirs.getValue(StepIds.END_TURN).stop)
     }
 
     private fun stateAt(step: PhaseStep) =

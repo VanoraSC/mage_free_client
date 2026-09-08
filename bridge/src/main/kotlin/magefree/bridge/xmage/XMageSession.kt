@@ -2,6 +2,7 @@ package magefree.bridge.xmage
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import mage.players.net.UserData
 import mage.remote.Connection
 import mage.remote.SessionImpl
 import magefree.bridge.mapping.GameRelay
@@ -368,4 +369,18 @@ public class XMageSession(
             session.connectStop(false, false)
         }
     }
+
+    /**
+     * Applies [userData] to the live upstream session via `SessionImpl.updatePreferencesForServer`.
+     *
+     * **This is how a preference reaches the server mid-session**, and it is what the desktop client
+     * calls when its own preferences dialog is accepted. The server merges rather than replaces:
+     * `Session.setUserData` calls `UserData.update`, which copies the skip steps wholesale.
+     *
+     * Returns the session's own flag; `false` when it is not connected.
+     */
+    public suspend fun updatePreferences(userData: UserData): Boolean =
+        withContext(Dispatchers.IO) {
+            session.updatePreferencesForServer(userData)
+        }
 }

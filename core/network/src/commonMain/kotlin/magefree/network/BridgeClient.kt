@@ -79,4 +79,18 @@ interface BridgeClient {
         message: Any,
         requestId: String,
     ): ReplyT
+
+    /**
+     * Send [message] on the live session socket and return, without awaiting a reply.
+     *
+     * For the things that are **told** to the bridge rather than asked of it — a preference the server
+     * applies with no result to report. Everything the caller needs to know afterwards arrives, if at
+     * all, on the ordinary push stream.
+     *
+     * Wire-agnostic for the same reason [request] is: `message` is erased to `Any` so no `:protocol`
+     * type reaches this ABI, and callers inside `:core:network` supply the concrete type.
+     *
+     * Throws if there is no active session, exactly as [request] does.
+     */
+    suspend fun send(message: Any)
 }

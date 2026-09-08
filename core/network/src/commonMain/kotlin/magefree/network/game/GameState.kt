@@ -748,3 +748,17 @@ open class GameActionFailure(
 class GameSessionGoneFailure(
     reason: String?,
 ) : GameActionFailure(reason ?: "your session has ended; sign in again")
+
+/**
+ * The typed failure a [GameClient] verb surfaces when the action **never left the app** — there was no
+ * socket to the bridge when it was sent, or the socket ended with the reply still outstanding.
+ *
+ * Distinct from [GameSessionGoneFailure], which is the bridge answering that *it* had nothing to act
+ * through: that one needs a new sign-in, this one usually needs nothing at all, because the client
+ * reconnects on its own and the same action can simply be taken again. Distinct from a plain
+ * [GameActionFailure] for the reason that matters to a player: the server never saw this, so it did not
+ * decline anything, and saying that it did is a lie about the rules of the game.
+ */
+class GameUnreachableFailure(
+    override val cause: Throwable?,
+) : GameActionFailure("the connection dropped before the server saw it")

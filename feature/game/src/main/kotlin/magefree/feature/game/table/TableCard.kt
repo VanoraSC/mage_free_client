@@ -130,7 +130,10 @@ const val CAST_LABEL: String = "Cast"
  * Empty for a spectator, who has no hand — and empty is a real state the board draws as nothing rather
  * than as an empty region, which is §7.4's rule about regions that hold height.
  */
-fun handCards(state: GameState): List<TableCard> = state.hand.map { card -> card.asTableCard(state, TableCardZone.Hand) }
+fun handCards(
+    state: GameState,
+    picks: PromptPicks = PromptPicks(),
+): List<TableCard> = state.hand.map { card -> card.asTableCard(state, TableCardZone.Hand, picks) }
 
 /**
  * One player's graveyard, in the server's own order.
@@ -168,6 +171,7 @@ fun exileCards(
 internal fun GameCard.asTableCard(
     state: GameState,
     zone: TableCardZone,
+    picks: PromptPicks = PromptPicks(),
 ): TableCard {
     val offered = state.playable.firstOrNull { it.objectId == id }
     return TableCard(
@@ -180,7 +184,15 @@ internal fun GameCard.asTableCard(
                 oracleText = rules.joinToString("\n").takeIf { it.isNotBlank() },
             ),
         art = zoneArtRequest(setCode, collectorNumber),
-        signal = if (offered != null) BoardCardSignal.Playable else null,
+        // **The question outranks the affordance.** A card that is both castable and one of the
+        // answers to what the server is asking has to show the second: casting it is not something
+        // the player can do while a prompt is outstanding, and answering is.
+        signal =
+            when {
+                id in picks.pickable -> BoardCardSignal.Pickable
+                offered != null -> BoardCardSignal.Playable
+                else -> null
+            },
         isLand = CardType.Land in cardTypes,
         power = shownPower,
         toughness = shownToughness,

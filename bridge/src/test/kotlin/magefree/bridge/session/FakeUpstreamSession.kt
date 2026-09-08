@@ -23,6 +23,7 @@ import magefree.protocol.SendPlayerString
 import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.StartMatch
 import magefree.protocol.StopWatching
 import magefree.protocol.SubmitDeck
@@ -152,6 +153,27 @@ public class FakeUpstreamSession(
         lastGameRequest = request
         return GameActionResult(action = gameActionOf(request), ok = scriptedActionOk)
     }
+
+    /**
+     * The last stops the coordinator applied, so a test can assert the server was actually told.
+     *
+     * `SetPriorityStops` is told rather than asked — there is no reply to wait on — so the arrival is
+     * awaited through [awaitPriorityStops] instead of by reading the socket.
+     */
+    @Volatile
+    public var lastPriorityStops: SetPriorityStops? = null
+        private set
+
+    private val priorityStopsSignal = Channel<SetPriorityStops>(capacity = Channel.UNLIMITED)
+
+    override suspend fun setPriorityStops(request: SetPriorityStops): Boolean {
+        lastPriorityStops = request
+        priorityStopsSignal.send(request)
+        return true
+    }
+
+    /** Suspends until the coordinator routes a `SetPriorityStops` here, and answers what it carried. */
+    public suspend fun awaitPriorityStops(): SetPriorityStops = priorityStopsSignal.receive()
 
     /**
      * The same message→code mapping [XMageUpstreamSession] applies, so the double answers the *right*

@@ -104,6 +104,15 @@ const val PLAY_ACTION_LABEL: String = "Play"
 
 const val TARGET_ACTION_LABEL: String = "Choose as target"
 
+/**
+ * What the same card offers once it has been chosen.
+ *
+ * Upstream toggles: `HumanPlayer.choose` removes a target sent a second time, and keeps it in the
+ * candidate list so it can be. A button that still said *choose* would take the choice back while
+ * claiming to make it.
+ */
+const val UNPICK_ACTION_LABEL: String = "Take back this choice"
+
 const val MANA_ACTION_LABEL: String = "Tap for mana"
 
 /** Closes the tapped-card detail without acting (any tap elsewhere closes it). */

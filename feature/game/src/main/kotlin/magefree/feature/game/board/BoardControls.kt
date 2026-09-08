@@ -314,6 +314,22 @@ sealed interface PromptControlsUi {
     /** Board objects the server says are already chosen for this prompt. */
     val chosenObjectIds: Set<String> get() = emptySet()
 
+    /**
+     * Whether the board should mark [pickableObjectIds] and [chosenObjectIds] as *the answer to this
+     * question* — see `PromptPicks`.
+     *
+     * False by default, and false for the two prompts that already have a signal of their own: a
+     * priority window's candidates are `Playable`, a mana payment's are the cost being assembled. Both
+     * of those are established board colours, and painting them over with a third would lose the
+     * distinction rather than add one.
+     *
+     * True where the board otherwise says **nothing**: targeting and combat declarations. Those are
+     * the prompts whose candidates are ordinary permanents on either battlefield, drawn exactly like
+     * permanents nobody is asking about — which is what made "separate all permanents into two piles"
+     * unanswerable in a real game.
+     */
+    val marksCandidatesOnBoard: Boolean get() = false
+
     /** Cards the prompt carried itself, for prompts whose candidates are not on the board. */
     val candidateCards: List<CandidateCardUi> get() = emptyList()
 
@@ -392,6 +408,8 @@ sealed interface PromptControlsUi {
         /** A declared creature is also *chosen*, so the board marks it as one. */
         override val chosenObjectIds: Set<String> get() = withdrawableObjectIds
 
+        override val marksCandidatesOnBoard: Boolean get() = true
+
         /**
          * A declaration pick is a `chooseTarget` — the same verb targeting uses, which is what upstream
          * expects here (`HumanPlayer` answers both from the same select loop, and the probes declared
@@ -444,10 +462,25 @@ sealed interface PromptControlsUi {
         override val buttons: List<ControlButton>,
         val hasPicked: Boolean,
     ) : PromptControlsUi {
+        override val marksCandidatesOnBoard: Boolean get() = true
+
         override fun actionFor(objectId: String): BoardAction? =
             if (objectId in pickableObjectIds) BoardAction.ChooseTarget(objectId) else null
 
-        override fun actionLabelFor(objectId: String): String? = if (objectId in pickableObjectIds) TARGET_ACTION_LABEL else null
+        /**
+         * **A chosen target is pressed again to take it back**, and the label has to say so.
+         *
+         * That is upstream's own rule, not an invention: `HumanPlayer.choose` answers a response id it
+         * already holds with `target.remove(responseId)`, and `TargetPermanent.possibleTargets` keeps a
+         * chosen permanent in the candidate list precisely so it can be sent again. A card labelled
+         * "select" that in fact deselects is the same defect the combat declaration had.
+         */
+        override fun actionLabelFor(objectId: String): String? =
+            when {
+                objectId in chosenObjectIds -> UNPICK_ACTION_LABEL
+                objectId in pickableObjectIds -> TARGET_ACTION_LABEL
+                else -> null
+            }
     }
 
     /**

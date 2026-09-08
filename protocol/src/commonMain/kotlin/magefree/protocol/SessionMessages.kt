@@ -121,3 +121,47 @@ public enum class SessionStateCode {
     /** The upstream connection dropped and a reconnect is in progress. */
     RECONNECTING,
 }
+
+/**
+ * Which steps the server should give this player priority in, for one side of the turn.
+ *
+ * **A direct mirror of upstream's `SkipPrioritySteps`** — the same seven fields, the same meaning, the
+ * same defaults. `true` means *stop here*; the server passes for the player at any step that is false
+ * and has an empty stack (`HumanPlayer.checkPassStep`). The bridge translates this onto the upstream
+ * type and does not interpret it.
+ *
+ * **The seven are all there are.** Every other step — declare attackers, declare blockers, combat
+ * damage, untap, cleanup — is `default: return true` in upstream's own `isPhaseStepSet`, so the server
+ * always gives priority there and no setting exists to change it.
+ */
+@Serializable
+public data class PriorityStops(
+    val upkeep: Boolean = false,
+    val draw: Boolean = false,
+    val main1: Boolean = true,
+    val beforeCombat: Boolean = false,
+    val endOfCombat: Boolean = false,
+    val main2: Boolean = true,
+    val endOfTurn: Boolean = false,
+)
+
+/**
+ * App→bridge: set which priority windows the server should stop at, per side of the turn.
+ *
+ * **The skipping is the server's, not the client's.** `HumanPlayer.priority()` consults the player's
+ * own `UserSkipPrioritySteps` and passes without ever sending the client a prompt, so a stop the app
+ * has not told the server about is a stop that cannot happen. The bridge applies these through
+ * `SessionImpl.updatePreferencesForServer`, which is what the desktop client does when its
+ * preferences change; the server merges them into the live user (`UserData.update` copies
+ * `userSkipPrioritySteps` wholesale).
+ *
+ * Sent whenever the player changes a stop, and on connect so the server starts from what they set
+ * last rather than from its own defaults.
+ */
+@Serializable
+@SerialName("set_priority_stops")
+public data class SetPriorityStops(
+    val yourTurn: PriorityStops = PriorityStops(),
+    val opponentTurn: PriorityStops = PriorityStops(),
+    val requestId: String? = null,
+) : ClientMessage

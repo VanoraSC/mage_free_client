@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import magefree.model.ConnectionState
 import magefree.network.BridgeClient
+import magefree.network.BridgeSessionUnavailable
 import magefree.network.ServerPushSource
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameFailureCode
@@ -25,6 +26,7 @@ import magefree.protocol.GameStateUnavailableCode
 import magefree.protocol.GetGameState
 import magefree.protocol.JoinGame
 import magefree.protocol.PlayerActionCode
+import magefree.protocol.PriorityStops
 import magefree.protocol.QuitMatch
 import magefree.protocol.SendPlayerAction
 import magefree.protocol.SendPlayerBoolean
@@ -33,6 +35,7 @@ import magefree.protocol.SendPlayerManaType
 import magefree.protocol.SendPlayerString
 import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerMessage
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.StopWatching
 import magefree.protocol.WatchGame
 import kotlin.uuid.Uuid
@@ -93,6 +96,18 @@ internal class DefaultGameClient(
     ): Result<Unit> = sendUuid(gameId, objectId)
 
     override suspend fun passPriority(gameId: String): Result<Unit> = sendBoolean(gameId, false)
+
+    override suspend fun setPriorityStops(
+        yourTurn: PriorityStopSteps,
+        opponentTurn: PriorityStopSteps,
+    ): Result<Unit> =
+        runCatching {
+            // Told, not asked: the bridge applies it to the live upstream user and has nothing to
+            // report back. Whether the server then stops is visible only as a prompt arriving.
+            bridgeClient.send(
+                SetPriorityStops(yourTurn = yourTurn.wire(), opponentTurn = opponentTurn.wire()),
+            )
+        }
 
     override suspend fun useSpecialAction(gameId: String): Result<Unit> = sendString(gameId, SPECIAL)
 
@@ -353,6 +368,11 @@ internal class DefaultGameClient(
      * (no session / timeout / drop from `request`) is captured as a failed [Result], so a caller always
      * gets a [Result] and never an unhandled throw. [CancellationException] is re-thrown so structured
      * cancellation is preserved.
+     *
+     * **A missing socket is classified rather than passed through raw.** `BridgeSessionUnavailable`
+     * carries a request id in its message and no idea of what a player is looking at; a caller that
+     * surfaced it verbatim would tell them the *server* declined their move, naming a UUID. It becomes
+     * a [GameUnreachableFailure] here, at the boundary that knows the difference.
      */
     private inline fun action(block: (id: String) -> ServerMessage): Result<Unit> =
         try {
@@ -362,6 +382,8 @@ internal class DefaultGameClient(
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: BridgeSessionUnavailable) {
+            Result.failure(GameUnreachableFailure(e))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -405,3 +427,15 @@ internal class DefaultGameClient(
         const val SPECIAL_CHOICE_PREFIX: String = "#"
     }
 }
+
+/** The app's stop steps as the wire's, which is a field-for-field mirror of upstream's own type. */
+private fun PriorityStopSteps.wire(): PriorityStops =
+    PriorityStops(
+        upkeep = upkeep,
+        draw = draw,
+        main1 = main1,
+        beforeCombat = beforeCombat,
+        endOfCombat = endOfCombat,
+        main2 = main2,
+        endOfTurn = endOfTurn,
+    )

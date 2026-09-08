@@ -233,9 +233,11 @@ internal fun FloatingControls(
                 )
             }
 
-            actionError?.let { reason ->
+            // Already a whole sentence: whether the server refused the move or the move never reached
+            // it is part of what has to be said, and only the ViewModel knows which happened.
+            actionError?.let { message ->
                 Text(
-                    text = "$ACTION_FAILED_PREFIX $reason",
+                    text = message,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     maxLines = 2,

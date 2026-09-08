@@ -30,6 +30,7 @@ import magefree.designsystem.card.CardPreview
 import magefree.designsystem.card.CardPreviewState
 import magefree.designsystem.component.MageSecondaryButton
 import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.PhaseStop
 import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.designsystem.theme.MageTheme
@@ -92,7 +93,7 @@ fun BattlefieldPreviewScreen(
     var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
     var reading by remember { mutableStateOf<ReadingCard?>(null) }
     // The stops are the one part of the phase bar a player changes, so the preview keeps them live.
-    var stops by remember { mutableStateOf(setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN)) }
+    var stops by remember { mutableStateOf(emptyMap<String, PhaseStop>()) }
     val board = catalogBoard(step)
 
     // The stacking rule is about a *transition* — a card turning a quarter and travelling into the
@@ -111,8 +112,20 @@ fun BattlefieldPreviewScreen(
                 onPlayFromHand = { id -> inspected = "played $id" },
                 vitals = tableVitals(state),
                 onExpandVitals = { seat -> expandedSeat = seat },
-                phases = PhaseBarState(steps = standardTurnSteps(stops), currentStepId = StepIds.PRECOMBAT_MAIN),
-                onToggleStop = { step -> stops = if (step.id in stops) stops - step.id else stops + step.id },
+                phases =
+                    PhaseBarState(
+                        steps =
+                            standardTurnSteps(
+                                stops = stops,
+                                // The mains are rules on your own turn, and the preview is always yours.
+                                locked = setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN),
+                            ),
+                        currentStepId = StepIds.PRECOMBAT_MAIN,
+                    ),
+                // The same three-state cycle the board runs, so the preview shows what a press does.
+                onToggleStop = { step ->
+                    stops = stops + (step.id to (stops[step.id] ?: PhaseStop.None).next())
+                },
                 artFor = artFor,
                 // §7.1: a tap on a card *is* the way to read it, wherever the card is. On the
                 // battlefield there is nothing else a tap could mean until the board is wired to a

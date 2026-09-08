@@ -4,6 +4,8 @@ import magefree.designsystem.component.phase.PhaseBarState
 import magefree.designsystem.component.phase.PhaseBarTurn
 import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
+import magefree.feature.game.board.BoardStops
+import magefree.feature.game.board.OWN_MAIN_PHASE_STOPS
 import magefree.network.game.GameState
 import magefree.network.game.PhaseStep
 
@@ -17,30 +19,44 @@ import magefree.network.game.PhaseStep
  * answers null for the rest — a turn passing through untap simply leaves the marker where it was
  * rather than jumping somewhere that is not shown.
  *
- * **The stops are upstream's own default and are not toggled here.** Nothing in this app yet acts on
- * a stop: `ManualPassPolicy` never passes on its own, so every step is one the player is asked at. A
- * toggle that changed a picture and nothing else would be a control that lies, so 0112 draws the bar
- * and leaves the toggling to the story that gives `PassPolicy` something to read.
+ * **The stops are the player's, and one row of marks means one thing.** Upstream keeps a
+ * `SkipPrioritySteps` per side, but the bar has one row and cannot draw a per-side distinction — so a
+ * mark is about the *step*, on both turns, and both of upstream's sides are sent the same set. Which
+ * stops are *rules* rather than settings is [lockedStops], and those are the server's rules, read out
+ * of `SkipPrioritySteps.isPhaseStepSet` and `BoardStops.asSteps`, so the mark and the stop cannot
+ * disagree.
  */
 
 /**
  * The phase bar for one snapshot.
  *
+ * **One row, one meaning.** A mark says the game stops at that step — blue at its next occurrence,
+ * red every time — whoever's turn it is. The bar drew a per-side row before, which made the same
+ * press mean different things depending on when it was made.
+ *
  * @param state the server's own game view.
+ * @param stops what the player has asked to be stopped at.
+ * @param locked the steps whose stop is a rule rather than a setting, for this turn.
  */
-fun phaseBarState(state: GameState): PhaseBarState =
-    PhaseBarState(
-        steps = standardTurnSteps(),
+fun phaseBarState(
+    state: GameState,
+    stops: BoardStops = BoardStops(),
+    locked: Set<String> = emptySet(),
+): PhaseBarState {
+    val isYourTurn = state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId
+    return PhaseBarState(
+        steps = standardTurnSteps(stops = stops.byStep, locked = locked),
         currentStepId = state.step.barStepId(),
         // Whose turn it is, from the seat the server marked active rather than from who holds
         // priority: the bar says *whose turn*, and priority moves within a turn several times.
         turn =
-            if (state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId) {
+            if (isYourTurn) {
                 PhaseBarTurn.Yours
             } else {
                 PhaseBarTurn.Opponents
             },
     )
+}
 
 /**
  * The bar's id for a step, or null for a step the bar does not draw.
@@ -62,4 +78,27 @@ private fun PhaseStep.barStepId(): String? =
         PhaseStep.PostcombatMain -> StepIds.POSTCOMBAT_MAIN
         PhaseStep.EndTurn -> StepIds.END_TURN
         PhaseStep.Untap, PhaseStep.Cleanup, PhaseStep.Unknown -> null
+    }
+
+/**
+ * The steps whose stop is a **rule** for this snapshot, rather than something the player set.
+ *
+ * **The combat steps, always.** `SkipPrioritySteps.isPhaseStepSet` has seven cases and a
+ * `default: return true`, so declare attackers, declare blockers and combat damage are not steps a
+ * stop can be lifted from — the server gives priority in all three however the flags are set. That is
+ * where the mandatory window after blockers are declared and before damage comes from, and why it
+ * needs no condition on there having been an attack: with no attackers those steps do not happen.
+ *
+ * **Your own main phases**, because a turn you cannot act in is not a turn you are playing. That one
+ * is a rule this client enforces, by forcing the flags in [OWN_MAIN_PHASE_STOPS] on the way to the
+ * server — so the lock in the bar and the stop the server makes are the same fact stated twice.
+ */
+fun lockedStops(state: GameState): Set<String> =
+    buildSet {
+        add(StepIds.DECLARE_ATTACKERS)
+        add(StepIds.DECLARE_BLOCKERS)
+        add(StepIds.COMBAT_DAMAGE)
+        if (state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId) {
+            addAll(OWN_MAIN_PHASE_STOPS)
+        }
     }

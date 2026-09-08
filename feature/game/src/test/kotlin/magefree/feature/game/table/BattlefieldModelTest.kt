@@ -2,6 +2,12 @@ package magefree.feature.game.table
 
 import magefree.designsystem.card.BoardBadge
 import magefree.designsystem.card.BoardCardSignal
+import magefree.designsystem.card.BoardFocus
+import magefree.designsystem.card.focalSignal
+import magefree.feature.game.board.BoardAction
+import magefree.feature.game.board.PromptControlsUi
+import magefree.feature.game.board.TARGET_ACTION_LABEL
+import magefree.feature.game.board.UNPICK_ACTION_LABEL
 import magefree.network.game.CardIconType
 import magefree.network.game.CardType
 import magefree.network.game.CombatGroup
@@ -242,6 +248,88 @@ class BattlefieldModelTest {
         assertEquals(null, model.viewer)
         assertEquals(listOf("a", "b"), model.opponents.map { it.playerId })
     }
+
+    // ---- the question the board is being asked ------------------------------------------------
+
+    @Test
+    fun `a permanent the outstanding prompt can be answered with says so`() {
+        // The defect this exists for: Liliana's -6 asks the player to separate an opponent's
+        // permanents into two piles, and the board drew those permanents exactly like permanents
+        // nobody was asking about. There was nothing on screen to say which cards answered the
+        // question — or, once one was picked, that anything had happened at all.
+        val state = stateWith(viewer = listOf(bears(), forest()))
+
+        val model = battlefieldModel(state, PromptPicks(pickable = setOf("forest")))
+
+        val side = model.viewer!!
+        assertTrue(BoardCardSignal.Pickable in side.permanentById("forest").state.signals)
+        assertTrue(BoardCardSignal.Pickable !in side.permanentById("bears").state.signals)
+    }
+
+    @Test
+    fun `the question outranks whatever else the card is saying`() {
+        // A creature that is attacking *and* is one of the cards the question is about must show the
+        // question: answering is the only thing the player can do while the server is waiting.
+        val signals = setOf(BoardCardSignal.Attacking, BoardCardSignal.Pickable)
+
+        assertEquals(BoardCardSignal.Pickable, focalSignal(signals, BoardFocus.Combat))
+        assertEquals(BoardCardSignal.Pickable, focalSignal(signals, BoardFocus.Quiet))
+    }
+
+    @Test
+    fun `a prompt the board already draws its own way is not painted over`() {
+        // A priority window's candidates are `Playable` and a mana payment's are the cost being
+        // assembled. Both are established board colours; a third on top of them would lose the
+        // distinction rather than add one.
+        val priority =
+            PromptControlsUi.Priority(
+                message = "Play something",
+                pickableObjectIds = setOf("forest"),
+                buttons = emptyList(),
+            )
+
+        assertEquals(PromptPicks(), priority.boardPicks())
+        assertEquals(PromptPicks(), (null as PromptControlsUi?).boardPicks())
+    }
+
+    @Test
+    fun `a targeting prompt hands the board its candidates`() {
+        val targeting =
+            PromptControlsUi.Targeting(
+                message = "Select permanents to put in the first pile",
+                pickableObjectIds = setOf("forest", "swamp"),
+                chosenObjectIds = setOf("forest"),
+                candidateCards = emptyList(),
+                buttons = emptyList(),
+                hasPicked = true,
+            )
+
+        assertEquals(PromptPicks(pickable = setOf("forest", "swamp")), targeting.boardPicks())
+    }
+
+    @Test
+    fun `a card already chosen offers to take the choice back, not to choose it again`() {
+        // Upstream toggles: `HumanPlayer.choose` removes a target sent a second time, and
+        // `TargetPermanent.possibleTargets` keeps it in the candidate list so it can be. A button
+        // still reading "choose" would take the choice back while claiming to make it.
+        val targeting =
+            PromptControlsUi.Targeting(
+                message = "Select permanents to put in the first pile",
+                pickableObjectIds = setOf("forest", "swamp"),
+                chosenObjectIds = setOf("forest"),
+                candidateCards = emptyList(),
+                buttons = emptyList(),
+                hasPicked = true,
+            )
+
+        assertEquals(UNPICK_ACTION_LABEL, targeting.actionLabelFor("forest"))
+        assertEquals(TARGET_ACTION_LABEL, targeting.actionLabelFor("swamp"))
+        assertNull(targeting.actionLabelFor("mountain"))
+        assertEquals(BoardAction.ChooseTarget("forest"), targeting.actionFor("forest"))
+    }
+
+    private fun BattlefieldSide.permanentById(id: String) =
+        PermanentRole.entries.firstNotNullOf { role -> inRole(role).firstOrNull { it.id == id } }
 }
 
 private fun stateWith(viewer: List<GamePermanent>) =
