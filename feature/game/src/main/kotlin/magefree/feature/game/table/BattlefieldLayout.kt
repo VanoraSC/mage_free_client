@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
+import magefree.designsystem.card.BoardFocus
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.boardCardWidthFitting
 import magefree.designsystem.card.rememberCounterPalette
@@ -121,6 +122,7 @@ fun BattlefieldLayout(
     artFor: TableArtResolver? = null,
     onInspect: ((String) -> Unit)? = null,
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)? = null,
+    focus: BoardFocus = BoardFocus.Quiet,
     hand: List<TableCard> = emptyList(),
     playableElsewhere: List<TableCard> = emptyList(),
     onPlayFromHand: ((String) -> Unit)? = null,
@@ -137,185 +139,187 @@ fun BattlefieldLayout(
     // positions rather than from a second copy of this layout's arithmetic.
     val anchors = rememberBoardAnchors()
 
-    BoxWithConstraints(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(BoardSurface.table)
-                .testTag(BattlefieldTestTags.BOARD)
-                .then(anchors.rootModifier()),
-    ) {
-        val sides = model.opponents + listOfNotNull(model.viewer)
-        val boardWidth = maxWidth - BoardMargin * 2
-        val boardHeight = maxHeight - BoardMargin * 2
+    androidx.compose.runtime.CompositionLocalProvider(LocalBoardFocus provides focus) {
+        BoxWithConstraints(
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .background(BoardSurface.table)
+                    .testTag(BattlefieldTestTags.BOARD)
+                    .then(anchors.rootModifier()),
+        ) {
+            val sides = model.opponents + listOfNotNull(model.viewer)
+            val boardWidth = maxWidth - BoardMargin * 2
+            val boardHeight = maxHeight - BoardMargin * 2
 
-        // The bottom of the screen is the hand with the phase bar resting on it. Both belong to the
-        // viewer and both are read between decisions, so they sit together and the board's own rows
-        // stop above them rather than being overlaid by them.
-        val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
-        val bottomStack = bottomStackHeight(hand, handTile, phases != null)
-        val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
-        val sideHeight = contentHeight / sides.size.coerceAtLeast(1)
+            // The bottom of the screen is the hand with the phase bar resting on it. Both belong to the
+            // viewer and both are read between decisions, so they sit together and the board's own rows
+            // stop above them rather than being overlaid by them.
+            val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
+            val bottomStack = bottomStackHeight(hand, handTile, phases != null)
+            val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
+            val sideHeight = contentHeight / sides.size.coerceAtLeast(1)
 
-        // **The rail is a column of numbers, so it is as narrow as numbers are.** It was a card wide
-        // while it drew the top card of every pile; those became counts, and the width they were using
-        // went back to the battlefield.
-        val hasRail = vitals.isNotEmpty()
-        val railWidth = if (hasRail) RailWidth else 0.dp
-        val afterRail = boardWidth - railWidth - if (hasRail) ZoneGap else 0.dp
+            // **The rail is a column of numbers, so it is as narrow as numbers are.** It was a card wide
+            // while it drew the top card of every pile; those became counts, and the width they were using
+            // went back to the battlefield.
+            val hasRail = vitals.isNotEmpty()
+            val railWidth = if (hasRail) RailWidth else 0.dp
+            val afterRail = boardWidth - railWidth - if (hasRail) ZoneGap else 0.dp
 
-        // **The land column takes what it needs, up to a ceiling.** A share carved off would hold width
-        // open on a board with two lands and run out on one with six kinds of them — and running out is
-        // what puts a Swamp on its own line below the Islands. So it asks for one row of stacks per
-        // side and is capped, never reserved.
-        val landWidth = landCardWidth(sides, afterRail * LAND_ZONE_CEILING, sideHeight)
-        val landZoneWidth = minOf(landZoneWidth(sides, landWidth), afterRail * LAND_ZONE_CEILING)
-        val mainWidth = afterRail - landZoneWidth - if (landZoneWidth > 0.dp) ZoneGap else 0.dp
+            // **The land column takes what it needs, up to a ceiling.** A share carved off would hold width
+            // open on a board with two lands and run out on one with six kinds of them — and running out is
+            // what puts a Swamp on its own line below the Islands. So it asks for one row of stacks per
+            // side and is capped, never reserved.
+            val landWidth = landCardWidth(sides, afterRail * LAND_ZONE_CEILING, sideHeight)
+            val landZoneWidth = minOf(landZoneWidth(sides, landWidth), afterRail * LAND_ZONE_CEILING)
+            val mainWidth = afterRail - landZoneWidth - if (landZoneWidth > 0.dp) ZoneGap else 0.dp
 
-        // One size for everything that is not a land, shared across both sides: a creature on the far
-        // side is the same size as one on this side, because the game does not say one is nearer.
-        val cardWidth = mainCardWidth(sides, mainWidth, sideHeight)
+            // One size for everything that is not a land, shared across both sides: a creature on the far
+            // side is the same size as one on this side, because the game does not say one is nearer.
+            val cardWidth = mainCardWidth(sides, mainWidth, sideHeight)
 
-        // **The creatures belong on the screen's centre line, not their column's.** The battlefield is
-        // the third column, so centring inside it puts the creatures well right of the middle with a
-        // hole where the player is looking. The rows slide back toward the screen's own centre by the
-        // difference — but only as far as their own slack allows, so a row wide enough to need its
-        // whole column stays in it and never slides under the lands.
-        val leftColumns = boardWidth - mainWidth
-        val centreShift = (leftColumns + mainWidth / 2 - boardWidth / 2).coerceAtLeast(0.dp)
+            // **The creatures belong on the screen's centre line, not their column's.** The battlefield is
+            // the third column, so centring inside it puts the creatures well right of the middle with a
+            // hole where the player is looking. The rows slide back toward the screen's own centre by the
+            // difference — but only as far as their own slack allows, so a row wide enough to need its
+            // whole column stays in it and never slides under the lands.
+            val leftColumns = boardWidth - mainWidth
+            val centreShift = (leftColumns + mainWidth / 2 - boardWidth / 2).coerceAtLeast(0.dp)
 
-        Row(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
-            if (hasRail) {
-                StatusRail(
-                    vitals = vitals,
-                    palette = palette,
-                    onExpand = onExpandVitals,
-                    modifier = Modifier.width(railWidth).fillMaxHeight(),
-                )
-                Spacer(modifier = Modifier.width(ZoneGap))
-            }
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                // The two board columns share what is left above the hand. `weight` rather than the
-                // measured `contentHeight`, so the arithmetic that sized the cards can be an estimate
-                // without the layout inheriting its error.
-                //
-                // **The life totals are drawn over this, not in it.** They sit on the centre line of
-                // each player's own edge — the one place on a mirrored board that belongs to a player
-                // rather than to a zone — and a row that reserved height for them would take it from
-                // the battlefield in every game, including the ones where nothing is ever targeted.
-                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        if (landZoneWidth > 0.dp) {
-                            LandColumn(
-                                sides = sides,
-                                width = landWidth,
-                                palette = palette,
-                                artFor = artFor,
-                                onLandPress = onLandPress,
-                                modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
-                            )
-                            Spacer(modifier = Modifier.width(ZoneGap))
-                        }
-
-                        // **A gap on the centre line.** Each side packs its creatures against the middle,
-                        // so without one the two front rows touch and the board reads as one crowd of
-                        // creatures rather than as two armies facing each other — which is the single most
-                        // important thing a glance at a battlefield has to answer.
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(CentreLineGap),
-                        ) {
-                            model.opponents.forEach { side ->
-                                SideRows(
-                                    side = side,
-                                    order = OpponentOrder,
-                                    cardWidth = cardWidth,
-                                    centreShift = centreShift,
-                                    palette = palette,
-                                    artFor = artFor,
-                                    onInspect = onInspect,
-                                    anchors = anchors,
-                                    modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else OPPONENT_WEIGHT),
-                                )
-                            }
-
-                            // **The stack opens the centre line, and closes it again.** The gap between the
-                            // two front rows is where a table puts the stack and where the arrows have the
-                            // shortest way to go. It holds no height when nothing is on it — the board's
-                            // own rule — and the height it takes when something is is honest movement,
-                            // because a spell arriving is a game action.
-                            if (stack.isNotEmpty()) {
-                                StackRegion(
-                                    stack = stack,
-                                    cardWidth = cardWidth,
-                                    palette = palette,
-                                    artFor = artFor,
-                                    anchors = anchors,
-                                    onInspect = onInspect,
-                                    modifier = Modifier.fillMaxWidth().weight(STACK_WEIGHT),
-                                )
-                            }
-
-                            model.viewer?.let { side ->
-                                SideRows(
-                                    side = side,
-                                    order = ViewerOrder,
-                                    cardWidth = cardWidth,
-                                    centreShift = centreShift,
-                                    palette = palette,
-                                    artFor = artFor,
-                                    onInspect = onInspect,
-                                    anchors = anchors,
-                                    modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else VIEWER_WEIGHT),
-                                )
-                            }
-                        }
-                    }
-
-                    // Mirrored exactly as the battlefields are, so whose life it is needs no label.
-                    // Anchored like any other target, so an arrow from a spell that names a player
-                    // has somewhere real to point.
-                    Row(
-                        modifier = Modifier.align(Alignment.TopCenter),
-                        horizontalArrangement = Arrangement.spacedBy(ZoneGap),
-                    ) {
-                        lifeTotals.opponents.forEach { seat -> SeatLife(seat, onPickPlayer, anchors) }
-                    }
-
-                    lifeTotals.viewer?.let { seat ->
-                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
-                            SeatLife(seat, onPickPlayer, anchors)
-                        }
-                    }
+            Row(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
+                if (hasRail) {
+                    StatusRail(
+                        vitals = vitals,
+                        palette = palette,
+                        onExpand = onExpandVitals,
+                        modifier = Modifier.width(railWidth).fillMaxHeight(),
+                    )
+                    Spacer(modifier = Modifier.width(ZoneGap))
                 }
 
-                phases?.let { bar ->
-                    PhaseBar(
-                        state = bar,
-                        onToggleStop = { step -> onToggleStop?.invoke(step) },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = PhaseBarGap),
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // The two board columns share what is left above the hand. `weight` rather than the
+                    // measured `contentHeight`, so the arithmetic that sized the cards can be an estimate
+                    // without the layout inheriting its error.
+                    //
+                    // **The life totals are drawn over this, not in it.** They sit on the centre line of
+                    // each player's own edge — the one place on a mirrored board that belongs to a player
+                    // rather than to a zone — and a row that reserved height for them would take it from
+                    // the battlefield in every game, including the ones where nothing is ever targeted.
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            if (landZoneWidth > 0.dp) {
+                                LandColumn(
+                                    sides = sides,
+                                    width = landWidth,
+                                    palette = palette,
+                                    artFor = artFor,
+                                    onLandPress = onLandPress,
+                                    modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
+                                )
+                                Spacer(modifier = Modifier.width(ZoneGap))
+                            }
+
+                            // **A gap on the centre line.** Each side packs its creatures against the middle,
+                            // so without one the two front rows touch and the board reads as one crowd of
+                            // creatures rather than as two armies facing each other — which is the single most
+                            // important thing a glance at a battlefield has to answer.
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(CentreLineGap),
+                            ) {
+                                model.opponents.forEach { side ->
+                                    SideRows(
+                                        side = side,
+                                        order = OpponentOrder,
+                                        cardWidth = cardWidth,
+                                        centreShift = centreShift,
+                                        palette = palette,
+                                        artFor = artFor,
+                                        onInspect = onInspect,
+                                        anchors = anchors,
+                                        modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else OPPONENT_WEIGHT),
+                                    )
+                                }
+
+                                // **The stack opens the centre line, and closes it again.** The gap between the
+                                // two front rows is where a table puts the stack and where the arrows have the
+                                // shortest way to go. It holds no height when nothing is on it — the board's
+                                // own rule — and the height it takes when something is is honest movement,
+                                // because a spell arriving is a game action.
+                                if (stack.isNotEmpty()) {
+                                    StackRegion(
+                                        stack = stack,
+                                        cardWidth = cardWidth,
+                                        palette = palette,
+                                        artFor = artFor,
+                                        anchors = anchors,
+                                        onInspect = onInspect,
+                                        modifier = Modifier.fillMaxWidth().weight(STACK_WEIGHT),
+                                    )
+                                }
+
+                                model.viewer?.let { side ->
+                                    SideRows(
+                                        side = side,
+                                        order = ViewerOrder,
+                                        cardWidth = cardWidth,
+                                        centreShift = centreShift,
+                                        palette = palette,
+                                        artFor = artFor,
+                                        onInspect = onInspect,
+                                        anchors = anchors,
+                                        modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else VIEWER_WEIGHT),
+                                    )
+                                }
+                            }
+                        }
+
+                        // Mirrored exactly as the battlefields are, so whose life it is needs no label.
+                        // Anchored like any other target, so an arrow from a spell that names a player
+                        // has somewhere real to point.
+                        Row(
+                            modifier = Modifier.align(Alignment.TopCenter),
+                            horizontalArrangement = Arrangement.spacedBy(ZoneGap),
+                        ) {
+                            lifeTotals.opponents.forEach { seat -> SeatLife(seat, onPickPlayer, anchors) }
+                        }
+
+                        lifeTotals.viewer?.let { seat ->
+                            Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                                SeatLife(seat, onPickPlayer, anchors)
+                            }
+                        }
+                    }
+
+                    phases?.let { bar ->
+                        PhaseBar(
+                            state = bar,
+                            onToggleStop = { step -> onToggleStop?.invoke(step) },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = PhaseBarGap),
+                        )
+                    }
+
+                    // The hand hangs off the bottom edge: only the top of a card is read, and the quarter
+                    // that falls off screen is the quarter that carries nothing a player in a hurry needs.
+                    HandRegion(
+                        cards = hand,
+                        elsewhere = playableElsewhere,
+                        tileWidth = handTile,
+                        artFor = artFor,
+                        onPlay = onPlayFromHand,
+                        onInspect = onInspect,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-
-                // The hand hangs off the bottom edge: only the top of a card is read, and the quarter
-                // that falls off screen is the quarter that carries nothing a player in a hurry needs.
-                HandRegion(
-                    cards = hand,
-                    elsewhere = playableElsewhere,
-                    tileWidth = handTile,
-                    artFor = artFor,
-                    onPlay = onPlayFromHand,
-                    onInspect = onInspect,
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
-        }
 
-        // **Over everything, and touching nothing.** The arrows are drawn last so they are not covered
-        // by the cards they run between, and the `Canvas` takes no pointer input, so the cards
-        // underneath answer a press exactly as they did before there were arrows.
-        TargetArrows(stack = stack, anchors = anchors, modifier = Modifier.fillMaxSize())
+            // **Over everything, and touching nothing.** The arrows are drawn last so they are not covered
+            // by the cards they run between, and the `Canvas` takes no pointer input, so the cards
+            // underneath answer a press exactly as they did before there were arrows.
+            TargetArrows(stack = stack, anchors = anchors, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -435,10 +439,10 @@ private fun SideRows(
         verticalArrangement = Arrangement.spacedBy(RowGap, towardCentre),
     ) {
         order.forEach { row ->
-            val content = side.inRole(row.role)
+            val content = side.entriesIn(row.role)
             if (content.isNotEmpty()) {
                 PermanentRow(
-                    permanents = content,
+                    entries = content,
                     tag = BattlefieldTestTags.row(side.playerId, row.name),
                     width = cardWidth,
                     // Only the centred rows slide. A row already pinned to the outside edge is where
@@ -458,7 +462,7 @@ private fun SideRows(
 /** One row of permanents, scrolling sideways when it cannot fit at the floor width. */
 @Composable
 private fun PermanentRow(
-    permanents: List<TablePermanent>,
+    entries: List<RowEntry>,
     tag: String,
     width: Dp,
     centreShift: Dp,
@@ -473,7 +477,11 @@ private fun PermanentRow(
         // How far this row *may* slide left before it would leave its own column: half of whatever
         // width it is not using. A row that fills the column does not move at all, which is what keeps
         // it out from under the land column however busy the board gets.
-        val content = width * permanents.size + CardGap * (permanents.size - 1)
+        // A pile costs more than a card — staggered faces, and the fan reaching right — so the row's
+        // budget is measured in what each entry actually occupies rather than in cards.
+        val content =
+            entries.sumOf { it.widthInCards().toDouble() }.toFloat().let { width * it } +
+                CardGap * (entries.size - 1)
         val slack = ((maxWidth - content) / 2).coerceAtLeast(0.dp)
 
         // **The row scrolls only once it has to, because scrolling clips.** A tapped permanent leans
@@ -497,15 +505,31 @@ private fun PermanentRow(
             horizontalArrangement = Arrangement.spacedBy(CardGap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            permanents.forEach { permanent ->
-                PermanentCard(
-                    permanent = permanent,
-                    width = width,
-                    palette = palette,
-                    artFor = artFor,
-                    onInspect = onInspect,
-                    anchors = anchors,
-                )
+            entries.forEach { entry ->
+                when (entry) {
+                    is RowEntry.Single ->
+                        PermanentCard(
+                            permanent = entry.permanent,
+                            width = width,
+                            palette = palette,
+                            artFor = artFor,
+                            onInspect = onInspect,
+                            anchors = anchors,
+                        )
+
+                    // The lands' own renderer, because a pile of tokens *is* the same thing: several
+                    // interchangeable copies of one card, read once. A token pile is uniformly upright
+                    // or uniformly turned, so only one of its two halves is ever populated.
+                    is RowEntry.Pile ->
+                        LandStack(
+                            stack = entry.asStack(),
+                            width = width,
+                            palette = palette,
+                            artFor = artFor,
+                            onPress = onInspect?.let { inspect -> { _ -> inspect(entry.permanents.first().id) } },
+                            modifier = anchors.anchorModifier(entry.permanents.first().id),
+                        )
+                }
             }
         }
     }
@@ -542,6 +566,9 @@ private fun PermanentCard(
         // Where this permanent is, for an arrow from whatever is targeting it.
         modifier = anchors.anchorModifier(permanent.id),
         counterPalette = palette,
+        // What the board is about right now, which decides which of a card's signals gets the strong
+        // border. Ambient, because every card on one board shares the answer — see [LocalBoardFocus].
+        focus = LocalBoardFocus.current,
     )
 }
 
@@ -609,7 +636,10 @@ private fun mainCardWidth(
     sides.forEach { side ->
         var populated = 0
         ViewerOrder.forEach { row ->
-            val count = side.inRole(row.role).size
+            // **Entries, not permanents.** A pile of twelve Zombie tokens is one thing in the row, and
+            // counting the tokens instead is what made a token board size every card on the table —
+            // both sides, every row — from a crowd that draws as a single stack.
+            val count = side.entriesIn(row.role).size
             if (count > 0) populated += 1
             if (count > busiest) busiest = count
         }
@@ -617,7 +647,12 @@ private fun mainCardWidth(
     }
     if (busiest == 0) return PreferredMainCardWidth
 
-    val byWidth = (mainWidth - CardGap * (busiest - 1)) / busiest
+    // **A crowded row shrinks the board only so far, and then scrolls.** One width is shared by both
+    // sides on purpose — the game does not say one is nearer — which means the busiest row anywhere
+    // decides how big a card is *everywhere*, including the opponent's rows and the non-creature rows
+    // that are not crowded at all. Past [LegibleCardWidth] that trade stops being worth making: the
+    // row that does not fit scrolls, and the rest of the board keeps a card it can read.
+    val byWidth = ((mainWidth - CardGap * (busiest - 1)) / busiest).coerceAtLeast(LegibleCardWidth)
     val rowHeight = (sideHeight - RowGap * (tallest - 1)) / tallest.coerceAtLeast(1)
     val byHeight = rowHeight * BOARD_CARD_ASPECT_RATIO
     val plain = minOf(PreferredMainCardWidth, byWidth, byHeight)
@@ -729,6 +764,15 @@ internal val PreferredMainCardWidth = 252.dp
  * small card.
  */
 private val MinCardWidth = 56.dp
+
+/**
+ * The narrowest a card is shrunk to make a crowded row fit.
+ *
+ * Below this its name band and its stats stop being readable, so shrinking further buys nothing a
+ * player can use — the row scrolls instead. Distinct from [MinCardWidth], which is the hard floor for
+ * a board so small that nothing fits at all.
+ */
+private val LegibleCardWidth = 96.dp
 
 /** Space around the whole board, because a card against the screen edge is awkward to touch. */
 private val BoardMargin = 12.dp

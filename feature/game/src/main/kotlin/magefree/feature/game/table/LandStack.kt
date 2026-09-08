@@ -306,6 +306,7 @@ private fun StackedCard(
             art = artFor?.invoke(permanent.art, permanent.state.card),
             onTap = onPress,
             counterPalette = palette,
+            focus = LocalBoardFocus.current,
         )
     }
 }

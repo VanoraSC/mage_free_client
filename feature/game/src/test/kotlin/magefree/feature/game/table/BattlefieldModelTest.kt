@@ -418,3 +418,146 @@ private fun pacifismOnItsOwn() =
     )
 
 private fun GamePermanent.withIcons(vararg icons: GameCardIcon) = copy(card = card.copy(icons = icons.toList()))
+
+/**
+ * What a battlefield row actually draws: single permanents, and piles of identical tokens.
+ *
+ * The assertions worth having are the ones a plausible implementation gets wrong: that **only tokens**
+ * pile, that a **tapped** token is its own pile rather than the turned half of one, that summoning
+ * sickness splits a pile like any other difference, and that a pile appears where its first member did.
+ */
+class RowEntryTest {
+    @Test
+    fun `identical tokens draw as one pile`() {
+        // Twelve Zombie tokens are one thing on the board twelve times over. Drawing twelve cards
+        // spends the row's whole width saying so, which is what shrank every card on the table.
+        val side = sideWith(List(12) { token("z$it", "Zombie Token") })
+
+        val entries = side.entriesIn(PermanentRole.Creature)
+
+        assertEquals(1, entries.size)
+        assertEquals(12, entries.single().permanents.size)
+        assertTrue(entries.single() is RowEntry.Pile)
+    }
+
+    @Test
+    fun `real cards never pile, however identical`() {
+        // Two Grizzly Bears are two cards a player owns and may want to tell apart. Upstream marks the
+        // difference itself, so nothing here is guessed.
+        val side = sideWith(listOf(creature("b1", "Grizzly Bears"), creature("b2", "Grizzly Bears")))
+
+        val entries = side.entriesIn(PermanentRole.Creature)
+
+        assertEquals(2, entries.size)
+        assertTrue(entries.all { it is RowEntry.Single })
+    }
+
+    @Test
+    fun `a tapped token is its own pile, not the turned half of one`() {
+        // Where tokens differ from lands, deliberately. A land's two halves are one permanent in two
+        // states and the count is what matters. A creature's tap state is *what it is doing*.
+        val side =
+            sideWith(
+                listOf(
+                    token("z1", "Zombie Token"),
+                    token("z2", "Zombie Token", tapped = true),
+                    token("z3", "Zombie Token"),
+                ),
+            )
+
+        val entries = side.entriesIn(PermanentRole.Creature)
+
+        assertEquals(2, entries.size)
+        assertEquals(listOf(2, 1), entries.map { it.permanents.size })
+        // Each pile is uniformly one way up, so the renderer gets one populated half.
+        entries.filterIsInstance<RowEntry.Pile>().forEach { pile ->
+            val stack = pile.asStack()
+            assertTrue("a pile is all upright or all turned", stack.untapped.isEmpty() || stack.tapped.isEmpty())
+        }
+    }
+
+    @Test
+    fun `summoning sickness splits a pile, because it is a different creature to attack with`() {
+        val side =
+            sideWith(
+                listOf(
+                    token("z1", "Zombie Token"),
+                    token("z2", "Zombie Token", summoningSick = true),
+                ),
+            )
+
+        assertEquals(2, side.entriesIn(PermanentRole.Creature).size)
+    }
+
+    @Test
+    fun `a token carrying an attachment stands alone`() {
+        // The Aura is on *that* Zombie, so "read one and you have read them all" stops being true —
+        // the same absolute rule the land stacks follow.
+        val enchanted = token("z1", "Zombie Token").let { it.copy(attachments = listOf("pacifism")) }
+        val side = sideWith(listOf(enchanted, token("z2", "Zombie Token"), pacifismOn("z1")))
+
+        val entries = side.entriesIn(PermanentRole.Creature)
+
+        assertEquals(2, entries.size)
+        assertTrue(entries.all { it is RowEntry.Single })
+    }
+
+    @Test
+    fun `a pile is drawn where its first member was, not at the end of the row`() {
+        // A pile that jumped to the end when it gained a token would be a pile that appears to move.
+        val side =
+            sideWith(
+                listOf(
+                    token("z1", "Zombie Token"),
+                    creature("b1", "Grizzly Bears"),
+                    token("z2", "Zombie Token"),
+                ),
+            )
+
+        val entries = side.entriesIn(PermanentRole.Creature)
+
+        assertEquals(listOf(listOf("z1", "z2"), listOf("b1")), entries.map { e -> e.permanents.map { it.id } })
+    }
+
+    @Test
+    fun `a pile costs more of the row than a card, because it fans`() {
+        val side = sideWith(listOf(token("z1", "Zombie Token"), token("z2", "Zombie Token"), creature("b1", "Bears")))
+        val entries = side.entriesIn(PermanentRole.Creature)
+
+        val pile = entries.filterIsInstance<RowEntry.Pile>().single()
+        val single = entries.filterIsInstance<RowEntry.Single>().single()
+        assertTrue(pile.widthInCards() > single.widthInCards())
+    }
+
+    private fun sideWith(permanents: List<GamePermanent>) =
+        battlefieldModel(
+            GameState(
+                gameId = "g",
+                viewerPlayerId = "me",
+                players = listOf(GamePlayer(playerId = "me", name = "Me", isViewer = true, battlefield = permanents)),
+            ),
+        ).viewer!!
+
+    private fun token(
+        id: String,
+        name: String,
+        tapped: Boolean = false,
+        summoningSick: Boolean = false,
+    ) = GamePermanent(
+        card = GameCard(id = id, name = name, cardTypes = listOf(CardType.Creature), isCreature = true, isToken = true),
+        isTapped = tapped,
+        hasSummoningSickness = summoningSick,
+    )
+
+    private fun creature(
+        id: String,
+        name: String,
+    ) = GamePermanent(card = GameCard(id = id, name = name, cardTypes = listOf(CardType.Creature), isCreature = true))
+
+    private fun pacifismOn(hostId: String) =
+        GamePermanent(
+            card = GameCard(id = "pacifism", name = "Pacifism", cardTypes = listOf(CardType.Enchantment)),
+            attachedTo = hostId,
+            isAttachedToPermanent = true,
+        )
+}
