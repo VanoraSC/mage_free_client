@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import magefree.model.ConnectionState
 import magefree.network.BridgeClient
+import magefree.network.BridgeSessionUnavailable
 import magefree.network.ServerPushSource
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameFailureCode
@@ -367,6 +368,11 @@ internal class DefaultGameClient(
      * (no session / timeout / drop from `request`) is captured as a failed [Result], so a caller always
      * gets a [Result] and never an unhandled throw. [CancellationException] is re-thrown so structured
      * cancellation is preserved.
+     *
+     * **A missing socket is classified rather than passed through raw.** `BridgeSessionUnavailable`
+     * carries a request id in its message and no idea of what a player is looking at; a caller that
+     * surfaced it verbatim would tell them the *server* declined their move, naming a UUID. It becomes
+     * a [GameUnreachableFailure] here, at the boundary that knows the difference.
      */
     private inline fun action(block: (id: String) -> ServerMessage): Result<Unit> =
         try {
@@ -376,6 +382,8 @@ internal class DefaultGameClient(
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: BridgeSessionUnavailable) {
+            Result.failure(GameUnreachableFailure(e))
         } catch (e: Exception) {
             Result.failure(e)
         }

@@ -31,6 +31,7 @@ import magefree.model.Credentials
 import magefree.model.ServerTarget
 import magefree.model.SessionEvent
 import magefree.network.BridgeClient
+import magefree.network.BridgeSessionUnavailable
 import magefree.network.ServerPushSource
 import magefree.network.mapper.SessionMapper
 import magefree.network.mapper.SessionMapper.handshakeResult
@@ -160,7 +161,7 @@ class KtorBridgeClient(
 
     override suspend fun disconnect() {
         disconnectRequested = true
-        pending.failAll(IllegalStateException("session disconnected before reply"))
+        pending.failAll(BridgeSessionUnavailable("session disconnected before reply"))
         activeSession?.close(CloseReason(CloseReason.Codes.NORMAL, "client disconnect"))
         activeSession = null
         _connectionState.value = ConnectionState.Disconnected
@@ -198,7 +199,7 @@ class KtorBridgeClient(
     }
 
     override suspend fun send(message: Any) {
-        val session = activeSession ?: throw IllegalStateException("no active session to send on")
+        val session = activeSession ?: throw BridgeSessionUnavailable("no active session to send on")
         val clientMessage =
             message as? ClientMessage
                 ?: throw IllegalArgumentException("send payload must be a ClientMessage, was ${message::class}")
@@ -210,7 +211,7 @@ class KtorBridgeClient(
         requestId: String,
     ): ReplyT {
         val session =
-            activeSession ?: throw IllegalStateException("no active session for request $requestId")
+            activeSession ?: throw BridgeSessionUnavailable("no active session for request $requestId")
         val clientMessage =
             message as? ClientMessage
                 ?: throw IllegalArgumentException("request payload must be a ClientMessage, was ${message::class}")
@@ -282,7 +283,7 @@ class KtorBridgeClient(
         } finally {
             // The socket for this attempt is gone: no reply will arrive, so fail any in-flight request
             // (a reconnect gets a fresh socket; the requester surfaces this and can refresh again).
-            pending.failAll(IllegalStateException("session ended before reply"))
+            pending.failAll(BridgeSessionUnavailable("session ended before reply"))
             session.close()
             if (activeSession === session) activeSession = null
         }

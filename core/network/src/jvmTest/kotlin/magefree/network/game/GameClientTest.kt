@@ -4,6 +4,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import magefree.model.ConnectionState
+import magefree.network.BridgeSessionUnavailable
 import magefree.network.fake.FakeBridgeClient
 import magefree.protocol.ClientMessage
 import magefree.protocol.GameActionCode
@@ -35,6 +36,7 @@ import magefree.protocol.TableActionResult
 import magefree.protocol.TurnPhaseCode
 import magefree.protocol.WatchGame
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -364,6 +366,23 @@ class GameClientTest {
 
             assertTrue("the client must never throw at its caller", result.isFailure)
             assertEquals("no active session", result.exceptionOrNull()?.message)
+        }
+
+    @Test
+    fun aMissingSocketIsClassifiedAsUnreachableRatherThanPassedThroughRaw() =
+        runTest {
+            // `BridgeSessionUnavailable` names a request id and knows nothing about a game. A caller
+            // that surfaced it verbatim would tell a player the *server* refused their move, and hand
+            // them a UUID; the difference between "refused" and "never asked" is decided here.
+            val client = client { throw BridgeSessionUnavailable("no active session for request $REQUEST_ID") }
+
+            val failure = client.passPriority(GAME).exceptionOrNull()
+
+            assertTrue("a dropped socket is not a decline, got ${failure?.let { it::class.simpleName }}", failure is GameUnreachableFailure)
+            assertFalse(
+                "the request id must not survive into anything a caller might show",
+                failure?.message?.contains(REQUEST_ID) == true,
+            )
         }
 
     // --- the targeted read ---------------------------------------------------------------

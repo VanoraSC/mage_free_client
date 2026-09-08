@@ -21,6 +21,7 @@ import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
+import magefree.network.game.GameUnreachableFailure
 import magefree.network.game.ManaPool
 import magefree.network.game.ManaType
 import magefree.network.game.MultiAmountEntry
@@ -236,7 +237,62 @@ class GameBoardViewModelTest {
 
             viewModel.act(BoardAction.PlayObject("h-1"))
 
-            assertEquals("you can't play that now", viewModel.uiState.value.actionError)
+            assertEquals("$ACTION_FAILED_PREFIX you can't play that now", viewModel.uiState.value.actionError)
+        }
+
+    @Test
+    fun `a connection that dropped is not reported as the server declining`() =
+        runTest {
+            // The move never left the device, so nothing was refused and nothing is wrong with it.
+            // Telling a player "the server declined" — and handing them the request id the transport
+            // exception carries — says their move was illegal, which is a lie about the rules.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.actionResult = Result.failure(GameUnreachableFailure(IllegalStateException("no active session for request 38e54430")))
+
+            viewModel.act(BoardAction.PlayObject("h-1"))
+
+            val shown = viewModel.uiState.value.actionError
+            assertEquals(CONNECTION_DROPPED_NOTE, shown)
+            assertFalse("a request id is not something to show a player", shown!!.contains("38e54430"))
+        }
+
+    @Test
+    fun `a new question retires the previous question's error`() =
+        runTest {
+            // What Pete saw: the bridge restarted, the tap in that window failed with "no active
+            // session", the app reconnected and the board came back — and the error stayed on screen,
+            // pinned under a prompt it had nothing to do with.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            client.actionResult = Result.failure(GameUnreachableFailure(IllegalStateException("gone")))
+            viewModel.act(BoardAction.PlayObject("h-1"))
+            assertNotNull(viewModel.uiState.value.actionError)
+
+            client.emitGameState(dealtState().copy(prompt = GamePrompt.Ask(message = "Mulligan down to 6 cards?")))
+
+            assertNull("the question it was raised against is gone", viewModel.uiState.value.actionError)
+        }
+
+    @Test
+    fun `the same question re-pushed keeps its error`() =
+        runTest {
+            // The other half of the rule: a snapshot re-emitted for an unrelated reason must not wipe
+            // the answer to the question still on screen.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            val asking = dealtState().copy(prompt = GamePrompt.Ask(message = "Mulligan down to 6 cards?"))
+            client.emitGameState(asking)
+            client.actionResult = Result.failure(GameActionFailure("you can't do that"))
+            viewModel.act(BoardAction.AnswerAsk(true))
+
+            client.emitGameState(asking.copy(turn = 2))
+
+            assertEquals("$ACTION_FAILED_PREFIX you can't do that", viewModel.uiState.value.actionError)
         }
 
     @Test

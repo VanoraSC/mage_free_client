@@ -13,6 +13,7 @@ import magefree.cards.art.CardArtFace
 import magefree.network.game.GameClient
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
+import magefree.network.game.GameUnreachableFailure
 
 /**
  * The persistent context of a cast in flight — requirements the organizing principle: *"a player
@@ -88,7 +89,11 @@ data class DeclarationUi(
  * @property cast the cast in flight, or null.
  * @property declaration the combat declaration in flight, or null when the server has the
  *   board in neither role. Never both roles at once — [DeclarationUi.role] holds exactly one.
- * @property actionError the server's own reason for declining the last action, else null.
+ * @property actionError why the last action did not happen, as a whole sentence ready to show, else
+ *   null. Whole rather than a fragment because *who* refused is part of the sentence: the server
+ *   declining a move and the connection dropping before the server saw it read the same to a player
+ *   otherwise, and only one of them means the move was illegal. Cleared whenever the prompt changes,
+ *   for the same reason [selectedObjectId] is.
  * @property detailFace the peek state for the tapped card's art — null while no card is
  *   selected, or before the catalog has answered whether it is even a double-faced card.
  * @property snapshot the server's last whole game view, unprojected. The rebuilt board's tier reads
@@ -291,6 +296,10 @@ class GameBoardViewModel
                     cast = previous.cast.advancedBy(state.prompt),
                     declaration = previous.declaration.advancedBy(state.prompt),
                     detailFace = if (promptChanged) null else previous.detailFace,
+                    // An error is about the question it was raised against. A *new* question retires
+                    // it — otherwise a refusal, or a connection that blinked and healed, stays on
+                    // screen indefinitely, attached to a prompt it has nothing to do with.
+                    actionError = if (promptChanged) null else previous.actionError,
                 )
 
             // The one place the app decides *when* to answer a priority prompt. Asked once per
@@ -415,6 +424,8 @@ class GameBoardViewModel
                     // Upstream takes the pool's owner explicitly; it is the viewer's own pool here.
                     val playerId = latestState?.viewerPlayerId
                     if (playerId == null) {
+                        // Not a decline either: the app could not name a seat to spend from, so the
+                        // server was never asked.
                         _uiState.value = _uiState.value.copy(actionError = NO_SEAT_FOR_MANA)
                     } else {
                         send { it.unlockMana(id, playerId, action.manaType) }
@@ -444,10 +455,25 @@ class GameBoardViewModel
         private fun send(call: suspend (GameClient) -> Result<Unit>) {
             viewModelScope.launch {
                 call(gameClient).onFailure { error ->
-                    _uiState.value = _uiState.value.copy(actionError = error.message ?: ACTION_DECLINED_FALLBACK)
+                    _uiState.value = _uiState.value.copy(actionError = error.asBoardMessage())
                 }
             }
         }
+
+        /**
+         * What to tell the player about an action that did not happen.
+         *
+         * **Only a decline is attributed to the server.** A [GameUnreachableFailure] means the socket
+         * was not there when the move was sent, so nothing was refused and nothing is wrong with the
+         * move — the client reconnects on its own and the same action can simply be taken again.
+         * Reporting that as "the server declined", with the request id its message carries, tells a
+         * player their move was illegal and hands them a UUID to think about.
+         */
+        private fun Throwable.asBoardMessage(): String =
+            when (this) {
+                is GameUnreachableFailure -> CONNECTION_DROPPED_NOTE
+                else -> "$ACTION_FAILED_PREFIX ${message ?: ACTION_DECLINED_FALLBACK}"
+            }
 
         /** The server's own name for [objectId], from the board projection; a fallback if it is unknown. */
         private fun nameOf(objectId: String): String {
@@ -564,8 +590,16 @@ internal const val CAST_STEP_MODE: String = "choosing a mode"
 /** What the cast context calls a card the board could not name (it should always be able to). */
 internal const val UNNAMED_CAST: String = "a spell"
 
-/** What an action failure says when the server declined without a reason. */
-internal const val ACTION_DECLINED_FALLBACK: String = "the server declined that action"
+/** What an action failure says when the server declined and gave no reason of its own. */
+internal const val ACTION_DECLINED_FALLBACK: String = "no reason given"
+
+/**
+ * What a dropped connection says.
+ *
+ * Deliberately not phrased as a refusal: the move was never seen, so there is nothing wrong with it,
+ * and the client reconnects without being asked. "Try again" is the whole remedy.
+ */
+internal const val CONNECTION_DROPPED_NOTE: String = "The connection dropped before that reached the server — try again."
 
 /** Why mana cannot be spent from a pool we have no seat for (a spectator, or before the first snapshot). */
-internal const val NO_SEAT_FOR_MANA: String = "no seat to spend mana from"
+internal const val NO_SEAT_FOR_MANA: String = "There is no seat to spend mana from."
