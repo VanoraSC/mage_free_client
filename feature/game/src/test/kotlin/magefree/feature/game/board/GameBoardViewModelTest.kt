@@ -228,22 +228,6 @@ class GameBoardViewModelTest {
         }
 
     @Test
-    fun `untapping a land is the server's undo, not a client-side rewind`() =
-        runTest {
-            // A land tapped for mana is a cost that was paid and the mana is in a pool; neither is a
-            // thing a client may put back. `PlayerImpl.playManaAbility` stores a bookmark for exactly
-            // this and `GameImpl.undo` restores it, so the only correct implementation is to ask.
-            val client = FakeGameClient()
-            val viewModel = viewModel(client)
-            viewModel.observe(GAME_ID)
-            client.calls.clear()
-
-            viewModel.act(BoardAction.UndoLastAction)
-
-            assertEquals(listOf("undo:$GAME_ID"), client.calls)
-        }
-
-    @Test
     fun `surfaces the server's own reason when it declines an action`() =
         runTest {
             val client = FakeGameClient()

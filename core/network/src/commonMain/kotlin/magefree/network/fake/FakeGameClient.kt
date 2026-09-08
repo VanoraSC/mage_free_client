@@ -141,8 +141,6 @@ class FakeGameClient(
 
     override suspend fun concede(gameId: String): Result<Unit> = record("concede:$gameId")
 
-    override suspend fun undoLastAction(gameId: String): Result<Unit> = record("undo:$gameId")
-
     /**
      * Records the read and returns [refreshResult].
      *

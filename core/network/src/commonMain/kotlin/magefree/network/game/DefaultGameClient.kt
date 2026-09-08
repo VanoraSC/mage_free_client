@@ -190,8 +190,6 @@ internal class DefaultGameClient(
 
     override suspend fun concede(gameId: String): Result<Unit> = playerAction(gameId, PlayerActionCode.CONCEDE)
 
-    override suspend fun undoLastAction(gameId: String): Result<Unit> = playerAction(gameId, PlayerActionCode.UNDO)
-
     // --- reading -------------------------------------------------------------------------------------
 
     override suspend fun refreshGame(gameId: String): Result<GameSnapshot> =

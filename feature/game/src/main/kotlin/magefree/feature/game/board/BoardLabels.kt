@@ -91,15 +91,6 @@ const val PILE_LABEL: String = "Pile"
 /** Prefix for spending mana that is already floating in the pool. */
 const val UNLOCK_MANA_PREFIX: String = "Use"
 
-/**
- * The take-it-back button.
- *
- * Named for what a player wants rather than for the server's verb: the case it exists for is a land
- * tapped by mistake, and "untap" is the word in the player's head. It undoes whatever the server last
- * kept a bookmark for, which is usually exactly that.
- */
-const val UNDO_LABEL: String = "Untap / undo"
-
 /** Confirms a chosen number. */
 const val CONFIRM_AMOUNT_LABEL: String = "Confirm"
 

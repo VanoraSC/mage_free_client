@@ -115,7 +115,40 @@ argument for the buttons.
 - [ ] A candidate in a graveyard is marked in the seat window and can be answered from there.
 - [ ] Life is still readable at a glance, in its new place.
 
-## 8. History
+## 8. Known issues
+
+**There is no way to untap a land tapped for mana, and there must not be one.** Upstream has a
+`PlayerAction.UNDO` that does exactly what a player wants — `PlayerImpl.playManaAbility` stores a
+bookmark when the ability `isUndoPossible()`, and `GameImpl.undo` restores it, land untapped and mana
+gone. It was wired up here and it **soft-locked the game**: the board redrew with the land untapped
+and the outstanding prompt gone, with nothing left to press.
+
+Upstream says why, at the call site, and it was read too late:
+
+```java
+public void sendPlayerAction(PlayerAction playerAction, UUID userId, Object data) {
+    // TODO: critical bug, must be enabled and research/rework due:
+    // * game change commands must be executed by game thread (example: undo)
+    //SystemUtil.ensureRunInGameThread();
+    switch (playerAction) {
+        case UNDO:
+            game.undo(getPlayerId(userId));
+```
+
+`GameImpl.restoreState` mutates the game state in place from the **network** thread while the game
+thread is parked inside `HumanPlayer.priority()`'s `waitForResponse`. Nothing wakes that thread, and
+the question it is waiting on no longer exists. The `fireUpdatePlayersEvent` that follows pushes a
+fresh `GameView`, which is why the board looks updated and is in fact dead.
+
+The reference client has the same always-visible Undo button, and **that is not evidence it works** —
+it is the same bug, which is what the TODO is about. Do not re-add this without fixing the threading
+upstream first.
+
+What actually recovers a mis-tap: mid-cast, *Cancel this cast*, which the server rewinds and which
+leaves the mana unspent. Tapped during a priority window with no cast in flight, nothing recovers it
+— the mana empties when the step ends, which is the rule.
+
+## 9. History
 
 The first build of this story was a two-column overlay — piles dragged between columns — and it was
 rejected on sight: it moved targeting off the board instead of fixing it there. What survives from it
