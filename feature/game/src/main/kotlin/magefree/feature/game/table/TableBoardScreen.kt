@@ -177,6 +177,7 @@ fun TableBoardScreen(
                     onPickPlayer = { playerId -> onAction(BoardAction.ChooseTarget(playerId)) },
                     phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
                     stack = tableStack(snapshot),
+                    combat = snapshot.combat,
                     // A press on a step cycles its stop for the turn being played. What that then does
                     // is the pass policy's, which reads the same store this writes.
                     onToggleStop = { step -> onPressStop(step.id) },

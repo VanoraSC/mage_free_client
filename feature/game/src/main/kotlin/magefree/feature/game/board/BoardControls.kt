@@ -411,6 +411,25 @@ sealed interface PromptControlsUi {
         override val marksCandidatesOnBoard: Boolean get() = true
 
         /**
+         * **A tap on a creature declares it or takes it back, with no card raised in between.**
+         *
+         * Declaring is the one prompt where the player is not choosing between things they have to
+         * read first. They are looking at their own board, deciding which creatures go — several in a
+         * row, at speed — and raising each one into a full-screen card to press a second button turns
+         * a five-creature attack into ten presses and five things to dismiss. Mana payment already had
+         * this exception for exactly the same reason.
+         *
+         * **Nothing is skipped by doing it, because the server asks whatever is left.** A tap sends
+         * one id and `HumanPlayer` decides what it means: an undeclared creature goes to
+         * `selectDefender`, which declares it outright when there is one defender and *asks* when
+         * there are several; a declared one goes to `removeAttackerIfPossible`. Blocking is the same
+         * shape — `selectCombatGroup` auto-chooses when a blocker can block exactly one attacker and
+         * sends a target prompt when it can block more. So "tap the attacker, then tap what it
+         * attacks" is upstream's own flow, and the second tap answers an ordinary target prompt.
+         */
+        override val answersOnPress: Boolean get() = true
+
+        /**
          * A declaration pick is a `chooseTarget` — the same verb targeting uses, which is what upstream
          * expects here (`HumanPlayer` answers both from the same select loop, and the probes declared
          * live this way). It is sent per tap, never batched: the server re-prompts after each pick with

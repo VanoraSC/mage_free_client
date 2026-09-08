@@ -33,6 +33,7 @@ import magefree.designsystem.card.rememberCounterPalette
 import magefree.designsystem.component.phase.PhaseBar
 import magefree.designsystem.component.phase.PhaseBarState
 import magefree.designsystem.component.phase.PhaseBarStep
+import magefree.network.game.CombatGroup
 
 /*
  * The board, in three columns.
@@ -133,6 +134,7 @@ fun BattlefieldLayout(
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
     stack: List<TableStackObject> = emptyList(),
+    combat: List<CombatGroup> = emptyList(),
 ) {
     val palette = rememberCounterPalette()
     // Where everything is, measured as it is placed, so the target arrows can be drawn between real
@@ -319,7 +321,7 @@ fun BattlefieldLayout(
             // **Over everything, and touching nothing.** The arrows are drawn last so they are not covered
             // by the cards they run between, and the `Canvas` takes no pointer input, so the cards
             // underneath answer a press exactly as they did before there were arrows.
-            TargetArrows(stack = stack, anchors = anchors, modifier = Modifier.fillMaxSize())
+            TargetArrows(stack = stack, anchors = anchors, combat = combat, modifier = Modifier.fillMaxSize())
 
             // **A card arriving on the stack, drawn travelling.** Above the arrows and above the cards,
             // because it is the one thing on the board that is momentarily more important than either;
