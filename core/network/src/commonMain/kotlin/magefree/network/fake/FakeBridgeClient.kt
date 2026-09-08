@@ -97,6 +97,13 @@ class FakeBridgeClient(
         return reply as ReplyT
     }
 
+    /** Every message told to the bridge without a reply, in order, so a test can assert what was sent. */
+    val sent: MutableList<Any> = mutableListOf()
+
+    override suspend fun send(message: Any) {
+        sent += message
+    }
+
     override suspend fun disconnect() {
         teardowns += Teardown.DISCONNECT
         _connectionState.value = ConnectionState.Disconnected

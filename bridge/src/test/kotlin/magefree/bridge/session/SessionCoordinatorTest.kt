@@ -42,6 +42,7 @@ import magefree.protocol.PhaseStepCode
 import magefree.protocol.Ping
 import magefree.protocol.PlayerActionCode
 import magefree.protocol.Pong
+import magefree.protocol.PriorityStops
 import magefree.protocol.ProtocolJson
 import magefree.protocol.ProtocolVersion
 import magefree.protocol.QuitMatch
@@ -59,6 +60,7 @@ import magefree.protocol.ServerMessage
 import magefree.protocol.SessionResumable
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.SkillLevelCode
 import magefree.protocol.StopWatching
 import magefree.protocol.TableActionResult
@@ -612,6 +614,50 @@ class SessionCoordinatorTest {
                 val reply = assertInstanceOf(Pong::class.java, receiveDeserialized<ServerMessage>())
                 assertEquals("n", reply.nonce)
                 assertEquals("p-1", reply.requestId)
+            }
+        }
+    }
+
+    @Test
+    fun `SetPriorityStops reaches the bound session with both sides intact`() {
+        val fake = FakeUpstreamSession(listOf(status(SessionStateCode.CONNECTING), status(SessionStateCode.CONNECTED)))
+        scenario(fake) { client ->
+            client.session {
+                handshake()
+                sendSerialized<ClientMessage>(Login(username = "grace"))
+                assertEquals(SessionStateCode.CONNECTING, nextStatus().state)
+                assertEquals(SessionStateCode.CONNECTED, nextStatus().state)
+                expectResumable()
+
+                sendSerialized<ClientMessage>(
+                    SetPriorityStops(
+                        yourTurn = PriorityStops(upkeep = true, main1 = true, main2 = true),
+                        opponentTurn = PriorityStops(endOfTurn = true, main1 = false, main2 = false),
+                    ),
+                )
+
+                // Told, not asked: nothing comes back on the socket, so the assertion is that the
+                // session was reached — and with the two sides distinct, since a mapping that
+                // collapsed them would still "work" for a player who set the same stops on both.
+                val applied = withTimeout(5_000) { fake.awaitPriorityStops() }
+                assertEquals(PriorityStops(upkeep = true, main1 = true, main2 = true), applied.yourTurn)
+                assertEquals(PriorityStops(endOfTurn = true, main1 = false, main2 = false), applied.opponentTurn)
+            }
+        }
+    }
+
+    @Test
+    fun `SetPriorityStops on an unbound socket is dropped rather than crashing the session`() {
+        val fake = FakeUpstreamSession(emptyList())
+        scenario(fake) { client ->
+            client.session {
+                handshake()
+                // No login: there is no upstream to apply a preference to. The socket must stay usable.
+                sendSerialized<ClientMessage>(SetPriorityStops(yourTurn = PriorityStops(draw = true)))
+                sendSerialized<ClientMessage>(Ping(nonce = "still-here", requestId = "p-2"))
+                val reply = assertInstanceOf(Pong::class.java, receiveDeserialized<ServerMessage>())
+                assertEquals("still-here", reply.nonce)
+                assertNull(fake.lastPriorityStops)
             }
         }
     }

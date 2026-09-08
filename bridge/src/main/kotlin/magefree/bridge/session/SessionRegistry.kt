@@ -33,6 +33,7 @@ import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.StartMatch
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionResult
@@ -231,6 +232,12 @@ public class LiveSession internal constructor(
 
     /** Dispatches an in-game request while this session is bound. */
     internal suspend fun gameRequest(request: ClientMessage): GameActionResult = upstream.gameRequest(request)
+
+    /**
+     * Tells the server which priority windows to stop at. See [UpstreamSession.setPriorityStops] —
+     * the skipping is the server's, so a stop it has not been told about cannot happen.
+     */
+    internal suspend fun setPriorityStops(request: SetPriorityStops): Boolean = upstream.setPriorityStops(request)
 
     /**
      * Answers a `GetGameState` for this session from [gameStates] — a

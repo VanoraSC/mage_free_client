@@ -13,6 +13,7 @@ import magefree.protocol.RoomUserSummary
 import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStatus
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.StartMatch
 import magefree.protocol.SubmitDeck
 import magefree.protocol.TableActionResult
@@ -150,4 +151,16 @@ public interface UpstreamSession {
 
     /** Disconnects the upstream session cleanly. Idempotent; safe to call when never connected. */
     public suspend fun disconnect()
+
+    /**
+     * Tells the server which priority windows to stop at, per side of the turn.
+     *
+     * **The skipping is the server's.** `HumanPlayer.priority()` reads the player's own
+     * `UserSkipPrioritySteps` and passes without sending the client anything, so this is the only way a
+     * stop can exist at all — a client that simply declined to answer would be declining a question it
+     * was never asked.
+     *
+     * @return the server's own acceptance flag; `false` when there is no connected session.
+     */
+    public suspend fun setPriorityStops(request: SetPriorityStops): Boolean
 }

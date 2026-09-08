@@ -7,8 +7,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mage.players.net.UserData
 import mage.remote.MageVersionException
 import magefree.bridge.mapping.CallbackRelay
+import magefree.bridge.mapping.PriorityStopsMapper
 import magefree.bridge.xmage.XMageClientEvent
 import magefree.bridge.xmage.XMageConnection
 import magefree.bridge.xmage.XMageSession
@@ -35,6 +37,7 @@ import magefree.protocol.ServerInfo
 import magefree.protocol.ServerMessage
 import magefree.protocol.SessionStateCode
 import magefree.protocol.SessionStatus
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.StartMatch
 import magefree.protocol.StopWatching
 import magefree.protocol.SubmitDeck
@@ -86,6 +89,13 @@ public class XMageUpstreamSession(
     @Volatile
     private var current: XMageSession? = null
 
+    /**
+     * The profile this session logged in with, kept so a later preference change is a *change* to it
+     * rather than a reset of everything else on it. The server merges what it is sent
+     * (`UserData.update`), so anything left out would revert to whatever the merge source carried.
+     */
+    private var profile: UserData? = null
+
     override fun connect(credentials: Credentials): Flow<ServerMessage> =
         channelFlow {
             val session = sessionFactory()
@@ -124,13 +134,13 @@ public class XMageUpstreamSession(
                 send(SessionStatus(SessionStateCode.CONNECTING))
 
                 val connection =
-                    XMageConnection.build(
-                        host = target.host,
-                        port = target.port,
-                        username = credentials.username,
-                        password = credentials.password ?: "",
-                    )
-
+                    XMageConnection
+                        .build(
+                            host = target.host,
+                            port = target.port,
+                            username = credentials.username,
+                            password = credentials.password ?: "",
+                        ).also { built -> profile = built.userData }
                 val connected =
                     try {
                         session.connect(connection)
@@ -423,6 +433,18 @@ public class XMageUpstreamSession(
     }
 
     override suspend fun sessionId(): String? = current?.sessionId()
+
+    /**
+     * Writes the stops onto this session's own profile and pushes it upstream.
+     *
+     * The profile is the one built for the login, so the change is a change to it rather than a reset
+     * of everything else on it — the server merges what it receives.
+     */
+    override suspend fun setPriorityStops(request: SetPriorityStops): Boolean {
+        val session = current ?: return false
+        val data = profile ?: return false
+        return session.updatePreferences(PriorityStopsMapper.apply(request, data))
+    }
 
     override suspend fun disconnect() {
         current?.disconnect()

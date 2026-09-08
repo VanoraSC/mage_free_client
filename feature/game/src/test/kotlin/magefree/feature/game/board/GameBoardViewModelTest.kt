@@ -10,6 +10,8 @@ import kotlinx.coroutines.test.setMain
 import magefree.cards.CardCatalog
 import magefree.cards.art.CardArtFace
 import magefree.cards.model.CardFaces
+import magefree.designsystem.component.phase.PhaseStop
+import magefree.designsystem.component.phase.StepIds
 import magefree.network.fake.FakeGameClient
 import magefree.network.game.AbilityChoice
 import magefree.network.game.ChoiceOption
@@ -78,7 +80,7 @@ class GameBoardViewModelTest {
             // `observeGame` is not itself recorded, so the proof is the *seed*: the fake emits it as the
             // flow opens, exactly as production does. If it has been seen, the collection was already
             // running when the join went out.
-            assertEquals(listOf("join:$GAME_ID"), client.calls)
+            assertEquals(listOf("join:$GAME_ID"), client.gameCalls)
         }
 
     @Test
@@ -166,7 +168,7 @@ class GameBoardViewModelTest {
             viewModel.observe(GAME_ID)
             viewModel.observe(GAME_ID)
 
-            assertEquals("a recomposition must not re-join the game", listOf("join:$GAME_ID"), client.calls)
+            assertEquals("a recomposition must not re-join the game", listOf("join:$GAME_ID"), client.gameCalls)
         }
 
     @Test
@@ -183,7 +185,7 @@ class GameBoardViewModelTest {
             viewModel.setControlsVisible(false)
             viewModel.selectCard("h-1")
 
-            assertEquals(listOf("join:$GAME_ID"), client.calls)
+            assertEquals(listOf("join:$GAME_ID"), client.gameCalls)
         }
 
     // ---- one seam, every prompt kind ------------------------------------------------------------------
@@ -468,6 +470,164 @@ class GameBoardViewModelTest {
             assertEquals(listOf("pass:$GAME_ID"), client.calls)
         }
 
+    // ---- stops -----------------------------------------------------------------------------------------
+
+    @Test
+    fun `opening a board tells the server the stops, before any snapshot arrives`() =
+        runTest {
+            // The skipping is the server's: `HumanPlayer.priority()` reads its own copy of the player's
+            // steps and passes *without sending a prompt*. A board that only sent stops when one changed
+            // would leave a returning player on the server's defaults for the whole first game.
+            val client = FakeGameClient()
+
+            viewModel(client).observe(GAME_ID)
+
+            assertEquals(listOf("stops:main1,main2|"), client.calls.filter { it.startsWith("stops:") })
+        }
+
+    @Test
+    fun `your own main phases are sent as stops even though the player never asked`() =
+        runTest {
+            // The one rule the player may not press away, and it has to be true on the *server* rather
+            // than only locked in the bar: an unsent `main1` is `false`, and a false `main1` is the
+            // server skipping the one window the turn is for.
+            val client = FakeGameClient()
+            val store = StopStore()
+            viewModel(client, stops = store).observe(GAME_ID)
+            client.calls.clear()
+
+            // A press somewhere else, so the published set is the player's own and not a default.
+            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+
+            assertEquals(listOf("stops:upkeep,main1,main2|"), client.calls)
+        }
+
+    @Test
+    fun `each side is sent separately, so a stop on their end step does not touch yours`() =
+        runTest {
+            val client = FakeGameClient()
+            val store = StopStore()
+            viewModel(client, stops = store).observe(GAME_ID)
+            client.calls.clear()
+
+            store.press(isYourTurn = false, stepId = StepIds.END_TURN)
+
+            // Their side carries the end step; yours carries only the two forced mains.
+            assertEquals(listOf("stops:main1,main2|endOfTurn"), client.calls)
+        }
+
+    @Test
+    fun `a one-shot stop is taken back once the priority window it asked for arrives`() =
+        runTest {
+            // Upstream's stop is a boolean, so "once" is sent as an ordinary stop and cleared the moment
+            // it is honoured — the clearing republishes, which is what stops it firing again next turn.
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+
+            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            assertEquals(
+                PhaseStop.Once,
+                store.stops.value.yours
+                    .modeAt(StepIds.UPKEEP),
+            )
+            client.calls.clear()
+
+            client.emitGameState(selectState().copy(step = PhaseStep.Upkeep))
+
+            assertEquals(
+                PhaseStop.None,
+                store.stops.value.yours
+                    .modeAt(StepIds.UPKEEP),
+            )
+            assertEquals(
+                "clearing it must reach the server, or the stop stands for every turn after",
+                listOf("stops:main1,main2|"),
+                client.calls,
+            )
+        }
+
+    @Test
+    fun `a standing stop survives the window it fired in`() =
+        runTest {
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            assertEquals(
+                PhaseStop.Always,
+                store.stops.value.yours
+                    .modeAt(StepIds.UPKEEP),
+            )
+            client.calls.clear()
+
+            client.emitGameState(selectState().copy(step = PhaseStep.Upkeep))
+
+            assertEquals(
+                PhaseStop.Always,
+                store.stops.value.yours
+                    .modeAt(StepIds.UPKEEP),
+            )
+            assertEquals("nothing changed, so nothing is republished", emptyList<String>(), client.calls)
+        }
+
+    @Test
+    fun `a one-shot on a step the prompt did not arrive in is left alone`() =
+        runTest {
+            // The one-shot is spent by the window *it* asked for. A priority prompt in the draw step is
+            // not the upkeep the player asked to see.
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            client.calls.clear()
+
+            client.emitGameState(selectState().copy(step = PhaseStep.Draw))
+
+            assertEquals(
+                PhaseStop.Once,
+                store.stops.value.yours
+                    .modeAt(StepIds.UPKEEP),
+            )
+            assertEquals(emptyList<String>(), client.calls)
+        }
+
+    @Test
+    fun `the same prompt re-emitted cannot spend a second one-shot`() =
+        runTest {
+            // The server re-pushes a snapshot for reasons that have nothing to do with priority moving —
+            // a life change, a card revealed. The stop is spent by a priority *window*, not by a
+            // redraw, so the guard is on the prompt instance rather than on the step.
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+
+            val upkeep = selectState().copy(step = PhaseStep.Upkeep)
+            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            client.emitGameState(upkeep)
+            assertEquals(
+                PhaseStop.None,
+                store.stops.value.yours
+                    .modeAt(StepIds.UPKEEP),
+            )
+
+            // Set again *within the same priority window*, then let the snapshot be pushed again.
+            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            client.emitGameState(upkeep)
+
+            assertEquals(
+                "the same window must not spend the stop a second time",
+                PhaseStop.Once,
+                store.stops.value.yours
+                    .modeAt(StepIds.UPKEEP),
+            )
+        }
+
     @Test
     fun `the policy is asked once per question, never twice for the same one`() =
         runTest {
@@ -510,7 +670,7 @@ class GameBoardViewModelTest {
             client.emitGameState(dealtState().copy(prompt = GamePrompt.PlayMana(message = "Pay")))
 
             assertEquals("a pass is only ever an answer to a select", 0, consulted)
-            assertEquals(listOf("join:$GAME_ID"), client.calls)
+            assertEquals(listOf("join:$GAME_ID"), client.gameCalls)
         }
 
     // ---- view state: the toggle, the hand and the tapped card -----------------------------------------
@@ -564,7 +724,7 @@ class GameBoardViewModelTest {
             viewModel.setControlsVisible(false)
             viewModel.setControlsVisible(true)
 
-            assertEquals("looking at the board is not a game action", listOf("join:$GAME_ID"), client.calls)
+            assertEquals("looking at the board is not a game action", listOf("join:$GAME_ID"), client.gameCalls)
         }
 
     @Test
@@ -604,7 +764,7 @@ class GameBoardViewModelTest {
 
             viewModel.selectCard("h-1")
             assertEquals("h-1", viewModel.uiState.value.selectedObjectId)
-            assertEquals(listOf("join:$GAME_ID"), client.calls)
+            assertEquals(listOf("join:$GAME_ID"), client.gameCalls)
 
             viewModel.selectCard("h-1")
             assertNull(viewModel.uiState.value.selectedObjectId)
@@ -982,7 +1142,19 @@ class GameBoardViewModelTest {
         client: FakeGameClient,
         policy: PassPolicy = ManualPassPolicy,
         catalog: CardCatalog = FakeCardCatalog(),
-    ) = GameBoardViewModel(client, policy, catalog, StopStore())
+        stops: StopStore = StopStore(),
+    ) = GameBoardViewModel(client, policy, catalog, stops)
+
+    /**
+     * The recorded calls with the stop publications filtered out.
+     *
+     * Stops are a *session preference* rather than a game action — they carry no game id and answer no
+     * prompt — so a test about what the board sends the game must not be rewritten every time the
+     * preference is republished. The publications themselves are asserted directly, in their own
+     * tests, on the unfiltered list.
+     */
+    private val FakeGameClient.gameCalls: List<String>
+        get() = calls.filterNot { it.startsWith("stops:") }
 
     private fun forest(id: String) = GameCard(id = id, name = "Forest", setCode = "M21", collectorNumber = "272")
 

@@ -437,5 +437,7 @@ class SignInViewModelTest {
             message: Any,
             requestId: String,
         ): ReplyT = error("request not used in this test")
+
+        override suspend fun send(message: Any): Unit = error("send not used in this test")
     }
 }

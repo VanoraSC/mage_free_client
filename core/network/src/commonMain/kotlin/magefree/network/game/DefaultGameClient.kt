@@ -25,6 +25,7 @@ import magefree.protocol.GameStateUnavailableCode
 import magefree.protocol.GetGameState
 import magefree.protocol.JoinGame
 import magefree.protocol.PlayerActionCode
+import magefree.protocol.PriorityStops
 import magefree.protocol.QuitMatch
 import magefree.protocol.SendPlayerAction
 import magefree.protocol.SendPlayerBoolean
@@ -33,6 +34,7 @@ import magefree.protocol.SendPlayerManaType
 import magefree.protocol.SendPlayerString
 import magefree.protocol.SendPlayerUuid
 import magefree.protocol.ServerMessage
+import magefree.protocol.SetPriorityStops
 import magefree.protocol.StopWatching
 import magefree.protocol.WatchGame
 import kotlin.uuid.Uuid
@@ -93,6 +95,18 @@ internal class DefaultGameClient(
     ): Result<Unit> = sendUuid(gameId, objectId)
 
     override suspend fun passPriority(gameId: String): Result<Unit> = sendBoolean(gameId, false)
+
+    override suspend fun setPriorityStops(
+        yourTurn: PriorityStopSteps,
+        opponentTurn: PriorityStopSteps,
+    ): Result<Unit> =
+        runCatching {
+            // Told, not asked: the bridge applies it to the live upstream user and has nothing to
+            // report back. Whether the server then stops is visible only as a prompt arriving.
+            bridgeClient.send(
+                SetPriorityStops(yourTurn = yourTurn.wire(), opponentTurn = opponentTurn.wire()),
+            )
+        }
 
     override suspend fun useSpecialAction(gameId: String): Result<Unit> = sendString(gameId, SPECIAL)
 
@@ -405,3 +419,15 @@ internal class DefaultGameClient(
         const val SPECIAL_CHOICE_PREFIX: String = "#"
     }
 }
+
+/** The app's stop steps as the wire's, which is a field-for-field mirror of upstream's own type. */
+private fun PriorityStopSteps.wire(): PriorityStops =
+    PriorityStops(
+        upkeep = upkeep,
+        draw = draw,
+        main1 = main1,
+        beforeCombat = beforeCombat,
+        endOfCombat = endOfCombat,
+        main2 = main2,
+        endOfTurn = endOfTurn,
+    )

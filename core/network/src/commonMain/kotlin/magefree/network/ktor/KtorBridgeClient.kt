@@ -197,6 +197,14 @@ class KtorBridgeClient(
         disconnect()
     }
 
+    override suspend fun send(message: Any) {
+        val session = activeSession ?: throw IllegalStateException("no active session to send on")
+        val clientMessage =
+            message as? ClientMessage
+                ?: throw IllegalArgumentException("send payload must be a ClientMessage, was ${message::class}")
+        session.sendMessage(clientMessage)
+    }
+
     override suspend fun <ReplyT : Any> request(
         message: Any,
         requestId: String,

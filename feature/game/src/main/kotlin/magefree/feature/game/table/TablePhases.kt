@@ -5,6 +5,7 @@ import magefree.designsystem.component.phase.PhaseBarTurn
 import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.feature.game.board.BoardStops
+import magefree.feature.game.board.OWN_MAIN_PHASE_STOPS
 import magefree.network.game.GameState
 import magefree.network.game.PhaseStep
 
@@ -20,8 +21,9 @@ import magefree.network.game.PhaseStep
  *
  * **The stops are the player's, and the side is the turn.** Upstream keeps a `SkipPrioritySteps` per
  * side — one for your turn, one for an opponent's — and the bar has one row, so it draws the row that
- * applies to the turn being played. Which stops are *rules* rather than settings is [lockedStops], and
- * it is the same pair `StopPassPolicy` enforces, so the mark and the stop cannot disagree.
+ * applies to the turn being played. Which stops are *rules* rather than settings is [lockedStops],
+ * and those are the server's rules, read out of `SkipPrioritySteps.isPhaseStepSet` and
+ * `TurnStops.asSteps`, so the mark and the stop cannot disagree.
  */
 
 /**
@@ -81,16 +83,22 @@ private fun PhaseStep.barStepId(): String? =
 /**
  * The steps whose stop is a **rule** for this snapshot, rather than something the player set.
  *
- * Your own main phases, because a turn you cannot act in is not a turn you are playing. Declare
- * blockers, but only when there was an attack: it is the combat-trick window, and with no combat there
- * is nothing to respond to. Both are the same two the pass policy enforces — stated once here for the
- * bar so the mark a player sees and the stop that actually fires cannot disagree.
+ * **The combat steps, always.** `SkipPrioritySteps.isPhaseStepSet` has seven cases and a
+ * `default: return true`, so declare attackers, declare blockers and combat damage are not steps a
+ * stop can be lifted from — the server gives priority in all three however the flags are set. That is
+ * where the mandatory window after blockers are declared and before damage comes from, and why it
+ * needs no condition on there having been an attack: with no attackers those steps do not happen.
+ *
+ * **Your own main phases**, because a turn you cannot act in is not a turn you are playing. That one
+ * is a rule this client enforces, by forcing the flags in [OWN_MAIN_PHASE_STOPS] on the way to the
+ * server — so the lock in the bar and the stop the server makes are the same fact stated twice.
  */
 fun lockedStops(state: GameState): Set<String> =
     buildSet {
+        add(StepIds.DECLARE_ATTACKERS)
+        add(StepIds.DECLARE_BLOCKERS)
+        add(StepIds.COMBAT_DAMAGE)
         if (state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId) {
-            add(StepIds.PRECOMBAT_MAIN)
-            add(StepIds.POSTCOMBAT_MAIN)
+            addAll(OWN_MAIN_PHASE_STOPS)
         }
-        if (state.combat.isNotEmpty()) add(StepIds.DECLARE_BLOCKERS)
     }

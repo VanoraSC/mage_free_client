@@ -112,8 +112,8 @@ data class GameBoardUiState(
     /**
      * Which priority windows the player has asked to be stopped at, both sides.
      *
-     * Carried here so the phase bar draws the same stops [StopPassPolicy] is deciding from — one
-     * object, read twice, rather than two that could disagree about what is set.
+     * Carried here so the phase bar draws exactly what was sent to the server — one object, published
+     * to both, rather than two that could disagree about what is set.
      */
     val stops: BoardStops = BoardStops(),
 )
@@ -235,11 +235,24 @@ class GameBoardViewModel
                 .onEach(::onSnapshot)
                 .launchIn(viewModelScope)
 
-            // The stops outlive the board, so they are collected rather than read once: a stop the
-            // policy consumes has to disappear from the bar without waiting for the next snapshot.
+            // **Every change goes two places: the bar, and the server.**
+            //
+            // The bar, because the stops outlive the board and a change has to show without waiting
+            // for the next snapshot. The server, because that is where the skipping happens:
+            // `HumanPlayer.priority()` reads its own copy of the player's steps and passes without
+            // sending the client a prompt, so a stop the server has not been told about is a stop that
+            // cannot happen.
+            //
+            // The current value is emitted on collection, so opening a board sends what the player set
+            // last rather than leaving the server on its own defaults.
             stops.stops
-                .onEach { current -> _uiState.value = _uiState.value.copy(stops = current) }
-                .launchIn(viewModelScope)
+                .onEach { current ->
+                    _uiState.value = _uiState.value.copy(stops = current)
+                    gameClient.setPriorityStops(
+                        yourTurn = current.yours.asSteps(forced = OWN_MAIN_PHASE_STOPS),
+                        opponentTurn = current.theirs.asSteps(),
+                    )
+                }.launchIn(viewModelScope)
 
             viewModelScope.launch {
                 gameClient.joinGame(gameId).fold(
@@ -285,8 +298,28 @@ class GameBoardViewModel
             val prompt = state.prompt
             if (prompt is GamePrompt.Select && prompt !== policyAskedFor) {
                 policyAskedFor = prompt
+                consumeOneShotStop(state)
                 if (passPolicy.decide(state) == PassDecision.PassImmediately) sendPass()
             }
+        }
+
+        /**
+         * Clears a one-shot stop that has just fired.
+         *
+         * **A one-shot is the client's own idea, and this is where it costs something.** The server
+         * knows only *stop* and *do not stop*, so a "once" is sent upstream as an ordinary stop and
+         * taken back the moment the priority window it asked for arrives. Clearing it republishes the
+         * set, which sends the server the new one — so the next turn's window is skipped again.
+         *
+         * Called once per prompt *instance*, alongside the pass policy, so a re-emission of the same
+         * question cannot spend the same stop twice.
+         */
+        private fun consumeOneShotStop(state: GameState) {
+            val stepId = state.step.stoppableId() ?: return
+            stops.consumeOnce(
+                isYourTurn = state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId,
+                stepId = stepId,
+            )
         }
 
         /**
@@ -435,9 +468,9 @@ class GameBoardViewModel
          * press on it is about that turn — which is what makes both sides' stops reachable over one
          * turn cycle with no second control for choosing a side.
          *
-         * View state in the sense that it sends the server nothing; a game fact in the sense that it
-         * decides whether the app answers the next question on the player's behalf. It goes through the
-         * store rather than the UI state because the policy reads the same object.
+         * **It is not view state.** The store's collector publishes every change to the phase bar *and*
+         * upstream, because a stop the server has not been told about is a stop that cannot happen —
+         * `HumanPlayer.priority()` passes for an unset step without ever sending a prompt.
          */
         fun pressStop(stepId: String) {
             val state = latestState ?: return

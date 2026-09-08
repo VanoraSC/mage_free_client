@@ -10,6 +10,7 @@ import magefree.network.game.GameStateUnavailableFailure
 import magefree.network.game.GameStateUnavailableReason
 import magefree.network.game.ManaType
 import magefree.network.game.PassPriorityScope
+import magefree.network.game.PriorityStopSteps
 
 /**
  * A scriptable [GameClient] test double for hermetic tests of downstream code — no bridge,
@@ -71,6 +72,11 @@ class FakeGameClient(
     ): Result<Unit> = record("play:$gameId:$objectId")
 
     override suspend fun passPriority(gameId: String): Result<Unit> = record("pass:$gameId")
+
+    override suspend fun setPriorityStops(
+        yourTurn: PriorityStopSteps,
+        opponentTurn: PriorityStopSteps,
+    ): Result<Unit> = record("stops:${yourTurn.stepsSet()}|${opponentTurn.stepsSet()}")
 
     override suspend fun useSpecialAction(gameId: String): Result<Unit> = record("special:$gameId")
 
@@ -167,3 +173,15 @@ class FakeGameClient(
         return actionResultFor?.invoke(call) ?: actionResult
     }
 }
+
+/** The steps a side is set to stop at, named, so a recorded call reads as what the player asked for. */
+private fun PriorityStopSteps.stepsSet(): String =
+    buildList {
+        if (upkeep) add("upkeep")
+        if (draw) add("draw")
+        if (main1) add("main1")
+        if (beforeCombat) add("beforeCombat")
+        if (endOfCombat) add("endOfCombat")
+        if (main2) add("main2")
+        if (endOfTurn) add("endOfTurn")
+    }.joinToString(",")

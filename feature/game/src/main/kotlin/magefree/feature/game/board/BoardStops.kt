@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.update
 import magefree.designsystem.component.phase.PhaseStop
 import magefree.designsystem.component.phase.StepIds
 import magefree.network.game.PhaseStep
+import magefree.network.game.PriorityStopSteps
 
 /*
  * Which priority windows the player wants to be asked about.
@@ -17,14 +18,17 @@ import magefree.network.game.PhaseStep
  * stoppable, and the split by side is what lets a player care about their opponent's end step without
  * caring about their own.
  *
- * **The third state is the phase bar's own — see [PhaseStop].** Upstream's stop is a boolean. *Stop
- * the next time this comes round,
- * then forget it* is a thing a player wants constantly — "let me see their end step this turn" — and
- * has no upstream equivalent, so it is a client-side convenience rather than a translation.
+ * **The skipping is the server's, and that is not a detail.** `HumanPlayer.priority()` calls
+ * `checkPassStep`, which reads the player's own `UserSkipPrioritySteps` and passes *without ever
+ * sending the client a prompt* when the step is not set — and only when the stack is empty, which is
+ * where "auto-pass only with an empty stack" comes from. So a stop is not a decision this app makes
+ * about a question it was asked; it is the thing that decides whether the question arrives at all.
+ * These are sent upstream (`GameClient.setPriorityStops`) and the server does the rest.
  *
- * **Where the skipping happens is the other difference.** Upstream's server reads the user's steps and
- * skips before it ever asks; there is no message for setting that user data, so this app decides for
- * itself and sends the pass. The semantics are upstream's and only the decision point is ours.
+ * **The third state is the phase bar's own — see [PhaseStop].** Upstream's stop is a boolean. *Stop
+ * the next time this comes round, then forget it* is a thing a player wants constantly — "let me see
+ * their end step this turn" — and has no upstream equivalent, so it is sent as an ordinary stop and
+ * taken back once the window it asked for has arrived.
  */
 
 /** One side of the turn's stops, by the phase bar's own step ids. */
@@ -78,8 +82,9 @@ data class BoardStops(
  * what they asked for — the board is rebuilt between games of a match, and stops that died with it
  * would have to be set again every game.
  *
- * A single instance in the DI graph, read by [StopPassPolicy] and published to the phase bar by the
- * ViewModel, so the two can never disagree about what is set.
+ * A single instance in the DI graph. The ViewModel publishes every change twice — to the phase bar,
+ * so the mark appears without waiting for a snapshot, and to the server, which is where the stop
+ * actually takes effect — so what is drawn and what is enforced cannot drift apart.
  */
 class StopStore {
     private val _stops = MutableStateFlow(BoardStops())
@@ -97,8 +102,9 @@ class StopStore {
     /**
      * Clears a one-shot stop that has just fired.
      *
-     * Called by the policy at the moment it decides to stop, which is safe because the policy is asked
-     * exactly once per prompt instance — see [GameBoardViewModel]'s `policyAskedFor`.
+     * Called when a priority prompt arrives in the step it was set for — the proof that the server
+     * honoured it — and once per prompt *instance*, so a re-emission of the same question cannot
+     * spend the same stop twice. See [GameBoardViewModel]'s `policyAskedFor`.
      */
     fun consumeOnce(
         isYourTurn: Boolean,
@@ -132,3 +138,41 @@ internal fun PhaseStep.stoppableId(): String? =
         PhaseStep.EndTurn -> StepIds.END_TURN
         else -> null
     }
+
+/**
+ * One side's stops as the network layer's own type — a field-for-field mirror of upstream's
+ * `SkipPrioritySteps`, which is what the server ultimately reads.
+ *
+ * `Once` and `Always` both mean *stop* to the server: it has no notion of a one-shot, and the
+ * difference is kept here by clearing the stop after it has fired. That is the one piece of this the
+ * client owns, and it owns it because upstream has nothing to translate it to.
+ *
+ * @param forced steps that stop whether or not the player asked — [OWN_MAIN_PHASE_STOPS] on your own
+ *   turn. Sending them is what keeps the rule true on the server rather than only in the bar: without
+ *   it, a player who has never pressed M1 would have `main1 = false` sent for their own turn and the
+ *   server would skip the one window the whole turn is for.
+ */
+internal fun TurnStops.asSteps(forced: Set<String> = emptySet()): PriorityStopSteps =
+    PriorityStopSteps(
+        upkeep = stopsAt(StepIds.UPKEEP, forced),
+        draw = stopsAt(StepIds.DRAW, forced),
+        main1 = stopsAt(StepIds.PRECOMBAT_MAIN, forced),
+        beforeCombat = stopsAt(StepIds.BEGIN_COMBAT, forced),
+        endOfCombat = stopsAt(StepIds.END_COMBAT, forced),
+        main2 = stopsAt(StepIds.POSTCOMBAT_MAIN, forced),
+        endOfTurn = stopsAt(StepIds.END_TURN, forced),
+    )
+
+private fun TurnStops.stopsAt(
+    stepId: String,
+    forced: Set<String>,
+): Boolean = stepId in forced || modeAt(stepId) != PhaseStop.None
+
+/**
+ * The stops a player may not press away on their **own** turn.
+ *
+ * A turn you cannot act in is not a turn you are playing, so both main phases stop — which is also
+ * upstream's own default for `SkipPrioritySteps` (`main1` and `main2` start `true`). Stated once, and
+ * used both to draw the bar's locked marks and to force the flags actually sent.
+ */
+internal val OWN_MAIN_PHASE_STOPS: Set<String> = setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN)

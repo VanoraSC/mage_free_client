@@ -247,4 +247,43 @@ interface GameClient {
         gameId: String,
         seed: GameState = GameState(gameId),
     ): Flow<GameState>
+
+    /**
+     * Tell the server which priority windows to stop at, per side of the turn.
+     *
+     * **This is the only way a stop can exist.** `HumanPlayer.priority()` reads the player's own
+     * `UserSkipPrioritySteps`, and where a step is not set and the stack is empty it passes on the
+     * server *without sending the client a prompt at all*. A client that simply declined to answer
+     * would be declining a question it was never asked.
+     *
+     * **Seven steps, and only seven.** Upstream's `SkipPrioritySteps.isPhaseStepSet` answers
+     * `default: return true` for every other step — declare attackers, declare blockers, combat
+     * damage, untap, cleanup — so the server always gives priority there and there is nothing to ask
+     * for.
+     *
+     * **A session preference rather than a game one**, which is why it takes no game id. It lives on
+     * this client because priority is the only thing it affects and the board is the only place it is
+     * set; the bridge applies it with `SessionImpl.updatePreferencesForServer`, exactly as upstream's
+     * own client does when its preferences change.
+     */
+    suspend fun setPriorityStops(
+        yourTurn: PriorityStopSteps,
+        opponentTurn: PriorityStopSteps,
+    ): Result<Unit>
 }
+
+/**
+ * The steps a player wants priority in, on one side of the turn.
+ *
+ * A field-for-field mirror of upstream's `SkipPrioritySteps`, including its defaults: both main phases
+ * on, everything else off. `true` means *stop here*.
+ */
+data class PriorityStopSteps(
+    val upkeep: Boolean = false,
+    val draw: Boolean = false,
+    val main1: Boolean = true,
+    val beforeCombat: Boolean = false,
+    val endOfCombat: Boolean = false,
+    val main2: Boolean = true,
+    val endOfTurn: Boolean = false,
+)
