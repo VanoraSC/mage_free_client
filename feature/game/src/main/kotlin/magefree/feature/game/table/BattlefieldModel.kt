@@ -351,10 +351,12 @@ fun attachmentPreview(
  * Both come straight from the prompt: [pickable] is the server's own candidate list, [picked] its own
  * `chosenTargets`. Nothing is inferred.
  *
- * @property pickable ids the outstanding prompt can be answered with.
- * @property picked ids already sent as part of the answer. Still in [pickable], and deliberately so —
- *   upstream keeps a chosen target in `possibleTargets` and removes it when it is sent again, so the
- *   card that shows both is a card that can be pressed to take the choice back.
+ * @property pickable ids the outstanding prompt can be answered with — the server's candidates **and**
+ *   what it already holds. The union, deliberately: `Target.keepValidPossibleTargets` drops chosen ids
+ *   from `possibleTargets` ("keep only valid and *not selected* targets"), but upstream still answers a
+ *   chosen id — `HumanPlayer.choose` removes it before it ever consults `possibleTargets` — so a chosen
+ *   card is still a card that can be pressed, to take the choice back.
+ * @property picked ids already sent as part of the answer.
  */
 data class PromptPicks(
     val pickable: Set<String> = emptySet(),
@@ -372,7 +374,7 @@ fun PromptControlsUi?.boardPicks(): PromptPicks =
     if (this == null || !marksCandidatesOnBoard) {
         PromptPicks()
     } else {
-        PromptPicks(pickable = pickableObjectIds, picked = chosenObjectIds)
+        PromptPicks(pickable = pickableObjectIds + chosenObjectIds, picked = chosenObjectIds)
     }
 
 /** The battlefield in [state], arranged, with [picks] marking what the outstanding question is about. */

@@ -318,10 +318,36 @@ class BattlefieldModelTest {
     }
 
     @Test
+    fun `a chosen card is answerable even though the server stopped listing it as possible`() {
+        // The bug this exists for: discarding to hand size, "Take back this choice" appeared on a
+        // chosen Swamp and did nothing.
+        //
+        // `Target.keepValidPossibleTargets` — "keep only valid and *not selected* targets" — drops
+        // chosen ids from every `possibleTargets`, so after a pick the candidate set and the chosen
+        // set are **disjoint**. The label was offered for anything chosen and the action for anything
+        // possible, so the two never met. Upstream accepts the id regardless: `HumanPlayer.choose`
+        // checks `target.contains` before it ever consults `possibleTargets`.
+        val targeting =
+            PromptControlsUi.Targeting(
+                message = "Select 3 cards to discard",
+                pickableObjectIds = setOf("mountain"),
+                chosenObjectIds = setOf("swamp"),
+                candidateCards = emptyList(),
+                buttons = emptyList(),
+                hasPicked = true,
+            )
+
+        assertEquals(BoardAction.ChooseTarget("swamp"), targeting.actionFor("swamp"))
+        assertEquals(UNPICK_ACTION_LABEL, targeting.actionLabelFor("swamp"))
+        // And the board still draws it as pressable, or the label would be on a card with no border.
+        assertEquals(setOf("mountain", "swamp"), targeting.boardPicks().pickable)
+        assertEquals(setOf("swamp"), targeting.boardPicks().picked)
+    }
+
+    @Test
     fun `a card already chosen offers to take the choice back, not to choose it again`() {
-        // Upstream toggles: `HumanPlayer.choose` removes a target sent a second time, and
-        // `TargetPermanent.possibleTargets` keeps it in the candidate list so it can be. A button
-        // still reading "choose" would take the choice back while claiming to make it.
+        // Upstream toggles: `HumanPlayer.choose` removes a target sent a second time. A button still
+        // reading "choose" would take the choice back while claiming to make it.
         val targeting =
             PromptControlsUi.Targeting(
                 message = "Select permanents to put in the first pile",
