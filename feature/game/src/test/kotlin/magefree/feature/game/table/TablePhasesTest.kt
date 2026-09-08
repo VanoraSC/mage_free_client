@@ -5,7 +5,6 @@ import magefree.designsystem.component.phase.PhaseStop
 import magefree.designsystem.component.phase.StepIds
 import magefree.designsystem.component.phase.standardTurnSteps
 import magefree.feature.game.board.BoardStops
-import magefree.feature.game.board.TurnStops
 import magefree.network.game.GameState
 import magefree.network.game.PhaseStep
 import org.junit.Assert.assertEquals
@@ -124,7 +123,7 @@ class TablePhasesTest {
 
     @Test
     fun `an unlocked step still shows what the player set`() {
-        val stops = BoardStops(yours = TurnStops(mapOf(StepIds.UPKEEP to PhaseStop.Once)))
+        val stops = BoardStops(mapOf(StepIds.UPKEEP to PhaseStop.Once))
 
         val steps =
             phaseBarState(
@@ -135,6 +134,21 @@ class TablePhasesTest {
 
         assertEquals(PhaseStop.Once, steps.getValue(StepIds.UPKEEP).stop)
         assertTrue(steps.getValue(StepIds.UPKEEP).stoppable)
+    }
+
+    @Test
+    fun `the mark is the same whoever's turn it is`() {
+        // One row of marks, one meaning. A bar that drew a different mark on each side made the same
+        // press mean different things depending on when it was made, which is exactly what confused
+        // the player: a stop pressed on your own turn that let the opponent's step go past.
+        val stops = BoardStops(mapOf(StepIds.END_TURN to PhaseStop.Always))
+        val theirTurn = stateAt(PhaseStep.EndTurn).copy(activePlayerId = "p-opp")
+
+        val onYours = phaseBarState(stateAt(PhaseStep.EndTurn), stops = stops).steps.associateBy { it.id }
+        val onTheirs = phaseBarState(theirTurn, stops = stops).steps.associateBy { it.id }
+
+        assertEquals(PhaseStop.Always, onYours.getValue(StepIds.END_TURN).stop)
+        assertEquals(PhaseStop.Always, onTheirs.getValue(StepIds.END_TURN).stop)
     }
 
     private fun stateAt(step: PhaseStep) =

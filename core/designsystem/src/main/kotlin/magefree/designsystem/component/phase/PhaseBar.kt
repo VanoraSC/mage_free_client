@@ -29,16 +29,18 @@ import magefree.designsystem.board.BoardTypography
  *
  * It answers a question the player asks constantly and a second one they otherwise have to remember.
  * The first is positional — a row of steps with the current one marked reads at a glance in a way a
- * line of text never does. The second is that **a stop is a standing instruction**: "stop at my second
+ * line of text never does. The second is that **a stop is a standing instruction**: "stop at the second
  * main phase" is set once and then silently governs every turn afterwards, so the only honest place
  * to show it is on the step it applies to.
  *
- * The stops are the server's, not an invention here. Upstream keeps a `SkipPrioritySteps` per side —
- * one for your turn and one for the opponent's, which is what makes a stop per-phase *and* per-player
- * — covering exactly seven steps: upkeep, draw, first main, beginning of combat, end of combat,
- * second main, and end step. A set flag means **stop**, and first and second main are set by default.
+ * The stops are the server's, not an invention here. Upstream's `SkipPrioritySteps` covers exactly
+ * seven steps: upkeep, draw, first main, beginning of combat, end of combat, second main, and end
+ * step. A set flag means **stop**, and first and second main are set by default.
  *
- * This renders that model. Wiring it to a game is separate work.
+ * Upstream keeps one of those per side of the turn; **the bar does not**, because it has one row and a
+ * row cannot say which side a mark belongs to. A mark here is about the step, on both players' turns,
+ * and the caller sends both of upstream's sides the same set. What the two marks distinguish is *how
+ * long* — [PhaseStop.Once] against [PhaseStop.Always] — which is a question one row can put.
  */
 
 /** Whose turn the bar is describing. */
@@ -58,7 +60,7 @@ enum class PhaseBarTurn {
  * @param name the full name, for anywhere with room for it.
  * @param stoppable whether the server accepts a stop here. Only seven steps do; the rest are shown so
  *   the turn reads as a whole, but tapping them would be a control the server discards.
- * @param stop what the player has asked for at this step, on this side of the turn.
+ * @param stop what the player has asked for at this step — on both players' turns.
  */
 data class PhaseBarStep(
     val id: String,
@@ -87,7 +89,7 @@ data class PhaseBarState(
  * related reason — it exists only in some turns, and a bar whose length changed with the board would
  * cost more in instability than it returns in precision.
  *
- * @param stops what the player has asked for at each step, on the side of the turn being drawn.
+ * @param stops what the player has asked for at each step. One set, drawn on every turn.
  * @param locked steps whose stop is a **rule** rather than a setting — drawn as always stopping, and
  *   not pressable. The caller decides which, because which stops are rules is a question about the
  *   game and not about a bar.
@@ -277,19 +279,22 @@ val PhaseBarHeight = 26.dp
 /**
  * What a player has asked for at one step.
  *
- * Upstream's own stop is a boolean — `SkipPrioritySteps` is seven of them per side. The third state is
- * this client's: *stop the next time this comes round, then forget it* is a thing a player wants
- * constantly ("let me see their end step **this** turn") and has no upstream equivalent, so it is a
- * convenience rather than a translation.
+ * Upstream's own stop is a boolean — `SkipPrioritySteps` is seven of them. The third state is this
+ * client's: *stop the next time this comes round, then forget it* is a thing a player wants constantly
+ * ("let me see the **next** end step") and has no upstream equivalent, so it is a convenience rather
+ * than a translation.
+ *
+ * Neither state is about whose turn it is. Both apply on both players' turns; what they differ in is
+ * how long they last.
  */
 enum class PhaseStop {
     /** No stop. The step is passed through when there is nothing to respond to. */
     None,
 
-    /** Stop the next time this step comes round, then clear itself. */
+    /** Stop at the next occurrence of this step, whoever's turn it is, then clear itself. */
     Once,
 
-    /** Stop every time. */
+    /** Stop every time this step comes round, on both players' turns. */
     Always,
     ;
 

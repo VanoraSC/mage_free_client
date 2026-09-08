@@ -10,7 +10,7 @@
 
 Stop being asked about priority windows the player does not care about. With no stop set for the step
 being played and nothing on the stack, priority is passed without a question; the phase bar is where a
-player says which steps they *do* care about, per side of the turn.
+player says which steps they *do* care about.
 
 ## 2. Context & background
 
@@ -35,8 +35,16 @@ are precisely the ones it never hears about.
 `UserSkipPrioritySteps` holds two `SkipPrioritySteps` — `getYourTurn()` and `getOpponentTurn()` — each
 seven booleans over upkeep, draw, main 1, before combat, end of combat, main 2 and end of turn, where
 `true` means *stop here*. `main1` and `main2` start `true`; the rest start `false`. Those seven are
-exactly the seven the phase bar marks `stoppable`, and the split by side is exactly what "set stops for
-the opponent's phases, the player's phases, or both" needs.
+exactly the seven the phase bar marks `stoppable`.
+
+**The split by side is upstream's and it is not passed on.** A mark in the bar means the step, on both
+players' turns, and both of upstream's sides are sent the same set. The bar has one row and a row
+cannot say which side a mark belongs to: setting whichever side happened to be being played when the
+mark was pressed made the *same* press mean different things at different times — press upkeep on your
+own turn, stop on your own upkeep, and watch the opponent's go past with nothing on screen to explain
+it. What the two marks distinguish is *how long* — the next occurrence, or every one — which is a
+question one row can put. The only per-side thing left is a rule rather than a setting: your own main
+phases (below).
 
 **Everything else always stops.** `SkipPrioritySteps.isPhaseStepSet` ends `default: return true`, so
 declare attackers, declare blockers, combat damage, untap and cleanup are not steps a stop can be
@@ -74,7 +82,7 @@ it asked for has arrived.
 ## 3. Scope
 
 **In scope**
-- Stops per side, over the seven steps upstream accepts, sent to the server.
+- Stops over the seven steps upstream accepts, sent to the server for both sides of the turn.
 - Pressing a step cycles none → once → always → none, with a distinct mark for each.
 - The one-shot: sent as a stop, cleared once the window it asked for arrives.
 - Your own M1 and M2, forced on the wire so they cannot be lost.
@@ -116,15 +124,16 @@ matters: the server merges, so a preference dropped on the way would be merged b
 only in the bar would send `main1 = false` for a player who had never pressed M1, and the server would
 skip the one window the turn is for. Upstream defaults them to `true` for the same reason.
 
-**The one-shot is spent by a window, not by a step.** When a priority prompt arrives in the step a
-`Once` was set for, the stop is cleared — which republishes, which sends the server the new set, which
-is what stops it firing next turn. It is consumed once per prompt *instance*
-(`GameBoardViewModel.policyAskedFor`), so a snapshot re-pushed for an unrelated reason cannot spend it
-twice.
+**The one-shot is spent by the next window, whoever's turn it is.** When a priority prompt arrives in
+the step a `Once` was set for, the stop is cleared — which republishes, which sends the server the new
+set, which is what stops it firing again. *Next* means next: an opponent's upkeep is an occurrence of
+upkeep, and a blue mark that skipped it would be answering a question the player did not ask. It is
+consumed once per prompt *instance* (`GameBoardViewModel.policyAskedFor`), so a snapshot re-pushed for
+an unrelated reason cannot spend it twice.
 
-**The bar shows the side whose turn it is.** `PhaseBarState.turn` already carries that. Pressing a
-step sets the stop for the turn being played, so both sides' stops are reachable across one turn cycle
-without a second control for choosing a side.
+**The bar still says whose turn it is; the marks do not.** `PhaseBarState.turn` colours the current
+step, which is about where the game *is*. The stop marks are about what the player asked for, and that
+is one set drawn identically on every turn.
 
 **`lockedStops` states the server's rules for the bar.** The three combat steps, always, because
 `isPhaseStepSet` answers `default: return true` for them; plus your own two main phases. A locked step
@@ -153,24 +162,25 @@ for, so the shipped policy answers *ask the player* to all of them.
 - **Integration (the coordinator, `:bridge`):** `SetPriorityStops` reaches the bound session with both
   sides intact; on an unbound socket it is dropped and the socket stays usable.
 - **Unit (the board):** opening a board sends the stops before any snapshot; your own main phases are
-  sent whether or not the player asked; a press on one side does not touch the other; a one-shot is
-  cleared when a prompt arrives in its step and the clearing is sent; a standing stop is not; a
-  one-shot in a step the prompt did not arrive in is left alone; the same prompt instance cannot spend
-  two.
+  sent whether or not the player asked; one press sends the step on **both** sides, and the turn being
+  played when it is pressed makes no difference; a one-shot is cleared when a prompt arrives in its
+  step — including on an opponent's turn — and the clearing is sent; a standing stop is not; a one-shot
+  in a step the prompt did not arrive in is left alone; the same prompt instance cannot spend two.
 - **Unit (the bar's rules):** the three combat steps are locked on either side; your main phases are
-  locked and an opponent's are not; a locked step draws a standing mark and takes no press.
+  locked and an opponent's are not; a locked step draws a standing mark and takes no press; the mark a
+  step draws is the same whoever's turn it is.
 - **Hermetic Compose:** the bar marks a once-stop differently from an always-stop; pressing cycles the
   mark; a step the bar accepts no stop for does not change.
-- **Eyes-on:** a real game, playing a turn cycle with stops set on each side.
+- **Eyes-on:** a real game, playing a full turn cycle with a mark set on each kind of step.
 
 ## 8. Acceptance criteria
 
 - [ ] With no stops set, a turn plays without asking about steps nothing is happening in.
 - [ ] Pressing a step in the bar cycles blue → red → none, and the mark says which.
-- [ ] A blue stop fires once and then stops firing.
-- [ ] A red stop fires every time.
+- [ ] A blue stop fires at the **next** occurrence of that step, whoever's turn it is, then clears.
+- [ ] A red stop fires every time, on both players' turns.
+- [ ] Where a mark was pressed in the turn cycle makes no difference to what it does.
 - [ ] Your own M1 and M2 always stop, and cannot be turned off.
-- [ ] Stops set for an opponent's phases fire on their turn and not on yours, and the reverse.
 - [ ] After blockers are declared, the game stops before combat damage.
 - [ ] Nothing is passed on the player's behalf while anything is on the stack.
 - [ ] Stops set in one game are still set in the next.

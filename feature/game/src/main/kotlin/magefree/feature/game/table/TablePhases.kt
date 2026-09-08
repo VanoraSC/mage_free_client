@@ -19,24 +19,24 @@ import magefree.network.game.PhaseStep
  * answers null for the rest — a turn passing through untap simply leaves the marker where it was
  * rather than jumping somewhere that is not shown.
  *
- * **The stops are the player's, and the side is the turn.** Upstream keeps a `SkipPrioritySteps` per
- * side — one for your turn, one for an opponent's — and the bar has one row, so it draws the row that
- * applies to the turn being played. Which stops are *rules* rather than settings is [lockedStops],
- * and those are the server's rules, read out of `SkipPrioritySteps.isPhaseStepSet` and
- * `TurnStops.asSteps`, so the mark and the stop cannot disagree.
+ * **The stops are the player's, and one row of marks means one thing.** Upstream keeps a
+ * `SkipPrioritySteps` per side, but the bar has one row and cannot draw a per-side distinction — so a
+ * mark is about the *step*, on both turns, and both of upstream's sides are sent the same set. Which
+ * stops are *rules* rather than settings is [lockedStops], and those are the server's rules, read out
+ * of `SkipPrioritySteps.isPhaseStepSet` and `BoardStops.asSteps`, so the mark and the stop cannot
+ * disagree.
  */
 
 /**
  * The phase bar for one snapshot.
  *
- * **The bar draws the side whose turn is being played.** Stops are per side — upstream's own model,
- * a `SkipPrioritySteps` for your turn and another for an opponent's — and the bar has one row, so it
- * shows the row that applies right now. Both sides' stops are reachable over one turn cycle without a
- * second control for choosing a side.
+ * **One row, one meaning.** A mark says the game stops at that step — blue at its next occurrence,
+ * red every time — whoever's turn it is. The bar drew a per-side row before, which made the same
+ * press mean different things depending on when it was made.
  *
  * @param state the server's own game view.
- * @param stops what the player has asked to be stopped at, both sides.
- * @param locked the steps whose stop is a rule rather than a setting, for this side of this turn.
+ * @param stops what the player has asked to be stopped at.
+ * @param locked the steps whose stop is a rule rather than a setting, for this turn.
  */
 fun phaseBarState(
     state: GameState,
@@ -45,7 +45,7 @@ fun phaseBarState(
 ): PhaseBarState {
     val isYourTurn = state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId
     return PhaseBarState(
-        steps = standardTurnSteps(stops = stops.on(isYourTurn).byStep, locked = locked),
+        steps = standardTurnSteps(stops = stops.byStep, locked = locked),
         currentStepId = state.step.barStepId(),
         // Whose turn it is, from the seat the server marked active rather than from who holds
         // priority: the bar says *whose turn*, and priority moves within a turn several times.

@@ -553,23 +553,42 @@ class GameBoardViewModelTest {
             client.calls.clear()
 
             // A press somewhere else, so the published set is the player's own and not a default.
-            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            store.press(StepIds.UPKEEP)
 
-            assertEquals(listOf("stops:upkeep,main1,main2|"), client.calls)
+            // Their side carries only the upkeep the player pressed; yours carries the forced mains too.
+            assertEquals(listOf("stops:upkeep,main1,main2|upkeep"), client.calls)
         }
 
     @Test
-    fun `each side is sent separately, so a stop on their end step does not touch yours`() =
+    fun `one press stops the step on both players' turns`() =
         runTest {
+            // What made this confusing to play: the mark used to set whichever side happened to be
+            // being played when it was pressed, so pressing upkeep on your own turn stopped your upkeep
+            // and let the opponent's go past — with one row of marks and nothing to say why.
             val client = FakeGameClient()
             val store = StopStore()
             viewModel(client, stops = store).observe(GAME_ID)
             client.calls.clear()
 
-            store.press(isYourTurn = false, stepId = StepIds.END_TURN)
+            store.press(StepIds.END_TURN)
 
-            // Their side carries the end step; yours carries only the two forced mains.
-            assertEquals(listOf("stops:main1,main2|endOfTurn"), client.calls)
+            assertEquals(listOf("stops:main1,main2,endOfTurn|endOfTurn"), client.calls)
+        }
+
+    @Test
+    fun `the turn being played has no bearing on what a press sets`() =
+        runTest {
+            // The same press, made on an opponent's turn, must produce the same set.
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(dealtState().copy(activePlayerId = "p-opp"))
+            client.calls.clear()
+
+            store.press(StepIds.END_TURN)
+
+            assertEquals(listOf("stops:main1,main2,endOfTurn|endOfTurn"), client.calls)
         }
 
     @Test
@@ -582,11 +601,10 @@ class GameBoardViewModelTest {
             val viewModel = viewModel(client, stops = store)
             viewModel.observe(GAME_ID)
 
-            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            store.press(StepIds.UPKEEP)
             assertEquals(
                 PhaseStop.Once,
-                store.stops.value.yours
-                    .modeAt(StepIds.UPKEEP),
+                store.stops.value.modeAt(StepIds.UPKEEP),
             )
             client.calls.clear()
 
@@ -594,8 +612,7 @@ class GameBoardViewModelTest {
 
             assertEquals(
                 PhaseStop.None,
-                store.stops.value.yours
-                    .modeAt(StepIds.UPKEEP),
+                store.stops.value.modeAt(StepIds.UPKEEP),
             )
             assertEquals(
                 "clearing it must reach the server, or the stop stands for every turn after",
@@ -611,12 +628,11 @@ class GameBoardViewModelTest {
             val store = StopStore()
             val viewModel = viewModel(client, stops = store)
             viewModel.observe(GAME_ID)
-            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
-            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            store.press(StepIds.UPKEEP)
+            store.press(StepIds.UPKEEP)
             assertEquals(
                 PhaseStop.Always,
-                store.stops.value.yours
-                    .modeAt(StepIds.UPKEEP),
+                store.stops.value.modeAt(StepIds.UPKEEP),
             )
             client.calls.clear()
 
@@ -624,10 +640,29 @@ class GameBoardViewModelTest {
 
             assertEquals(
                 PhaseStop.Always,
-                store.stops.value.yours
-                    .modeAt(StepIds.UPKEEP),
+                store.stops.value.modeAt(StepIds.UPKEEP),
             )
             assertEquals("nothing changed, so nothing is republished", emptyList<String>(), client.calls)
+        }
+
+    @Test
+    fun `a one-shot fires on an opponent's turn, because next means next`() =
+        runTest {
+            // The bug Pete hit from the other side: a blue mark asks for the *next* occurrence of the
+            // step, and an opponent's upkeep is an occurrence of upkeep.
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+            store.press(StepIds.UPKEEP)
+            client.calls.clear()
+
+            client.emitGameState(
+                selectState().copy(step = PhaseStep.Upkeep, activePlayerId = "p-opp"),
+            )
+
+            assertEquals(PhaseStop.None, store.stops.value.modeAt(StepIds.UPKEEP))
+            assertEquals(listOf("stops:main1,main2|"), client.calls)
         }
 
     @Test
@@ -639,15 +674,14 @@ class GameBoardViewModelTest {
             val store = StopStore()
             val viewModel = viewModel(client, stops = store)
             viewModel.observe(GAME_ID)
-            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            store.press(StepIds.UPKEEP)
             client.calls.clear()
 
             client.emitGameState(selectState().copy(step = PhaseStep.Draw))
 
             assertEquals(
                 PhaseStop.Once,
-                store.stops.value.yours
-                    .modeAt(StepIds.UPKEEP),
+                store.stops.value.modeAt(StepIds.UPKEEP),
             )
             assertEquals(emptyList<String>(), client.calls)
         }
@@ -664,23 +698,21 @@ class GameBoardViewModelTest {
             viewModel.observe(GAME_ID)
 
             val upkeep = selectState().copy(step = PhaseStep.Upkeep)
-            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            store.press(StepIds.UPKEEP)
             client.emitGameState(upkeep)
             assertEquals(
                 PhaseStop.None,
-                store.stops.value.yours
-                    .modeAt(StepIds.UPKEEP),
+                store.stops.value.modeAt(StepIds.UPKEEP),
             )
 
             // Set again *within the same priority window*, then let the snapshot be pushed again.
-            store.press(isYourTurn = true, stepId = StepIds.UPKEEP)
+            store.press(StepIds.UPKEEP)
             client.emitGameState(upkeep)
 
             assertEquals(
                 "the same window must not spend the stop a second time",
                 PhaseStop.Once,
-                store.stops.value.yours
-                    .modeAt(StepIds.UPKEEP),
+                store.stops.value.modeAt(StepIds.UPKEEP),
             )
         }
 

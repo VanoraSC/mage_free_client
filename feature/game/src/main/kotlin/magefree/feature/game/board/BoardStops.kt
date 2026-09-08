@@ -12,11 +12,16 @@ import magefree.network.game.PriorityStopSteps
 /*
  * Which priority windows the player wants to be asked about.
  *
- * **The model is upstream's.** `UserSkipPrioritySteps` holds two `SkipPrioritySteps` — one for your
- * turn and one for an opponent's — each a set of seven booleans over upkeep, draw, main 1, before
- * combat, end of combat, main 2 and end of turn. Those are exactly the seven the phase bar marks
- * stoppable, and the split by side is what lets a player care about their opponent's end step without
- * caring about their own.
+ * **A stop is about a step, not about a side.** Upstream keeps two `SkipPrioritySteps` — one for your
+ * turn, one for an opponent's — and this app used to set whichever side happened to be being played
+ * when the mark was pressed. That is a distinction the bar cannot draw, because the bar has one row: a
+ * player who pressed upkeep on their own turn got a stop on their own upkeep only, with nothing on
+ * screen to say why the opponent's went past. So a mark now means the step, on both turns, and the
+ * seven booleans are sent twice.
+ *
+ * **The two marks answer *how long*, which is the question the bar can put.** Blue stops at the next
+ * occurrence of the step, whoever's turn it is, and then clears itself. Red stops every time, on both
+ * players' turns.
  *
  * **The skipping is the server's, and that is not a detail.** `HumanPlayer.priority()` calls
  * `checkPassStep`, which reads the player's own `UserSkipPrioritySteps` and passes *without ever
@@ -25,54 +30,36 @@ import magefree.network.game.PriorityStopSteps
  * about a question it was asked; it is the thing that decides whether the question arrives at all.
  * These are sent upstream (`GameClient.setPriorityStops`) and the server does the rest.
  *
- * **The third state is the phase bar's own — see [PhaseStop].** Upstream's stop is a boolean. *Stop
- * the next time this comes round, then forget it* is a thing a player wants constantly — "let me see
- * their end step this turn" — and has no upstream equivalent, so it is sent as an ordinary stop and
+ * **The one-shot is the phase bar's own — see [PhaseStop].** Upstream's stop is a boolean. *Stop the
+ * next time this comes round, then forget it* is a thing a player wants constantly — "let me see the
+ * next end step" — and has no upstream equivalent, so it is sent as an ordinary stop on both sides and
  * taken back once the window it asked for has arrived.
  */
 
-/** One side of the turn's stops, by the phase bar's own step ids. */
-data class TurnStops(
+/**
+ * What the player has asked to be stopped at, by the phase bar's own step ids.
+ *
+ * One set, not one per side: a mark applies to the step wherever it occurs. Where the two sides still
+ * differ is a *rule* rather than a setting — see [OWN_MAIN_PHASE_STOPS] — and that is applied on the
+ * way to the server rather than kept here.
+ */
+data class BoardStops(
     val byStep: Map<String, PhaseStop> = emptyMap(),
 ) {
     fun modeAt(stepId: String): PhaseStop = byStep[stepId] ?: PhaseStop.None
 
-    fun pressed(stepId: String): TurnStops = withMode(stepId, modeAt(stepId).next())
+    fun pressed(stepId: String): BoardStops = withMode(stepId, modeAt(stepId).next())
 
     fun withMode(
         stepId: String,
         mode: PhaseStop,
-    ): TurnStops =
-        TurnStops(
+    ): BoardStops =
+        BoardStops(
             // `None` is the absence of a stop rather than a stop that is off, so it is removed. It
             // keeps the map to what the player has actually asked for, which is what a future
             // persisted form wants to write.
             byStep = if (mode == PhaseStop.None) byStep - stepId else byStep + (stepId to mode),
         )
-}
-
-/**
- * Both sides' stops.
- *
- * @property yours what to stop for while it is the viewer's own turn.
- * @property theirs what to stop for while it is anyone else's.
- */
-data class BoardStops(
-    val yours: TurnStops = TurnStops(),
-    val theirs: TurnStops = TurnStops(),
-) {
-    fun on(isYourTurn: Boolean): TurnStops = if (isYourTurn) yours else theirs
-
-    fun pressed(
-        isYourTurn: Boolean,
-        stepId: String,
-    ): BoardStops = if (isYourTurn) copy(yours = yours.pressed(stepId)) else copy(theirs = theirs.pressed(stepId))
-
-    fun withMode(
-        isYourTurn: Boolean,
-        stepId: String,
-        mode: PhaseStop,
-    ): BoardStops = if (isYourTurn) copy(yours = yours.withMode(stepId, mode)) else copy(theirs = theirs.withMode(stepId, mode))
 }
 
 /**
@@ -91,12 +78,9 @@ class StopStore {
 
     val stops: StateFlow<BoardStops> = _stops.asStateFlow()
 
-    /** Cycles the stop at [stepId] on the side being played. */
-    fun press(
-        isYourTurn: Boolean,
-        stepId: String,
-    ) {
-        _stops.update { it.pressed(isYourTurn, stepId) }
+    /** Cycles the stop at [stepId]: none → once → always → none. */
+    fun press(stepId: String) {
+        _stops.update { it.pressed(stepId) }
     }
 
     /**
@@ -105,17 +89,13 @@ class StopStore {
      * Called when a priority prompt arrives in the step it was set for — the proof that the server
      * honoured it — and once per prompt *instance*, so a re-emission of the same question cannot
      * spend the same stop twice. See [GameBoardViewModel]'s `policyAskedFor`.
+     *
+     * **Whoever's turn it is.** A one-shot asks for the *next* occurrence of the step, so the first
+     * window that arrives is the one it was set for, and spending it there is what "next" means.
      */
-    fun consumeOnce(
-        isYourTurn: Boolean,
-        stepId: String,
-    ) {
+    fun consumeOnce(stepId: String) {
         _stops.update { current ->
-            if (current.on(isYourTurn).modeAt(stepId) == PhaseStop.Once) {
-                current.withMode(isYourTurn, stepId, PhaseStop.None)
-            } else {
-                current
-            }
+            if (current.modeAt(stepId) == PhaseStop.Once) current.withMode(stepId, PhaseStop.None) else current
         }
     }
 }
@@ -140,8 +120,11 @@ internal fun PhaseStep.stoppableId(): String? =
     }
 
 /**
- * One side's stops as the network layer's own type — a field-for-field mirror of upstream's
+ * The stops as the network layer's own type — a field-for-field mirror of upstream's
  * `SkipPrioritySteps`, which is what the server ultimately reads.
+ *
+ * Called once per side with the *same* marks, because a mark is about the step rather than about whose
+ * turn it is. [forced] is the only thing that differs between the two calls.
  *
  * `Once` and `Always` both mean *stop* to the server: it has no notion of a one-shot, and the
  * difference is kept here by clearing the stop after it has fired. That is the one piece of this the
@@ -152,7 +135,7 @@ internal fun PhaseStep.stoppableId(): String? =
  *   it, a player who has never pressed M1 would have `main1 = false` sent for their own turn and the
  *   server would skip the one window the whole turn is for.
  */
-internal fun TurnStops.asSteps(forced: Set<String> = emptySet()): PriorityStopSteps =
+internal fun BoardStops.asSteps(forced: Set<String> = emptySet()): PriorityStopSteps =
     PriorityStopSteps(
         upkeep = stopsAt(StepIds.UPKEEP, forced),
         draw = stopsAt(StepIds.DRAW, forced),
@@ -163,7 +146,7 @@ internal fun TurnStops.asSteps(forced: Set<String> = emptySet()): PriorityStopSt
         endOfTurn = stopsAt(StepIds.END_TURN, forced),
     )
 
-private fun TurnStops.stopsAt(
+private fun BoardStops.stopsAt(
     stepId: String,
     forced: Set<String>,
 ): Boolean = stepId in forced || modeAt(stepId) != PhaseStop.None

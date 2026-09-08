@@ -253,9 +253,11 @@ class GameBoardViewModel
             stops.stops
                 .onEach { current ->
                     _uiState.value = _uiState.value.copy(stops = current)
+                    // The same marks on both sides: a mark is about the step, not about whose turn it
+                    // is. Only the rule differs — your own main phases stop however the marks read.
                     gameClient.setPriorityStops(
-                        yourTurn = current.yours.asSteps(forced = OWN_MAIN_PHASE_STOPS),
-                        opponentTurn = current.theirs.asSteps(),
+                        yourTurn = current.asSteps(forced = OWN_MAIN_PHASE_STOPS),
+                        opponentTurn = current.asSteps(),
                     )
                 }.launchIn(viewModelScope)
 
@@ -324,11 +326,7 @@ class GameBoardViewModel
          * question cannot spend the same stop twice.
          */
         private fun consumeOneShotStop(state: GameState) {
-            val stepId = state.step.stoppableId() ?: return
-            stops.consumeOnce(
-                isYourTurn = state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId,
-                stepId = stepId,
-            )
+            stops.consumeOnce(state.step.stoppableId() ?: return)
         }
 
         /**
@@ -488,19 +486,19 @@ class GameBoardViewModel
         }
 
         /**
-         * Cycle the stop at [stepId], on the side whose turn is being played.
+         * Cycle the stop at [stepId]: none → once → always → none.
          *
-         * **The side is the turn, not a setting.** The bar draws the turn currently being played, so a
-         * press on it is about that turn — which is what makes both sides' stops reachable over one
-         * turn cycle with no second control for choosing a side.
+         * **The mark is about the step, on both turns.** It used to set whichever side was being played
+         * when it was pressed, which made the same mark mean different things depending on when it was
+         * touched — press upkeep on your own turn and the opponent's went past with nothing on screen
+         * to explain it. One row of marks, one meaning.
          *
          * **It is not view state.** The store's collector publishes every change to the phase bar *and*
          * upstream, because a stop the server has not been told about is a stop that cannot happen —
          * `HumanPlayer.priority()` passes for an unset step without ever sending a prompt.
          */
         fun pressStop(stepId: String) {
-            val state = latestState ?: return
-            stops.press(isYourTurn = state.activePlayerId != null && state.activePlayerId == state.viewerPlayerId, stepId = stepId)
+            stops.press(stepId)
         }
 
         /**
