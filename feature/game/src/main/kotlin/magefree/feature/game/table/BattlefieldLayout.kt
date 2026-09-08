@@ -310,6 +310,7 @@ fun BattlefieldLayout(
                         artFor = artFor,
                         onPlay = onPlayFromHand,
                         onInspect = onInspect,
+                        anchors = anchors,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -319,6 +320,19 @@ fun BattlefieldLayout(
             // by the cards they run between, and the `Canvas` takes no pointer input, so the cards
             // underneath answer a press exactly as they did before there were arrows.
             TargetArrows(stack = stack, anchors = anchors, modifier = Modifier.fillMaxSize())
+
+            // **A card arriving on the stack, drawn travelling.** Above the arrows and above the cards,
+            // because it is the one thing on the board that is momentarily more important than either;
+            // it lands exactly on the stack card that is already drawn underneath it and then stops
+            // existing, so nothing here is load-bearing for correctness — see [CardFlights].
+            val flights = rememberCardFlights(stack = stack, anchors = anchors)
+            val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
+            CardFlightOverlay(
+                flights = flights.filterNot { it.id in landed.value },
+                palette = palette,
+                artFor = artFor,
+                onLanded = { id -> landed.value = landed.value + id },
+            )
         }
     }
 }

@@ -1,5 +1,6 @@
 package magefree.feature.game.table
 
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -65,6 +66,21 @@ class BoardAnchors {
 
     /** Where [id] is drawn, or `null` for an object the board is not drawing. */
     fun boxOf(id: String): Rect? = boxes[id]
+
+    /**
+     * Records [box] for [id] without a layout pass, for a test that is about what the anchors are
+     * *used for* rather than about the measuring.
+     *
+     * The measuring itself is proven by the arrows and the flights on a real board; a test that had to
+     * lay out a whole battlefield to assert which card flies where would be testing Compose.
+     */
+    @VisibleForTesting
+    internal fun placeForTest(
+        id: String,
+        box: Rect,
+    ) {
+        boxes[id] = box
+    }
 }
 
 /** One [BoardAnchors] per board, remembered across recompositions. */

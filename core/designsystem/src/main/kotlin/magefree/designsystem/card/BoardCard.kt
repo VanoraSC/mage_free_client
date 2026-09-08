@@ -1,5 +1,7 @@
 package magefree.designsystem.card
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -525,6 +528,19 @@ private fun HostCard(
             ?: secondary?.color?.copy(alpha = SECONDARY_BORDER_ALPHA)
             ?: BoardSurface.zoneRaised
 
+    // **Tapping is a movement, so it is drawn as one.** A card that jumps between upright and leaning
+    // reports the *outcome* of tapping; a card that turns reports the act, which is what a player at a
+    // table sees and what makes an untap step read as the board waking up rather than as a redraw.
+    //
+    // Driven off `state.tapped` rather than off an event, so it is right however the state arrived —
+    // the player's own tap, an opponent's effect, or the untap step turning a whole board at once —
+    // and a card composed for the first time already tapped starts there rather than turning into it.
+    val lean by animateFloatAsState(
+        targetValue = if (state.tapped) TAPPED_ROTATION_DEGREES else 0f,
+        animationSpec = tween(durationMillis = TAP_TURN_MILLIS),
+        label = "cardLean",
+    )
+
     Box(
         modifier = modifier.size(width = width, height = cardHeight),
         contentAlignment = Alignment.Center,
@@ -537,7 +553,7 @@ private fun HostCard(
                     // as tapped at a glance — it is the only card on the board that is not square to
                     // the table — and it very nearly fits the footprint the card already had, which a
                     // full quarter-turn never could.
-                    .graphicsLayer { rotationZ = if (state.tapped) TAPPED_ROTATION_DEGREES else 0f }
+                    .graphicsLayer { rotationZ = lean }
                     .clip(BoardCardShape)
                     // **The black border a real card has.** Every Magic card in every set is bounded in
                     // black, and the border is the whole reason a card reads as an object on a table
@@ -987,6 +1003,15 @@ object BoardCardTestTags {
  * nothing, where a full turn swapped the card's width and height and moved every neighbour.
  */
 private const val TAPPED_ROTATION_DEGREES = 45f
+
+/**
+ * How long a card takes to turn.
+ *
+ * Long enough to read as a turn rather than a jump, short enough that an untap step turning a whole
+ * board does not become a wait. A player taps four lands in a row to pay a cost; four of these run at
+ * once and must be over before the next decision.
+ */
+private const val TAP_TURN_MILLIS = 180
 
 /** How opaque the name band, badges and stats backing are over arbitrary art. */
 private const val BAND_OPACITY = 0.82f

@@ -892,6 +892,15 @@ public data class GameCardView(
     val token: Boolean = false,
     val objectType: MageObjectTypeCode = MageObjectTypeCode.UNKNOWN,
     val icons: List<GameCardIconView> = emptyList(),
+    /**
+     * For an **ability on the stack**, the id of the permanent or card it came from.
+     *
+     * Null for everything else. `StackAbilityView` carries a nested `sourceCard` — the reference
+     * client swaps the ability view for it outright ("that's view will be replaced by sourceCard") —
+     * and its id is the object on the battlefield the ability was activated from. Additive: an older
+     * peer sends nothing and a board simply has no origin to animate from.
+     */
+    val sourceId: String? = null,
 )
 
 /**

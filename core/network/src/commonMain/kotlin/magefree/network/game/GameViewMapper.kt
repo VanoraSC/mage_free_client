@@ -244,6 +244,7 @@ internal object GameViewMapper {
             // object it names belongs to whatever draws the arrow.
             targets = targets,
             isToken = token,
+            sourceId = sourceId,
             objectType = objectType.toObjectType(),
             // The server's own `CardView.getCardIcons()`, generated from the game-aware ability set.
             // Carried through unchanged, hint and text included: the hint is what an ability icon is

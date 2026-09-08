@@ -44,6 +44,12 @@ data class TableStackObject(
     val art: CardArtRequest? = null,
     val rules: List<String> = emptyList(),
     val targetIds: List<String> = emptyList(),
+    /**
+     * For an ability, the object it was activated from; null for a spell, which *is* its own card.
+     *
+     * What the board flies a copy of into the stack — see `CardFlights`.
+     */
+    val sourceId: String? = null,
 )
 
 /**
@@ -78,6 +84,7 @@ fun tableStack(state: GameState): List<TableStackObject> =
                     badges = card.icons.mapNotNull(::badgeOf),
                 ),
             art = artRequestOf(card),
+            sourceId = card.sourceId?.takeIf { it != card.id },
             rules = card.rules.mapNotNull { it.trim().ifBlank { null } },
             targetIds = card.targets,
         )
