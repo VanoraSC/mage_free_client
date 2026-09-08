@@ -148,25 +148,10 @@ fun TableBoardScreen(
         if (direct != null) onAction(direct) else onCardTap(id)
     }
 
-    // **A question with more than one answer is answered in the overlay, not on the board.** A
-    // partition is two groups, and column membership is the only honest way to show which group a
-    // card is in — see `TargetPiles`. Collapsing it is a look at the board underneath, not an answer,
-    // so the question stays outstanding and it comes back on the next one.
-    var pilesCollapsed by remember(uiState.controls) { mutableStateOf(false) }
-    val piles = snapshot?.let { targetPiles(controls, battlefieldModel(it, controls.boardPicks())) }
-
     // Back closes whatever is open over the board, innermost first, before it leaves the board.
     BackHandler(enabled = uiState.selectedObjectId != null) { onCardTap(null) }
     BackHandler(enabled = uiState.selectedObjectId == null && expandedSeat != null) { expandedSeat = null }
-    // Back on the piles collapses them rather than answering the question: the prompt is still
-    // outstanding, and a back gesture that silently sent an answer would be the worst kind.
-    BackHandler(
-        enabled = uiState.selectedObjectId == null && expandedSeat == null && piles != null && !pilesCollapsed,
-    ) { pilesCollapsed = true }
-    BackHandler(
-        enabled = uiState.selectedObjectId == null && expandedSeat == null && (piles == null || pilesCollapsed),
-        onBack = onExit,
-    )
+    BackHandler(enabled = uiState.selectedObjectId == null && expandedSeat == null, onBack = onExit)
 
     Surface(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().testTag(TableBoardTestTags.SCREEN)) {
@@ -182,6 +167,10 @@ fun TableBoardScreen(
                     playableElsewhere = playableElsewhere(snapshot),
                     vitals = vitals,
                     onExpandVitals = { seat -> expandedSeat = seat },
+                    // A player is answered like any other target: by pressing the thing on the board
+                    // that is them. Their id is what upstream targets them by, so it is sent as-is.
+                    lifeTotals = lifeTotals(vitals, picks),
+                    onPickPlayer = { playerId -> onAction(BoardAction.ChooseTarget(playerId)) },
                     phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
                     stack = tableStack(snapshot),
                     // A press on a step cycles its stop for the turn being played. What that then does
@@ -213,7 +202,7 @@ fun TableBoardScreen(
                     PlayerOverlay(
                         vitals = seat,
                         onDismiss = { expandedSeat = null },
-                        zones = tableZones(snapshot).filter { it.playerId == seat.playerId },
+                        zones = tableZones(snapshot, picks).filter { it.playerId == seat.playerId },
                         artFor = artFor,
                         // A card read out of a pile opens the same detail as a card on the
                         // battlefield, so a target the server offered from a graveyard is answerable
@@ -234,19 +223,6 @@ fun TableBoardScreen(
             // answer to its own question.
             val answeredHere = controls != null && controls.candidateCards.isNotEmpty()
 
-            piles?.takeIf { !pilesCollapsed }?.let { open ->
-                TargetPilesOverlay(
-                    piles = open,
-                    artFor = artFor,
-                    // One `chooseTarget` either way: upstream removes a target sent a second time, so
-                    // which direction the card went is the server's own answer, not a client decision.
-                    onMove = { id -> onAction(BoardAction.ChooseTarget(id)) },
-                    onAction = onAction,
-                    onCollapse = { pilesCollapsed = true },
-                    modifier = Modifier.zIndex(PILES_LAYER_Z),
-                )
-            }
-
             // The menu and the question share one anchor and one column, so neither has to know where
             // the other ended up. Explicitly z-ordered rather than left to declaration order, because
             // a control drawn on top but not *hit* on top is a dead button — the failure mode this
@@ -264,9 +240,7 @@ fun TableBoardScreen(
             ) {
                 BoardCornerMenu(onExit = onExit, onAction = onAction)
 
-                // The piles carry the prompt's own buttons, so a second panel saying the same things
-                // would be two places to press for one question.
-                if (uiState.areControlsVisible && piles == null) {
+                if (uiState.areControlsVisible) {
                     FloatingControls(
                         controls = controls,
                         cast = uiState.cast,
@@ -280,17 +254,11 @@ fun TableBoardScreen(
                         // read for the first time room to be read.
                         onRaiseCandidate = { objectId -> onCardTap(objectId) },
                     )
-                } else if (piles == null || pilesCollapsed) {
-                    // The same control brings back whichever of the two was put away, because to the
-                    // player they are one thing: the question. A collapsed pile view is the case that
-                    // matters — a player who could not get back to it would have hidden the only place
-                    // the prompt can be answered.
+                } else {
                     HiddenControlsToggle(
                         isServerWaiting =
                             uiState.board.priority is PriorityUi.Yours || uiState.board.priority == PriorityUi.Asked,
-                        onShow = {
-                            if (pilesCollapsed) pilesCollapsed = false else onControlsVisibleChange(true)
-                        },
+                        onShow = { onControlsVisibleChange(true) },
                     )
                 }
             }
@@ -439,12 +407,6 @@ const val LEAVE_BOARD_LABEL: String = "Leave game"
 private const val SEAT_LAYER_Z = 1f
 
 private const val FLOATING_LAYER_Z = 2f
-
-/**
- * The two piles sit above the question's own controls, because while they are open they *are* the
- * question — they carry its buttons — and below the card detail, which is still where a card is read.
- */
-private const val PILES_LAYER_Z = 2.5f
 
 private const val DETAIL_LAYER_Z = 3f
 

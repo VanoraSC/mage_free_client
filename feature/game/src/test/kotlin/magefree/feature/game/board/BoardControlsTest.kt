@@ -456,7 +456,12 @@ class BoardControlsTest {
     // spell aimed at a face.
 
     @Test
-    fun `a target prompt whose candidates are players is answerable from the panel`() {
+    fun `a target prompt offers no candidate buttons at all`() {
+        // **A target is chosen on the board.** A permanent says so with its own green border, a player
+        // with their life total, a card in a pile in the seat window it is already visible in. The
+        // panel used to promote whatever the board could not draw into a list of names, which was a
+        // second vocabulary for the same act — and the one thing it was still needed for, players,
+        // now has a place of its own on the centre line.
         val controls =
             controlsFor(
                 baseState().copy(
@@ -469,20 +474,20 @@ class BoardControlsTest {
                 ),
             )!!
 
-        // Nothing on the board carries a player id, and the prompt sent no cards…
         assertEquals(emptyList<CandidateCardUi>(), controls.candidateCards)
-        // …so the panel itself must offer them, named, or the prompt cannot be answered at all.
-        assertEquals(
-            listOf(BoardAction.ChooseTarget("p-you"), BoardAction.ChooseTarget("p-opp")),
-            controls.buttons.map { it.action },
+        assertTrue(
+            "no candidate is answered from the panel any more",
+            controls.buttons.none { it.action is BoardAction.ChooseTarget },
         )
-        assertEquals(listOf("you (you)", "Computer"), controls.buttons.map { it.label })
+        // The candidates are still the prompt's own, which is what the board draws them from.
+        assertEquals(setOf("p-you", "p-opp"), controls.pickableObjectIds)
     }
 
     @Test
-    fun `a candidate the board does draw stays a board tap, not a button`() {
-        // The complement: what the board can show, the board shows. Only what it cannot draw is promoted
-        // into the panel, so targeting a permanent stays the tap model.
+    fun `every candidate is pickable on the board, drawable or not`() {
+        // The complement, and the reason removing the buttons is safe: `pickableObjectIds` is the whole
+        // candidate set, so whatever draws a candidate — a battlefield, a hand, a seat's open piles,
+        // a life total — has the same list to mark and the same id to send.
         val controls =
             controlsFor(
                 stateWithBoardCards().copy(
@@ -490,12 +495,8 @@ class BoardControlsTest {
                 ),
             )!!
 
-        assertTrue("the permanent is still tappable on the board", "y-1" in controls.pickableObjectIds)
-        assertEquals(
-            "only the player needs a button",
-            listOf(BoardAction.ChooseTarget("p-opp")),
-            controls.buttons.map { it.action }.filterIsInstance<BoardAction.ChooseTarget>(),
-        )
+        assertEquals(setOf("y-1", "p-opp"), controls.pickableObjectIds)
+        assertEquals(BoardAction.ChooseTarget("p-opp"), controls.actionFor("p-opp"))
     }
 
     @Test
@@ -533,11 +534,11 @@ class BoardControlsTest {
     }
 
     @Test
-    fun `an unnamed candidate still gets a control rather than nothing`() {
-        // The board can name players, cards in hand, on either battlefield, on the stack, in exile and in
-        // revealed sets. A graveyard is a *count* upstream, so a card there cannot be named — and an
-        // unnameable candidate must still be answerable, because the alternative is the stall this whole
-        // section exists to prevent.
+    fun `a candidate the panel cannot name is still pickable, and that is now the whole answer`() {
+        // This used to be the argument for the candidate buttons: an id the panel cannot put a name to
+        // still has to be answerable. It is — everywhere a card can be drawn now marks the prompt's
+        // candidates and sends their ids, including a seat's open piles, which is where the case that
+        // motivated the buttons (a card in a graveyard) actually lives.
         val controls =
             controlsFor(
                 baseState().copy(
@@ -545,8 +546,9 @@ class BoardControlsTest {
                 ),
             )!!
 
-        assertEquals(listOf(BoardAction.ChooseTarget("mystery-1")), controls.buttons.map { it.action })
-        assertEquals(listOf("$UNNAMED_CANDIDATE_LABEL 1"), controls.buttons.map { it.label })
+        assertEquals(setOf("mystery-1"), controls.pickableObjectIds)
+        assertEquals(BoardAction.ChooseTarget("mystery-1"), controls.actionFor("mystery-1"))
+        assertTrue(controls.buttons.none { it.action is BoardAction.ChooseTarget })
     }
 
     @Test

@@ -98,6 +98,12 @@ import magefree.designsystem.component.phase.PhaseBarStep
  * @param vitals each seat, from [tableVitals]. Empty draws nothing.
  * @param onExpandVitals opens a seat's full window — its status and every one of its piles — or `null`
  *   for a board that is only being read.
+ * @param lifeTotals each seat's life, drawn on the centre line of their own edge. Separate from
+ *   [vitals] because it is a different thing in a different place: the rail is read when you go
+ *   looking for it, and this is where a player is *pointed at* — by a spell on the stack, and by a
+ *   player answering a target question. See [LifeTotal].
+ * @param onPickPlayer answers the outstanding question with a player, by their id. Called only for a
+ *   life total the prompt marked pickable; `null` for a board that is only being read.
  * @param phases the turn and where in it the game is. Null draws no bar — the same rule as everywhere
  *   else here, and the state a board has before a game starts.
  * @param onToggleStop invoked when a stoppable step is pressed.
@@ -120,6 +126,8 @@ fun BattlefieldLayout(
     onPlayFromHand: ((String) -> Unit)? = null,
     vitals: List<TableVitals> = emptyList(),
     onExpandVitals: ((TableVitals) -> Unit)? = null,
+    lifeTotals: LifeTotals = LifeTotals(opponents = emptyList(), viewer = null),
+    onPickPlayer: ((String) -> Unit)? = null,
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
     stack: List<TableStackObject> = emptyList(),
@@ -191,70 +199,93 @@ fun BattlefieldLayout(
                 // The two board columns share what is left above the hand. `weight` rather than the
                 // measured `contentHeight`, so the arithmetic that sized the cards can be an estimate
                 // without the layout inheriting its error.
-                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    if (landZoneWidth > 0.dp) {
-                        LandColumn(
-                            sides = sides,
-                            width = landWidth,
-                            palette = palette,
-                            artFor = artFor,
-                            onLandPress = onLandPress,
-                            modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
-                        )
-                        Spacer(modifier = Modifier.width(ZoneGap))
+                //
+                // **The life totals are drawn over this, not in it.** They sit on the centre line of
+                // each player's own edge — the one place on a mirrored board that belongs to a player
+                // rather than to a zone — and a row that reserved height for them would take it from
+                // the battlefield in every game, including the ones where nothing is ever targeted.
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        if (landZoneWidth > 0.dp) {
+                            LandColumn(
+                                sides = sides,
+                                width = landWidth,
+                                palette = palette,
+                                artFor = artFor,
+                                onLandPress = onLandPress,
+                                modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
+                            )
+                            Spacer(modifier = Modifier.width(ZoneGap))
+                        }
+
+                        // **A gap on the centre line.** Each side packs its creatures against the middle,
+                        // so without one the two front rows touch and the board reads as one crowd of
+                        // creatures rather than as two armies facing each other — which is the single most
+                        // important thing a glance at a battlefield has to answer.
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(CentreLineGap),
+                        ) {
+                            model.opponents.forEach { side ->
+                                SideRows(
+                                    side = side,
+                                    order = OpponentOrder,
+                                    cardWidth = cardWidth,
+                                    centreShift = centreShift,
+                                    palette = palette,
+                                    artFor = artFor,
+                                    onInspect = onInspect,
+                                    anchors = anchors,
+                                    modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else OPPONENT_WEIGHT),
+                                )
+                            }
+
+                            // **The stack opens the centre line, and closes it again.** The gap between the
+                            // two front rows is where a table puts the stack and where the arrows have the
+                            // shortest way to go. It holds no height when nothing is on it — the board's
+                            // own rule — and the height it takes when something is is honest movement,
+                            // because a spell arriving is a game action.
+                            if (stack.isNotEmpty()) {
+                                StackRegion(
+                                    stack = stack,
+                                    cardWidth = cardWidth,
+                                    palette = palette,
+                                    artFor = artFor,
+                                    anchors = anchors,
+                                    onInspect = onInspect,
+                                    modifier = Modifier.fillMaxWidth().weight(STACK_WEIGHT),
+                                )
+                            }
+
+                            model.viewer?.let { side ->
+                                SideRows(
+                                    side = side,
+                                    order = ViewerOrder,
+                                    cardWidth = cardWidth,
+                                    centreShift = centreShift,
+                                    palette = palette,
+                                    artFor = artFor,
+                                    onInspect = onInspect,
+                                    anchors = anchors,
+                                    modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else VIEWER_WEIGHT),
+                                )
+                            }
+                        }
                     }
 
-                    // **A gap on the centre line.** Each side packs its creatures against the middle,
-                    // so without one the two front rows touch and the board reads as one crowd of
-                    // creatures rather than as two armies facing each other — which is the single most
-                    // important thing a glance at a battlefield has to answer.
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(CentreLineGap),
+                    // Mirrored exactly as the battlefields are, so whose life it is needs no label.
+                    // Anchored like any other target, so an arrow from a spell that names a player
+                    // has somewhere real to point.
+                    Row(
+                        modifier = Modifier.align(Alignment.TopCenter),
+                        horizontalArrangement = Arrangement.spacedBy(ZoneGap),
                     ) {
-                        model.opponents.forEach { side ->
-                            SideRows(
-                                side = side,
-                                order = OpponentOrder,
-                                cardWidth = cardWidth,
-                                centreShift = centreShift,
-                                palette = palette,
-                                artFor = artFor,
-                                onInspect = onInspect,
-                                anchors = anchors,
-                                modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else OPPONENT_WEIGHT),
-                            )
-                        }
+                        lifeTotals.opponents.forEach { seat -> SeatLife(seat, onPickPlayer, anchors) }
+                    }
 
-                        // **The stack opens the centre line, and closes it again.** The gap between the
-                        // two front rows is where a table puts the stack and where the arrows have the
-                        // shortest way to go. It holds no height when nothing is on it — the board's
-                        // own rule — and the height it takes when something is is honest movement,
-                        // because a spell arriving is a game action.
-                        if (stack.isNotEmpty()) {
-                            StackRegion(
-                                stack = stack,
-                                cardWidth = cardWidth,
-                                palette = palette,
-                                artFor = artFor,
-                                anchors = anchors,
-                                onInspect = onInspect,
-                                modifier = Modifier.fillMaxWidth().weight(STACK_WEIGHT),
-                            )
-                        }
-
-                        model.viewer?.let { side ->
-                            SideRows(
-                                side = side,
-                                order = ViewerOrder,
-                                cardWidth = cardWidth,
-                                centreShift = centreShift,
-                                palette = palette,
-                                artFor = artFor,
-                                onInspect = onInspect,
-                                anchors = anchors,
-                                modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else VIEWER_WEIGHT),
-                            )
+                    lifeTotals.viewer?.let { seat ->
+                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                            SeatLife(seat, onPickPlayer, anchors)
                         }
                     }
                 }
@@ -360,6 +391,26 @@ private fun LandRow(
             )
         }
     }
+}
+
+/**
+ * One seat's life total, pressable only when the outstanding question can be answered with them.
+ *
+ * The board decides nothing here: [LifeTotalState.isPickable] came from the prompt's own candidate
+ * list, and pressing sends the player's own server id, because that is what upstream targets a player
+ * by.
+ */
+@Composable
+private fun SeatLife(
+    seat: LifeTotalState,
+    onPickPlayer: ((String) -> Unit)?,
+    anchors: BoardAnchors,
+) {
+    LifeTotal(
+        state = seat,
+        onPick = onPickPlayer?.takeIf { seat.isPickable }?.let { pick -> { pick(seat.playerId) } },
+        modifier = anchors.anchorModifier(seat.playerId),
+    )
 }
 
 /** One player's rows of the battlefield: creatures against the centre line, everything else behind. */

@@ -342,29 +342,38 @@ fun attachmentPreview(
  * with nothing pending. The player has no way to see which cards answer it, and no way to see that a
  * pick they made landed, because the only feedback was the card detail closing.
  *
- * **Candidates only, not what has been picked.** Which of them the player has already chosen is drawn
- * where the choosing happens — the pile overlay's two columns — rather than as an eighth board colour:
- * the signal palette is spaced so no two marks can be mistaken for each other, and position says
- * "chosen" better than a shade does anyway. A declared attacker is the exception that proves it, and
- * it is already covered: `combat.attackerIds` marks it `Attacking`.
+ * **Two channels, because the two facts are different in kind.** A card that can answer the question
+ * is drawn with the board's own `Playable` green — the colour that already means *you can act on
+ * this*, and a player who has learned it once should not have to learn a second one for the same
+ * idea. A card the player has *chosen* is tinted the same green across its whole face, because what
+ * is being assembled is a set and a border cannot say "in the set" while also saying "eligible".
  *
- * [pickable] comes straight from the prompt's own candidate list. Nothing is inferred.
+ * Both come straight from the prompt: [pickable] is the server's own candidate list, [picked] its own
+ * `chosenTargets`. Nothing is inferred.
  *
  * @property pickable ids the outstanding prompt can be answered with.
+ * @property picked ids already sent as part of the answer. Still in [pickable], and deliberately so —
+ *   upstream keeps a chosen target in `possibleTargets` and removes it when it is sent again, so the
+ *   card that shows both is a card that can be pressed to take the choice back.
  */
 data class PromptPicks(
     val pickable: Set<String> = emptySet(),
+    val picked: Set<String> = emptySet(),
 )
 
 /**
  * What this prompt says about the board, or nothing for a prompt the board already draws its own way.
  *
  * The gate is [PromptControlsUi.marksCandidatesOnBoard], which is the prompt's own answer: a priority
- * window's candidates are already `Playable` and a mana payment's are already the cost, and neither
- * wants a third colour on top.
+ * window's candidates are already `Playable` for its own reason, and a mana payment's are the cost
+ * being assembled.
  */
 fun PromptControlsUi?.boardPicks(): PromptPicks =
-    if (this == null || !marksCandidatesOnBoard) PromptPicks() else PromptPicks(pickable = pickableObjectIds)
+    if (this == null || !marksCandidatesOnBoard) {
+        PromptPicks()
+    } else {
+        PromptPicks(pickable = pickableObjectIds, picked = chosenObjectIds)
+    }
 
 /** The battlefield in [state], arranged, with [picks] marking what the outstanding question is about. */
 fun battlefieldModel(
@@ -530,6 +539,7 @@ private fun boardCardState(
         attachments = attachments,
         tapped = permanent.isTapped,
         signals = signalsOf(permanent, combat, playable, picks),
+        isSelected = permanent.card.id in picks.picked,
     )
 }
 
@@ -540,9 +550,10 @@ private fun boardCardState(
  * playability from `GameState.playable`, and the picks from the outstanding prompt's own candidate
  * and chosen lists. None of it is inferred from the permanent.
  *
- * **A card already picked stays [BoardCardSignal.Pickable]**, because upstream lets it be pressed
- * again: `HumanPlayer.choose` removes a target that is sent a second time, and
- * `TargetPermanent.possibleTargets` keeps it in the candidate list so it can be.
+ * **A candidate is `Playable`, and so is a card you could cast.** One colour, one meaning — *you can
+ * act on this* — because a player who has learned the green border once should not have to learn a
+ * second colour for the same idea depending on which question is outstanding. Being *chosen* is the
+ * other channel entirely: [BoardCardState.isSelected], a tint over the whole face.
  */
 private fun signalsOf(
     permanent: GamePermanent,
@@ -554,8 +565,7 @@ private fun signalsOf(
         val id = permanent.card.id
         if (id in combat.attackerIds) add(BoardCardSignal.Attacking)
         if (id in combat.blockerIds) add(BoardCardSignal.Blocking)
-        if (id in playable) add(BoardCardSignal.Playable)
-        if (id in picks.pickable) add(BoardCardSignal.Pickable)
+        if (id in playable || id in picks.pickable) add(BoardCardSignal.Playable)
     }
 
 /**

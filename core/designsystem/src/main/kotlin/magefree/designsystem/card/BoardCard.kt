@@ -162,15 +162,6 @@ enum class BoardBadge(
  * already assigned, and being playable is an affordance rather than an event.
  */
 enum class BoardCardSignal {
-    /**
-     * The question the server is asking can be answered with this card.
-     *
-     * First, because it outranks everything else a card can be saying: while the server is waiting,
-     * answering is the only thing the player can do, and a creature that is attacking *and* is one of
-     * the cards the question is about has to show the second.
-     */
-    Pickable,
-
     /** Something on the stack is targeting this. */
     Targeted,
 
@@ -194,7 +185,6 @@ enum class BoardCardSignal {
     val color: Color
         get() =
             when (this) {
-                Pickable -> BoardSignal.pickable
                 Targeted -> BoardSignal.targeting
                 Threat -> BoardSignal.threat
                 Attacking -> BoardSignal.attacking
@@ -232,24 +222,16 @@ enum class BoardFocus {
     Quiet,
     ;
 
-    /**
-     * The signals this focus promotes, in order, when a card carries more than one.
-     *
-     * **[BoardCardSignal.Pickable] comes first whatever the focus is.** It exists only while the
-     * server is waiting for an answer, and answering is then the only thing the player can do — so a
-     * creature that is attacking *and* is one of the cards the question is about has to show the
-     * second, not the first. Everything else is context; this is the question.
-     */
+    /** The signals this focus promotes, in order, when a card carries more than one. */
     val focalSignals: List<BoardCardSignal>
         get() =
-            listOf(BoardCardSignal.Pickable) +
-                when (this) {
-                    Targeting -> listOf(BoardCardSignal.Targeted)
-                    Combat -> listOf(BoardCardSignal.Attacking, BoardCardSignal.Blocking)
-                    PendingCost -> listOf(BoardCardSignal.PendingCost)
-                    Playable -> listOf(BoardCardSignal.Playable)
-                    Quiet -> listOf(BoardCardSignal.Threat)
-                }
+            when (this) {
+                Targeting -> listOf(BoardCardSignal.Targeted)
+                Combat -> listOf(BoardCardSignal.Attacking, BoardCardSignal.Blocking)
+                PendingCost -> listOf(BoardCardSignal.PendingCost)
+                Playable -> listOf(BoardCardSignal.Playable)
+                Quiet -> listOf(BoardCardSignal.Threat)
+            }
 }
 
 /**
@@ -285,6 +267,14 @@ fun secondarySignal(
  * @param attachments what is attached to this permanent, in the order the server sent them.
  * @param tapped whether the permanent is tapped, which rotates it a quarter turn.
  * @param signals everything the game is signalling about this card at once.
+ * @param isSelected whether the player has chosen this card as part of the answer to the question the
+ *   server is asking.
+ *
+ *   **A fill, not a seventh signal**, and the difference is the point. Every [BoardCardSignal] says
+ *   something the *game* is doing to the card, drawn on its border; this says something the *player*
+ *   has done, and it wants the whole card because what is being assembled is a set. It is also the
+ *   only way the two can be read at once: a card that is both a valid target and already chosen has
+ *   to show both, and one border cannot.
  */
 data class BoardCardState(
     val card: CardDisplay,
@@ -295,6 +285,7 @@ data class BoardCardState(
     val attachments: List<BoardAttachment> = emptyList(),
     val tapped: Boolean = false,
     val signals: Set<BoardCardSignal> = emptySet(),
+    val isSelected: Boolean = false,
 )
 
 /**
@@ -575,6 +566,20 @@ private fun HostCard(
                 ) {
                     CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
                 }
+            }
+
+            // **What the player has chosen, over the whole card.** Drawn above the art and below the
+            // glyphs: it has to be unmistakable across a board of eight permanents being sorted into
+            // two groups, and it must not cost the counters and stats their legibility while it does.
+            // Translucent, because the card underneath is still the thing being chosen.
+            if (state.isSelected) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(BoardSignal.playable.copy(alpha = SELECTED_TINT_ALPHA))
+                            .testTag(BoardCardTestTags.SELECTED),
+                )
             }
 
             if (state.counters.isNotEmpty()) {
@@ -942,6 +947,9 @@ object BoardCardTestTags {
     const val COUNTERS: String = "board-card-counters"
     const val BADGES: String = "board-card-badges"
     const val ATTACHMENT: String = "board-card-attachment"
+
+    /** The tint over a card the player has chosen as part of an answer. */
+    const val SELECTED: String = "board-card-selected"
 }
 
 /**
@@ -964,6 +972,14 @@ private const val BAND_OPACITY = 0.82f
  * out as well said it twice and cost the player the fact.
  */
 private const val SECONDARY_BORDER_ALPHA = 0.85f
+
+/**
+ * How opaque the chosen-card tint is.
+ *
+ * High enough to be unmistakable across a board being sorted, low enough that the art underneath is
+ * still the card being chosen rather than a green rectangle where a card used to be.
+ */
+private const val SELECTED_TINT_ALPHA = 0.42f
 
 /** The largest count rendered in full; above it the circle shows a capped form. */
 private const val MAX_SHOWN_COUNT = 99

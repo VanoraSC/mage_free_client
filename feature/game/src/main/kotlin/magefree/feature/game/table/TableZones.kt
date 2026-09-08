@@ -113,13 +113,16 @@ data class TableZonePile(
  * The same seat order the battlefield uses, so the rail and the board agree about who is where without
  * either of them being told.
  */
-fun tableZones(state: GameState): List<TableZonePile> {
+fun tableZones(
+    state: GameState,
+    picks: PromptPicks = PromptPicks(),
+): List<TableZonePile> {
     val special = specialExileIds(state)
-    val revealed = revealedCards(state)
+    val revealed = revealedCards(state, picks)
     return state.players
         .sortedBy { it.isViewer }
         .flatMap { player ->
-            val exiled = exileCards(state, player.playerId)
+            val exiled = exileCards(state, player.playerId, picks)
             listOf(
                 TableZonePile(
                     playerId = player.playerId,
@@ -127,7 +130,7 @@ fun tableZones(state: GameState): List<TableZonePile> {
                     kind = TableZoneKind.Hand,
                     // Only the viewer's own. Every other seat sends a count and no cards, which is
                     // what a hand is.
-                    cards = if (player.isViewer) handCards(state) else emptyList(),
+                    cards = if (player.isViewer) handCards(state, picks) else emptyList(),
                     hidden = if (player.isViewer) 0 else player.handCount,
                 ),
                 TableZonePile(
@@ -140,7 +143,7 @@ fun tableZones(state: GameState): List<TableZonePile> {
                     playerId = player.playerId,
                     isViewer = player.isViewer,
                     kind = TableZoneKind.Graveyard,
-                    cards = graveyardCards(state, player.playerId),
+                    cards = graveyardCards(state, player.playerId, picks),
                 ),
                 TableZonePile(
                     playerId = player.playerId,
@@ -166,11 +169,14 @@ fun tableZones(state: GameState): List<TableZonePile> {
  * made them see it. The card that revealed them is in the game log, which is where a question about
  * provenance is actually answered.
  */
-private fun revealedCards(state: GameState): List<TableCard> =
+private fun revealedCards(
+    state: GameState,
+    picks: PromptPicks,
+): List<TableCard> =
     state.revealed
         .flatMap { zone -> zone.cards }
         .distinctBy { it.id }
-        .map { card -> card.asTableCard(state, TableCardZone.Revealed) }
+        .map { card -> card.asTableCard(state, TableCardZone.Revealed, picks) }
 
 /**
  * The cards in exile that are there for a reason the player has to keep track of.
