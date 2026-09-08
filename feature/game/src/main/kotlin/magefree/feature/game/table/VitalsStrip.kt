@@ -30,6 +30,7 @@ import magefree.designsystem.board.BoardZone
 import magefree.designsystem.board.ZoneIcon
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.counterDigitColor
+import magefree.designsystem.text.SymbolText
 
 /*
  * A player's vitals, collapsed to counts and colour.
@@ -102,12 +103,24 @@ fun VitalsStrip(
             ZoneCount(zone = BoardZone.Exile, count = vitals.exileCount, tag = VitalsTestTags.exile(vitals.playerId))
         }
 
-        if (vitals.floatingMana > 0) {
-            Chip(
-                label = "${vitals.floatingMana}",
-                fill = BoardSignal.pendingCost,
-                tag = VitalsTestTags.mana(vitals.playerId),
-            )
+        // **The pool by colour, in the game's own symbols.** One amber chip carrying the total said
+        // "three mana" where the game said "three black", and mid-cast that difference is the whole
+        // question of whether the spell in hand can be paid for.
+        if (vitals.floatingMana.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(ChipGap, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(RowGap),
+            ) {
+                vitals.floatingMana.forEach { mana ->
+                    SymbolText(
+                        text = "${mana.count}${mana.symbol}",
+                        style = BoardTypography.counter,
+                        color = BoardSurface.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.testTag(VitalsTestTags.mana(vitals.playerId, mana.symbol)),
+                    )
+                }
+            }
         }
 
         // **One counter per row, and the rows scroll.** A player with poison, energy and experience
@@ -243,7 +256,10 @@ object VitalsTestTags {
 
     fun exile(playerId: String): String = "vitals-exile-$playerId"
 
-    fun mana(playerId: String): String = "vitals-mana-$playerId"
+    fun mana(
+        playerId: String,
+        symbol: String,
+    ): String = "vitals-mana-$playerId-$symbol"
 
     fun wins(playerId: String): String = "vitals-wins-$playerId"
 

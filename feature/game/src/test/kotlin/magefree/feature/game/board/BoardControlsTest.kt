@@ -68,8 +68,14 @@ class BoardControlsTest {
         val controls = controlsFor(baseState().copy(prompt = GamePrompt.Select(message = "Select"), playable = emptyList()))
 
         assertEquals(emptySet<String>(), controls!!.pickableObjectIds)
-        assertEquals(listOf(BoardAction.PassPriority), controls.buttons.map { it.action })
-        assertEquals(PASS_LABEL, controls.buttons.single().label)
+        // Pass, and the take-it-back. Undo is unconditional here for the same reason it is in the
+        // reference client: whether there is anything to undo is the server's bookmark, and this app
+        // is never told about it.
+        assertEquals(
+            listOf(BoardAction.PassPriority, BoardAction.UndoLastAction),
+            controls.buttons.map { it.action },
+        )
+        assertEquals(PASS_LABEL, controls.buttons.first().label)
     }
 
     @Test

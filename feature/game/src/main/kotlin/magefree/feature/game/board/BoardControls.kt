@@ -71,6 +71,15 @@ sealed interface BoardAction {
     data object UseSpecial : BoardAction
 
     /**
+     * Take back the last action the server kept a bookmark for — **how a tapped land is untapped**.
+     *
+     * A land tapped for mana is a cost that was paid, and the mana is in a pool; neither is a thing a
+     * client may put back. `PlayerImpl.playManaAbility` stores a bookmark for exactly this and
+     * `GameImpl.undo` restores it, which is the only thing that can.
+     */
+    data object UndoLastAction : BoardAction
+
+    /**
      * Choose one target. Sent **per pick** — see the file header: the server re-prompts after each one.
      */
     data class ChooseTarget(
@@ -593,6 +602,7 @@ internal fun controlsFor(
                                 }
                                 // An offer the board cannot draw is still an offer — see [offBoardCandidateButtons].
                                 addAll(offBoardCandidateButtons(state, offeredIds, BoardAction::PlayObject))
+                                add(undoButton())
                             },
                     )
 
@@ -676,6 +686,7 @@ internal fun controlsFor(
                         prompt.options.specialButtonText?.cleanedOrNull()?.let {
                             add(ControlButton(label = it, action = BoardAction.UseSpecial))
                         }
+                        add(undoButton())
                         add(ControlButton(label = CANCEL_CAST_LABEL, action = BoardAction.CancelPrompt))
                     },
             )
@@ -912,6 +923,7 @@ private fun GameState.nameFor(id: String): String? {
  * button in the floating panel — so nothing new is invented and nothing becomes modal. What the board
  * **can** draw stays a board tap; only what it cannot is promoted.
  */
+
 private fun offBoardCandidateButtons(
     state: GameState,
     candidateIds: Collection<String>,
@@ -974,3 +986,14 @@ private fun GameState.viewerControlledIds(): Set<String> =
         ?.battlefield
         ?.mapTo(mutableSetOf()) { it.card.id }
         .orEmpty()
+
+/**
+ * The take-it-back button, offered on the two windows where a mana ability can have been activated.
+ *
+ * **Unconditional, deliberately.** Whether there is anything to undo is the server's stored bookmark,
+ * which this app is not told about, and `GameImpl.undo` is a no-op without one. The reference client
+ * resolves the same question the same way — `FeedbackPanel.btnUndo` is simply always visible — and
+ * the alternative, guessing from the mana pool, would hide the undo of a declared attacker whose cost
+ * was paid, which `PlayerImpl` bookmarks too.
+ */
+private fun undoButton(): ControlButton = ControlButton(label = UNDO_LABEL, action = BoardAction.UndoLastAction)

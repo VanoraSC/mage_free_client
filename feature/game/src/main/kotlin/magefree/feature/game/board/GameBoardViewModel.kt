@@ -435,6 +435,7 @@ class GameBoardViewModel
                 is BoardAction.DistributeAmounts -> send { it.distributeAmounts(id, action.amounts) }
                 BoardAction.Concede -> send { it.concede(id) }
                 BoardAction.QuitMatch -> send { it.quitMatch(id) }
+                BoardAction.UndoLastAction -> send { it.undoLastAction(id) }
             }
         }
 

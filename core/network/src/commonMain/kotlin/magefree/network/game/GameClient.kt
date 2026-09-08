@@ -195,6 +195,19 @@ interface GameClient {
      */
     suspend fun concede(gameId: String): Result<Unit>
 
+    /**
+     * Take back the last action, where the server kept a bookmark for it.
+     *
+     * **This is how a tapped land is untapped.** `PlayerImpl.playManaAbility` stores a bookmark when
+     * the ability `isUndoPossible()`, and `GameImpl.undo` restores it — the land comes back untapped
+     * and the mana leaves the pool. Nothing else can do that: mana in a pool is not a thing a client
+     * may put back, and the land is tapped as a *cost that was paid*.
+     *
+     * A no-op when the server holds no bookmark, which is why it is offered unconditionally — exactly
+     * as the reference client's own Undo button is (`FeedbackPanel.btnUndo` is always visible).
+     */
+    suspend fun undoLastAction(gameId: String): Result<Unit>
+
     // --- reading -------------------------------------------------------------------------------------
 
     /**

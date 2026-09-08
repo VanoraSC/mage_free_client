@@ -2,6 +2,7 @@ package magefree.feature.game.table
 
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
+import magefree.network.game.ManaPool
 
 /*
  * What decides a game without being on the battlefield.
@@ -32,6 +33,23 @@ data class TablePlayerCounter(
 )
 
 /**
+ * One colour of mana floating in a player's pool.
+ *
+ * **The colour is the whole point, and a total loses it.** The pool was drawn as one amber chip with
+ * the total in it, which said "three mana" where the game said "three black" — and mid-cast that
+ * difference is the whole question of whether the spell in hand can be paid for. [symbol] is the mana
+ * symbol in `SymbolText`'s own notation, so the board draws the game's own picture of the colour
+ * rather than picking a swatch to stand for it.
+ *
+ * @property symbol the mana symbol, e.g. `{B}`.
+ * @property count how many of that colour are floating.
+ */
+data class TableManaPoolEntry(
+    val symbol: String,
+    val count: Int,
+)
+
+/**
  * One player's vitals.
  *
  * @property counters every **non-zero** counter, poison first. A counter at zero is not shown, for the
@@ -49,7 +67,7 @@ data class TableVitals(
     val handCount: Int,
     val graveyardCount: Int,
     val exileCount: Int,
-    val floatingMana: Int,
+    val floatingMana: List<TableManaPoolEntry>,
     val wins: Int,
     val winsNeeded: Int,
     val isActive: Boolean,
@@ -80,7 +98,7 @@ private fun GamePlayer.toVitals(): TableVitals =
         handCount = handCount,
         graveyardCount = graveyardCount,
         exileCount = exileCount,
-        floatingMana = manaPool.total,
+        floatingMana = manaPool.entries(),
         wins = wins,
         winsNeeded = winsNeeded,
         isActive = isActive,
@@ -129,3 +147,19 @@ private const val POISON_COUNTER = "poison"
  * is presenting a rule the game already fixed, not predicting one.
  */
 private const val NEAR_LETHAL_POISON = 8
+
+/**
+ * The pool, one entry per colour that has something in it, in the game's own WUBRG order.
+ *
+ * Colourless last because it is the one a player is least often waiting on, and generic is not in a
+ * pool at all — it is a way of paying, not a thing that floats.
+ */
+private fun ManaPool.entries(): List<TableManaPoolEntry> =
+    buildList {
+        if (white > 0) add(TableManaPoolEntry(symbol = "{W}", count = white))
+        if (blue > 0) add(TableManaPoolEntry(symbol = "{U}", count = blue))
+        if (black > 0) add(TableManaPoolEntry(symbol = "{B}", count = black))
+        if (red > 0) add(TableManaPoolEntry(symbol = "{R}", count = red))
+        if (green > 0) add(TableManaPoolEntry(symbol = "{G}", count = green))
+        if (colorless > 0) add(TableManaPoolEntry(symbol = "{C}", count = colorless))
+    }
