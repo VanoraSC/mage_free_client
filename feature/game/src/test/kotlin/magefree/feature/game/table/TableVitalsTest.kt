@@ -100,10 +100,20 @@ class TableVitalsTest {
     }
 
     @Test
-    fun `the floating mana is the whole pool, not one colour of it`() {
+    fun `the floating mana is one entry per colour, in the game's own symbols`() {
+        // A total said "three mana" where the game said "one white and two green", and mid-cast that
+        // difference is the whole question of whether the spell in hand can be paid for.
         val seat = seatWith(manaPool = ManaPool(white = 1, green = 2))
 
-        assertEquals(3, seat.floatingMana)
+        assertEquals(
+            listOf(TableManaPoolEntry("{W}", 1), TableManaPoolEntry("{G}", 2)),
+            seat.floatingMana,
+        )
+    }
+
+    @Test
+    fun `a colour with nothing in the pool is not drawn at all`() {
+        assertEquals(emptyList<TableManaPoolEntry>(), seatWith(manaPool = ManaPool()).floatingMana)
     }
 }
 

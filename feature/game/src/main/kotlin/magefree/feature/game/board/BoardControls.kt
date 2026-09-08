@@ -624,17 +624,12 @@ internal fun controlsFor(
                 hasPicked = hasPicked,
                 buttons =
                     buildList {
-                        // Candidates the board cannot draw — players, above all — come first, because
-                        // without them this prompt has no answer at all. A card the prompt carried is
-                        // not one of them: it is drawn, in this panel, and is pressed there.
-                        addAll(
-                            offBoardCandidateButtons(
-                                state = state,
-                                candidateIds = pickable,
-                                action = BoardAction::ChooseTarget,
-                                alsoDrawn = carried.mapTo(mutableSetOf()) { it.id },
-                            ),
-                        )
+                        // **No candidate buttons.** A target is chosen on the board — a permanent by
+                        // its own green border, a player by their life total, both of which sit where
+                        // the player is already looking. A list of names in a panel was a second
+                        // vocabulary for the same act, and the one thing it was still needed for
+                        // (players) now has a place of its own.
+                        //
                         // The player's confirmation *is* the final done — it is not a
                         // client-side accumulator being flushed, because every pick was already sent.
                         // An *optional* prompt (`!prompt.isRequired`) is answerable with zero picks by
@@ -840,11 +835,9 @@ private fun declarationControls(
             },
         buttons =
             buildList {
-                // A candidate the board cannot draw is still a candidate — the same promotion every
-                // other prompt gets. A creature is normally on a battlefield the board draws, so this
-                // is usually empty; it costs nothing and it cannot be the reason a declaration is
-                // unanswerable.
-                addAll(offBoardCandidateButtons(state, candidates, BoardAction::ChooseTarget))
+                // No candidate buttons here either: a declaration names creatures, and creatures are
+                // on a battlefield this board draws.
+                //
                 // The *done*: upstream's shared "done / cancel" arm, which is how a declaration is
                 // closed (both probes closed one exactly this way). Never a pass — a declaration is not
                 // a priority window, whatever prompt kind it arrives as.

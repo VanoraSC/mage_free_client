@@ -99,7 +99,7 @@ class BoardColorsTest {
             BoardSignal.all.flatMapIndexed { index, first ->
                 BoardSignal.all.drop(index + 1).map { second -> first to second }
             }
-        assertEquals("every pair of the seven signals is compared", 21, pairs.size)
+        assertEquals("every pair of the six signals is compared", 15, pairs.size)
         pairs.forEach { (first, second) ->
             val difference = colorDifference(first, second)
             assertTrue(

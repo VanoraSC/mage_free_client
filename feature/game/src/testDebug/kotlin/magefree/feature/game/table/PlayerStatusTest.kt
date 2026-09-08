@@ -59,12 +59,12 @@ class PlayerStatusTest {
     }
 
     @Test
-    fun `both seats get a strip, with life and the library count`() {
+    fun `both seats get a strip, with the library count`() {
         show(twoSeats())
 
         composeTestRule.onNodeWithTag(VitalsTestTags.strip("me")).assertIsDisplayed()
         composeTestRule.onNodeWithTag(VitalsTestTags.strip("them")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(VitalsTestTags.life("me"), useUnmergedTree = true).assertIsDisplayed()
+
         composeTestRule.onNodeWithTag(VitalsTestTags.library("me"), useUnmergedTree = true).assertIsDisplayed()
     }
 

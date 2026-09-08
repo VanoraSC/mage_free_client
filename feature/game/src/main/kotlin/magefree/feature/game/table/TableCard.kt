@@ -51,6 +51,8 @@ data class TableCard(
     val card: CardDisplay,
     val art: CardArtRequest? = null,
     val signal: BoardCardSignal? = null,
+    /** Whether the player has chosen this card as part of the answer the server is waiting for. */
+    val isSelected: Boolean = false,
     val isLand: Boolean = false,
     val power: String? = null,
     val toughness: String? = null,
@@ -149,9 +151,10 @@ fun handCards(
 fun graveyardCards(
     state: GameState,
     playerId: String,
+    picks: PromptPicks = PromptPicks(),
 ): List<TableCard> {
     val player = state.players.firstOrNull { it.playerId == playerId } ?: return emptyList()
-    return player.graveyard.map { card -> card.asTableCard(state, TableCardZone.Graveyard) }
+    return player.graveyard.map { card -> card.asTableCard(state, TableCardZone.Graveyard, picks) }
 }
 
 /**
@@ -163,9 +166,10 @@ fun graveyardCards(
 fun exileCards(
     state: GameState,
     playerId: String,
+    picks: PromptPicks = PromptPicks(),
 ): List<TableCard> {
     val player = state.players.firstOrNull { it.playerId == playerId } ?: return emptyList()
-    return player.exile.map { card -> card.asTableCard(state, TableCardZone.Exile) }
+    return player.exile.map { card -> card.asTableCard(state, TableCardZone.Exile, picks) }
 }
 
 internal fun GameCard.asTableCard(
@@ -184,15 +188,10 @@ internal fun GameCard.asTableCard(
                 oracleText = rules.joinToString("\n").takeIf { it.isNotBlank() },
             ),
         art = zoneArtRequest(setCode, collectorNumber),
-        // **The question outranks the affordance.** A card that is both castable and one of the
-        // answers to what the server is asking has to show the second: casting it is not something
-        // the player can do while a prompt is outstanding, and answering is.
-        signal =
-            when {
-                id in picks.pickable -> BoardCardSignal.Pickable
-                offered != null -> BoardCardSignal.Playable
-                else -> null
-            },
+        // One colour, one meaning: *you can act on this*. A card the server has offered and a card
+        // that answers the outstanding question are the same fact to a player deciding what to press.
+        signal = if (offered != null || id in picks.pickable) BoardCardSignal.Playable else null,
+        isSelected = id in picks.picked,
         isLand = CardType.Land in cardTypes,
         power = shownPower,
         toughness = shownToughness,

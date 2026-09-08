@@ -161,7 +161,7 @@ fun HandRegion(
                 // name off a black-on-white strip and reading it off a printed frame at a quarter of
                 // the size.
                 BoardCard(
-                    state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal)),
+                    state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal), isSelected = card.isSelected),
                     width = tileWidth,
                     art = artFor?.invoke(card.boardArt, card.card),
                     onTap = { onPlay?.invoke(card.id) },
@@ -205,7 +205,7 @@ private fun ElsewhereCard(
 ) {
     Box(modifier = modifier) {
         BoardCard(
-            state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal)),
+            state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal), isSelected = card.isSelected),
             width = tileWidth,
             art = artFor?.invoke(card.boardArt, card.card),
             onTap = { onPlay?.invoke(card.id) },

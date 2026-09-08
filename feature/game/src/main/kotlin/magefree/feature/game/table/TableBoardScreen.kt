@@ -167,6 +167,10 @@ fun TableBoardScreen(
                     playableElsewhere = playableElsewhere(snapshot),
                     vitals = vitals,
                     onExpandVitals = { seat -> expandedSeat = seat },
+                    // A player is answered like any other target: by pressing the thing on the board
+                    // that is them. Their id is what upstream targets them by, so it is sent as-is.
+                    lifeTotals = lifeTotals(vitals, picks),
+                    onPickPlayer = { playerId -> onAction(BoardAction.ChooseTarget(playerId)) },
                     phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
                     stack = tableStack(snapshot),
                     // A press on a step cycles its stop for the turn being played. What that then does
@@ -198,7 +202,7 @@ fun TableBoardScreen(
                     PlayerOverlay(
                         vitals = seat,
                         onDismiss = { expandedSeat = null },
-                        zones = tableZones(snapshot).filter { it.playerId == seat.playerId },
+                        zones = tableZones(snapshot, picks).filter { it.playerId == seat.playerId },
                         artFor = artFor,
                         // A card read out of a pile opens the same detail as a card on the
                         // battlefield, so a target the server offered from a graveyard is answerable

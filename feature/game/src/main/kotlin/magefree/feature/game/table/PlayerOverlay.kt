@@ -229,7 +229,7 @@ private fun ZoneColumn(
         ) {
             zone.cards.forEach { card ->
                 BoardCard(
-                    state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal)),
+                    state = BoardCardState(card = card.card, signals = setOfNotNull(card.signal), isSelected = card.isSelected),
                     width = ZoneCardWidth,
                     art = artFor?.invoke(card.boardArt, card.card),
                     onTap = onInspect?.let { inspect -> { inspect(card.id) } },

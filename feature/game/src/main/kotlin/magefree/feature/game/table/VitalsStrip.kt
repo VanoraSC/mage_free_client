@@ -30,6 +30,7 @@ import magefree.designsystem.board.BoardZone
 import magefree.designsystem.board.ZoneIcon
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.counterDigitColor
+import magefree.designsystem.text.SymbolText
 
 /*
  * A player's vitals, collapsed to counts and colour.
@@ -75,15 +76,10 @@ fun VitalsStrip(
         // the rail, the viewer's at the bottom — and a label repeating that costs room the numbers
         // need. Priority is shown elsewhere.
 
-        // Life gets the design system's own `vitals` token — *"the largest thing on the board that is
-        // not a card"* — which is what it was defined for. It is on its own line at the top because it
-        // is the number a player checks most and the only one they check from across the table.
-        Chip(
-            label = "${vitals.life}",
-            fill = LifeColor,
-            tag = VitalsTestTags.life(vitals.playerId),
-            style = BoardTypography.vitals,
-        )
+        // **No life here.** It is the number a player checks most and the only one they check from
+        // across the table, and it is also the thing a spell points at when it targets its owner — so
+        // it left this column for the centre line of the player's own edge, where both of those are
+        // true. See [LifeTotal].
 
         // **A picture and a number per zone**, in the order a player reads them: what I am holding,
         // what I have left to draw, what has died, what is gone. The pictures are upstream's own, so
@@ -107,12 +103,24 @@ fun VitalsStrip(
             ZoneCount(zone = BoardZone.Exile, count = vitals.exileCount, tag = VitalsTestTags.exile(vitals.playerId))
         }
 
-        if (vitals.floatingMana > 0) {
-            Chip(
-                label = "${vitals.floatingMana}",
-                fill = BoardSignal.pendingCost,
-                tag = VitalsTestTags.mana(vitals.playerId),
-            )
+        // **The pool by colour, in the game's own symbols.** One amber chip carrying the total said
+        // "three mana" where the game said "three black", and mid-cast that difference is the whole
+        // question of whether the spell in hand can be paid for.
+        if (vitals.floatingMana.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(ChipGap, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(RowGap),
+            ) {
+                vitals.floatingMana.forEach { mana ->
+                    SymbolText(
+                        text = "${mana.count}${mana.symbol}",
+                        style = BoardTypography.counter,
+                        color = BoardSurface.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.testTag(VitalsTestTags.mana(vitals.playerId, mana.symbol)),
+                    )
+                }
+            }
         }
 
         // **One counter per row, and the rows scroll.** A player with poison, energy and experience
@@ -240,8 +248,6 @@ private fun Marker(
 object VitalsTestTags {
     fun strip(playerId: String): String = "vitals-$playerId"
 
-    fun life(playerId: String): String = "vitals-life-$playerId"
-
     fun library(playerId: String): String = "vitals-library-$playerId"
 
     fun hand(playerId: String): String = "vitals-hand-$playerId"
@@ -250,7 +256,10 @@ object VitalsTestTags {
 
     fun exile(playerId: String): String = "vitals-exile-$playerId"
 
-    fun mana(playerId: String): String = "vitals-mana-$playerId"
+    fun mana(
+        playerId: String,
+        symbol: String,
+    ): String = "vitals-mana-$playerId-$symbol"
 
     fun wins(playerId: String): String = "vitals-wins-$playerId"
 
@@ -263,9 +272,6 @@ object VitalsTestTags {
         name: String,
     ): String = "vitals-counter-$playerId-$name"
 }
-
-/** Life is red everywhere in Magic, and this is not the place to be original about it. */
-private val LifeColor = Color(0xFFE05252)
 
 /** Poison is green, and it is the only other number that ends a game on its own. */
 private val PoisonColor = Color(0xFF6FBF73)

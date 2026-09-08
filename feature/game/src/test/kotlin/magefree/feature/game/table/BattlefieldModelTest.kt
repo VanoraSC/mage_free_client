@@ -2,8 +2,6 @@ package magefree.feature.game.table
 
 import magefree.designsystem.card.BoardBadge
 import magefree.designsystem.card.BoardCardSignal
-import magefree.designsystem.card.BoardFocus
-import magefree.designsystem.card.focalSignal
 import magefree.feature.game.board.BoardAction
 import magefree.feature.game.board.PromptControlsUi
 import magefree.feature.game.board.TARGET_ACTION_LABEL
@@ -19,6 +17,7 @@ import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
 import magefree.network.game.PlayableObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -252,28 +251,36 @@ class BattlefieldModelTest {
     // ---- the question the board is being asked ------------------------------------------------
 
     @Test
-    fun `a permanent the outstanding prompt can be answered with says so`() {
+    fun `a permanent the outstanding prompt can be answered with says so, in the playable colour`() {
         // The defect this exists for: Liliana's -6 asks the player to separate an opponent's
         // permanents into two piles, and the board drew those permanents exactly like permanents
-        // nobody was asking about. There was nothing on screen to say which cards answered the
-        // question — or, once one was picked, that anything had happened at all.
+        // nobody was asking about. Nothing on screen said which cards answered the question.
+        //
+        // The *playable* colour, not one of its own: "you can act on this" is one idea, and a player
+        // who has learned the green border once should not have to learn a second colour for it
+        // depending on which question happens to be outstanding.
         val state = stateWith(viewer = listOf(bears(), forest()))
 
         val model = battlefieldModel(state, PromptPicks(pickable = setOf("forest")))
 
         val side = model.viewer!!
-        assertTrue(BoardCardSignal.Pickable in side.permanentById("forest").state.signals)
-        assertTrue(BoardCardSignal.Pickable !in side.permanentById("bears").state.signals)
+        assertTrue(BoardCardSignal.Playable in side.permanentById("forest").state.signals)
+        assertTrue(BoardCardSignal.Playable !in side.permanentById("bears").state.signals)
     }
 
     @Test
-    fun `the question outranks whatever else the card is saying`() {
-        // A creature that is attacking *and* is one of the cards the question is about must show the
-        // question: answering is the only thing the player can do while the server is waiting.
-        val signals = setOf(BoardCardSignal.Attacking, BoardCardSignal.Pickable)
+    fun `a permanent the player has chosen is tinted, and stays pressable`() {
+        // Two channels, because the two facts are different in kind: green says the card *can*
+        // answer the question, the tint says it already does. And it keeps the border, deliberately —
+        // upstream removes a target sent a second time, so a chosen card is still a card to press.
+        val state = stateWith(viewer = listOf(bears(), forest()))
 
-        assertEquals(BoardCardSignal.Pickable, focalSignal(signals, BoardFocus.Combat))
-        assertEquals(BoardCardSignal.Pickable, focalSignal(signals, BoardFocus.Quiet))
+        val model = battlefieldModel(state, PromptPicks(pickable = setOf("forest", "bears"), picked = setOf("forest")))
+
+        val side = model.viewer!!
+        assertTrue(side.permanentById("forest").state.isSelected)
+        assertTrue(BoardCardSignal.Playable in side.permanentById("forest").state.signals)
+        assertFalse(side.permanentById("bears").state.isSelected)
     }
 
     @Test
@@ -304,7 +311,10 @@ class BattlefieldModelTest {
                 hasPicked = true,
             )
 
-        assertEquals(PromptPicks(pickable = setOf("forest", "swamp")), targeting.boardPicks())
+        assertEquals(
+            PromptPicks(pickable = setOf("forest", "swamp"), picked = setOf("forest")),
+            targeting.boardPicks(),
+        )
     }
 
     @Test

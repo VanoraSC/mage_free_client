@@ -128,18 +128,8 @@ object BoardSignal {
     /** This is dangerous to the player: lethal on board, a poison count, an unanswered threat. */
     val threat: Color = Color(0xFFFB7185)
 
-    /**
-     * The question the server is asking can be answered with this card.
-     *
-     * Distinct from [targeting], which is about the *stack* — what a spell already on it points at.
-     * This is about the question in front of the player right now, and the two are on screen at the
-     * same moment constantly (a spell resolving asks you to pick its target while the arrows to its
-     * existing targets are still drawn), so they cannot be a shade apart.
-     */
-    val pickable: Color = Color(0xFF2DD4BF)
-
     /** Every signal, for the checks that must hold across all of them and for the catalog. */
-    val all: List<Color> = listOf(playable, targeting, attacking, blocking, pendingCost, threat, pickable)
+    val all: List<Color> = listOf(playable, targeting, attacking, blocking, pendingCost, threat)
 
     /**
      * The contrast every signal holds against every board ground. 3:1 is the WCAG minimum for a
