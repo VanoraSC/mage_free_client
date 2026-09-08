@@ -14,6 +14,7 @@ import magefree.designsystem.card.CardArtSlot
 import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.card.CardPreviewAttachment
 import magefree.designsystem.card.CardPreviewState
+import magefree.feature.game.board.PromptControlsUi
 import magefree.network.game.CardIconType
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -332,8 +333,44 @@ fun attachmentPreview(
         action = null,
     )
 
-/** The battlefield in [state], arranged. */
-fun battlefieldModel(state: GameState): BattlefieldModel {
+/**
+ * What the outstanding prompt says about the cards on the board.
+ *
+ * **The board has to draw the question, not just the game.** Without this, a prompt whose candidates
+ * are permanents — "separate all permanents target player controls into two piles", "sacrifice a
+ * creature", anything with a target on the battlefield — draws a board that looks exactly like a board
+ * with nothing pending. The player has no way to see which cards answer it, and no way to see that a
+ * pick they made landed, because the only feedback was the card detail closing.
+ *
+ * **Candidates only, not what has been picked.** Which of them the player has already chosen is drawn
+ * where the choosing happens — the pile overlay's two columns — rather than as an eighth board colour:
+ * the signal palette is spaced so no two marks can be mistaken for each other, and position says
+ * "chosen" better than a shade does anyway. A declared attacker is the exception that proves it, and
+ * it is already covered: `combat.attackerIds` marks it `Attacking`.
+ *
+ * [pickable] comes straight from the prompt's own candidate list. Nothing is inferred.
+ *
+ * @property pickable ids the outstanding prompt can be answered with.
+ */
+data class PromptPicks(
+    val pickable: Set<String> = emptySet(),
+)
+
+/**
+ * What this prompt says about the board, or nothing for a prompt the board already draws its own way.
+ *
+ * The gate is [PromptControlsUi.marksCandidatesOnBoard], which is the prompt's own answer: a priority
+ * window's candidates are already `Playable` and a mana payment's are already the cost, and neither
+ * wants a third colour on top.
+ */
+fun PromptControlsUi?.boardPicks(): PromptPicks =
+    if (this == null || !marksCandidatesOnBoard) PromptPicks() else PromptPicks(pickable = pickableObjectIds)
+
+/** The battlefield in [state], arranged, with [picks] marking what the outstanding question is about. */
+fun battlefieldModel(
+    state: GameState,
+    picks: PromptPicks = PromptPicks(),
+): BattlefieldModel {
     val combat = CombatAssignment.of(state)
     val playable = state.playable.map { it.objectId }.toSet()
 
@@ -361,6 +398,7 @@ fun battlefieldModel(state: GameState): BattlefieldModel {
                                         attachments = attachmentsOf(permanent, everyPermanent),
                                         combat = combat,
                                         playable = playable,
+                                        picks = picks,
                                     ),
                                 art = artRequestOf(permanent.card),
                                 carriesAttachment = permanent.attachments.isNotEmpty(),
@@ -474,6 +512,7 @@ private fun boardCardState(
     attachments: List<BoardAttachment>,
     combat: CombatAssignment,
     playable: Set<String>,
+    picks: PromptPicks,
 ): BoardCardState {
     val card = permanent.card
     return BoardCardState(
@@ -490,27 +529,33 @@ private fun boardCardState(
         badges = card.icons.mapNotNull(::badgeOf),
         attachments = attachments,
         tapped = permanent.isTapped,
-        signals = signalsOf(permanent, combat, playable),
+        signals = signalsOf(permanent, combat, playable, picks),
     )
 }
 
 /**
  * Which signals apply to [permanent] right now.
  *
- * All three are the server's own answers: combat assignment comes from `GameState.combat`, and
- * playability from `GameState.playable`, which is the list upstream computes of what this player may
- * act on. None of it is inferred from the permanent.
+ * All of them are the server's own answers: combat assignment comes from `GameState.combat`,
+ * playability from `GameState.playable`, and the picks from the outstanding prompt's own candidate
+ * and chosen lists. None of it is inferred from the permanent.
+ *
+ * **A card already picked stays [BoardCardSignal.Pickable]**, because upstream lets it be pressed
+ * again: `HumanPlayer.choose` removes a target that is sent a second time, and
+ * `TargetPermanent.possibleTargets` keeps it in the candidate list so it can be.
  */
 private fun signalsOf(
     permanent: GamePermanent,
     combat: CombatAssignment,
     playable: Set<String>,
+    picks: PromptPicks,
 ): Set<BoardCardSignal> =
     buildSet {
         val id = permanent.card.id
         if (id in combat.attackerIds) add(BoardCardSignal.Attacking)
         if (id in combat.blockerIds) add(BoardCardSignal.Blocking)
         if (id in playable) add(BoardCardSignal.Playable)
+        if (id in picks.pickable) add(BoardCardSignal.Pickable)
     }
 
 /**

@@ -157,9 +157,13 @@ fun TableBoardScreen(
         Box(modifier = Modifier.fillMaxSize().testTag(TableBoardTestTags.SCREEN)) {
             if (snapshot != null) {
                 val vitals = tableVitals(snapshot)
+                // What the outstanding question is about, so the board can draw it. Without this a
+                // prompt whose candidates are permanents draws a board indistinguishable from one with
+                // nothing pending — see `PromptPicks`.
+                val picks = controls.boardPicks()
                 BattlefieldLayout(
-                    model = battlefieldModel(snapshot),
-                    hand = handCards(snapshot),
+                    model = battlefieldModel(snapshot, picks),
+                    hand = handCards(snapshot, picks),
                     playableElsewhere = playableElsewhere(snapshot),
                     vitals = vitals,
                     onExpandVitals = { seat -> expandedSeat = seat },

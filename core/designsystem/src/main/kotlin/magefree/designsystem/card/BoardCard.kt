@@ -162,6 +162,15 @@ enum class BoardBadge(
  * already assigned, and being playable is an affordance rather than an event.
  */
 enum class BoardCardSignal {
+    /**
+     * The question the server is asking can be answered with this card.
+     *
+     * First, because it outranks everything else a card can be saying: while the server is waiting,
+     * answering is the only thing the player can do, and a creature that is attacking *and* is one of
+     * the cards the question is about has to show the second.
+     */
+    Pickable,
+
     /** Something on the stack is targeting this. */
     Targeted,
 
@@ -185,6 +194,7 @@ enum class BoardCardSignal {
     val color: Color
         get() =
             when (this) {
+                Pickable -> BoardSignal.pickable
                 Targeted -> BoardSignal.targeting
                 Threat -> BoardSignal.threat
                 Attacking -> BoardSignal.attacking
@@ -222,16 +232,24 @@ enum class BoardFocus {
     Quiet,
     ;
 
-    /** The signals this focus promotes, in order, when a card carries more than one. */
+    /**
+     * The signals this focus promotes, in order, when a card carries more than one.
+     *
+     * **[BoardCardSignal.Pickable] comes first whatever the focus is.** It exists only while the
+     * server is waiting for an answer, and answering is then the only thing the player can do — so a
+     * creature that is attacking *and* is one of the cards the question is about has to show the
+     * second, not the first. Everything else is context; this is the question.
+     */
     val focalSignals: List<BoardCardSignal>
         get() =
-            when (this) {
-                Targeting -> listOf(BoardCardSignal.Targeted)
-                Combat -> listOf(BoardCardSignal.Attacking, BoardCardSignal.Blocking)
-                PendingCost -> listOf(BoardCardSignal.PendingCost)
-                Playable -> listOf(BoardCardSignal.Playable)
-                Quiet -> listOf(BoardCardSignal.Threat)
-            }
+            listOf(BoardCardSignal.Pickable) +
+                when (this) {
+                    Targeting -> listOf(BoardCardSignal.Targeted)
+                    Combat -> listOf(BoardCardSignal.Attacking, BoardCardSignal.Blocking)
+                    PendingCost -> listOf(BoardCardSignal.PendingCost)
+                    Playable -> listOf(BoardCardSignal.Playable)
+                    Quiet -> listOf(BoardCardSignal.Threat)
+                }
 }
 
 /**
