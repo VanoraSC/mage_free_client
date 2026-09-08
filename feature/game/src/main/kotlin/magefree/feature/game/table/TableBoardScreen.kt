@@ -163,6 +163,10 @@ fun TableBoardScreen(
                 val picks = controls.boardPicks()
                 BattlefieldLayout(
                     model = battlefieldModel(snapshot, picks),
+                    // What the board is about, which decides which signal a card emphasises. Combat
+                    // above all: an attacking creature and a merely tapped one both lean, and only
+                    // one of them is in combat.
+                    focus = boardFocus(snapshot),
                     hand = handCards(snapshot, picks),
                     playableElsewhere = playableElsewhere(snapshot),
                     vitals = vitals,

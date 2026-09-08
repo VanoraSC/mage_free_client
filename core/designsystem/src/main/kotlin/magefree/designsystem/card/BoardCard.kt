@@ -286,6 +286,16 @@ data class BoardCardState(
     val tapped: Boolean = false,
     val signals: Set<BoardCardSignal> = emptySet(),
     val isSelected: Boolean = false,
+    /**
+     * Whether this creature came under its controller this turn and so cannot attack or use a tap
+     * ability yet — upstream's own `PermanentView.hasSummoningSickness`.
+     *
+     * **A veil, not a signal.** It is drawn as a grey scrim over the whole card, for the same reason
+     * [isSelected] is a fill: it is a fact about the card as a whole, not about its edge. Grey rather
+     * than any of the [BoardSignal] colours because it means *not ready* — the absence of an
+     * affordance — and every information colour on this board means something is happening.
+     */
+    val hasSummoningSickness: Boolean = false,
 )
 
 /**
@@ -566,6 +576,20 @@ private fun HostCard(
                 ) {
                     CardArtRegion(card = state.card, art = art, modifier = Modifier.fillMaxSize())
                 }
+            }
+
+            // **Not ready yet.** A grey scrim, under the chosen tint and under the glyphs: it says the
+            // absence of an affordance, which is the one thing the board's information colours never
+            // mean. Drawn before the tint so a summoning-sick creature that is also a valid target
+            // still reads as chosen.
+            if (state.hasSummoningSickness) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(SummoningSickVeil)
+                            .testTag(BoardCardTestTags.SUMMONING_SICK),
+                )
             }
 
             // **What the player has chosen, over the whole card.** Drawn above the art and below the
@@ -950,6 +974,9 @@ object BoardCardTestTags {
 
     /** The tint over a card the player has chosen as part of an answer. */
     const val SELECTED: String = "board-card-selected"
+
+    /** The veil over a creature that cannot attack or tap yet. */
+    const val SUMMONING_SICK: String = "board-card-summoning-sick"
 }
 
 /**
@@ -980,6 +1007,14 @@ private const val SECONDARY_BORDER_ALPHA = 0.85f
  * still the card being chosen rather than a green rectangle where a card used to be.
  */
 private const val SELECTED_TINT_ALPHA = 0.42f
+
+/**
+ * The scrim over a creature that is not ready.
+ *
+ * Dark and neutral: it reads as the card being held back rather than as anything happening to it, and
+ * it leaves the art recognisable, which is the whole reason a player looks at a creature at all.
+ */
+private val SummoningSickVeil = Color(0xFF0B0B0B).copy(alpha = 0.46f)
 
 /** The largest count rendered in full; above it the circle shows a capped form. */
 private const val MAX_SHOWN_COUNT = 99

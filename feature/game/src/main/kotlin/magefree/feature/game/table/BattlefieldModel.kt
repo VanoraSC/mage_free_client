@@ -81,6 +81,13 @@ data class TablePermanent(
     val state: BoardCardState,
     val art: CardArtRequest? = null,
     val carriesAttachment: Boolean = false,
+    /**
+     * Whether this is a token.
+     *
+     * The board draws identical tokens as a pile, and only tokens: the server says so with
+     * `GameCard.isToken`, and it is the only thing that can — a token and a card look identical.
+     */
+    val isToken: Boolean = false,
     val abilities: List<String> = emptyList(),
     val attached: List<TableAttachment> = emptyList(),
 )
@@ -188,9 +195,107 @@ data class BattlefieldSide(
         } + alone
     }
 
+    /**
+     * What [role]'s row actually draws: single permanents, and piles of identical tokens.
+     *
+     * **Only tokens pile.** A board that made twelve Zombie tokens is a board with one thing on it
+     * twelve times over, and drawing twelve cards spends the row's whole width saying so — which is
+     * what shrank every card on the table to its floor. Real cards never pile: two Grizzly Bears are
+     * two cards a player owns and may want to tell apart, and upstream marks the difference itself
+     * (`GameCard.isToken`), so nothing is being guessed.
+     *
+     * **A tapped token is its own pile, not the turned half of one.** This is where tokens differ
+     * from lands, deliberately. A land's two halves are the same permanent in two states and the
+     * count is what matters, so one stack with a leaning side reads correctly. A creature's tap state
+     * is *what it is doing* — it attacked, it crewed, it was tapped down — and that is a different
+     * thing from an untapped copy standing ready, not the same thing lying over. So tap state is part
+     * of the key here, and each pile is uniformly upright or uniformly turned.
+     */
+    fun entriesIn(role: PermanentRole): List<RowEntry> {
+        val row = inRole(role)
+        val members = LinkedHashMap<TokenPileKey, MutableList<TablePermanent>>()
+        row.forEach { permanent ->
+            permanent.tokenPileKey()?.let { key -> members.getOrPut(key) { mutableListOf() } += permanent }
+        }
+
+        // Each pile appears where its *first* member did, so a pile that gains a token does not jump
+        // to the end of the row — the same rule the land stacks follow, for the same reason.
+        //
+        // **A lone token is a card, not a pile of one.** A pile is wider than a card and reads as a
+        // count; one of something is neither, and drawing it as a stack would spend the extra width
+        // saying nothing.
+        val drawn = mutableSetOf<TokenPileKey>()
+        return row.mapNotNull { permanent ->
+            val key = permanent.tokenPileKey()
+            val group = key?.let(members::getValue)
+            when {
+                group == null || group.size == 1 -> RowEntry.Single(permanent)
+                drawn.add(key) -> RowEntry.Pile(group.toList())
+                else -> null
+            }
+        }
+    }
+
     /** True when nothing occupies [role] — the layout draws no region at all for it. */
     fun isEmpty(role: PermanentRole): Boolean = permanents.none { it.role == role }
 }
+
+/** One thing a battlefield row draws. */
+sealed interface RowEntry {
+    /** The permanents this entry stands for, in the server's own order. Never empty. */
+    val permanents: List<TablePermanent>
+
+    /**
+     * How much of the row this occupies, in card widths.
+     *
+     * A pile is wider than a card — the fan staggers and the turned half reaches right — so a row
+     * that budgeted a card per entry would put its last pile off the edge.
+     */
+    fun widthInCards(): Float = if (this is Pile) stackWidthInCards() else 1f
+
+    /** A permanent on its own: every real card, and any token nothing matches. */
+    data class Single(
+        val permanent: TablePermanent,
+    ) : RowEntry {
+        override val permanents: List<TablePermanent> get() = listOf(permanent)
+    }
+
+    /**
+     * Identical tokens, drawn as one pile.
+     *
+     * Uniformly upright or uniformly turned — see [BattlefieldSide.entriesIn] — so [asStack] hands
+     * the pile renderer one populated half and one empty one.
+     */
+    data class Pile(
+        val members: List<TablePermanent>,
+    ) : RowEntry {
+        override val permanents: List<TablePermanent> get() = members
+
+        /** The pile in the shape the stack renderer takes, which is the lands' own. */
+        fun asStack(): TableLandStack =
+            TableLandStack(
+                untapped = members.filterNot { it.state.tapped },
+                tapped = members.filter { it.state.tapped },
+            )
+    }
+}
+
+/**
+ * What makes two tokens the same pile, or `null` for a permanent that may never pile at all.
+ *
+ * `null` for every non-token, and for a token carrying an attachment — an Aura is on *that* Zombie,
+ * so "read one and you have read them all" stops being true, exactly as it does for lands.
+ *
+ * The whole drawing state is the key, **tap state included**, plus the printing. Nothing is dropped
+ * the way a land drops playability: a creature's tap state is what it is doing.
+ */
+internal data class TokenPileKey(
+    val state: BoardCardState,
+    val art: CardArtRequest?,
+)
+
+private fun TablePermanent.tokenPileKey(): TokenPileKey? =
+    if (!isToken || carriesAttachment) null else TokenPileKey(state = state, art = art)
 
 /**
  * What makes two permanents the same stack, or `null` for one that may never stack at all.
@@ -413,6 +518,7 @@ fun battlefieldModel(
                                     ),
                                 art = artRequestOf(permanent.card),
                                 carriesAttachment = permanent.attachments.isNotEmpty(),
+                                isToken = permanent.card.isToken,
                                 abilities = permanent.card.rules,
                                 attached = attachedCardsOf(permanent, everyPermanent),
                             )
@@ -542,6 +648,9 @@ private fun boardCardState(
         tapped = permanent.isTapped,
         signals = signalsOf(permanent, combat, playable, picks),
         isSelected = permanent.card.id in picks.picked,
+        // The server's own answer, and drawn only on creatures: it is true of any permanent that
+        // arrived this turn, but it is a *creature* that a player is about to try to attack with.
+        hasSummoningSickness = permanent.hasSummoningSickness && card.isCreature,
     )
 }
 
