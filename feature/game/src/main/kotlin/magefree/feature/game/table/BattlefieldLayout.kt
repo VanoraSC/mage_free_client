@@ -543,7 +543,10 @@ private fun PermanentRow(
                             palette = palette,
                             artFor = artFor,
                             onPress = onInspect?.let { inspect -> { _ -> inspect(entry.permanents.first().id) } },
-                            modifier = anchors.anchorModifier(entry.permanents.first().id),
+                            // On the front *card*, not on the pile: the pile's box is a card and a
+                            // half wide and holds the staggering too, so an arrow measured against it
+                            // left visibly empty air beside the cards.
+                            anchorModifier = anchors.anchorModifier(entry.permanents.first().id),
                         )
                 }
             }
@@ -669,9 +672,28 @@ private fun mainCardWidth(
     // that are not crowded at all. Past [LegibleCardWidth] that trade stops being worth making: the
     // row that does not fit scrolls, and the rest of the board keeps a card it can read.
     val byWidth = ((mainWidth - CardGap * (busiest - 1)) / busiest).coerceAtLeast(LegibleCardWidth)
-    val rowHeight = (sideHeight - RowGap * (tallest - 1)) / tallest.coerceAtLeast(1)
-    val byHeight = rowHeight * BOARD_CARD_ASPECT_RATIO
+
+    // **A pile is taller than a card, and the height budget has to know it.** The fan staggers
+    // downward and the turned half hangs below, so a row holding one costs `stackHeightInCards()`
+    // card-widths of height rather than one card's worth. Budgeting a card per row is what put the
+    // non-creature permanents below the bottom of the board — behind the phase bar — the moment a
+    // token pile appeared, and what made the whole side jump when a token tapped and a second pile
+    // split off.
+    //
+    // Everything here is in **card-width units**, which is what `StackShape` already measures in, so
+    // the division answers a width directly with no aspect ratio applied twice.
+    val tallestSide =
+        sides.maxOfOrNull { side ->
+            ViewerOrder.sumOf { row -> side.entriesIn(row.role).heightInCards().toDouble() }
+        } ?: 0.0
+    val byHeight =
+        if (tallestSide <= 0.0) {
+            PreferredMainCardWidth
+        } else {
+            (sideHeight - RowGap * (tallest - 1).coerceAtLeast(0)) / tallestSide.toFloat()
+        }
     val plain = minOf(PreferredMainCardWidth, byWidth, byHeight)
+    val rowHeight = plain / BOARD_CARD_ASPECT_RATIO
 
     val byAssembly =
         sides

@@ -612,3 +612,44 @@ class CombatDeclarationTest {
         withdrawableObjectIds = withdrawable,
     )
 }
+
+/**
+ * How much of a side a row costs, in the units the layout budgets in.
+ *
+ * **A pile is taller than a card**, and a layout that forgot it put the non-creature permanents below
+ * the bottom of the board — behind the phase bar — the moment a token pile appeared, and moved the
+ * whole side when a token tapped and a second pile split off.
+ */
+class RowHeightTest {
+    @Test
+    fun `a row holding a pile costs more height than a row of cards`() {
+        val cards = listOf(RowEntry.Single(permanentFor("b1")))
+        val pile = listOf(RowEntry.Pile(listOf(permanentFor("z1"), permanentFor("z2"))))
+
+        assertTrue(
+            "a pile fans downward and its turned half hangs below",
+            pile.heightInCards() > cards.heightInCards(),
+        )
+    }
+
+    @Test
+    fun `a row costs its tallest entry, not the sum of its entries`() {
+        // A row is a row: five cards side by side are one card tall.
+        val one = listOf(RowEntry.Single(permanentFor("b1")))
+        val five = (1..5).map { RowEntry.Single(permanentFor("b$it")) }
+
+        assertEquals(one.heightInCards(), five.heightInCards())
+    }
+
+    @Test
+    fun `an empty row costs nothing, which is the board's own rule`() {
+        assertEquals(0f, emptyList<RowEntry>().heightInCards())
+    }
+
+    private fun permanentFor(id: String) =
+        TablePermanent(
+            id = id,
+            role = PermanentRole.Creature,
+            state = magefree.designsystem.card.BoardCardState(card = magefree.designsystem.card.CardDisplay(name = id)),
+        )
+}
