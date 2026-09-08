@@ -34,10 +34,16 @@ the whole card rather than its edge, and `BoardColorsTest` holds every signal to
 and a ΔE ≥ 25 spacing from every other — a "chosen" border was tried, and those tests correctly
 rejected it.
 
-**A chosen card keeps its green border, deliberately.** `HumanPlayer.choose` removes a target that is
-sent a second time, and `TargetPermanent.possibleTargets` keeps a chosen permanent in the candidate
-list precisely so it can be. So a card showing both is a card that can be pressed to take the choice
-back, and its detail says so.
+**A chosen card keeps its green border, deliberately**, so it can be pressed again to take the choice
+back. `HumanPlayer.choose` answers a response id it already holds with `target.remove(responseId)`.
+
+**And that is *not* the same as it still being a possible target.** `Target.keepValidPossibleTargets`
+is documented "keep only valid and **not selected** targets" and filters on `notContains`, so every
+`possibleTargets` — permanents and cards alike — drops what has been chosen. Upstream still accepts
+the id because it checks `target.contains` **before** it consults `possibleTargets`. So the board's
+pickable set is the *union* of the server's candidates and its chosen set, and `Targeting.actionFor`
+answers for both. Gating on candidates alone made "Take back this choice" a button that did nothing,
+which is how this was found: discarding to hand size, with no way to unselect a card.
 
 **The life total left the status rail.** In the rail it was a number in a corner with four zone counts
 under it — read when you went looking for it. It is now its own element on the centre line of each

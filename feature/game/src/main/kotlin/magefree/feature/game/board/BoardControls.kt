@@ -464,16 +464,36 @@ sealed interface PromptControlsUi {
     ) : PromptControlsUi {
         override val marksCandidatesOnBoard: Boolean get() = true
 
+        /**
+         * **A chosen target is answerable even though the server no longer lists it as possible.**
+         *
+         * `Target.keepValidPossibleTargets` is documented *"keep only valid and **not selected**
+         * targets"* and filters on `notContains`, so every `possibleTargets` — permanents and cards
+         * alike — drops what has already been chosen. Gating on [pickableObjectIds] alone therefore
+         * made "Take back this choice" a button that did nothing: the label was offered for anything
+         * chosen and the action for anything possible, and after a pick those two sets are disjoint.
+         *
+         * Sending it is valid because upstream checks in that order — `HumanPlayer.choose` answers
+         * `target.contains(responseId)` with `target.remove(responseId)` **before** it considers
+         * `possibleTargets.contains(responseId)`. This is the same rule [Declaration] already
+         * followed for a declared attacker; targeting simply did not.
+         */
         override fun actionFor(objectId: String): BoardAction? =
-            if (objectId in pickableObjectIds) BoardAction.ChooseTarget(objectId) else null
+            if (objectId in pickableObjectIds || objectId in chosenObjectIds) {
+                BoardAction.ChooseTarget(objectId)
+            } else {
+                null
+            }
 
         /**
          * **A chosen target is pressed again to take it back**, and the label has to say so.
          *
          * That is upstream's own rule, not an invention: `HumanPlayer.choose` answers a response id it
-         * already holds with `target.remove(responseId)`, and `TargetPermanent.possibleTargets` keeps a
-         * chosen permanent in the candidate list precisely so it can be sent again. A card labelled
-         * "select" that in fact deselects is the same defect the combat declaration had.
+         * already holds with `target.remove(responseId)`. A card labelled "select" that in fact
+         * deselects is the same defect the combat declaration had.
+         *
+         * Note it is **not** in `possibleTargets` by then — see [actionFor], which is why the two sets
+         * are consulted separately here.
          */
         override fun actionLabelFor(objectId: String): String? =
             when {
