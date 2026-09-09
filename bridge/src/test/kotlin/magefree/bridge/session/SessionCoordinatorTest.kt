@@ -9,6 +9,8 @@ import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.routing.routing
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import magefree.bridge.testApplicationTimed
 import magefree.bridge.ws.sessionWebSocket
@@ -639,7 +641,18 @@ class SessionCoordinatorTest {
                 // Told, not asked: nothing comes back on the socket, so the assertion is that the
                 // session was reached — and with the two sides distinct, since a mapping that
                 // collapsed them would still "work" for a player who set the same stops on both.
-                val applied = withTimeout(5_000) { fake.awaitPriorityStops() }
+                //
+                // **Waited in real time, not virtual.** `runTest` gives `withTimeout` a virtual clock
+                // that advances instantly, while the thing being awaited is a *real* websocket on real
+                // dispatchers — so the timeout could expire before the socket had done anything, and
+                // did, on three separate full container runs. It passed alone every time, which is
+                // exactly what a virtual clock racing real work looks like: the busier the machine,
+                // the likelier it fires. This is the fix `kotlinx.coroutines.test`'s own error message
+                // recommends, and it is a test bug rather than a flaky test.
+                val applied =
+                    withContext(Dispatchers.Default.limitedParallelism(1)) {
+                        withTimeout(5_000) { fake.awaitPriorityStops() }
+                    }
                 assertEquals(PriorityStops(upkeep = true, main1 = true, main2 = true), applied.yourTurn)
                 assertEquals(PriorityStops(endOfTurn = true, main1 = false, main2 = false), applied.opponentTurn)
             }
