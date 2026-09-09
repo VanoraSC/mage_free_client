@@ -179,6 +179,13 @@ fun TableBoardScreen(
                     // that is them. Their id is what upstream targets them by, so it is sent as-is.
                     lifeTotals = lifeTotals(vitals, picks),
                     onPickPlayer = { playerId -> onAction(BoardAction.ChooseTarget(playerId)) },
+                    // What has been seen of the one opponent's hand, drawn along their own edge.
+                    // Empty for a multiplayer game, where the inference does not hold — see [KnownHand].
+                    opponentHand =
+                        snapshot.players
+                            .firstOrNull { !it.isViewer }
+                            ?.let { seenCards.seen.knownHandFor(snapshot, it.playerId) }
+                            ?: KnownHand(),
                     phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
                     stack = tableStack(snapshot),
                     combat = snapshot.combat,
