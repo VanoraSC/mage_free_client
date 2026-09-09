@@ -1,26 +1,19 @@
 package magefree.feature.game.table
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import magefree.designsystem.board.BoardSurface
-import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
+import magefree.cards.art.CardArtSize
+import magefree.cards.art.cardBackRequest
 import magefree.designsystem.card.BoardCard
 import magefree.designsystem.card.BoardCardState
+import magefree.designsystem.card.CardDisplay
 
 /*
  * The opponent's hand, along their own edge.
@@ -30,9 +23,9 @@ import magefree.designsystem.card.BoardCardState
  * read rather than a number you go and look up.
  *
  * **Two kinds of card, and the difference is the whole point.** A card you have been shown is drawn
- * face-up, because you have seen it and the game does not take that back. Everything else is a card
- * back: it says *there is a card here* and nothing more, which is exactly what the server told us —
- * `PlayerView.handCount` and no cards at all.
+ * face-up, because you have seen it and the game does not take that back. Everything else is the back
+ * of a card: it says *there is a card here* and nothing more, which is exactly what the server told us
+ * — `PlayerView.handCount` and no cards at all.
  *
  * What is known comes from [SeenCards], and everything about how that is worked out — including that
  * it is inference, and that it holds for one opponent and not for several — is in [KnownHand].
@@ -46,9 +39,9 @@ import magefree.designsystem.card.BoardCardState
  *
  * @param hand what this client knows, from [SeenCards.knownHandFor].
  * @param tileWidth the width a card is drawn at — the same the viewer's own hand uses.
- * @param artFor resolves a known card's art. A card back has no art to resolve.
- * @param onInspect called with a known card's id when it is tapped. A card back answers nothing,
- *   because there is nothing to say about it.
+ * @param artFor resolves a card's art, including the back's.
+ * @param onInspect called with a known card's id when it is tapped. A back answers nothing, because
+ *   there is nothing behind it to open.
  */
 @Composable
 fun OpponentHandRegion(
@@ -77,16 +70,47 @@ fun OpponentHandRegion(
             )
         }
 
-        // **A card back is not a card, and must not be drawn as one.** It carries no name, no art, no
-        // cost and no type, and it takes no press, because there is nothing behind it to open — the
-        // server sent a count.
         repeat(hand.hidden) { index ->
             CardBack(
                 width = tileWidth,
+                artFor = artFor,
                 modifier = Modifier.testTag(OpponentHandTestTags.hidden(index)),
             )
         }
     }
+}
+
+/**
+ * The back of a card, as Scryfall serves it.
+ *
+ * **The real picture, not an impression of one.** This said "Face-down" on a white card first, which
+ * was wrong twice over: *face-down* is a game state in Magic — a morph, a manifest — and none of that
+ * is true of a card in somebody's hand; and a card with a word on it reads as a card whose *name* is
+ * that word. A flat brown rectangle was no better, being precisely what a card back is not.
+ *
+ * Scryfall serves the one back every Magic card shares, from its own host — `backs.scryfall.io`, not
+ * the card CDN, which answers 404 for that id. Both were checked with a request before this was
+ * written rather than reasoned about from the card URLs, because they look near enough alike to guess
+ * wrong. See `cardBackRequest`.
+ *
+ * **Empty name, on purpose.** A back has no name, and the card tier draws its name band from what it
+ * is given — so anything here would be printed across a picture with no room for it. Until the image
+ * loads it falls back to the same placeholder every other card does, which is what a card that has not
+ * loaded should look like.
+ */
+@Composable
+private fun CardBack(
+    width: Dp,
+    artFor: TableArtResolver?,
+    modifier: Modifier = Modifier,
+) {
+    val blank = CardDisplay(name = "")
+    BoardCard(
+        state = BoardCardState(card = blank),
+        width = width,
+        art = artFor?.invoke(cardBackRequest(CardArtSize.SMALL), blank),
+        modifier = modifier,
+    )
 }
 
 /** Test tags for the opponent's hand. */
@@ -99,47 +123,6 @@ object OpponentHandTestTags {
     /** A card back, by position. It has no id, because the server never sent one. */
     fun hidden(index: Int): String = "opponent-hand-hidden-$index"
 }
-
-/**
- * The back of a card.
- *
- * **It said "Face-down" and that was wrong twice over.** *Face-down* is a game state in Magic — a
- * morph, a manifest, a permanent turned over by an effect — and none of that is true of a card in
- * somebody's hand. It is simply a card this player has not been shown. And a white card with a word
- * printed on it does not read as a card back at all; it reads as a card whose name is "Face-down".
- *
- * So it is drawn as what it is: the black border every Magic card has, and a plain ground inside it.
- * No name band, because a back has no name to put in one.
- */
-@Composable
-private fun CardBack(
-    width: Dp,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .size(width = width, height = width / BOARD_CARD_ASPECT_RATIO)
-                .clip(CardShape)
-                .background(BoardSurface.cardBorder)
-                .padding(CardBorder),
-    ) {
-        Box(modifier = Modifier.fillMaxSize().clip(CardShape).background(CardBackGround))
-    }
-}
-
-/**
- * The colour of a card back.
- *
- * A deep, desaturated brown — the value a real card's back sits at, and far enough from every
- * [magefree.designsystem.board.BoardSignal] that it can never be mistaken for the board saying
- * something.
- */
-private val CardBackGround = Color(0xFF4A3B32)
-
-private val CardShape = RoundedCornerShape(3.dp)
-
-private val CardBorder = 2.dp
 
 /** The same gap the viewer's own hand uses, so the two rows read as the same thing mirrored. */
 private val TileGap: Dp = 4.dp

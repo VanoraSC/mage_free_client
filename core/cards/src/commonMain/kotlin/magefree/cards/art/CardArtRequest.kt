@@ -117,3 +117,23 @@ fun tokenArtRequest(
 
 /** XMage's own word for a token, which is not part of the name any image source knows it by. */
 private const val TOKEN_NAME_SUFFIX = " Token"
+
+/**
+ * The back of a Magic card — the same picture for every card there has ever been.
+ *
+ * **Not a printing, and marked as one deliberately.** It is requested by a sentinel [setCode] rather
+ * than by inventing a nullable field on every request in the app: a back has no set, no collector
+ * number and no name, and the one thing an image source needs to know is that this is *the* back.
+ *
+ * Used for a card the viewer has not been shown — a card in an opponent's hand — where the honest
+ * picture is the one they are actually looking at across the table.
+ */
+fun cardBackRequest(size: CardArtSize = CardArtSize.SMALL): CardArtRequest =
+    CardArtRequest(setCode = CARD_BACK_SET_CODE, collectorNumber = "", size = size)
+
+/**
+ * The sentinel set code that means *the card back*.
+ *
+ * Not a real set, and it cannot collide with one: XMage set codes are alphanumeric, and this is not.
+ */
+const val CARD_BACK_SET_CODE: String = "//back"

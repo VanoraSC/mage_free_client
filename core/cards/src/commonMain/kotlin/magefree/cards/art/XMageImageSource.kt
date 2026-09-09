@@ -66,6 +66,8 @@ class ScryfallImageSource(
     private val language: String = DEFAULT_LANGUAGE,
 ) : XMageImageSource {
     override fun resolve(request: CardArtRequest): List<String> {
+        if (request.setCode == CARD_BACK_SET_CODE) return listOf(cardBackUrl(request.size))
+
         val set = scryfallSetCode(request.setCode)
         request.tokenName?.let { return resolveToken(set, it, request) }
 
@@ -167,3 +169,25 @@ class ScryfallImageSource(
             }
     }
 }
+
+/**
+ * Where Scryfall serves the card back.
+ *
+ * **Its own host, not the card CDN.** `cards.scryfall.io` answers 404 for this id; the back lives at
+ * `backs.scryfall.io`, with the same size-then-two-id-characters path shape. Both were checked with a
+ * request before this was written rather than reasoned about from the card URLs, because they look
+ * near enough alike to guess wrong.
+ *
+ * The id is Scryfall's own `card_back_id`, which is one value for every ordinary Magic card in
+ * existence — there is exactly one back, so there is nothing here to look up per card.
+ */
+private fun cardBackUrl(size: CardArtSize): String {
+    // An art crop of a back would be a crop of a picture that is all frame. It gets the whole back.
+    val folder = if (size == CardArtSize.LARGE) "large" else "normal"
+    return "$CARD_BACK_BASE/$folder/${CARD_BACK_ID.take(1)}/${CARD_BACK_ID.drop(1).take(1)}/$CARD_BACK_ID.jpg"
+}
+
+private const val CARD_BACK_BASE = "https://backs.scryfall.io"
+
+/** Scryfall's `card_back_id` — the one back every Magic card shares. */
+private const val CARD_BACK_ID = "0aeebaf5-8c7d-4636-9e82-8c27447861f7"
