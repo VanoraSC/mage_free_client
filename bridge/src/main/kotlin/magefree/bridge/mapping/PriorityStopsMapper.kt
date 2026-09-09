@@ -39,6 +39,11 @@ internal object PriorityStopsMapper {
         base.also { data ->
             data.userSkipPrioritySteps.yourTurn.applyFrom(request.yourTurn)
             data.userSkipPrioritySteps.opponentTurn.applyFrom(request.opponentTurn)
+            // **How much the server may answer for the player.** `TargetImpl.tryToAutoChoose` picks a
+            // single-candidate choice on their behalf — and never fires the event, so the client is
+            // never asked — whenever this is above zero. Upstream defaults it to 1, which is what
+            // took a card off a turn-1 Inquisition of Kozilek without showing the hand it revealed.
+            data.autoTargetLevel = request.autoTargetLevel
         }
 
     private fun SkipPrioritySteps.applyFrom(stops: PriorityStops) {

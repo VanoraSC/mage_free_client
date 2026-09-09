@@ -66,9 +66,9 @@ a reveal of the opponent's hand also appears under the viewer's own. That is a d
    reconciled against `handCount`, drawn as face-up cards for what is known and face-down cards for
    the rest.
 
-**Optional follow-on (4)** — *put an owner on the wire.* Whether (3) rests on inference or on fact
-depends on whether `CardView` exposes enough to attribute a revealed card to a player. If it does, one
-additional protocol field replaces the inference. **This check is not done** — see §7.
+**Follow-on (4) is ruled out — see §7.** `CardView` carries no owner, so there is nothing to put on
+the wire. (3) rests on inference, and the story says so.
+
 
 **Out of scope**
 - The consent feature. Asking an opponent to show their hand is a different thing with a different
@@ -116,13 +116,25 @@ the next snapshot rather than compounding. And honest about what it is — *what
   and face-up for what is known.
 - **Eyes-on:** a turn-1 Inquisition against a hand with exactly one legal target.
 
-## 7. Open question — the one thing not verified
+## 7. The open question, now settled — **(4) is not possible**
 
-`CardView`'s public surface was not fully checked for an owner. A grep found `ownerId` only in
-internal uses inside `CardView`'s own construction, not as an exposed field. **Finish this before
-building (3)**: if an owner is reachable, the optional follow-on (4) turns the known-hand model from
-inference into fact and should be done first; if it is not, (3) attributes by matching a reveal
-against the discard prompt that accompanies it, and the story should say plainly that it is inference.
+`CardView` exposes exactly two ids: `getId()` and `getParentId()`. There is **no owner, controller or
+player id on it at all** — the only `ownerId` mentions in the file are internal, inside its own
+construction, comparing a permanent's controller against its owner to decide a label. `RevealedView`
+adds nothing but a name.
+
+The bridge is a client and receives `CardView`; it cannot carry what it was never given. **So there is
+no wire field to add, and (3) rests on inference.** The story says so plainly rather than implying a
+certainty it does not have.
+
+**The inference, and its limit.** A revealed card that the board cannot see in any visible zone — not
+on a battlefield, not in a graveyard, not in exile, not on the stack, not in the viewer's own hand —
+is in a hand or a library. With **one** opponent that is enough: it is theirs, or it is not in a hand
+at all, and the `handCount` reconciliation catches the second case on the next snapshot.
+
+With more than one opponent it is not enough, and nothing on the wire makes it so. The known-hand
+component is therefore offered for a **single opponent only**, and multiplayer keeps the reveal pile
+and nothing more. That is a real limit, stated rather than papered over.
 
 ## 8. Acceptance criteria
 
