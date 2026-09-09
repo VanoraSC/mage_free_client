@@ -3,6 +3,7 @@ package magefree.feature.game.table
 import magefree.designsystem.card.BoardBadge
 import magefree.designsystem.card.BoardCardSignal
 import magefree.feature.game.board.BoardAction
+import magefree.feature.game.board.CombatRole
 import magefree.feature.game.board.PromptControlsUi
 import magefree.feature.game.board.TARGET_ACTION_LABEL
 import magefree.feature.game.board.UNPICK_ACTION_LABEL
@@ -559,5 +560,96 @@ class RowEntryTest {
             card = GameCard(id = "pacifism", name = "Pacifism", cardTypes = listOf(CardType.Enchantment)),
             attachedTo = hostId,
             isAttachedToPermanent = true,
+        )
+}
+
+/**
+ * Combat as a set of relationships, and the taps that make them.
+ *
+ * Who is attacking is a border; **who they are attacking, and which blocker is on which attacker, is a
+ * pairing** — and a pairing has no honest representation on a card. These assert the two halves that
+ * matter: that a declaration is answered by a tap rather than by raising a card, and that the pairings
+ * the board draws lines for are the server's own.
+ */
+class CombatDeclarationTest {
+    @Test
+    fun `a tap on a creature declares it, with no card raised in between`() {
+        // Declaring is the one prompt where the player is not choosing between things they have to
+        // read first — they are looking at their own board, at speed. Raising each creature into a
+        // full-screen card turns a five-creature attack into ten presses.
+        val controls = declaration(pickable = setOf("bears"))
+
+        assertTrue(controls.answersOnPress)
+        assertEquals(BoardAction.ChooseTarget("bears"), controls.actionFor("bears"))
+    }
+
+    @Test
+    fun `a tap on a declared creature takes it back, which is the same message`() {
+        // Upstream's own design: `selectAttackers` answers an id matching `filterAttack` with
+        // `removeAttackerIfPossible`, and `selectBlockers` answers one matching `filterBlock` with
+        // `removeBlocker`. One verb, and the server decides which way it went.
+        val controls = declaration(pickable = setOf("bears"), withdrawable = setOf("wolf"))
+
+        assertEquals(BoardAction.ChooseTarget("wolf"), controls.actionFor("wolf"))
+        assertEquals(setOf("wolf"), controls.chosenObjectIds)
+    }
+
+    @Test
+    fun `a creature the server did not offer answers nothing`() {
+        val controls = declaration(pickable = setOf("bears"))
+
+        assertNull(controls.actionFor("someone-elses-creature"))
+    }
+
+    private fun declaration(
+        pickable: Set<String>,
+        withdrawable: Set<String> = emptySet(),
+    ) = PromptControlsUi.Declaration(
+        message = "Select attackers",
+        pickableObjectIds = pickable,
+        buttons = emptyList(),
+        role = CombatRole.Attacking,
+        withdrawableObjectIds = withdrawable,
+    )
+}
+
+/**
+ * How much of a side a row costs, in the units the layout budgets in.
+ *
+ * **A pile is taller than a card**, and a layout that forgot it put the non-creature permanents below
+ * the bottom of the board — behind the phase bar — the moment a token pile appeared, and moved the
+ * whole side when a token tapped and a second pile split off.
+ */
+class RowHeightTest {
+    @Test
+    fun `a row holding a pile costs more height than a row of cards`() {
+        val cards = listOf(RowEntry.Single(permanentFor("b1")))
+        val pile = listOf(RowEntry.Pile(listOf(permanentFor("z1"), permanentFor("z2"))))
+
+        assertTrue(
+            "a pile fans downward and its turned half hangs below",
+            pile.heightInCards() > cards.heightInCards(),
+        )
+    }
+
+    @Test
+    fun `a row costs its tallest entry, not the sum of its entries`() {
+        // A row is a row: five cards side by side are one card tall.
+        val one = listOf(RowEntry.Single(permanentFor("b1")))
+        val five = (1..5).map { RowEntry.Single(permanentFor("b$it")) }
+
+        assertEquals(one.heightInCards(), five.heightInCards())
+    }
+
+    @Test
+    fun `an empty row costs nothing, which is the board's own rule`() {
+        assertEquals(0f, emptyList<RowEntry>().heightInCards())
+    }
+
+    private fun permanentFor(id: String) =
+        TablePermanent(
+            id = id,
+            role = PermanentRole.Creature,
+            state = magefree.designsystem.card.BoardCardState(card = magefree.designsystem.card.CardDisplay(name = id)),
         )
 }

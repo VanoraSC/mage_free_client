@@ -253,6 +253,15 @@ sealed interface RowEntry {
      */
     fun widthInCards(): Float = if (this is Pile) stackWidthInCards() else 1f
 
+    /**
+     * How tall this is, in card **widths** — the unit `StackShape` measures in.
+     *
+     * A pile is taller than a card: the fan staggers downward and the turned half hangs below. A
+     * layout that budgeted a card's height per row put the non-creature permanents off the bottom of
+     * the board the moment a pile appeared.
+     */
+    fun heightInCards(): Float = if (this is Pile) stackHeightInCards() else cardHeightInCards()
+
     /** A permanent on its own: every real card, and any token nothing matches. */
     data class Single(
         val permanent: TablePermanent,
@@ -769,3 +778,10 @@ internal val GameCard.shownToughness: String? get() = if (showsStats) toughness 
 
 private val GameCard.showsStats: Boolean
     get() = isCreature && !power.isNullOrBlank() && !toughness.isNullOrBlank()
+
+/**
+ * How tall a row of these is, in card widths — the tallest entry in it, or zero for an empty row.
+ *
+ * An empty row costs nothing, which is the board's own rule about regions that hold height.
+ */
+internal fun List<RowEntry>.heightInCards(): Float = maxOfOrNull { it.heightInCards() } ?: 0f

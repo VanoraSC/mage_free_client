@@ -110,6 +110,7 @@ internal fun LandStack(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onPress: ((LandStackHalf) -> Unit)?,
+    anchorModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     val geometry = LandStackGeometry(width)
@@ -136,6 +137,11 @@ internal fun LandStack(
                 .testTag(BattlefieldTestTags.stack(stack.inspectId)),
     ) {
         // Back to front, so the lowest and furthest right of each half is drawn on top.
+        // **The anchor goes on the front card, not on the pile.** An arrow measured against the whole
+        // fan leaves its bounding box — visibly out of the empty air beside the cards — because the
+        // box is a card and a half wide and holds the staggering as well. The front card is the one a
+        // player would point at, so it is the one an arrow leaves.
+        val anchoredHalf = if (turned > 0) LandStackHalf.Turned else LandStackHalf.Upright
         repeat(upright) { slot ->
             StackedCard(
                 stack = stack,
@@ -146,6 +152,8 @@ internal fun LandStack(
                 palette = palette,
                 artFor = artFor,
                 onPress = onPress?.let { press -> { press(LandStackHalf.Upright) } },
+                modifier =
+                    if (anchoredHalf == LandStackHalf.Upright && slot == upright - 1) anchorModifier else Modifier,
             )
         }
         // **The turned half continues the diagonal where the upright half stops**, so a card taps in
@@ -201,6 +209,12 @@ internal fun LandStack(
                 // A card in flight is not a target. Pressing where it *was* would act on a stack that
                 // has already changed underneath the finger.
                 onPress = if (newest) null else onPress?.let { press -> { press(LandStackHalf.Turned) } },
+                modifier =
+                    if (anchoredHalf == LandStackHalf.Turned && slot == firstTurnedSlot + turned - 1) {
+                        anchorModifier
+                    } else {
+                        Modifier
+                    },
             )
         }
 
@@ -280,6 +294,7 @@ private fun StackedCard(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onPress: (() -> Unit)?,
+    modifier: Modifier = Modifier,
 ) {
     // **Each half is drawn from its own copies.** The halves are interchangeable in everything the
     // stack's key compares, but not in the one signal the key deliberately ignores: an untapped land is
@@ -295,7 +310,7 @@ private fun StackedCard(
         }
     Box(
         modifier =
-            Modifier
+            modifier
                 .offset(x = centre.x - width / 2, y = centre.y - geometry.cardHeight / 2)
                 .requiredSize(width = width, height = geometry.cardHeight)
                 .graphicsLayer { rotationZ = TAPPED_TURN_DEGREES * turn },
@@ -497,3 +512,6 @@ enum class LandStackHalf {
     /** A turned copy: the strip below the upright cards, where a tapped one shows past them. */
     Turned,
 }
+
+/** One card's height, in card widths — the unit everything above measures in. */
+internal fun cardHeightInCards(): Float = StackShape.CARD_HEIGHT
