@@ -51,28 +51,50 @@ first.
 
 **In scope**
 - The vertical two-column rail: whose turn by side, phase by position.
+- **Stops per side**, and an end-step stop on both turns by default — see §5.
 - Both graveyards on the rail, each showing its top card.
 - A scrolling zone view, ordered, reachable from a graveyard's top card and from a zone count.
 - The render rule: zones with cards, plus exile always.
 
 **Out of scope**
-- The stops on the phase bar. They are 0115's and they move with the bar; how a stop is *marked* on a
-  vertical rail is a question this story has to answer, but what a stop **means** does not change.
+- **How a stop behaves once set.** That is 0115's and does not change: `Once` fires at the next
+  occurrence and clears, `Always` fires every time, and your own main phases stop regardless. What
+  changes here is *which side a mark applies to* — see §5.
 - Card sizes and row layout — see #213, which has three open regressions of its own.
 
-## 5. Open questions to settle before building
+## 5. The stops become per-side again — and that is the rail's doing
 
-- **Where do the stop marks go?** The horizontal bar puts a dot under a step. A vertical rail with two
-  columns has a different geometry, and the stop is per-step rather than per-side — so it cannot
-  simply live in one of the two columns without implying it applies to that side only, which 0115
-  established is not true.
-- **What does the rail do to the board's width?** The status rail already occupies the left. Two rails
-  side by side would take width from the battlefield, which is the thing 0112 spent the most effort
-  protecting. Whether the phase rail *replaces* the status rail's position, merges with it, or sits
-  outside it is a layout decision this story owns.
-- **Does the top card of a graveyard replace that zone's count in the status rail**, or sit beside it?
+**0115 merged the two sides, and this un-merges them.** That is a reversal, not a drift, and the reason
+is geometry. 0115's own words: *"the bar has one row and a row cannot say which side a mark belongs
+to"* — so a mark pressed on your turn silently set only your side, and a player had no way to see why
+the opponent's upkeep went past. Merging was the only honest thing a single row could do.
 
-## 6. Acceptance criteria
+**A two-column rail is a different shape, and it can say it.** Each column *is* a side. A mark in the
+left column means *stop here on their turn*; a mark in the right means *stop here on mine*. The thing
+that made the per-side model unreadable is exactly what the rail supplies.
+
+This also puts the client back in step with upstream, which was never merged:
+`UserSkipPrioritySteps` holds a `SkipPrioritySteps` per side natively, and 0115 has been sending the
+same set to both. That extra mapping goes away.
+
+**And the end step stops by default, on both turns.** Upstream defaults `endOfTurn` to `false` on both
+sides; this client will default it to `true` on both. It is the window a player most often wants and
+most often forgets to ask for, and one they lose a game to. **Disableable like any other stop** — it
+is a default, not a rule, which is what separates it from the two main phases (those are a rule, see
+`OWN_MAIN_PHASE_STOPS`).
+
+## 6. The other two questions, answered
+
+**The rail costs the board no width.** It is bounded by the width of the graveyard and the card-count
+display, which are already on the left. So this is a rearrangement of a column that exists rather than
+a new claim on the battlefield — which is what 0112 spent the most effort protecting.
+
+**The graveyard's top card does not replace the card counts.** Both are shown. The counts are the
+information; the top card is there so a graveyard looks like a graveyard — and so that a future story
+has somewhere to animate a card *going* to it. It earns its room by being the destination of a
+movement, not by carrying a number the counts already carry.
+
+## 7. Acceptance criteria
 
 - [ ] The phase rail is vertical, on the left, and has two columns.
 - [ ] The left column lights when it is an opponent's turn; the right when it is the player's.
@@ -82,4 +104,8 @@ first.
 - [ ] Pressing a graveyard opens a vertical scroll of its cards in the server's order, oldest last.
 - [ ] Pressing a zone count opens the same kind of view for that zone.
 - [ ] A zone with no cards is not drawn — except exile, which is always drawn.
-- [ ] Stops still work, and still read as belonging to a step rather than to a side.
+- [ ] A stop is set per side: the left column stops on an opponent's turn, the right on the player's.
+- [ ] Both sides stop at the end step by default, and either can be turned off.
+- [ ] Your own M1 and M2 still stop whatever the marks say — that is a rule, not a default.
+- [ ] The rail takes no width from the battlefield.
+- [ ] The zone counts are still shown, alongside the graveyard's top card.
