@@ -164,4 +164,30 @@ public data class SetPriorityStops(
     val yourTurn: PriorityStops = PriorityStops(),
     val opponentTurn: PriorityStops = PriorityStops(),
     val requestId: String? = null,
+    /**
+     * How much the **server** is allowed to answer on the player's behalf — upstream's
+     * `UserData.autoTargetLevel`, which its own preferences dialog calls Off / Most / All
+     * (`AUTO_TARGET_DISABLE = 0`, `AUTO_TARGET_NON_FEEL_BAD = 1`, `AUTO_TARGET_ALL = 2`).
+     *
+     * **Zero, and it matters more than it looks.** `TargetImpl.tryToAutoChoose` picks for the player —
+     * and never fires the event, so the client is never asked — whenever min equals max, the candidate
+     * count equals the number to pick, and this is above zero. Upstream defaults it to `1`, which is
+     * why a turn-1 Inquisition of Kozilek took a card without ever showing the hand it revealed: one
+     * legal target, so the server answered.
+     *
+     * Defaulted rather than required so an older peer sending nothing lands on upstream's own value
+     * rather than silently changing a preference it never mentioned.
+     */
+    val autoTargetLevel: Int = UPSTREAM_AUTO_TARGET_DEFAULT,
 ) : ClientMessage
+
+/**
+ * Upstream's own default for `autoTargetLevel` — *Most*, from `UserData.getDefaultUserDataView()`.
+ *
+ * Named so that "the peer said nothing" and "the peer asked for Most" are the same value on purpose
+ * rather than by coincidence.
+ */
+public const val UPSTREAM_AUTO_TARGET_DEFAULT: Int = 1
+
+/** *Off*: the server answers nothing on the player's behalf. `Constants.AUTO_TARGET_DISABLE`. */
+public const val AUTO_TARGET_OFF: Int = 0

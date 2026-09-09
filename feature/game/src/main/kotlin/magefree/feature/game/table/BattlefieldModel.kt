@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import magefree.cards.art.CardArtFace
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
+import magefree.cards.art.cardBackRequest
+import magefree.cards.art.faceDownArtRequest
 import magefree.cards.art.tokenArtRequest
 import magefree.designsystem.card.BoardAttachment
 import magefree.designsystem.card.BoardBadge
@@ -573,7 +575,16 @@ private fun roleOf(card: GameCard): PermanentRole =
  * [CardArtFace] is asked for.
  */
 internal fun artRequestOf(card: GameCard): CardArtRequest? {
-    if (card.isFaceDown) return null
+    // **A face-down permanent has a picture, and which one says what it is.** Morph, manifest, cloak,
+    // disguise and foretell are five different things a player must tell apart at a glance — what may
+    // be turned up, for how much, and by whom — and Magic prints a distinct helper card for each.
+    // Drawing all five as one blank was the board declining to say something the server had told it.
+    // `GameCard.imageName` is upstream's own name for the kind; the printings are upstream's too.
+    if (card.isFaceDown) {
+        return card.imageName
+            ?.let { faceDownArtRequest(it, CardArtSize.ART_CROP) }
+            ?: cardBackRequest(CardArtSize.ART_CROP)
+    }
     val set = card.setCode?.takeIf { it.isNotBlank() } ?: return null
     if (card.isToken) return tokenArtRequest(setCode = set, name = card.name, size = CardArtSize.ART_CROP)
     val number = card.collectorNumber?.takeIf { it.isNotBlank() } ?: return null
@@ -660,6 +671,9 @@ private fun boardCardState(
         // The server's own answer, and drawn only on creatures: it is true of any permanent that
         // arrived this turn, but it is a *creature* that a player is about to try to attack with.
         hasSummoningSickness = permanent.hasSummoningSickness && card.isCreature,
+        // A morph or a manifest is drawn as the whole helper card, with no name band — see
+        // [BoardCardState.isFaceDown]. The server's own answer, never inferred from a blank name.
+        isFaceDown = card.isFaceDown,
     )
 }
 

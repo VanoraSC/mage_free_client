@@ -131,6 +131,7 @@ fun BattlefieldLayout(
     onExpandVitals: ((TableVitals) -> Unit)? = null,
     lifeTotals: LifeTotals = LifeTotals(opponents = emptyList(), viewer = null),
     onPickPlayer: ((String) -> Unit)? = null,
+    opponentHand: KnownHand = KnownHand(),
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
     stack: List<TableStackObject> = emptyList(),
@@ -201,6 +202,18 @@ fun BattlefieldLayout(
                 }
 
                 Column(modifier = Modifier.fillMaxSize()) {
+                    // **Their hand, along their own edge.** Mirrored exactly as the battlefields are,
+                    // so how many cards they are holding is something read rather than looked up. It
+                    // hangs off the top for the reason the viewer's hangs off the bottom: only the part
+                    // carrying the name is worth the room. See [OpponentHandRegion].
+                    OpponentHandRegion(
+                        hand = opponentHand,
+                        tileWidth = handTile,
+                        artFor = artFor,
+                        onInspect = onInspect,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
                     // The two board columns share what is left above the hand. `weight` rather than the
                     // measured `contentHeight`, so the arithmetic that sized the cards can be an estimate
                     // without the layout inheriting its error.
@@ -546,7 +559,9 @@ private fun PermanentRow(
                             // On the front *card*, not on the pile: the pile's box is a card and a
                             // half wide and holds the staggering too, so an arrow measured against it
                             // left visibly empty air beside the cards.
-                            anchorModifier = anchors.anchorModifier(entry.permanents.first().id),
+                            // Every member, not just the front one: a pile draws them all in one
+                            // place, and a member anchored where it used to be drew an arrow from there.
+                            anchorModifier = anchors.anchorModifier(entry.permanents.map { it.id }),
                         )
                 }
             }

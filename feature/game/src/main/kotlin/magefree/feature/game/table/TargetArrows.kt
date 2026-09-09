@@ -56,10 +56,14 @@ internal fun TargetArrows(
                 anchors.boxOf(targetId)?.let { Arrow(from = from, to = it, color = ArrowColor) }
             }
         } + combatArrows(combat, anchors)
-    if (arrows.isEmpty()) return
+    // **Deduplicated, because a pile is one place.** Two attackers in one pile are two pairings and
+    // one line: drawing both puts two identical arrows on the same pixels, which reads as a thicker
+    // arrow rather than as two, and is a lie either way.
+    val drawn = arrows.distinct()
+    if (drawn.isEmpty()) return
 
     Canvas(modifier = modifier) {
-        arrows.forEach { arrow -> drawArrow(from = arrow.from, to = arrow.to, color = arrow.color) }
+        drawn.forEach { arrow -> drawArrow(from = arrow.from, to = arrow.to, color = arrow.color) }
     }
 }
 

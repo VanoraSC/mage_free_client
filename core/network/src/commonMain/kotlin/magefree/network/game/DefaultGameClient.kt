@@ -17,6 +17,7 @@ import magefree.model.ConnectionState
 import magefree.network.BridgeClient
 import magefree.network.BridgeSessionUnavailable
 import magefree.network.ServerPushSource
+import magefree.protocol.AUTO_TARGET_OFF
 import magefree.protocol.GameActionResult
 import magefree.protocol.GameFailureCode
 import magefree.protocol.GamePrompted
@@ -105,7 +106,14 @@ internal class DefaultGameClient(
             // Told, not asked: the bridge applies it to the live upstream user and has nothing to
             // report back. Whether the server then stops is visible only as a prompt arriving.
             bridgeClient.send(
-                SetPriorityStops(yourTurn = yourTurn.wire(), opponentTurn = opponentTurn.wire()),
+                SetPriorityStops(
+                    yourTurn = yourTurn.wire(),
+                    opponentTurn = opponentTurn.wire(),
+                    // **The server answers nothing on the player's behalf.** `tryToAutoChoose` picks a
+                    // single-candidate choice and never fires the event, so the client is not asked —
+                    // which is how a turn-1 Inquisition took a card without showing the hand.
+                    autoTargetLevel = AUTO_TARGET_OFF,
+                ),
             )
         }
 

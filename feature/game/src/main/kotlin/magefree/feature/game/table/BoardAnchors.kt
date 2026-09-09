@@ -64,6 +64,23 @@ class BoardAnchors {
             if (boxes[id] != box) boxes[id] = box
         }
 
+    /**
+     * Reports one box as the place *every* one of [ids] is drawn.
+     *
+     * **For a pile, which draws several permanents in one place.** Anchoring only the front card left
+     * every other member holding whatever box it had before it was piled — and those boxes are never
+     * pruned, so a second attacker inside a pile drew its arrow from where it used to be. That is a
+     * stray red line on a real board, and it is what this exists to stop: a permanent the board draws
+     * *somewhere* must not be anchored *elsewhere*.
+     */
+    fun anchorModifier(ids: Collection<String>): Modifier =
+        Modifier.onGloballyPositioned { coordinates ->
+            val space = root ?: return@onGloballyPositioned
+            if (!coordinates.isAttached) return@onGloballyPositioned
+            val box = space.localBoundingBoxOf(coordinates, clipBounds = false)
+            ids.forEach { id -> if (boxes[id] != box) boxes[id] = box }
+        }
+
     /** Where [id] is drawn, or `null` for an object the board is not drawing. */
     fun boxOf(id: String): Rect? = boxes[id]
 

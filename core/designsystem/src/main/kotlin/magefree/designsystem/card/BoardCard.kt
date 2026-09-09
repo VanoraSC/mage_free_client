@@ -299,6 +299,19 @@ data class BoardCardState(
      * affordance — and every information colour on this board means something is happening.
      */
     val hasSummoningSickness: Boolean = false,
+    /**
+     * Whether this is drawn face down — a card back, a morph, a manifest.
+     *
+     * **The picture is a whole card, so it is drawn as one.** Every other card here shows an *art
+     * crop* — the illustration alone, in a 4:3 box under a title bar — because that is what the Board
+     * tier asks Scryfall for. A back has no illustration to crop out of it: the image *is* the card,
+     * frame and all. Put in the art box it was squeezed into the wrong shape and cut off at one end.
+     *
+     * So it fills the whole face and is centre-cropped, losing a little top and bottom evenly, and
+     * the title bar is not drawn at all — a face-down card has no name to put in one, and an empty
+     * band above it is a strip of white that says nothing.
+     */
+    val isFaceDown: Boolean = false,
 )
 
 /**
@@ -568,7 +581,13 @@ private fun HostCard(
             Column(modifier = Modifier.fillMaxSize().padding(CardBorderWidth)) {
                 // The title bar takes what the square leaves over the art — which is where a real card
                 // puts its name and cost, and roughly the share of the card it gives them.
-                CardTitleBar(card = state.card, modifier = Modifier.fillMaxWidth().weight(1f))
+                //
+                // **Except face down, which has no name.** See [BoardCardState.isFaceDown]: an empty
+                // band above a card back is a strip of white saying nothing, and the picture below it
+                // is a whole card rather than an illustration, so it wants the whole face.
+                if (!state.isFaceDown) {
+                    CardTitleBar(card = state.card, modifier = Modifier.fillMaxWidth().weight(1f))
+                }
 
                 // **The art, and nothing but the art.** This tier asks for [CardArtSize.ART_CROP] —
                 // the illustration on its own — so there is no frame here to cut off and no clipping
@@ -586,7 +605,9 @@ private fun HostCard(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .aspectRatio(CARD_ART_ASPECT_RATIO)
+                            // Face down fills the whole face and centre-crops: the picture is a whole
+                            // card, not an illustration, so a 4:3 art box is the wrong shape for it.
+                            .then(if (state.isFaceDown) Modifier.fillMaxSize() else Modifier.aspectRatio(CARD_ART_ASPECT_RATIO))
                             .clip(BoardArtShape)
                             .testTag(BoardCardTestTags.ART),
                 ) {

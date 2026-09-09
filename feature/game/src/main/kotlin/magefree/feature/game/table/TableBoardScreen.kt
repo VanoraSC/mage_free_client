@@ -161,6 +161,10 @@ fun TableBoardScreen(
                 // prompt whose candidates are permanents draws a board indistinguishable from one with
                 // nothing pending — see `PromptPicks`.
                 val picks = controls.boardPicks()
+                // What this client has been shown, kept across snapshots because the server clears
+                // its reveals on the next update and will not say it twice. See [KnownHand].
+                val seenCards = uiState.seenCards
+
                 BattlefieldLayout(
                     model = battlefieldModel(snapshot, picks),
                     // What the board is about, which decides which signal a card emphasises. Combat
@@ -175,6 +179,13 @@ fun TableBoardScreen(
                     // that is them. Their id is what upstream targets them by, so it is sent as-is.
                     lifeTotals = lifeTotals(vitals, picks),
                     onPickPlayer = { playerId -> onAction(BoardAction.ChooseTarget(playerId)) },
+                    // What has been seen of the one opponent's hand, drawn along their own edge.
+                    // Empty for a multiplayer game, where the inference does not hold — see [KnownHand].
+                    opponentHand =
+                        snapshot.players
+                            .firstOrNull { !it.isViewer }
+                            ?.let { seenCards.knownHandFor(snapshot, it.playerId) }
+                            ?: KnownHand(),
                     phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
                     stack = tableStack(snapshot),
                     combat = snapshot.combat,
@@ -207,7 +218,7 @@ fun TableBoardScreen(
                     PlayerOverlay(
                         vitals = seat,
                         onDismiss = { expandedSeat = null },
-                        zones = tableZones(snapshot, picks).filter { it.playerId == seat.playerId },
+                        zones = tableZones(snapshot, picks, seenCards).filter { it.playerId == seat.playerId },
                         artFor = artFor,
                         // A card read out of a pile opens the same detail as a card on the
                         // battlefield, so a target the server offered from a graveyard is answerable
