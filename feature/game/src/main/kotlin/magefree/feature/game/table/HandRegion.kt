@@ -74,6 +74,7 @@ fun HandRegion(
     onPlay: ((String) -> Unit)? = null,
     onInspect: ((String) -> Unit)? = null,
     elsewhere: List<TableCard> = emptyList(),
+    anchors: BoardAnchors? = null,
 ) {
     if (cards.isEmpty() && elsewhere.isEmpty()) return
 
@@ -107,6 +108,7 @@ fun HandRegion(
                 artFor = artFor,
                 onPlay = onPlay,
                 onInspect = onInspect,
+                anchors = anchors,
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
@@ -166,7 +168,13 @@ fun HandRegion(
                     art = artFor?.invoke(card.boardArt, card.card),
                     onTap = { onPlay?.invoke(card.id) },
                     onLongPress = onInspect?.let { inspect -> { inspect(card.id) } },
-                    modifier = Modifier.testTag(HandTestTags.card(card.id)),
+                    // Where this card is, so casting it can be drawn as the card travelling to the
+                    // stack. The anchors keep the box after the card has gone, which is what makes
+                    // the origin available at the moment it is needed — see [CardFlights].
+                    modifier =
+                        Modifier
+                            .then(anchors?.anchorModifier(handAnchorId(card.id)) ?: Modifier)
+                            .testTag(HandTestTags.card(card.id)),
                 )
             }
         }
@@ -201,6 +209,7 @@ private fun ElsewhereCard(
     artFor: TableArtResolver?,
     onPlay: ((String) -> Unit)?,
     onInspect: ((String) -> Unit)?,
+    anchors: BoardAnchors?,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -210,7 +219,10 @@ private fun ElsewhereCard(
             art = artFor?.invoke(card.boardArt, card.card),
             onTap = { onPlay?.invoke(card.id) },
             onLongPress = onInspect?.let { inspect -> { inspect(card.id) } },
-            modifier = Modifier.testTag(HandTestTags.card(card.id)),
+            modifier =
+                Modifier
+                    .then(anchors?.anchorModifier(handAnchorId(card.id)) ?: Modifier)
+                    .testTag(HandTestTags.card(card.id)),
         )
 
         // Which pile it is in, on the card. The gap says *not in hand*; this says *where*, which is

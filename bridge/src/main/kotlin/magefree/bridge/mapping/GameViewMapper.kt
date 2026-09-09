@@ -397,6 +397,10 @@ public object GameViewMapper {
             name = displayName(card),
             setCode = setCode(card),
             collectorNumber = collectorNumber(card),
+            // Where an ability on the stack came from. The same nested `sourceCard` [displayName] and
+            // [setCode] already read — its id is the permanent the ability was activated from, which is
+            // the object the board animates the ability out of.
+            sourceId = sourceCardOf(card)?.id?.toString(),
             manaCost = text { card.manaCostStr }.orNullIfBlank(),
             typeLine = text { card.typeText }?.trim().orNullIfBlank(),
             power = card.power.orNullIfBlank(),

@@ -294,6 +294,13 @@ data class GameCard(
     val transformed: Boolean = false,
     val targets: List<String> = emptyList(),
     val isToken: Boolean = false,
+    /**
+     * For an ability on the stack, the object it was activated from; null for everything else.
+     *
+     * The board animates a copy of that object into the stack, which is what upstream's own client
+     * does more bluntly — it replaces the ability view with its `sourceCard` outright.
+     */
+    val sourceId: String? = null,
     val objectType: MageObjectType = MageObjectType.Unknown,
     val icons: List<GameCardIcon> = emptyList(),
 )
