@@ -671,6 +671,9 @@ private fun boardCardState(
         // The server's own answer, and drawn only on creatures: it is true of any permanent that
         // arrived this turn, but it is a *creature* that a player is about to try to attack with.
         hasSummoningSickness = permanent.hasSummoningSickness && card.isCreature,
+        // A morph or a manifest is drawn as the whole helper card, with no name band — see
+        // [BoardCardState.isFaceDown]. The server's own answer, never inferred from a blank name.
+        isFaceDown = card.isFaceDown,
     )
 }
 

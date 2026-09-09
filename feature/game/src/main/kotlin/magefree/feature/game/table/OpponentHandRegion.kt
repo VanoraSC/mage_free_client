@@ -106,7 +106,7 @@ private fun CardBack(
 ) {
     val blank = CardDisplay(name = "")
     BoardCard(
-        state = BoardCardState(card = blank),
+        state = BoardCardState(card = blank, isFaceDown = true),
         width = width,
         art = artFor?.invoke(cardBackRequest(CardArtSize.SMALL), blank),
         modifier = modifier,
