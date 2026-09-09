@@ -1,11 +1,5 @@
 package magefree.feature.game.table
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import magefree.network.game.GameState
 
 /*
@@ -119,20 +113,3 @@ private fun GameState.visibleCardIds(): Set<String> =
             player.exile.forEach { add(it.id) }
         }
     }
-
-/** The fold, held for the life of one board. */
-@Stable
-class SeenCardsTracker {
-    var seen: SeenCards by mutableStateOf(SeenCards())
-        private set
-
-    /** Folds one snapshot in. Idempotent for a snapshot that reveals nothing and moves nothing. */
-    fun observe(state: GameState) {
-        val next = seen.fold(state)
-        if (next != seen) seen = next
-    }
-}
-
-/** One tracker per board, remembered across recompositions. */
-@Composable
-fun rememberSeenCards(): SeenCardsTracker = remember { SeenCardsTracker() }

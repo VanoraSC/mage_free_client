@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import magefree.cards.CardCatalog
 import magefree.cards.art.CardArtFace
+import magefree.feature.game.table.SeenCards
+import magefree.feature.game.table.fold
 import magefree.network.game.GameClient
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
@@ -121,6 +123,17 @@ data class GameBoardUiState(
      * to both, rather than two that could disagree about what is set.
      */
     val stops: BoardStops = BoardStops(),
+    /**
+     * What this client has been shown, folded across **every** snapshot.
+     *
+     * **It lives here rather than in the composition, and that is the whole fix.** A reveal exists in
+     * exactly the snapshot that carries it — `GameImpl` clears it on the next update — and a
+     * `StateFlow` conflates, so a board that folded during composition never saw a reveal that was
+     * superseded before the next frame. That is precisely an Inquisition of Kozilek with no legal
+     * target: the server reveals, asks nothing, and the next update wipes it. Folding in `onSnapshot`
+     * sees every emission, because that is what `onEach` on the flow means.
+     */
+    val seenCards: SeenCards = SeenCards(),
 )
 
 /**
@@ -302,6 +315,11 @@ class GameBoardViewModel
                     // it — otherwise a refusal, or a connection that blinked and healed, stays on
                     // screen indefinitely, attached to a prompt it has nothing to do with.
                     actionError = if (promptChanged) null else previous.actionError,
+                    // **Folded here, not in the composition.** A reveal lives in one snapshot and the
+                    // server wipes it on the next update; a `StateFlow` conflates, so a board that
+                    // folded while composing missed any reveal superseded before the next frame — an
+                    // Inquisition with no legal target reveals, asks nothing, and is gone.
+                    seenCards = previous.seenCards.fold(state),
                 )
 
             // The one place the app decides *when* to answer a priority prompt. Asked once per
