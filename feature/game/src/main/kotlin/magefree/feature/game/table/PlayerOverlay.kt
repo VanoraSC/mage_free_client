@@ -236,6 +236,18 @@ private fun ZoneColumn(
                     modifier = Modifier.testTag(PlayerOverlayTestTags.card(card.id)),
                 )
             }
+
+            // **A hand can be partly known, and both halves have to show.** An opponent whose hand you
+            // have seen two cards of has two cards and a number, not one or the other — this branch
+            // used to be unreachable because the count was only drawn for a pile with nothing in it.
+            if (zone.hidden > 0) {
+                Text(
+                    text = hiddenMessage(zone.hidden),
+                    style = BoardTypography.annotation,
+                    color = BoardSurface.onSurfaceMuted,
+                    modifier = Modifier.testTag(PlayerOverlayTestTags.hidden(zone.kind)),
+                )
+            }
         }
     }
 }
@@ -280,6 +292,9 @@ object PlayerOverlayTestTags {
 
     /** What a column says when its pile is empty. */
     fun empty(kind: TableZoneKind): String = "player-overlay-empty-${kind.name}"
+
+    /** The "and N you have not been shown" line, beside whatever *is* known. */
+    fun hidden(kind: TableZoneKind): String = "player-overlay-hidden-${kind.name}"
 
     /** One card in one of the columns, by its server object id. */
     fun card(cardId: String): String = "player-overlay-card-$cardId"

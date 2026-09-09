@@ -161,6 +161,10 @@ fun TableBoardScreen(
                 // prompt whose candidates are permanents draws a board indistinguishable from one with
                 // nothing pending — see `PromptPicks`.
                 val picks = controls.boardPicks()
+                // What this client has been shown, kept across snapshots because the server clears
+                // its reveals on the next update and will not say it twice. See [KnownHand].
+                val seenCards = rememberSeenCards()
+                seenCards.observe(snapshot)
                 BattlefieldLayout(
                     model = battlefieldModel(snapshot, picks),
                     // What the board is about, which decides which signal a card emphasises. Combat
@@ -207,7 +211,7 @@ fun TableBoardScreen(
                     PlayerOverlay(
                         vitals = seat,
                         onDismiss = { expandedSeat = null },
-                        zones = tableZones(snapshot, picks).filter { it.playerId == seat.playerId },
+                        zones = tableZones(snapshot, picks, seenCards.seen).filter { it.playerId == seat.playerId },
                         artFor = artFor,
                         // A card read out of a pile opens the same detail as a card on the
                         // battlefield, so a target the server offered from a graveyard is answerable

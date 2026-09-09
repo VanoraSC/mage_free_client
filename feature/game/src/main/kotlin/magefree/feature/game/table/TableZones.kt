@@ -116,6 +116,7 @@ data class TableZonePile(
 fun tableZones(
     state: GameState,
     picks: PromptPicks = PromptPicks(),
+    seen: SeenCards = SeenCards(),
 ): List<TableZonePile> {
     val special = specialExileIds(state)
     val revealed = revealedCards(state, picks)
@@ -130,14 +131,33 @@ fun tableZones(
                     kind = TableZoneKind.Hand,
                     // Only the viewer's own. Every other seat sends a count and no cards, which is
                     // what a hand is.
-                    cards = if (player.isViewer) handCards(state, picks) else emptyList(),
-                    hidden = if (player.isViewer) 0 else player.handCount,
+                    // **An opponent's hand is what you have been shown of it, and a count for the
+                    // rest.** The server sends only the count; everything face-up here is a card it
+                    // revealed to this client at some point and that has not been seen anywhere since.
+                    // See [KnownHand] — including why it answers for one opponent and not for several.
+                    cards =
+                        if (player.isViewer) {
+                            handCards(state, picks)
+                        } else {
+                            seen.knownHandFor(state, player.playerId)?.cards.orEmpty()
+                        },
+                    hidden =
+                        if (player.isViewer) {
+                            0
+                        } else {
+                            seen.knownHandFor(state, player.playerId)?.hidden ?: player.handCount
+                        },
                 ),
                 TableZonePile(
                     playerId = player.playerId,
                     isViewer = player.isViewer,
                     kind = TableZoneKind.Revealed,
-                    cards = revealed,
+                    // **The viewer's own window, and nowhere else.** `GameView.revealed` is built for
+                    // the seat the view was made for, so it is *what this client has been shown* —
+                    // which is a fact about the viewer, not about the seat whose window it happened to
+                    // be drawn in. Repeated under every seat it read as "their reveals", which the
+                    // wire never said and which is wrong the moment a reveal came off a library.
+                    cards = if (player.isViewer) revealed else emptyList(),
                 ),
                 TableZonePile(
                     playerId = player.playerId,

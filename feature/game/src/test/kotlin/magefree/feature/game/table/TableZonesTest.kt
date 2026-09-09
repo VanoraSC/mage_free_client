@@ -85,18 +85,21 @@ class TableZonesTest {
     }
 
     @Test
-    fun `what has been revealed is one pile, on every seat`() {
-        // `RevealedView` carries a name and cards and no player id — upstream names a reveal after the
-        // *effect* that caused it — so the board shows what has been seen and does not claim whose it
-        // was. Saying "their hand" would be asserting something the server never sent.
+    fun `what has been revealed belongs to the viewer's own window, and nowhere else`() {
+        // `GameView.revealed` is built for the seat the view was made for, so it is *what this client
+        // has been shown* — a fact about the viewer, not about the seat whose window it is drawn in.
+        // Repeated under every seat it read as "their reveals", which the wire never said and which is
+        // wrong the moment a reveal came off a library.
         val zones = tableZones(state())
 
-        listOf("me", "them").forEach { seat ->
-            assertEquals(
-                listOf("rev-duress"),
-                zones.first { it.playerId == seat && it.kind == TableZoneKind.Revealed }.cards.map { it.id },
-            )
-        }
+        assertEquals(
+            listOf("rev-duress"),
+            zones.first { it.playerId == "me" && it.kind == TableZoneKind.Revealed }.cards.map { it.id },
+        )
+        assertEquals(
+            emptyList<String>(),
+            zones.first { it.playerId == "them" && it.kind == TableZoneKind.Revealed }.cards.map { it.id },
+        )
     }
 
     @Test
