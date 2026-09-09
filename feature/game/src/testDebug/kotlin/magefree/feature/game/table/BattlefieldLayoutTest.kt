@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -437,6 +438,30 @@ class BattlefieldLayoutTest {
         composeTestRule.onNodeWithTag(LifeTotalTestTags.total("me")).performClick()
 
         assertEquals("the stack layer is over the board and taking its presses", listOf("me"), picked)
+    }
+
+    @Test
+    fun `show battlefield takes the stack with it`() {
+        // The stack is the one layer left over the board once the panel is gone, and what it covers is
+        // exactly what the control was pressed to reach: a permanent the question is about. One
+        // control, two states — the battlefield, or the question.
+        val visible = mutableStateOf(true)
+        composeTestRule.setContent {
+            MageTheme {
+                BattlefieldLayout(
+                    model = battlefieldModel(oneSided("me", listOf(bears()))),
+                    stack = listOf(thoughtseize()),
+                    stackVisible = visible.value,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag(StackTestTags.REGION).assertExists()
+
+        visible.value = false
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag(StackTestTags.REGION).assertDoesNotExist()
     }
 
     @Test

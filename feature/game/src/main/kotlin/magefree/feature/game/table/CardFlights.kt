@@ -63,34 +63,64 @@ internal data class CardFlight(
  * Kept across recompositions so a flight survives the snapshots that arrive while it is running, and
  * so an object already on the stack is never flown twice — an arrival is *new to the stack*, which is
  * a fact about the previous stack rather than about the current one.
+ *
+ * @param visible whether the stack is being drawn. With it hidden — *Show battlefield* — an arrival
+ *   has nowhere to land: [BoardAnchors] does not prune, so the box for an undrawn object is wherever
+ *   it was last drawn, and a card would be flown to a place with nothing in it. The arrivals are still
+ *   *recorded*, so a spell that landed while the board was clear does not fly in a second time when
+ *   the stack comes back.
  */
 @Composable
 internal fun rememberCardFlights(
     stack: List<TableStackObject>,
     anchors: BoardAnchors,
+    visible: Boolean = true,
 ): List<CardFlight> {
     var known by remember { mutableStateOf(emptySet<String>()) }
+    var arriving by remember { mutableStateOf(emptyList<TableStackObject>()) }
     var flights by remember { mutableStateOf(emptyList<CardFlight>()) }
 
     val onStack = stack.map { it.id }.toSet()
     if (onStack != known) {
-        val arrived = stack.filter { it.id !in known }
+        val arrived = if (visible) stack.filter { it.id !in known } else emptyList()
         known = onStack
-        flights =
-            // A flight whose object has already left the stack is dropped: a spell that resolved
-            // before its own animation finished has nowhere left to land.
-            flights.filter { it.id in onStack } +
-            arrived.mapNotNull { entry ->
-                val to = anchors.boxOf(entry.id) ?: return@mapNotNull null
-                // A spell was in hand under its own id; an ability was never anywhere, and comes out
-                // of the permanent that produced it. The hand is tried first, because a card cast
-                // from hand is the case a player sees most.
-                val from =
-                    anchors.boxOf(handAnchorId(entry.id))
-                        ?: entry.sourceId?.let(anchors::boxOf)
-                        ?: return@mapNotNull null
-                if (from == to) null else CardFlight(id = entry.id, entry = entry, from = from, to = to)
+        // A flight — or an arrival still waiting for one — whose object has already left the stack is
+        // dropped: a spell that resolved before its own animation finished has nowhere left to land.
+        flights = flights.filter { it.id in onStack }
+        arriving = arriving.filter { it.id in onStack } + arrived
+    }
+
+    // **An arrival waits for its own destination to be measured.** This is where flights failed
+    // outright: `to` is where the card is going, and on the composition that first sees an object on
+    // the stack that card has not been laid out yet — [BoardAnchors] is written from
+    // `onGloballyPositioned`, which runs after. So every arrival resolved to a null destination and
+    // was thrown away, while `known` had already absorbed its id, and no card ever flew. The test
+    // could not see it: it placed both anchors before changing the stack, which is the one order a
+    // real board never produces.
+    //
+    // Holding it costs nothing and needs no effect — the anchors are snapshot state, so the box being
+    // written *is* the recomposition that resolves this.
+    if (arriving.isNotEmpty()) {
+        val stillArriving = mutableListOf<TableStackObject>()
+        val started = mutableListOf<CardFlight>()
+        arriving.forEach { entry ->
+            val to = anchors.boxOf(entry.id)
+            if (to == null) {
+                stillArriving += entry
+                return@forEach
             }
+            // A spell was in hand under its own id; an ability was never anywhere, and comes out of
+            // the permanent that produced it. The hand is tried first, because a card cast from hand
+            // is the case a player sees most. Neither: the board never measured an origin — an
+            // opponent's card out of a hand this client cannot see — and there is no flight to draw.
+            // That is settled once the destination is known, so it stops waiting either way.
+            val from = anchors.boxOf(handAnchorId(entry.id)) ?: entry.sourceId?.let(anchors::boxOf)
+            if (from != null && from != to) started += CardFlight(id = entry.id, entry = entry, from = from, to = to)
+        }
+        if (started.isNotEmpty() || stillArriving.size != arriving.size) {
+            flights = flights + started
+            arriving = stillArriving
+        }
     }
     return flights
 }

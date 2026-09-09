@@ -64,6 +64,27 @@ class CardFlightsTest {
     }
 
     @Test
+    fun `a spell still flies when its destination is only measured after it arrives`() {
+        // **The order a real board produces, and it is why no card ever flew.** An object is on the
+        // stack in the snapshot *before* it has been laid out there — [BoardAnchors] is written from
+        // `onGloballyPositioned`, which runs after composition — so on the composition that first sees
+        // the arrival there is no destination yet. It was dropped, with its id already recorded as
+        // known, and nothing was ever flown on a real board while every test here passed: each of them
+        // places both anchors before touching the stack, which is the one order the board never does.
+        anchors.placeForTest(handAnchorId("spell-1"), from())
+        show()
+
+        stack.value = listOf(entry("spell-1"))
+        composeTestRule.waitForIdle()
+        assertEquals("there is nowhere to fly to yet", emptyList<String>(), seen.map { it.id })
+
+        anchors.placeForTest("spell-1", to())
+        composeTestRule.waitForIdle()
+
+        assertEquals("the arrival was still waiting for its destination", listOf("spell-1"), seen.map { it.id })
+    }
+
+    @Test
     fun `an ability flies from the permanent that produced it`() {
         // An ability has no continuity with anything the player has seen — its id is new. `sourceId` is
         // upstream's own `sourceCard.getId()`, the permanent on the battlefield.

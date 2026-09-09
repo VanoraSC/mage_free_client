@@ -111,6 +111,10 @@ import magefree.network.game.CombatGroup
  * @param onToggleStop invoked when a stoppable step is pressed.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
+ * @param stackVisible whether to draw the stack at all. False is *Show battlefield* — the layer is a
+ *   layer, and the one thing it can still cover is a permanent the player is being asked to pick. The
+ *   stack is passed either way rather than emptied, so the animation host does not see a spell it has
+ *   already flown in arrive a second time when the panel comes back.
  * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
  *   because a stack is two affordances rather than one — the upright copies are the card you would pick
  *   up, and the turned ones are the cards already lying down — and what each *means* is a question
@@ -135,6 +139,7 @@ fun BattlefieldLayout(
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
     stack: List<TableStackObject> = emptyList(),
+    stackVisible: Boolean = true,
     combat: List<CombatGroup> = emptyList(),
 ) {
     val palette = rememberCounterPalette()
@@ -328,7 +333,7 @@ fun BattlefieldLayout(
             // Floating costs nothing it was buying: it still lands on the centre line, where a table
             // puts it and where the arrows have the shortest way to go. It simply stops changing the
             // size of everything else while it is there.
-            if (stack.isNotEmpty()) {
+            if (stackVisible && stack.isNotEmpty()) {
                 StackRegion(
                     stack = stack,
                     cardWidth = cardWidth,
@@ -347,13 +352,21 @@ fun BattlefieldLayout(
             // **Over everything, and touching nothing.** The arrows are drawn last so they are not covered
             // by the cards they run between, and the `Canvas` takes no pointer input, so the cards
             // underneath answer a press exactly as they did before there were arrows.
-            TargetArrows(stack = stack, anchors = anchors, combat = combat, modifier = Modifier.fillMaxSize())
+            // **An object that is not drawn has nothing to draw an arrow from.** [BoardAnchors] does
+            // not prune, so with the stack hidden its ids still answer with the box they last had —
+            // and the arrow would come out of empty air on the board the player just asked to see.
+            TargetArrows(
+                stack = if (stackVisible) stack else emptyList(),
+                anchors = anchors,
+                combat = combat,
+                modifier = Modifier.fillMaxSize(),
+            )
 
             // **A card arriving on the stack, drawn travelling.** Above the arrows and above the cards,
             // because it is the one thing on the board that is momentarily more important than either;
             // it lands exactly on the stack card that is already drawn underneath it and then stops
             // existing, so nothing here is load-bearing for correctness — see [CardFlights].
-            val flights = rememberCardFlights(stack = stack, anchors = anchors)
+            val flights = rememberCardFlights(stack = stack, anchors = anchors, visible = stackVisible)
             val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
             CardFlightOverlay(
                 flights = flights.filterNot { it.id in landed.value },

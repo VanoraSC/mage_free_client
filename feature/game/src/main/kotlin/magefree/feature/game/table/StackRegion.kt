@@ -1,5 +1,6 @@
 package magefree.feature.game.table
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,8 +8,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -92,10 +95,21 @@ internal fun StackRegion(
     // arrow canvas does not. What answers a press is the stack, where the stack actually is.
     val objectHeight = cardWidth / BOARD_CARD_ASPECT_RATIO
 
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    // **Against the right edge, because the left half is the contested one.** The lands are in the
+    // left corner and the creature rows pack toward the centre from there, so a layer over the middle
+    // of the board covers the cards a player is most often trying to reach. The right is the quiet
+    // half. It stays on the centre line vertically, which is where the arrows have the shortest way
+    // to go and where a table puts the stack.
+    Box(modifier = modifier, contentAlignment = Alignment.CenterEnd) {
         Row(
             modifier =
                 Modifier
+                    // **Opaque, because it is a layer and not a card on the table.** Drawn straight
+                    // onto the board it read as a permanent that had wandered into the middle, and the
+                    // rules text beside it was laid over whatever was underneath. `floating` is the
+                    // board's own value for a layer over the board — the token names the stack itself.
+                    .background(BoardSurface.floating, PanelShape)
+                    .padding(PanelPadding)
                     .height(objectHeight)
                     .horizontalScroll(rememberScrollState())
                     .testTag(StackTestTags.REGION),
@@ -168,3 +182,9 @@ private val LineGap = 2.dp
  * narrow enough that two objects on the stack both fit across a landscape board before it scrolls.
  */
 private val TextWidth = 190.dp
+
+/** The layer's own corners, matching every other panel that floats over this board. */
+private val PanelShape = RoundedCornerShape(8.dp)
+
+/** How far the objects sit inside the panel, so nothing is drawn against its edge. */
+private val PanelPadding = 6.dp
