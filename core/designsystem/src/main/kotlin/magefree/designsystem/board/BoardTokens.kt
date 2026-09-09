@@ -58,6 +58,23 @@ object BoardTypography {
             lineHeight = 13.sp,
         )
 
+    /**
+     * What an object on the stack says, in the server's own words.
+     *
+     * **Bigger than [cardName], because it is not a label.** A name is glanced at and a rule is read,
+     * and the object on the stack is the one thing on the board the whole game is currently waiting
+     * on. It is also the only text on the board given a whole card's height to be read in: the column
+     * beside the card is a fixed width, so height is the only room there is to spend, and at the card
+     * name's size most of it went unused.
+     */
+    val stackRules: TextStyle =
+        TextStyle(
+            fontFamily = FontFamily.Default,
+            fontWeight = FontWeight.Normal,
+            fontSize = 16.sp,
+            lineHeight = 20.sp,
+        )
+
     /** Power and toughness on a card face. Heavier than the name: it changes, and changes matter. */
     val cardStats: TextStyle =
         TextStyle(

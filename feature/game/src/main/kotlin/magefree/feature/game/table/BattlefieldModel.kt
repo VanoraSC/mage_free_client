@@ -253,7 +253,7 @@ sealed interface RowEntry {
      * A pile is wider than a card — the fan staggers and the turned half reaches right — so a row
      * that budgeted a card per entry would put its last pile off the edge.
      */
-    fun widthInCards(): Float = if (this is Pile) stackWidthInCards() else 1f
+    fun widthInCards(): Float = if (this is Pile) stackWidthInCards(halves()) else 1f
 
     /**
      * How tall this is, in card **widths** — the unit `StackShape` measures in.
@@ -262,7 +262,7 @@ sealed interface RowEntry {
      * layout that budgeted a card's height per row put the non-creature permanents off the bottom of
      * the board the moment a pile appeared.
      */
-    fun heightInCards(): Float = if (this is Pile) stackHeightInCards() else cardHeightInCards()
+    fun heightInCards(): Float = if (this is Pile) stackHeightInCards(halves()) else cardHeightInCards()
 
     /** A permanent on its own: every real card, and any token nothing matches. */
     data class Single(
@@ -288,6 +288,17 @@ sealed interface RowEntry {
                 untapped = members.filterNot { it.state.tapped },
                 tapped = members.filter { it.state.tapped },
             )
+
+        /**
+         * The one half this pile has, and the only one it can ever have.
+         *
+         * A land stack reserves both because a land taps without leaving it. A token that taps leaves
+         * for a pile of its own — tap state is part of the key — so this pile reserving the other
+         * half would be reserving room nothing can arrive in, in both directions: a pile of upright
+         * tokens claimed the leaning half's overhang and the drop below it, and a pile of tapped ones
+         * hung a title bar below every card beside it.
+         */
+        internal fun halves(): StackHalves = StackHalves.of(asStack())
     }
 }
 

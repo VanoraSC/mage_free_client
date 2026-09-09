@@ -16,7 +16,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import magefree.designsystem.card.BoardCardState
 import magefree.designsystem.card.BoardCardTestTags
+import magefree.designsystem.card.CardDisplay
 import magefree.designsystem.theme.MageTheme
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
@@ -407,6 +409,91 @@ class BattlefieldLayoutTest {
     }
 
     @Test
+    fun `a spell on the stack does not swallow the presses meant for the board`() {
+        // Found in a game: with Thoughtseize on the stack asking for a player, neither life total
+        // answered a tap. The stack had just become a floating layer, and it kept `fillMaxWidth` and a
+        // `horizontalScroll` from the days when it had a band of the board to itself — with a
+        // `fillMaxHeight` inside a wrap-content row, which takes the height constraint of the *board*.
+        // The result was one scrollable strip the size of the whole table, drawn last, over everything.
+        //
+        // A player targeted by their own life total is the strictest case: it is the furthest thing
+        // from the stack that a press has to reach, and the game cannot go on without it.
+        val picked = mutableListOf<String>()
+        composeTestRule.setContent {
+            MageTheme {
+                BattlefieldLayout(
+                    model = battlefieldModel(oneSided("me", listOf(bears()))),
+                    lifeTotals =
+                        LifeTotals(
+                            opponents = emptyList(),
+                            viewer = LifeTotalState(playerId = "me", life = 20, isPickable = true),
+                        ),
+                    onPickPlayer = { picked += it },
+                    stack = listOf(thoughtseize()),
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag(LifeTotalTestTags.total("me")).performClick()
+
+        assertEquals("the stack layer is over the board and taking its presses", listOf("me"), picked)
+    }
+
+    @Test
+    fun `a pile of tapped tokens fills its own box rather than hanging below it`() {
+        // Found on a real board: two tapped Zombies drew a title bar lower than everything beside
+        // them, while a *single* tapped one looked right — because a single one is drawn as a card and
+        // never reserves a half. A pile reserved an upright half it can never have (a token that taps
+        // leaves for a pile of its own) and then dropped its cards onto the card that would have been
+        // there. Measured as the empty band left at the top of the pile's own box.
+        show(oneSided("me", listOf(bears("standing")) + (1..2).map { zombie("z$it", tapped = true) }))
+
+        val box = bounds(BattlefieldTestTags.stack("z1"))
+        val highest = cardsInStack("z1").minOf { it.top }
+
+        assertTrue(
+            "the pile's cards started ${highest - box.top}px below the top of a box that is theirs alone",
+            highest - box.top <= ROUNDING_SLACK_PX,
+        )
+    }
+
+    @Test
+    fun `a pile of upright tokens keeps no room for a lean it can never have`() {
+        // The same fault in the other direction, and the expensive one: every upright pile claimed the
+        // leaning half's overhang and the drop below it, so a board that made tokens shrank every card
+        // on it — both sides, every row — to fit room nothing would ever occupy.
+        show(oneSided("me", listOf(bears("standing")) + (1..2).map { zombie("z$it") }))
+
+        val box = bounds(BattlefieldTestTags.stack("z1"))
+        val nearest = cardsInStack("z1").minOf { it.left }
+
+        assertTrue(
+            "the pile's cards started ${nearest - box.left}px right of the left edge of their own box",
+            nearest - box.left <= ROUNDING_SLACK_PX,
+        )
+    }
+
+    @Test
+    fun `a land stack still reserves both halves, because a land taps without leaving it`() {
+        // The reason the reservation is the caller's answer rather than a reading of the contents. A
+        // land moves between the halves of the stack it is already in, so a footprint that fitted only
+        // what is in it right now would resize the land corner — and the card size with it — the first
+        // time a player tapped a land.
+        showPair(
+            left = oneSided("dry", (1..4).map { plains("dry$it") }),
+            right = oneSided("wet", (1..3).map { plains("wet$it") } + plains("wet4", tapped = true)),
+        )
+
+        val untouched = bounds(BattlefieldTestTags.stack("dry1"))
+        val tapped = bounds(BattlefieldTestTags.stack("wet1"))
+
+        assertTrue(
+            "the stack measured ${untouched.height} untapped and ${tapped.height} with one land turned",
+            kotlin.math.abs(untouched.height - tapped.height) <= ROUNDING_SLACK_PX,
+        )
+    }
+
+    @Test
     fun `ten of a land cost about what three of it cost`() {
         // The whole point of stacking. Without it the land corner has to shrink its cards to fit ten,
         // and shrinking is exactly what the corner exists to avoid.
@@ -488,6 +575,34 @@ private fun bears(
 ) = permanent(id, "Grizzly Bears", listOf(CardType.Creature), isCreature = true, tapped = tapped)
 
 private fun creature(index: Int) = permanent("creature-$index", "Saproling", listOf(CardType.Creature), isCreature = true)
+
+/** One object on the stack, with text beside it — the shape that fills the region's width. */
+private fun thoughtseize() =
+    TableStackObject(
+        id = "thoughtseize",
+        state = BoardCardState(card = CardDisplay(name = "Thoughtseize")),
+        rules = listOf("Target player reveals their hand. You choose a nonland card from it."),
+    )
+
+/**
+ * A token, which is the only thing that piles — and identical to every other one made here, which is
+ * what makes two of them one pile. Upstream says so itself with `isToken`; nothing is inferred.
+ */
+private fun zombie(
+    id: String,
+    tapped: Boolean = false,
+) = GamePermanent(
+    card =
+        GameCard(
+            id = id,
+            name = "Zombie",
+            setCode = "TDDL",
+            cardTypes = listOf(CardType.Creature),
+            isCreature = true,
+            isToken = true,
+        ),
+    isTapped = tapped,
+)
 
 private fun forest(id: String = "forest") = permanent(id, "Forest", listOf(CardType.Land))
 

@@ -581,6 +581,11 @@ private fun PermanentRow(
                             // Every member, not just the front one: a pile draws them all in one
                             // place, and a member anchored where it used to be drew an arrow from there.
                             anchorModifier = anchors.anchorModifier(entry.permanents.map { it.id }),
+                            // Only the half it has. A pile cannot gain the other one — a token that
+                            // taps leaves for a pile of its own — so room kept for it is room nothing
+                            // will ever occupy, and it showed as a pile of tapped tokens hanging a
+                            // title bar below the cards beside it.
+                            halves = entry.halves(),
                         )
                 }
             }

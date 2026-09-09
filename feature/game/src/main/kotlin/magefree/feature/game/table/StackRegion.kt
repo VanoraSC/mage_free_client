@@ -2,10 +2,11 @@ package magefree.feature.game.table
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.board.BoardTypography
+import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
 import magefree.designsystem.card.CounterPalette
 
@@ -78,41 +80,63 @@ internal fun StackRegion(
 ) {
     if (stack.isEmpty()) return
 
-    Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag(StackTestTags.REGION),
-        horizontalArrangement = Arrangement.spacedBy(ObjectGap),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        stack.forEach { entry ->
-            Row(
-                modifier = Modifier.fillMaxHeight().testTag(StackTestTags.entry(entry.id)),
-                horizontalArrangement = Arrangement.spacedBy(TextGap),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BoardCard(
-                    state = entry.state,
-                    width = cardWidth,
-                    art = artFor?.invoke(entry.art, entry.state.card),
-                    onTap = onInspect?.let { inspect -> { inspect(entry.id) } },
-                    counterPalette = palette,
-                    // The arrow leaves from the card, not from the text beside it: the card is the
-                    // object, and the text is what it says.
-                    modifier = anchors.anchorModifier(entry.id),
-                )
+    // **A floating layer must not claim the board it floats over.** In the flow this region had a band
+    // to itself and nothing was underneath it; floating, everything is. `fillMaxWidth` around a
+    // `horizontalScroll` turned the whole middle of the board into one scrollable strip that swallowed
+    // every press landing on it — and `fillMaxHeight` inside a wrap-content row took the height
+    // constraint of the *board*, so the strip was the entire board. With a spell on the stack the life
+    // totals stopped answering, and a prompt asking for a player could not be completed at all.
+    //
+    // So the scrolling row is sized to what it draws — as wide as its objects, capped at the room it
+    // was given, and one card tall — and the box around it takes no pointer input, exactly as the
+    // arrow canvas does not. What answers a press is the stack, where the stack actually is.
+    val objectHeight = cardWidth / BOARD_CARD_ASPECT_RATIO
 
-                // A vanilla creature spell has no rules text, and draws none rather than an empty
-                // column that makes the row look broken.
-                if (entry.rules.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier.width(TextWidth).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(LineGap),
-                    ) {
-                        entry.rules.forEach { line ->
-                            Text(
-                                text = line,
-                                style = BoardTypography.cardName,
-                                color = BoardSurface.onSurface,
-                            )
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Row(
+            modifier =
+                Modifier
+                    .height(objectHeight)
+                    .horizontalScroll(rememberScrollState())
+                    .testTag(StackTestTags.REGION),
+            horizontalArrangement = Arrangement.spacedBy(ObjectGap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            stack.forEach { entry ->
+                Row(
+                    modifier = Modifier.fillMaxHeight().testTag(StackTestTags.entry(entry.id)),
+                    horizontalArrangement = Arrangement.spacedBy(TextGap),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BoardCard(
+                        state = entry.state,
+                        width = cardWidth,
+                        art = artFor?.invoke(entry.art, entry.state.card),
+                        onTap = onInspect?.let { inspect -> { inspect(entry.id) } },
+                        counterPalette = palette,
+                        // The arrow leaves from the card, not from the text beside it: the card is the
+                        // object, and the text is what it says.
+                        modifier = anchors.anchorModifier(entry.id),
+                    )
+
+                    // A vanilla creature spell has no rules text, and draws none rather than an empty
+                    // column that makes the row look broken.
+                    if (entry.rules.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.width(TextWidth).verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(LineGap),
+                        ) {
+                            entry.rules.forEach { line ->
+                                Text(
+                                    text = line,
+                                    // Prose, beside a card, about the one object the whole game is
+                                    // waiting on — read rather than glanced at, and the only thing on
+                                    // the board with a card's whole height to be read in. The width is
+                                    // fixed at [TextWidth], so height is the only room there is.
+                                    style = BoardTypography.stackRules,
+                                    color = BoardSurface.onSurface,
+                                )
+                            }
                         }
                     }
                 }
