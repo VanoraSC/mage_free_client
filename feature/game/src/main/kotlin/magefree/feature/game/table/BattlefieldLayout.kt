@@ -161,7 +161,19 @@ fun BattlefieldLayout(
             val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
             val bottomStack = bottomStackHeight(hand, handTile, phases != null)
             val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
-            val sideHeight = contentHeight / sides.size.coerceAtLeast(1)
+
+            // **The height a side actually gets, not the height it would get if they were equal.**
+            // The rows are laid out by `weight`, and the weights are not equal once the stack opens
+            // the centre line: the viewer's side takes `VIEWER_WEIGHT` of the total, not half. Sizing
+            // cards against half meant sizing them for a box bigger than they had, and the surplus
+            // overflowed the Column it was measured into — which is the non-creature row ending up
+            // under the phase bar. A pile made it visible because a pile is taller, not because piles
+            // were the cause.
+            //
+            // The *smallest* share is used for both sides, because one width is shared by both and a
+            // card that fits the tighter side fits the other. Cheaper than solving each side against
+            // its own share and then reconciling them into the one number they have to agree on.
+            val sideHeight = contentHeight * smallestSideShare(sides.size, stack.isEmpty())
 
             // **The rail is a column of numbers, so it is as narrow as numbers are.** It was a card wide
             // while it drew the top card of every pile; those became counts, and the width they were using
@@ -482,6 +494,7 @@ private fun SideRows(
                     onInspect = onInspect,
                     anchors = anchors,
                     alignment = row.alignment,
+                    towardCentre = towardCentre,
                 )
             }
         }
@@ -500,6 +513,7 @@ private fun PermanentRow(
     onInspect: ((String) -> Unit)?,
     anchors: BoardAnchors,
     alignment: Alignment,
+    towardCentre: Alignment.Vertical,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth(), contentAlignment = alignment) {
@@ -532,7 +546,11 @@ private fun PermanentRow(
                     .let { base -> if (scrolls) base.horizontalScroll(rememberScrollState()) else base }
                     .testTag(tag),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
-            verticalAlignment = Alignment.CenterVertically,
+            // **Entries share the edge nearest the centre line, not their centres.** A pile is taller
+            // than a card, so a row that centred them left a lone creature floating halfway down the
+            // pile beside it — Liliana's Reaver sitting below the tokens it is standing next to. The
+            // rows already meet on the centre line; their contents should too.
+            verticalAlignment = towardCentre,
         ) {
             entries.forEach { entry ->
                 when (entry) {
@@ -902,3 +920,35 @@ private const val OPPONENT_WEIGHT = 1f
 private const val STACK_WEIGHT = 1.4f
 
 private const val VIEWER_WEIGHT = 1.3f
+
+/**
+ * The fraction of the content height the **tightest** side is given by the weights.
+ *
+ * The rows are laid out with `weight`, so a side's height is its weight over the total — and the
+ * weights are deliberately unequal once the stack opens the centre line. An estimate that divided the
+ * height evenly handed every card more room than the layout would actually give it, and the surplus
+ * overflowed downward past the phase bar.
+ *
+ * One number for both sides, because one card width is shared by both: a card that fits the tighter
+ * side fits the other, and the alternative is solving each side separately and then reconciling two
+ * answers into the one the board can actually use.
+ */
+internal fun smallestSideShareForTest(
+    sideCount: Int,
+    stackIsEmpty: Boolean,
+): Float = smallestSideShare(sideCount, stackIsEmpty)
+
+private fun smallestSideShare(
+    sideCount: Int,
+    stackIsEmpty: Boolean,
+): Float {
+    if (sideCount <= 0) return 1f
+    // With nothing on the stack every side weighs the same, so the share is the plain division the
+    // arithmetic used to assume.
+    if (stackIsEmpty) return 1f / sideCount
+    // Otherwise the opponents share `OPPONENT_WEIGHT` each, the stack takes its own, and the viewer
+    // takes theirs. The tightest side is whichever of the two player weights is smaller.
+    val opponents = (sideCount - 1).coerceAtLeast(0)
+    val total = OPPONENT_WEIGHT * opponents + STACK_WEIGHT + VIEWER_WEIGHT
+    return minOf(OPPONENT_WEIGHT, VIEWER_WEIGHT) / total
+}
