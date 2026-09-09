@@ -901,6 +901,16 @@ public data class GameCardView(
      * peer sends nothing and a board simply has no origin to animate from.
      */
     val sourceId: String? = null,
+    /**
+     * Upstream's own image name for an object that is **face down or inner-named** — `Morph`,
+     * `Manifest`, `Cloak`, `Disguise`, `Foretell`, `Face Down`, `Copy`.
+     *
+     * `CardView.getImageFileName()`, which `CardUtil.getCardNameForGUI` treats as non-empty exactly
+     * for those objects. It is the only thing that says *which kind* of face-down a permanent is, and
+     * Magic prints a different helper card for each — so a board without it can only draw five
+     * different things as one. Null for an ordinary card.
+     */
+    val imageName: String? = null,
 )
 
 /**

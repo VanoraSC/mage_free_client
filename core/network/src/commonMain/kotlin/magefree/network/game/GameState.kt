@@ -301,6 +301,11 @@ data class GameCard(
      * does more bluntly — it replaces the ability view with its `sourceCard` outright.
      */
     val sourceId: String? = null,
+    /**
+     * Which kind of face-down this is — `Morph`, `Manifest`, `Cloak`, `Disguise`, `Foretell`,
+     * `Face Down` — or null for an ordinary card. Upstream's own image name.
+     */
+    val imageName: String? = null,
     val objectType: MageObjectType = MageObjectType.Unknown,
     val icons: List<GameCardIcon> = emptyList(),
 )

@@ -401,6 +401,9 @@ public object GameViewMapper {
             // [setCode] already read — its id is the permanent the ability was activated from, which is
             // the object the board animates the ability out of.
             sourceId = sourceCardOf(card)?.id?.toString(),
+            // Which kind of face-down this is — see [GameCardView.imageName]. Non-empty only for a
+            // face-down or inner-named object, which is upstream's own rule for the field.
+            imageName = card.imageFileName.orNullIfBlank(),
             manaCost = text { card.manaCostStr }.orNullIfBlank(),
             typeLine = text { card.typeText }?.trim().orNullIfBlank(),
             power = card.power.orNullIfBlank(),

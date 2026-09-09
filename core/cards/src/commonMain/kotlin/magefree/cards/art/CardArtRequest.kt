@@ -137,3 +137,49 @@ fun cardBackRequest(size: CardArtSize = CardArtSize.SMALL): CardArtRequest =
  * Not a real set, and it cannot collide with one: XMage set codes are alphanumeric, and this is not.
  */
 const val CARD_BACK_SET_CODE: String = "//back"
+
+/**
+ * The picture for a face-down permanent of a given kind — a morph, a manifest, a foretold card.
+ *
+ * **A face-down permanent is not just "a card back".** Morph, manifest, cloak, disguise and foretell
+ * are five different things a player has to tell apart at a glance: what may be turned up, for how
+ * much, and by whom. Magic prints a distinct *helper card* for each, and Scryfall has them, so the
+ * board can show the right one instead of five identical brown rectangles.
+ *
+ * **The printings are upstream's own.** `TokenRepository.createXmageToken` lists a Scryfall URL per
+ * kind, gathered under Scryfall's `assistant-cards` tag; these are the set and collector number out of
+ * the first URL it registers for each. Taking the *first* rather than one at random is deliberate —
+ * upstream randomises among its alternatives for visual variety, and a board where the same morph
+ * changes picture between snapshots would be worse than one that always shows the same one.
+ *
+ * `null` for a kind this build has not heard of, which falls back to the plain [cardBackRequest] —
+ * the honest answer for "face-down, and we do not know more than that".
+ *
+ * @param kind upstream's own image name, from `CardView.getImageFileName()`, which is non-empty
+ *   exactly for a face-down or inner-named object (`CardUtil.getCardNameForGUI`).
+ */
+fun faceDownArtRequest(
+    kind: String,
+    size: CardArtSize = CardArtSize.SMALL,
+): CardArtRequest? =
+    when (kind.trim().lowercase()) {
+        // TokenRepository: XMAGE_IMAGE_NAME_FACE_DOWN_MORPH → tktk/11
+        "morph" -> printing("tktk", "11", size)
+        // XMAGE_IMAGE_NAME_FACE_DOWN_MANIFEST → tfrf/4
+        "manifest" -> printing("tfrf", "4", size)
+        // XMAGE_IMAGE_NAME_FACE_DOWN_DISGUISE and _CLOAK share a printing upstream → tmkm/21
+        "disguise", "cloak" -> printing("tmkm", "21", size)
+        // XMAGE_IMAGE_NAME_FACE_DOWN_FORETELL → tkhm/23
+        "foretell" -> printing("tkhm", "23", size)
+        // XMAGE_IMAGE_NAME_FACE_DOWN_MANUAL. Upstream links Wikipedia here with a TODO saying it could
+        // not find a Scryfall URL for the back; `cardBackRequest` is that URL, so this is the one
+        // place this client is ahead of it.
+        "face down" -> cardBackRequest(size)
+        else -> null
+    }
+
+private fun printing(
+    setCode: String,
+    collectorNumber: String,
+    size: CardArtSize,
+): CardArtRequest = CardArtRequest(setCode = setCode, collectorNumber = collectorNumber, size = size)
