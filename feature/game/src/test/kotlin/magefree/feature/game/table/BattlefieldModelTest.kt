@@ -1,5 +1,6 @@
 package magefree.feature.game.table
 
+import androidx.compose.ui.unit.dp
 import magefree.designsystem.card.BoardBadge
 import magefree.designsystem.card.BoardCardSignal
 import magefree.feature.game.board.BoardAction
@@ -655,39 +656,34 @@ class RowHeightTest {
 }
 
 /**
- * How much height a side is actually given, which is what a card is sized against.
+ * How much height one side is given out of the space above the phase bar and the hand.
  *
- * **The rows are laid out by `weight`, and the weights are not equal.** Once the stack opens the
- * centre line the viewer's side takes `VIEWER_WEIGHT` of the total rather than half, so an estimate
- * that divided the height evenly sized every card for a box bigger than it had — and the surplus
- * overflowed downward, past the phase bar. A pile made it visible because a pile is taller; piles were
- * never the cause.
+ * **The gap between the two sides is height too**, and it was never taken out of the budget — so each
+ * side was sized for half a gap more than it had. Invisible on a board with slack; with a hand on
+ * screen there is none, and the surplus came out as the non-creature row overlapping the creatures and
+ * running under the phase bar.
  */
-class SideHeightShareTest {
+class SideHeightTest {
     @Test
-    fun `an empty stack splits the height evenly, which is what it used to assume`() {
-        assertEquals(0.5f, smallestSideShareForTest(sideCount = 2, stackIsEmpty = true))
+    fun `the gap between the two sides comes out of the budget`() {
+        val whole = 400.dp
+
+        val each = sideHeightFor(whole, sideCount = 2)
+
+        assertTrue(
+            "two sides plus the gap between them must fit in what there is, got $each each",
+            each * 2 + CentreLineGapForTest <= whole,
+        )
     }
 
     @Test
-    fun `an open stack takes height from the sides, so a side gets less than half`() {
-        val share = smallestSideShareForTest(sideCount = 2, stackIsEmpty = false)
-
-        assertTrue("the stack's own weight has to come from somewhere, got $share", share < 0.5f)
+    fun `a single side pays for no gap, because there is nothing to be apart from`() {
+        // A spectator's board, or one seat left. There is no centre line to leave room for.
+        assertEquals(400.dp, sideHeightFor(400.dp, sideCount = 1))
     }
 
     @Test
-    fun `the estimate is the tightest side, because one width is shared by both`() {
-        // A card that fits the tighter side fits the other. Estimating per side and reconciling two
-        // answers into the one number the board can use is the same arithmetic done twice.
-        val share = smallestSideShareForTest(sideCount = 2, stackIsEmpty = false)
-
-        // 1f / (1f + 1.4f + 1.3f) — the opponent's weight, which is the smaller of the two.
-        assertEquals(1f / 3.7f, share, 0.0001f)
-    }
-
-    @Test
-    fun `a board with no sides asks for everything rather than dividing by zero`() {
-        assertEquals(1f, smallestSideShareForTest(sideCount = 0, stackIsEmpty = true))
+    fun `a board too small for the gap asks for nothing rather than a negative height`() {
+        assertEquals(0.dp, sideHeightFor(0.dp, sideCount = 2))
     }
 }

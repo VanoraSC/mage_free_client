@@ -162,18 +162,12 @@ fun BattlefieldLayout(
             val bottomStack = bottomStackHeight(hand, handTile, phases != null)
             val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
 
-            // **The height a side actually gets, not the height it would get if they were equal.**
-            // The rows are laid out by `weight`, and the weights are not equal once the stack opens
-            // the centre line: the viewer's side takes `VIEWER_WEIGHT` of the total, not half. Sizing
-            // cards against half meant sizing them for a box bigger than they had, and the surplus
-            // overflowed the Column it was measured into — which is the non-creature row ending up
-            // under the phase bar. A pile made it visible because a pile is taller, not because piles
-            // were the cause.
-            //
-            // The *smallest* share is used for both sides, because one width is shared by both and a
-            // card that fits the tighter side fits the other. Cheaper than solving each side against
-            // its own share and then reconciling them into the one number they have to agree on.
-            val sideHeight = contentHeight * smallestSideShare(sides.size, stack.isEmpty())
+            // **The gap between the two sides is height too.** `CentreLineGap` separates them and is
+            // deliberately much larger than a row gap, and it was never taken out of the budget — so
+            // each side was sized for half a gap more than it had. On a board with slack that was
+            // invisible; with a hand on screen the slack is gone, and the surplus came out as the
+            // non-creature row overlapping the creatures and running under the phase bar.
+            val sideHeight = sideHeightFor(contentHeight, sides.size)
 
             // **The rail is a column of numbers, so it is as narrow as numbers are.** It was a card wide
             // while it drew the top card of every pile; those became counts, and the width they were using
@@ -266,24 +260,7 @@ fun BattlefieldLayout(
                                         artFor = artFor,
                                         onInspect = onInspect,
                                         anchors = anchors,
-                                        modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else OPPONENT_WEIGHT),
-                                    )
-                                }
-
-                                // **The stack opens the centre line, and closes it again.** The gap between the
-                                // two front rows is where a table puts the stack and where the arrows have the
-                                // shortest way to go. It holds no height when nothing is on it — the board's
-                                // own rule — and the height it takes when something is is honest movement,
-                                // because a spell arriving is a game action.
-                                if (stack.isNotEmpty()) {
-                                    StackRegion(
-                                        stack = stack,
-                                        cardWidth = cardWidth,
-                                        palette = palette,
-                                        artFor = artFor,
-                                        anchors = anchors,
-                                        onInspect = onInspect,
-                                        modifier = Modifier.fillMaxWidth().weight(STACK_WEIGHT),
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
                                     )
                                 }
 
@@ -297,7 +274,7 @@ fun BattlefieldLayout(
                                         artFor = artFor,
                                         onInspect = onInspect,
                                         anchors = anchors,
-                                        modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else VIEWER_WEIGHT),
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
                                     )
                                 }
                             }
@@ -341,6 +318,30 @@ fun BattlefieldLayout(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+            }
+
+            // **The stack floats on the centre line rather than sitting in it.** In the flow it had a
+            // weight, so a spell arriving compressed both battlefields — and because one card width is
+            // shared by the whole table, compressing the centre resized every card on it. A player
+            // watching a spell go on the stack watched their board shrink around it.
+            //
+            // Floating costs nothing it was buying: it still lands on the centre line, where a table
+            // puts it and where the arrows have the shortest way to go. It simply stops changing the
+            // size of everything else while it is there.
+            if (stack.isNotEmpty()) {
+                StackRegion(
+                    stack = stack,
+                    cardWidth = cardWidth,
+                    palette = palette,
+                    artFor = artFor,
+                    anchors = anchors,
+                    onInspect = onInspect,
+                    modifier =
+                        Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth()
+                            .padding(horizontal = StackInset),
+                )
             }
 
             // **Over everything, and touching nothing.** The arrows are drawn last so they are not covered
@@ -870,6 +871,9 @@ private val RowGap = 3.dp
  */
 private val CentreLineGap = 20.dp
 
+/** The gap between the two sides, for a test that asserts the budget accounts for it. */
+internal val CentreLineGapForTest: Dp get() = CentreLineGap
+
 /**
  * How much of the board's height the hand is sized against.
  *
@@ -903,52 +907,37 @@ private fun bottomStackHeight(
 /** Room the phase bar takes, for working out what is left above it. */
 private val PhaseBarAllowance = 28.dp
 
-/*
- * How the centre column is shared while the stack is on it.
+/**
+ * How far in from the centre line the stack floats.
  *
- * **The viewer's half gives up less than the opponent's.** Both are compressed, because the stack has
- * to be big enough to read and the height has to come from somewhere — but the row a player is
- * deciding *with* is their own, and squeezing both equally makes the wrong one hardest to read. The
- * opponent's row stays legible; it is being consulted rather than acted on.
+ * **The stack is a floating layer and takes no part in sizing the board.** It used to sit *in* the
+ * centre column with a weight, which meant a spell arriving compressed both battlefields — and
+ * because one card width is shared by the whole table, compressing the centre resized every card on
+ * it. A player watching a spell go on the stack watched their board shrink around it.
  *
- * A weight rather than a fixed height, so the same rule holds on a phone and on a tablet. With an
- * empty stack both sides are one, exactly as they were: no empty region holds height, and no region
- * that is not there may skew the two halves it is not between.
+ * Floating it costs nothing that it was buying: it still lands on the centre line, which is where a
+ * table puts it and where the arrows have the shortest way to go. What it stops doing is changing the
+ * size of everything else while it is there.
  */
-private const val OPPONENT_WEIGHT = 1f
-
-private const val STACK_WEIGHT = 1.4f
-
-private const val VIEWER_WEIGHT = 1.3f
+private val StackInset = 8.dp
 
 /**
- * The fraction of the content height the **tightest** side is given by the weights.
+ * How much height one side gets, out of the space above the phase bar and the hand.
  *
- * The rows are laid out with `weight`, so a side's height is its weight over the total — and the
- * weights are deliberately unequal once the stack opens the centre line. An estimate that divided the
- * height evenly handed every card more room than the layout would actually give it, and the surplus
- * overflowed downward past the phase bar.
+ * **The gap between the two sides is height too.** `CentreLineGap` separates them and is deliberately
+ * much larger than a row gap, and it was never taken out of the budget — so each side was sized for
+ * half a gap more than it actually had. On a board with slack that was invisible; with a hand on
+ * screen there is no slack, and the surplus came out as the non-creature row overlapping the creatures
+ * and running under the phase bar.
  *
- * One number for both sides, because one card width is shared by both: a card that fits the tighter
- * side fits the other, and the alternative is solving each side separately and then reconciling two
- * answers into the one the board can actually use.
+ * A gap between two sides is `sideCount - 1` of them, which is zero for a spectator's single side and
+ * one for an ordinary game.
  */
-internal fun smallestSideShareForTest(
+internal fun sideHeightFor(
+    contentHeight: Dp,
     sideCount: Int,
-    stackIsEmpty: Boolean,
-): Float = smallestSideShare(sideCount, stackIsEmpty)
-
-private fun smallestSideShare(
-    sideCount: Int,
-    stackIsEmpty: Boolean,
-): Float {
-    if (sideCount <= 0) return 1f
-    // With nothing on the stack every side weighs the same, so the share is the plain division the
-    // arithmetic used to assume.
-    if (stackIsEmpty) return 1f / sideCount
-    // Otherwise the opponents share `OPPONENT_WEIGHT` each, the stack takes its own, and the viewer
-    // takes theirs. The tightest side is whichever of the two player weights is smaller.
-    val opponents = (sideCount - 1).coerceAtLeast(0)
-    val total = OPPONENT_WEIGHT * opponents + STACK_WEIGHT + VIEWER_WEIGHT
-    return minOf(OPPONENT_WEIGHT, VIEWER_WEIGHT) / total
+): Dp {
+    val sides = sideCount.coerceAtLeast(1)
+    val gaps = CentreLineGap * (sides - 1).coerceAtLeast(0)
+    return ((contentHeight - gaps) / sides).coerceAtLeast(0.dp)
 }
