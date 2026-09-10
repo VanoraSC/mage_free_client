@@ -124,15 +124,22 @@ internal fun rememberCardFlights(
                 stillArriving += entry
                 return@forEach
             }
-            // A spell was in hand under its own name — see [handAnchorId], which is where the id it
-            // does *not* keep is explained. An ability was never anywhere, and comes out of the
-            // permanent that produced it. The hand is tried first, because a card cast from hand is
-            // the case a player sees most. Neither: the board never measured an origin — an
-            // opponent's card, out of a hand this client cannot see — and there is no flight to draw.
-            // That is settled once the destination is known, so it stops waiting either way.
+            // **The source is asked first, because it is the one answer that is an id.** An ability
+            // comes out of the permanent that produced it and the server says which — so that is
+            // where it flies from, and nothing else gets a say.
+            //
+            // The hand is the fallback, and it is a *name* — see [handAnchorId], which is where the
+            // id a spell does not keep is explained. A name is weaker than an id in exactly the way
+            // that bit: an ability is named after its source card, so an activated Liliana of the
+            // Veil matched the box the Liliana card had sat in back when it was in hand, and its +1
+            // flew out of the hand instead of out of the planeswalker on the board.
+            //
+            // Neither: the board never measured an origin — an opponent's card, out of a hand this
+            // client cannot see — and there is no flight to draw. That is settled once the
+            // destination is known, so it stops waiting either way.
             val from =
-                anchors.boxOf(handAnchorId(entry.state.card.name))
-                    ?: entry.sourceId?.let(anchors::boxOf)
+                entry.sourceId?.let(anchors::boxOf)
+                    ?: anchors.boxOf(handAnchorId(entry.state.card.name))
             if (from != null && from != to) started += CardFlight(id = entry.id, entry = entry, from = from, to = to)
         }
         if (started.isNotEmpty() || stillArriving.size != arriving.size) {

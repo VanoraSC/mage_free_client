@@ -110,6 +110,23 @@ class CardFlightsTest {
     }
 
     @Test
+    fun `an ability flies from its permanent even though its name is still in the hand`() {
+        // **An ability is named after the card that made it**, and the hand is keyed by name — so a
+        // planeswalker's +1 matched the box its own card had occupied in hand before it was ever
+        // cast, and flew out of the hand instead of out of the permanent on the board. The source is
+        // an id and the server said it; the name is a fallback for the one case with no id at all.
+        anchors.placeForTest(handAnchorId("Something"), Rect(0f, 0f, 40f, 40f))
+        anchors.placeForTest("liliana", from())
+        anchors.placeForTest("plus-one", to())
+        show()
+
+        stack.value = listOf(entry("plus-one", sourceId = "liliana"))
+        composeTestRule.waitForIdle()
+
+        assertEquals("it should leave the permanent, not the hand", from(), seen.single().from)
+    }
+
+    @Test
     fun `an object already on the stack is never flown again`() {
         // An arrival is *new to the stack*. Re-flying on every snapshot would send a card across the
         // board each time the opponent gained a life point.
