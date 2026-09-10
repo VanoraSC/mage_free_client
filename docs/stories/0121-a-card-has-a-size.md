@@ -45,19 +45,54 @@ Project baseline; `:feature:game` only. No wire change.
 
 ## 5. Design & approach
 
-*(to be filled in when it is built)*
+`mainCardWidth` became `mainCardWidths`, answering a `MainCardWidths(creature, other)`. The shape the
+sketch above proposed held; what it did not anticipate is which constraints turn out to bind.
 
-The obvious shape is that `mainCardWidth` stops answering one number and answers one **per role**,
-with the height budget summing each row at its own role's width. The thing to be careful about is that
-the two rows share a side's height: two independently-capped widths can add up to more than the side
-has, so the height constraint has to be solved across both rather than applied to each.
+**Two preferred sizes, written as a ratio.** `PreferredOtherWidth` keeps the measured 252dp — it is
+the one Pete picked off a board he liked — and `PreferredCreatureWidth` is derived from it by
+`CREATURE_SIZE_ADVANTAGE = 1.25`. Two independent numbers would drift apart the first time either was
+adjusted; the pair is a ratio and is written as one.
+
+**Crowding is answered per role.** The busiest row *of that role*, across both sides, so twelve
+creatures no longer say anything about how wide an enchantment may be drawn. Still shared across the
+two sides, which is deliberate and unchanged: the game does not say one side's creatures are nearer.
+
+**Height is answered across both, by scaling both.** The two rows are stacked inside one side and
+share its height, so when a side does not fit, both roles scale by the same factor. Scaling only the
+offending row would leave the two sizes in whatever proportion the crowding happened to produce, and
+the proportion is the thing this story exists to state.
+
+**The ratio is a preference, not an invariant.** A cap that binds on one role and not the other moves
+the two closer together, and that is correct — holding the ratio would mean shrinking the *uncapped*
+role to match, taking room from a card that has it in order to preserve a proportion nobody asked to
+be preserved at that price.
+
+**Worth knowing for later:** on a phone in landscape the two preferred widths together are taller than
+one side, so **every real board is the scaled case**. The preferred pair sets the ratio; the side's
+height sets the size. That is the same as it was before this story — the single preferred was already
+unreachable — but it means tuning the absolute numbers upward buys nothing without more height.
+
+The stack takes `MainCardWidths.largest`: an object waiting to resolve has no role, may become either
+kind or neither, and is the one object the game is currently waiting on.
 
 ## 6. Testing & verification
 
-*(to be filled in when it is built)*
+`./gradlew check -x :bridge:test -x :bridge:check`. Three tests in `BattlefieldLayoutTest`, each
+confirmed to fail without the change it covers:
 
-At minimum: creatures are drawn wider than non-creatures on an uncrowded board; both shrink when a row
-is crowded; neither exceeds its own preferred size on an empty board.
+- **a creature is drawn a quarter larger, and stays that way once the side has to scale** — an
+  uncrowded board, where both roles start at their preferred width and are then scaled together by the
+  shared height budget. The ratio surviving is the proof they scaled by the same factor. Fails with
+  `CREATURE_SIZE_ADVANTAGE` set to 1.
+- **a crowded creature row never shrinks the permanents behind it** — twelve creatures and one
+  artifact on one board; the artifact is drawn *wider than the creatures beside it*, which one shared
+  width cannot produce. Measured on the same board rather than against a second one: comparing two
+  boards only says the artifact did not get *smaller*, which stayed true under the old shared width.
+  Fails when `busiest` is computed across roles instead of per role.
+- **a crowded creature row is capped on its own, and the ratio gives way to it** — pins the paragraph
+  above, so that a later attempt to "fix" the drifting ratio has to argue with a test.
+
+The existing preferred-size assertion moved to `PreferredCreatureWidth`, since its board is creatures.
 
 ## 7. Acceptance criteria
 

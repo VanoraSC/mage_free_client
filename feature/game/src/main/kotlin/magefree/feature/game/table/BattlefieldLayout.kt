@@ -190,9 +190,9 @@ fun BattlefieldLayout(
             val landZoneWidth = minOf(landZoneWidth(sides, landWidth), afterRail * LAND_ZONE_CEILING)
             val mainWidth = afterRail - landZoneWidth - if (landZoneWidth > 0.dp) ZoneGap else 0.dp
 
-            // One size for everything that is not a land, shared across both sides: a creature on the far
-            // side is the same size as one on this side, because the game does not say one is nearer.
-            val cardWidth = mainCardWidth(sides, mainWidth, sideHeight)
+            // A size per kind of permanent, each shared across both sides: a creature on the far side is the
+            // same size as one on this side, because the game does not say one is nearer. See [MainCardWidths].
+            val cardWidths = mainCardWidths(sides, mainWidth, sideHeight)
 
             // **The creatures belong on the screen's centre line, not their column's.** The battlefield is
             // the third column, so centring inside it puts the creatures well right of the middle with a
@@ -260,7 +260,7 @@ fun BattlefieldLayout(
                                     SideRows(
                                         side = side,
                                         order = OpponentOrder,
-                                        cardWidth = cardWidth,
+                                        cardWidths = cardWidths,
                                         centreShift = centreShift,
                                         palette = palette,
                                         artFor = artFor,
@@ -274,7 +274,7 @@ fun BattlefieldLayout(
                                     SideRows(
                                         side = side,
                                         order = ViewerOrder,
-                                        cardWidth = cardWidth,
+                                        cardWidths = cardWidths,
                                         centreShift = centreShift,
                                         palette = palette,
                                         artFor = artFor,
@@ -344,7 +344,7 @@ fun BattlefieldLayout(
             if (stackVisible && stack.isNotEmpty()) {
                 StackRegion(
                     stack = stack,
-                    cardWidth = cardWidth,
+                    cardWidth = cardWidths.largest,
                     palette = palette,
                     artFor = artFor,
                     anchors = anchors,
@@ -490,7 +490,7 @@ private fun SeatLife(
 private fun SideRows(
     side: BattlefieldSide,
     order: List<BattlefieldRow>,
-    cardWidth: Dp,
+    cardWidths: MainCardWidths,
     centreShift: Dp,
     palette: CounterPalette,
     artFor: TableArtResolver?,
@@ -512,7 +512,7 @@ private fun SideRows(
                 PermanentRow(
                     entries = content,
                     tag = BattlefieldTestTags.row(side.playerId, row.name),
-                    width = cardWidth,
+                    width = cardWidths.forRole(row.role),
                     // Only the centred rows slide. A row already pinned to the outside edge is where
                     // it was put on purpose.
                     centreShift = if (row.alignment == Alignment.Center) centreShift else 0.dp,
@@ -699,7 +699,33 @@ private fun landZoneWidth(
 }
 
 /**
- * How wide everything that is not a land is drawn.
+ * How wide each kind of permanent is drawn.
+ *
+ * **Two sizes, because the two kinds are not read the same way.** A creature is the permanent a player
+ * is asked about most — what is attacking, what can block, what its stats have become after four
+ * effects — and it carries the counters and badges that say so. An artifact or an enchantment is
+ * usually read once, when it arrives, and then remembered. Drawing both at one size spent the same
+ * room on both, and the room is what a creature needs.
+ */
+internal data class MainCardWidths(
+    val creature: Dp,
+    val other: Dp,
+) {
+    /** The width [role] is drawn at. Lands are not here — they have their own column and their own size. */
+    fun forRole(role: PermanentRole): Dp = if (role == PermanentRole.Creature) creature else other
+
+    /**
+     * The larger of the two, for the things on this board that are cards without being permanents.
+     *
+     * The stack is the case: an object waiting to resolve has no role — it may become either kind, or
+     * neither — and it is the one object the whole game is currently waiting on, so it takes the
+     * board's readable size rather than its quiet one.
+     */
+    val largest: Dp get() = maxOf(creature, other)
+}
+
+/**
+ * How wide everything that is not a land is drawn, **per role**.
  *
  * Four constraints, and the smallest wins: the preferred size, the busiest row fitting across the main
  * area, the side's rows fitting down its half, and — the one that is easy to forget — a card carrying
@@ -707,68 +733,95 @@ private fun landZoneWidth(
  * name bands show and turned ones reach out to the right. That last was a shipped bug in 0100 and it
  * shows only on the one board that has an Aura on it.
  *
+ * **Crowding is answered per role, and height is answered across both.** A row's width problem is its
+ * own: twelve creatures say nothing about how big an enchantment should be, and shrinking the back row
+ * to pay for the front one was the board taking room from a card that had it. Height is the opposite —
+ * the two rows are stacked in one side and share its height — so when a side does not fit, **both**
+ * roles scale by the same factor. Scaling only the offender would leave the two sizes in whatever
+ * ratio the crowding happened to produce, and the ratio is the thing this exists to state.
+ *
  * Floored at [MinCardWidth]: below it a card stops being readable, which defeats the purpose of
  * shrinking it, so the row scrolls instead — the one place the board admits it has run out of space.
  */
-private fun mainCardWidth(
+private fun mainCardWidths(
     sides: List<BattlefieldSide>,
     mainWidth: Dp,
     sideHeight: Dp,
-): Dp {
-    var busiest = 0
-    var tallest = 0
-    sides.forEach { side ->
-        var populated = 0
-        ViewerOrder.forEach { row ->
-            // **Entries, not permanents.** A pile of twelve Zombie tokens is one thing in the row, and
-            // counting the tokens instead is what made a token board size every card on the table —
-            // both sides, every row — from a crowd that draws as a single stack.
-            val count = side.entriesIn(row.role).size
-            if (count > 0) populated += 1
-            if (count > busiest) busiest = count
-        }
-        if (populated > tallest) tallest = populated
-    }
-    if (busiest == 0) return PreferredMainCardWidth
+): MainCardWidths {
+    // **Entries, not permanents.** A pile of twelve Zombie tokens is one thing in the row, and counting
+    // the tokens instead is what made a token board size every card on the table — both sides, every
+    // row — from a crowd that draws as a single stack.
+    //
+    // Across both sides, because one width is shared by them on purpose: the game does not say one
+    // side's creatures are nearer than the other's.
+    fun busiest(role: PermanentRole) = sides.maxOfOrNull { it.entriesIn(role).size } ?: 0
 
-    // **A crowded row shrinks the board only so far, and then scrolls.** One width is shared by both
-    // sides on purpose — the game does not say one is nearer — which means the busiest row anywhere
-    // decides how big a card is *everywhere*, including the opponent's rows and the non-creature rows
-    // that are not crowded at all. Past [LegibleCardWidth] that trade stops being worth making: the
-    // row that does not fit scrolls, and the rest of the board keeps a card it can read.
-    val byWidth = ((mainWidth - CardGap * (busiest - 1)) / busiest).coerceAtLeast(LegibleCardWidth)
+    // **A crowded row shrinks its cards only so far, and then scrolls.** Past [LegibleCardWidth] the
+    // trade stops being worth making: the row that does not fit scrolls, and the board keeps a card it
+    // can read.
+    fun byWidth(role: PermanentRole): Dp {
+        val count = busiest(role)
+        if (count == 0) return preferredWidthFor(role)
+        return ((mainWidth - CardGap * (count - 1)) / count).coerceAtLeast(LegibleCardWidth)
+    }
+
+    val roles = listOf(PermanentRole.Creature, PermanentRole.Other)
+    if (roles.all { busiest(it) == 0 }) {
+        return MainCardWidths(creature = PreferredCreatureWidth, other = PreferredOtherWidth)
+    }
+
+    var widths =
+        MainCardWidths(
+            creature = minOf(PreferredCreatureWidth, byWidth(PermanentRole.Creature)),
+            other = minOf(PreferredOtherWidth, byWidth(PermanentRole.Other)),
+        )
 
     // **A pile is taller than a card, and the height budget has to know it.** The fan staggers
     // downward and the turned half hangs below, so a row holding one costs `stackHeightInCards()`
     // card-widths of height rather than one card's worth. Budgeting a card per row is what put the
     // non-creature permanents below the bottom of the board — behind the phase bar — the moment a
-    // token pile appeared, and what made the whole side jump when a token tapped and a second pile
-    // split off.
+    // token pile appeared.
     //
-    // Everything here is in **card-width units**, which is what `StackShape` already measures in, so
-    // the division answers a width directly with no aspect ratio applied twice.
-    val tallestSide =
-        sides.maxOfOrNull { side ->
-            ViewerOrder.sumOf { row -> side.entriesIn(row.role).heightInCards().toDouble() }
-        } ?: 0.0
-    val byHeight =
-        if (tallestSide <= 0.0) {
-            PreferredMainCardWidth
-        } else {
-            (sideHeight - RowGap * (tallest - 1).coerceAtLeast(0)) / tallestSide.toFloat()
-        }
-    val plain = minOf(PreferredMainCardWidth, byWidth, byHeight)
-    val rowHeight = plain / BOARD_CARD_ASPECT_RATIO
+    // Everything is in **card-width units**, which is what `StackShape` already measures in, so a row
+    // costs its height in cards times the width of the role that fills it, and no aspect ratio is
+    // applied twice.
+    val scale =
+        sides.minOfOrNull { side ->
+            val populated = ViewerOrder.count { side.entriesIn(it.role).isNotEmpty() }
+            val cards =
+                ViewerOrder.fold(0.dp) { total, row ->
+                    total + widths.forRole(row.role) * side.entriesIn(row.role).heightInCards()
+                }
+            val room = sideHeight - RowGap * (populated - 1).coerceAtLeast(0)
+            if (cards <= 0.dp) 1f else (room / cards).coerceAtMost(1f)
+        } ?: 1f
+    if (scale < 1f) widths = MainCardWidths(creature = widths.creature * scale, other = widths.other * scale)
 
-    val byAssembly =
+    // An assembly is one permanent's problem, so it is answered in that permanent's own role: an Aura
+    // on a creature says nothing about how wide an artifact may be drawn.
+    return MainCardWidths(
+        creature = widths.creature.afterAssemblies(sides, PermanentRole.Creature),
+        other = widths.other.afterAssemblies(sides, PermanentRole.Other),
+    )
+}
+
+/** This width, taken down by whatever a permanent of [role] carrying attachments cannot fit inside. */
+private fun Dp.afterAssemblies(
+    sides: List<BattlefieldSide>,
+    role: PermanentRole,
+): Dp {
+    val rowHeight = this / BOARD_CARD_ASPECT_RATIO
+    val fitted =
         sides
             .flatMap { it.permanents }
-            .filter { it.role != PermanentRole.Land && it.state.attachments.isNotEmpty() }
-            .minOfOrNull { boardCardWidthFitting(it.state, maxWidth = plain, maxHeight = rowHeight) }
-            ?: plain
-
-    return minOf(plain, byAssembly).coerceAtLeast(MinCardWidth)
+            .filter { it.role == role && it.state.attachments.isNotEmpty() }
+            .minOfOrNull { boardCardWidthFitting(it.state, maxWidth = this, maxHeight = rowHeight) }
+            ?: this
+    return minOf(this, fitted).coerceAtLeast(MinCardWidth)
 }
+
+/** The size a permanent of [role] is drawn at when the board has room for it. */
+private fun preferredWidthFor(role: PermanentRole): Dp = if (role == PermanentRole.Creature) PreferredCreatureWidth else PreferredOtherWidth
 
 /**
  * One row of a side's battlefield: which bucket feeds it, and where it sits across the width.
@@ -849,14 +902,32 @@ private val RailWidth = 76.dp
 private val PreferredCardWidth = 112.dp
 
 /**
- * The size everything that is **not** a land is drawn at when the board has room for it.
+ * The size a **non-creature** permanent is drawn at when the board has room for it.
  *
- * Half again the land's. These are the cards a player actually reads — what is attacking, what is
- * enchanted, what a creature's stats have become — and they are the ones carrying counters, badges and
- * an attachment stack on top of the picture. The land column is bounded, so the width this takes comes
- * out of empty board rather than out of the lands.
+ * Half again the land's, and the size Pete picked off a board he liked the look of — this is the one
+ * of the two that was measured rather than derived. An artifact or an enchantment is usually read once,
+ * when it arrives, and remembered after that; this is the width at which reading it once works.
+ *
+ * The land column is bounded, so the width this takes comes out of empty board rather than out of the
+ * lands.
  */
-internal val PreferredMainCardWidth = 252.dp
+internal val PreferredOtherWidth = 252.dp
+
+/**
+ * The size a **creature** is drawn at when the board has room for it.
+ *
+ * A quarter larger than [PreferredOtherWidth], which is Pete's own figure from the same board. It is
+ * the one derived from the other on purpose: the pair is a *ratio*, and a ratio written as two
+ * independent numbers drifts apart the first time either is adjusted.
+ *
+ * A creature is the permanent a player is asked about most — what is attacking, what can block, what
+ * its power has become after four effects — and it is the one carrying the counters and badges that
+ * say so, on top of the picture. The extra quarter is where those go.
+ */
+internal val PreferredCreatureWidth = PreferredOtherWidth * CREATURE_SIZE_ADVANTAGE
+
+/** How much larger a creature is drawn than everything else that is not a land. Pete's own figure. */
+private const val CREATURE_SIZE_ADVANTAGE = 1.25f
 
 /**
  * Below this a card stops being readable, so the row scrolls rather than shrinking further.

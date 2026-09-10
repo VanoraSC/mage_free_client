@@ -242,8 +242,77 @@ class BattlefieldLayoutTest {
 
         val sparse = cardWidthIn(BattlefieldTestTags.row("sparse", "front"))
         val some = cardWidthIn(BattlefieldTestTags.row("some", "front"))
-        assertTrue("a sparse board drew $sparse, past the preferred $PreferredMainCardWidth", sparse <= PreferredMainCardWidth.value)
+        assertTrue("a sparse board drew $sparse, past the preferred $PreferredCreatureWidth", sparse <= PreferredCreatureWidth.value)
         assertTrue("a sparse board drew $sparse against a busier board's $some", sparse - some <= ROUNDING_SLACK_PX)
+    }
+
+    @Test
+    fun `a creature is drawn a quarter larger, and stays that way once the side has to scale`() {
+        // 0121's whole point. A creature is the permanent a player is asked about most — what is
+        // attacking, what can block, what its power has become — and it carries the counters and
+        // badges that say so on top of the picture. One shared size spent the same room on an
+        // enchantment that is read once and remembered.
+        //
+        // **This board is already the scaled case, which is why the ratio is worth asserting here.**
+        // Neither row is crowded, so both start at their preferred width — and the two preferred
+        // widths together are taller than a phone in landscape can give one side, so both are scaled
+        // down to fit. The ratio surviving that is the proof they scaled by the *same* factor, which
+        // is the one thing the shared height budget could get wrong.
+        show(oneSided("me", listOf(bears(), talisman())))
+
+        val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
+        val other = cardWidthIn(BattlefieldTestTags.row("me", "back"))
+
+        assertTrue("the creature measured $creature against a non-creature's $other", creature > other)
+        assertTrue(
+            "the ratio came out ${creature.toFloat() / other} rather than $CREATURE_RATIO",
+            kotlin.math.abs(creature.toFloat() / other.toFloat() - CREATURE_RATIO) <= RATIO_SLACK,
+        )
+    }
+
+    @Test
+    fun `a crowded creature row never shrinks the permanents behind it`() {
+        // A row's width problem is its own. Twelve creatures say nothing about how wide an
+        // enchantment should be drawn, and under one shared width the back row paid for the front
+        // one — the board taking room from a card that had it.
+        //
+        // Measured against the crowded row on the *same* board rather than against a second board:
+        // comparing two boards only says the artifact did not get smaller, which stayed true under
+        // one shared width too — the swarm shrank everything, and a shrunken artifact beside twelve
+        // shrunken creatures still measured no worse than an unshrunken one squeezed by height. The
+        // fact with teeth is that here the artifact is drawn *wider than the creatures beside it*,
+        // which one shared width cannot produce at all.
+        show(oneSided("me", List(12) { creature(it) } + listOf(talisman())))
+
+        val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
+        val other = cardWidthIn(BattlefieldTestTags.row("me", "back"))
+
+        assertTrue(
+            "twelve creatures measured $creature and the artifact behind them $other",
+            other > creature,
+        )
+    }
+
+    @Test
+    fun `a crowded creature row is capped on its own, and the ratio gives way to it`() {
+        // The ratio is a *preference*, not an invariant — it is what the two roles start from, and a
+        // cap that binds on one of them is the board doing its job. Three creatures across a board
+        // this size cannot each have their preferred width, so the creature row is capped below it
+        // while the lone artifact behind is not capped at all, and the pair ends up closer together
+        // than a quarter apart.
+        //
+        // Worth pinning because the obvious wrong fix is to hold the ratio by shrinking the
+        // *uncapped* role to match — which would take room from a card that has it, to preserve a
+        // proportion nobody asked to be preserved at the cost of card size.
+        show(oneSided("me", List(3) { creature(it) } + listOf(talisman())))
+
+        val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
+        val other = cardWidthIn(BattlefieldTestTags.row("me", "back"))
+
+        assertTrue(
+            "a crowded creature row measured $creature against an uncrowded $other",
+            creature.toFloat() / other.toFloat() < CREATURE_RATIO,
+        )
     }
 
     @Test
@@ -676,3 +745,15 @@ private const val ROUNDING_SLACK_PX = 2
  * two measure exactly the same.
  */
 private const val LEAN_MARGIN = 1.35f
+
+/** How much larger a creature is drawn than a permanent that is not one. 0121's own figure. */
+private const val CREATURE_RATIO = 1.25f
+
+/**
+ * How far the ratio may drift and still count as held.
+ *
+ * Both widths are divisions rounded to a whole pixel, so at board sizes the quotient of two of them
+ * lands a percent or so either side. What this must not admit is the two roles being scaled by
+ * different factors, which moves the ratio by tens of percent rather than by one.
+ */
+private const val RATIO_SLACK = 0.04f
