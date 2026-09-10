@@ -52,7 +52,8 @@ import magefree.designsystem.text.SymbolText
  * @param vitals the player, from [tableVitals].
  * @param palette the board's live counter palette, so a kind keeps one colour across the whole board.
  * @param onExpand opens the full list, or `null` for a strip that is only being read.
- * @param onZonePress opens one pile — the count *is* the door to it. `null` leaves the counts as
+ * @param onZonePress opens what is behind the counts. Any of them is the same door: "what has this
+ *   player got that is not on the board" is one question. `null` leaves the counts as
  *   numbers, which is what a strip nobody can act on should be.
  * @param modifier the [Modifier] for the strip.
  */
@@ -63,7 +64,7 @@ fun VitalsStrip(
     palette: CounterPalette,
     modifier: Modifier = Modifier,
     onExpand: (() -> Unit)? = null,
-    onZonePress: ((TableZoneKind) -> Unit)? = null,
+    onZonePress: (() -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -96,7 +97,7 @@ fun VitalsStrip(
                 zone = BoardZone.Hand,
                 count = vitals.handCount,
                 tag = VitalsTestTags.hand(vitals.playerId),
-                onOpen = onZonePress?.let { open -> { open(TableZoneKind.Hand) } },
+                onOpen = onZonePress,
             )
             // The library shows even at zero, and it is the only one that does: an empty library is a
             // loss on the next draw, which is a game state rather than an absence.
@@ -111,7 +112,7 @@ fun VitalsStrip(
                 zone = BoardZone.Graveyard,
                 count = vitals.graveyardCount,
                 tag = VitalsTestTags.graveyard(vitals.playerId),
-                onOpen = onZonePress?.let { open -> { open(TableZoneKind.Graveyard) } },
+                onOpen = onZonePress,
             )
             // **Exile is drawn even at zero**, which no other pile is. Every other absence is
             // unremarkable; an empty exile is a thing a player checks *for* — whether the card that
@@ -122,7 +123,7 @@ fun VitalsStrip(
                 count = vitals.exileCount,
                 tag = VitalsTestTags.exile(vitals.playerId),
                 always = true,
-                onOpen = onZonePress?.let { open -> { open(TableZoneKind.Exile) } },
+                onOpen = onZonePress,
             )
         }
 

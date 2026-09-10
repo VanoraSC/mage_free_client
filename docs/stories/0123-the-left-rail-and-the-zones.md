@@ -115,6 +115,19 @@ nothing to do with it. `TablePhases.kt` is gone; `TableRail.kt` replaces it and 
 the board's height, and `bottomStackHeight` no longer reserves them. So §6's promise that the rail
 costs the board no width arrived as *height returned* on top of it.
 
+**The counts are one door, not four.** A press on any of a seat's counts opens *everything behind
+them at once* — exile always, plus any other pile with cards in it — rather than the pile that was
+pressed. Not the graveyard, which has its own card on the rail and its own press; not the hand, which
+the board already draws along the player's own edge. "What has this player got that is not on the
+board" is one question, and answering it a pile at a time makes the player ask it four times to find
+out three of the answers were empty. `ZoneViewer` therefore takes a *list* and draws a column per
+pile.
+
+**Cards in a pile ask for `boardArt`.** `TableCard.art` is the request as the server named it, at
+whatever size; a Board-tier card draws the illustration alone inside its own frame, so a full card
+scan handed to one draws a whole printing — borders, text box and all — shrunk inside a name plate.
+The hand and the battlefield already ask for the crop; the rail and the viewer now do too.
+
 **Where the seat window still lives.** `PlayerOverlay` — all of a seat's piles side by side — is
 unchanged and still opens by pressing the strip itself. `ZoneViewer` is the new single-pile view, and
 it is what a graveyard or a count opens. Two surfaces, because they answer different questions.

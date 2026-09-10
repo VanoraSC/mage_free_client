@@ -59,12 +59,13 @@ import magefree.designsystem.component.phase.PhaseRailStep
  * @param modifier the [Modifier] for the rail.
  * @param rail the turn, from [phaseRailState], or `null` for a board with no game in it yet — the
  *   same rule every other region here follows.
- * @param graveyards each seat's graveyard, from [tableZones]. A seat with none draws a placeholder
+ * @param zones every seat's piles, from [tableZones]. A seat whose graveyard is empty draws a placeholder
  *   rather than nothing: the rail's whole job is to stay put, and a region that vanished when empty
  *   would move everything under it the first time a creature died.
  * @param artFor resolves a card's art from the printing the server named.
  * @param onExpand opens a seat's full window, or `null` for a rail that is only being read.
- * @param onOpenZone opens one pile, by seat and kind — a press on a graveyard, or on a count.
+ * @param onOpenPiles opens some piles: a graveyard on its own from the rail, or everything behind
+ *   the counts from a press on them.
  * @param onToggleStop invoked with the step and the side whose cell was pressed.
  */
 @Composable
@@ -73,10 +74,10 @@ fun StatusRail(
     palette: CounterPalette,
     modifier: Modifier = Modifier,
     rail: PhaseRailState? = null,
-    graveyards: List<TableZonePile> = emptyList(),
+    zones: List<TableZonePile> = emptyList(),
     artFor: TableArtResolver? = null,
     onExpand: ((TableVitals) -> Unit)? = null,
-    onOpenZone: ((String, TableZoneKind) -> Unit)? = null,
+    onOpenPiles: ((List<TableZonePile>) -> Unit)? = null,
     onToggleStop: ((PhaseRailStep, PhaseBarTurn) -> Unit)? = null,
 ) {
     val opponents = vitals.filterNot { it.isViewer }
@@ -87,8 +88,8 @@ fun StatusRail(
         verticalArrangement = Arrangement.spacedBy(SeatGap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        opponents.forEach { seat -> Graveyard(seat.playerId, graveyards, artFor, onOpenZone) }
-        opponents.forEach { seat -> Seat(seat, palette, onExpand, onOpenZone) }
+        opponents.forEach { seat -> Graveyard(seat.playerId, zones, artFor, onOpenPiles) }
+        opponents.forEach { seat -> Seat(seat, palette, onExpand, zones, onOpenPiles) }
 
         // **The turn takes what is left**, which is what keeps the rail one screen tall however many
         // seats there are. The graveyards and the counts are the fixed ends; the steps divide the
@@ -103,8 +104,8 @@ fun StatusRail(
             Box(modifier = Modifier.fillMaxWidth().weight(1f))
         }
 
-        viewer.forEach { seat -> Seat(seat, palette, onExpand, onOpenZone) }
-        viewer.forEach { seat -> Graveyard(seat.playerId, graveyards, artFor, onOpenZone) }
+        viewer.forEach { seat -> Seat(seat, palette, onExpand, zones, onOpenPiles) }
+        viewer.forEach { seat -> Graveyard(seat.playerId, zones, artFor, onOpenPiles) }
     }
 }
 
@@ -113,13 +114,18 @@ private fun Seat(
     seat: TableVitals,
     palette: CounterPalette,
     onExpand: ((TableVitals) -> Unit)?,
-    onOpenZone: ((String, TableZoneKind) -> Unit)?,
+    zones: List<TableZonePile>,
+    onOpenPiles: ((List<TableZonePile>) -> Unit)?,
 ) {
     VitalsStrip(
         vitals = seat,
         palette = palette,
         onExpand = onExpand?.let { expand -> { expand(seat) } },
-        onZonePress = onOpenZone?.let { open -> { kind -> open(seat.playerId, kind) } },
+        // **The counts are one door, not four.** A press on any of them opens everything behind them
+        // at once — see [pilesBehindTheCounts] — because "what has this player got that is not on the
+        // board" is one question, and answering it a pile at a time makes the player ask it four
+        // times to find out that three of the answers were empty.
+        onZonePress = onOpenPiles?.let { open -> { open(zones.pilesBehindTheCounts(seat.playerId)) } },
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -134,11 +140,11 @@ private fun Seat(
 @Composable
 private fun Graveyard(
     playerId: String,
-    graveyards: List<TableZonePile>,
+    zones: List<TableZonePile>,
     artFor: TableArtResolver?,
-    onOpenZone: ((String, TableZoneKind) -> Unit)?,
+    onOpenPiles: ((List<TableZonePile>) -> Unit)?,
 ) {
-    val pile = graveyards.firstOrNull { it.playerId == playerId && it.kind == TableZoneKind.Graveyard }
+    val pile = zones.pileFor(playerId, TableZoneKind.Graveyard)
     val top = pile?.topCard
 
     Box(
@@ -147,8 +153,8 @@ private fun Graveyard(
                 .fillMaxWidth()
                 .aspectRatio(BOARD_CARD_ASPECT_RATIO)
                 .then(
-                    if (onOpenZone != null) {
-                        Modifier.clickable { onOpenZone(playerId, TableZoneKind.Graveyard) }
+                    if (onOpenPiles != null && pile != null) {
+                        Modifier.clickable { onOpenPiles(listOf(pile)) }
                     } else {
                         Modifier
                     },
@@ -167,7 +173,9 @@ private fun Graveyard(
             BoardCard(
                 state = BoardCardState(card = top.card, power = top.power, toughness = top.toughness),
                 width = maxOf(0.dp, RailCardWidth),
-                art = artFor?.invoke(top.art, top.card),
+                // The art crop, exactly as the hand and the battlefield ask for it — a full card
+                // scan drawn inside a Board-tier frame is a card inside a card.
+                art = artFor?.invoke(top.boardArt, top.card),
             )
         }
     }

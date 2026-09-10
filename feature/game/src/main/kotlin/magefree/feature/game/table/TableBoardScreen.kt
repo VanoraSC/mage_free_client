@@ -55,7 +55,7 @@ import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
  * ┌──────────────────────────────────────────────────────────┐
  * │  BattlefieldLayout — left rail, lands, battlefields, hand │  the board
  * ├───────────────────────────────────────────────────────────┤
- * │  ZoneViewer — one pile, ordered, on a scrim               │  a look
+ * │  ZoneViewer — piles, ordered, on a scrim                  │  a look
  * │  PlayerOverlay — one seat's piles, on a scrim             │  a look
  * ├───────────────────────────────────────────────────────────┤
  * │  FloatingControls / HiddenControlsToggle                  │  the question
@@ -134,9 +134,10 @@ fun TableBoardScreen(
     // it is remembered here rather than carried in the UI state.
     var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
 
-    // Which single pile is open, or null. Held as the pile itself rather than as an id, because a
-    // pile is what the viewer draws and re-resolving one per frame would be looking it up twice.
-    var openZone by remember { mutableStateOf<TableZonePile?>(null) }
+    // Which piles are open, and empty for none. One is a graveyard pressed on the rail; several is a
+    // seat's counts pressed, which opens everything behind them at once. Held as the piles themselves
+    // rather than as ids, because a pile is what the viewer draws.
+    var openPiles by remember { mutableStateOf(emptyList<TableZonePile>()) }
 
     // **What a press on a card does.** Ordinarily it raises the card, and the raised card is where the
     // act is committed — one gesture everywhere, and a look at what you are about to do. While a cost
@@ -155,10 +156,10 @@ fun TableBoardScreen(
 
     // Back closes whatever is open over the board, innermost first, before it leaves the board.
     BackHandler(enabled = uiState.selectedObjectId != null) { onCardTap(null) }
-    BackHandler(enabled = uiState.selectedObjectId == null && openZone != null) { openZone = null }
-    BackHandler(enabled = uiState.selectedObjectId == null && openZone == null && expandedSeat != null) { expandedSeat = null }
+    BackHandler(enabled = uiState.selectedObjectId == null && openPiles.isNotEmpty()) { openPiles = emptyList() }
+    BackHandler(enabled = uiState.selectedObjectId == null && openPiles.isEmpty() && expandedSeat != null) { expandedSeat = null }
     BackHandler(
-        enabled = uiState.selectedObjectId == null && openZone == null && expandedSeat == null,
+        enabled = uiState.selectedObjectId == null && openPiles.isEmpty() && expandedSeat == null,
         onBack = onExit,
     )
 
@@ -202,8 +203,8 @@ fun TableBoardScreen(
                     phases = phaseRailState(snapshot, stops = uiState.stops),
                     // Each seat's graveyard, drawn at its own end of the rail — the top card, which is
                     // what a graveyard looks like on a table and the one card most worth seeing.
-                    graveyards = zones,
-                    onOpenZone = { playerId, kind -> openZone = zones.pileFor(playerId, kind) },
+                    zones = zones,
+                    onOpenPiles = { piles -> openPiles = piles },
                     stack = tableStack(snapshot),
                     // *Show battlefield* takes the stack with it. It is the one layer left over the
                     // board once the panel is gone, and what it covers is exactly what the player
@@ -236,14 +237,14 @@ fun TableBoardScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                // **One pile, opened and scrolled, in the server's own order.** A graveyard is not a
+                // **The piles, opened and scrolled, in the server's own order.** A graveyard is not a
                 // set — what died last is on top — and half the reason to open one is to answer *what
-                // just went there*. Reached from the card on the rail, and from the count, because
-                // both are the same pile said two ways.
-                openZone?.let { pile ->
+                // just went there*. A graveyard arrives here on its own from the rail; a press on the
+                // counts brings everything behind them — exile always, and whatever else holds cards.
+                if (openPiles.isNotEmpty()) {
                     ZoneViewer(
-                        pile = pile,
-                        onDismiss = { openZone = null },
+                        piles = openPiles,
+                        onDismiss = { openPiles = emptyList() },
                         artFor = artFor,
                         onInspect = { id -> onCardTap(id) },
                         modifier = Modifier.zIndex(SEAT_LAYER_Z),

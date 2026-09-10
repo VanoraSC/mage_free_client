@@ -36,12 +36,12 @@ class ZoneViewerTest {
     private val dismissed = mutableListOf<Unit>()
     private val inspected = mutableListOf<String>()
 
-    private fun show(pile: TableZonePile) {
+    private fun show(vararg piles: TableZonePile) {
         composeTestRule.setContent {
             MageTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
                     ZoneViewer(
-                        pile = pile,
+                        piles = piles.toList(),
                         onDismiss = { dismissed += Unit },
                         onInspect = { inspected += it },
                     )
@@ -80,7 +80,7 @@ class ZoneViewerTest {
         // list could be scrolled halfway and the number is still the answer to *how many*.
         show(graveyard())
 
-        composeTestRule.onNodeWithTag(ZoneViewerTestTags.COUNT).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.count(TableZoneKind.Graveyard)).assertIsDisplayed()
     }
 
     @Test
@@ -89,7 +89,7 @@ class ZoneViewerTest {
         // failure to load, which is the one thing it must not be mistaken for.
         show(graveyard(cards = emptyList()))
 
-        composeTestRule.onNodeWithTag(ZoneViewerTestTags.EMPTY).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.empty(TableZoneKind.Graveyard)).assertIsDisplayed()
     }
 
     @Test
@@ -101,6 +101,36 @@ class ZoneViewerTest {
         composeTestRule.onNodeWithTag(ZoneViewerTestTags.card("gy-2")).performClick()
 
         assertEquals(listOf("gy-2"), inspected)
+    }
+
+    @Test
+    fun `several piles open side by side, each with its own name and count`() {
+        // What a press on the counts produces. Side by side rather than one list with headings,
+        // because these are *different piles*: run together, "what is in exile" becomes a question
+        // about how far down you had scrolled.
+        show(
+            pile(TableZoneKind.Exile, listOf(tableCard("ex-1", "Chandra, Torch of Defiance"))),
+            pile(TableZoneKind.Revealed, listOf(tableCard("rev-1", "Shivan Dragon"))),
+        )
+
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.title(TableZoneKind.Exile)).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.title(TableZoneKind.Revealed)).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.card("ex-1")).assertExists()
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.card("rev-1")).assertExists()
+    }
+
+    @Test
+    fun `an empty exile beside a full pile still says it is empty`() {
+        // The case a press on the counts produces most often: exile is offered whether or not there is
+        // anything in it, so its column has to be able to say *nothing here* while its neighbour is
+        // full — an absent column would read as the pile not existing.
+        show(
+            pile(TableZoneKind.Exile, emptyList()),
+            pile(TableZoneKind.Revealed, listOf(tableCard("rev-1", "Shivan Dragon"))),
+        )
+
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.empty(TableZoneKind.Exile)).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.card("rev-1")).assertExists()
     }
 
     @Test
@@ -132,6 +162,11 @@ class ZoneViewerTest {
         kind = TableZoneKind.Graveyard,
         cards = cards,
     )
+
+    private fun pile(
+        kind: TableZoneKind,
+        cards: List<TableCard>,
+    ) = TableZonePile(playerId = "me", isViewer = true, kind = kind, cards = cards)
 
     private fun tableCard(
         id: String,

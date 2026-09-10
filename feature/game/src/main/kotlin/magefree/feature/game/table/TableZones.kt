@@ -236,3 +236,21 @@ fun List<TableZonePile>.pileFor(
     playerId: String,
     kind: TableZoneKind,
 ): TableZonePile? = firstOrNull { it.playerId == playerId && it.kind == kind }
+
+/**
+ * The piles a press on one seat's **counts** opens: everything they have that is not on the board
+ * already.
+ *
+ * **Not the graveyard**, which has its own card on the rail and its own press. **Not the hand**,
+ * which the board draws along the player's own edge — opening a window onto cards already on screen
+ * is a window that says nothing.
+ *
+ * **Exile is always here**, empty or not, and it is the only pile that is. Every other absence is
+ * unremarkable; an empty exile is a thing a player checks *for* — whether the card that vanished is
+ * coming back — and inferring "nothing there" from a missing column is the one answer a board should
+ * never make somebody guess at. Everything else earns its column by having a card in it.
+ */
+fun List<TableZonePile>.pilesBehindTheCounts(playerId: String): List<TableZonePile> =
+    filter { it.playerId == playerId }
+        .filter { it.kind != TableZoneKind.Graveyard && it.kind != TableZoneKind.Hand }
+        .filter { it.cards.isNotEmpty() || it.kind == TableZoneKind.Exile }

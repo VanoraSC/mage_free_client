@@ -109,8 +109,8 @@ import magefree.network.game.CombatGroup
  * @param phases the turn and where in it the game is, from [phaseRailState]. Null draws no rail — the same rule as everywhere
  *   else here, and the state a board has before a game starts.
  * @param onToggleStop invoked with the step and the side whose column was pressed.
- * @param graveyards each seat's graveyard, drawn at its own end of the rail.
- * @param onOpenZone opens one seat's pile — from its graveyard on the rail, or from its count.
+ * @param zones every seat's piles: the rail draws each graveyard's top card and opens them.
+ * @param onOpenPiles opens piles — a graveyard on its own, or everything behind a seat's counts.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
  * @param stackVisible whether to draw the stack at all. False is *Show battlefield* — the layer is a
@@ -140,8 +140,8 @@ fun BattlefieldLayout(
     opponentHand: KnownHand = KnownHand(),
     phases: PhaseRailState? = null,
     onToggleStop: ((PhaseRailStep, PhaseBarTurn) -> Unit)? = null,
-    graveyards: List<TableZonePile> = emptyList(),
-    onOpenZone: ((String, TableZoneKind) -> Unit)? = null,
+    zones: List<TableZonePile> = emptyList(),
+    onOpenPiles: ((List<TableZonePile>) -> Unit)? = null,
     stack: List<TableStackObject> = emptyList(),
     stackVisible: Boolean = true,
     combat: List<CombatGroup> = emptyList(),
@@ -215,10 +215,10 @@ fun BattlefieldLayout(
                         vitals = vitals,
                         palette = palette,
                         rail = phases,
-                        graveyards = graveyards,
+                        zones = zones,
                         artFor = artFor,
                         onExpand = onExpandVitals,
-                        onOpenZone = onOpenZone,
+                        onOpenPiles = onOpenPiles,
                         onToggleStop = onToggleStop,
                         modifier = Modifier.width(railWidth).fillMaxHeight(),
                     )

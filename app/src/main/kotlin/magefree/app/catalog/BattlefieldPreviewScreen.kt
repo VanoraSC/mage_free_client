@@ -117,8 +117,9 @@ fun BattlefieldPreviewScreen(
                 onPlayFromHand = { id -> inspected = "played $id" },
                 vitals = tableVitals(state),
                 onExpandVitals = { seat -> expandedSeat = seat },
-                // The rail draws each seat's graveyard at its own end, so the preview hands it the piles.
-                graveyards = zones,
+                // The rail draws each seat's graveyard at its own end and opens the piles behind the
+                // counts, so the preview hands it every zone.
+                zones = zones,
                 phases =
                     PhaseRailState(
                         steps =

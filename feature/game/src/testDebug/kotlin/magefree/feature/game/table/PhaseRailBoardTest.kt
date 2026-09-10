@@ -43,7 +43,7 @@ class PhaseRailBoardTest {
     val composeTestRule = createComposeRule()
 
     private val pressed = mutableListOf<Pair<TurnSide, String>>()
-    private val opened = mutableListOf<Pair<String, TableZoneKind>>()
+    private val opened = mutableListOf<List<TableZoneKind>>()
 
     private fun show(
         state: GameState,
@@ -56,9 +56,9 @@ class PhaseRailBoardTest {
                         model = battlefieldModel(state),
                         vitals = tableVitals(state),
                         phases = phaseRailState(state, stops = stops),
-                        graveyards = tableZones(state),
+                        zones = tableZones(state),
                         onToggleStop = { step, side -> pressed += side.asTurnSide() to step.id },
-                        onOpenZone = { playerId, kind -> opened += playerId to kind },
+                        onOpenPiles = { piles -> opened += piles.map { it.kind } },
                     )
                 }
             }
@@ -138,18 +138,35 @@ class PhaseRailBoardTest {
 
         composeTestRule.onNodeWithTag(StatusRailTestTags.graveyard("me")).performClick()
 
-        assertEquals(listOf("me" to TableZoneKind.Graveyard), opened)
+        assertEquals(listOf(listOf(TableZoneKind.Graveyard)), opened)
     }
 
     @Test
-    fun `pressing a count opens the pile it counts`() {
-        // The count is the door to the pile, which is 0123's own wording. The library has no door,
-        // because a library is not a thing you may look through.
-        show(twoSeats())
+    fun `pressing a count opens everything behind the counts at once`() {
+        // The counts are one door, not four: *what has this player got that is not on the board* is a
+        // single question, and answering it a pile at a time makes the player ask it four times to
+        // find out three of the answers were empty.
+        //
+        // **Not the graveyard and not the hand.** The graveyard has its own card on the rail and its
+        // own press; the hand is already drawn along the player's own edge, so a window onto it says
+        // nothing. Exile comes even when it is empty — see [pilesBehindTheCounts].
+        show(twoSeats(exile = listOf(card("ex-1", "Chandra, Torch of Defiance"))))
 
         composeTestRule.onNodeWithTag(VitalsTestTags.exile("me"), useUnmergedTree = true).performClick()
 
-        assertEquals(listOf("me" to TableZoneKind.Exile), opened)
+        assertEquals(listOf(listOf(TableZoneKind.Exile)), opened)
+    }
+
+    @Test
+    fun `exile is offered even when there is nothing in it`() {
+        // The one pile drawn at zero, and the reason: an empty exile is a thing a player checks *for*
+        // — whether the card that vanished is coming back — and inferring "nothing there" from a
+        // missing column is the one answer a board should never make somebody guess at.
+        show(twoSeats(exile = emptyList()))
+
+        composeTestRule.onNodeWithTag(VitalsTestTags.exile("me"), useUnmergedTree = true).performClick()
+
+        assertEquals(listOf(listOf(TableZoneKind.Exile)), opened)
     }
 
     @Test
@@ -193,34 +210,38 @@ class PhaseRailBoardTest {
         assertEquals(StepIds.POSTCOMBAT_MAIN, phaseRailState(twoSeats().copy(step = PhaseStep.PostcombatMain)).currentStepId)
     }
 
-    private fun twoSeats(graveyard: List<GameCard> = listOf(card("gy-1", "Llanowar Elves"))) =
-        GameState(
-            gameId = "g1",
-            viewerPlayerId = "me",
-            activePlayerId = "me",
-            step = PhaseStep.PrecombatMain,
-            hasSnapshot = true,
-            players =
-                listOf(
-                    GamePlayer(
-                        playerId = "me",
-                        name = "You",
-                        isViewer = true,
-                        life = 20,
-                        libraryCount = 30,
-                        graveyardCount = graveyard.size,
-                        graveyard = graveyard,
-                        battlefield = listOf(GamePermanent(card = card("bears", "Grizzly Bears"))),
-                    ),
-                    GamePlayer(
-                        playerId = "them",
-                        name = "Opponent",
-                        life = 20,
-                        libraryCount = 30,
-                        battlefield = listOf(GamePermanent(card = card("wurm", "Craw Wurm"))),
-                    ),
+    private fun twoSeats(
+        graveyard: List<GameCard> = listOf(card("gy-1", "Llanowar Elves")),
+        exile: List<GameCard> = emptyList(),
+    ) = GameState(
+        gameId = "g1",
+        viewerPlayerId = "me",
+        activePlayerId = "me",
+        step = PhaseStep.PrecombatMain,
+        hasSnapshot = true,
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = "me",
+                    name = "You",
+                    isViewer = true,
+                    life = 20,
+                    libraryCount = 30,
+                    graveyardCount = graveyard.size,
+                    exileCount = exile.size,
+                    exile = exile,
+                    graveyard = graveyard,
+                    battlefield = listOf(GamePermanent(card = card("bears", "Grizzly Bears"))),
                 ),
-        )
+                GamePlayer(
+                    playerId = "them",
+                    name = "Opponent",
+                    life = 20,
+                    libraryCount = 30,
+                    battlefield = listOf(GamePermanent(card = card("wurm", "Craw Wurm"))),
+                ),
+            ),
+    )
 
     private fun card(
         id: String,
