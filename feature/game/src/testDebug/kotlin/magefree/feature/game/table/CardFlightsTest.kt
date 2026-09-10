@@ -35,32 +35,61 @@ class CardFlightsTest {
 
     private val anchors = BoardAnchors()
     private val stack = mutableStateOf(emptyList<TableStackObject>())
-    private var seen: List<CardFlight> = emptyList()
+    private var flown: StackFlights = StackFlights()
+
+    /** The flights being drawn, which is what every assertion here is about. */
+    private val seen: List<CardFlight> get() = flown.flights
 
     private fun show() {
         composeTestRule.setContent {
             MageTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    seen = rememberCardFlights(stack = stack.value, anchors = anchors)
+                    flown = rememberCardFlights(stack = stack.value, anchors = anchors)
                 }
             }
         }
     }
 
     @Test
-    fun `a spell flies from where its own card was, because it kept its id`() {
-        // A card on the stack has the same object id it had in hand, so the card that left is the card
-        // that arrived — the origin needs no matching and no guessing.
-        anchors.placeForTest(handAnchorId("spell-1"), from())
-        anchors.placeForTest("spell-1", to())
+    fun `a spell flies from where its card was, found by name and not by id`() {
+        // **The id it does not keep.** Upstream builds a stack spell's view from the `Spell` — and
+        // `Spell.getId()` is `ability.getId()`, a fresh UUID, not the card's. The card's own id is on
+        // `Spell.getSourceId()`, which no `CardView` field exposes, so the bridge cannot carry it and
+        // the two ends cannot be joined by id at all. The stack id here is deliberately unrelated to
+        // anything the hand ever held, which is the real case; the name is what both ends carry.
+        anchors.placeForTest(handAnchorId("Something"), from())
+        anchors.placeForTest("spell-ability-1", to())
         // The stack's anchor is the *current* box; the hand's is what it was before the card left, and
         // the anchors keep both because nothing prunes them.
         show()
 
-        stack.value = listOf(entry("spell-1"))
+        stack.value = listOf(entry("spell-ability-1"))
         composeTestRule.waitForIdle()
 
-        assertEquals(listOf("spell-1"), seen.map { it.id })
+        val flight = seen.single()
+        assertEquals("spell-ability-1", flight.id)
+        assertEquals("it should leave from where the card was in hand", from(), flight.from)
+    }
+
+    @Test
+    fun `a spell still flies when its destination is only measured after it arrives`() {
+        // **The order a real board produces, and it is why no card ever flew.** An object is on the
+        // stack in the snapshot *before* it has been laid out there — [BoardAnchors] is written from
+        // `onGloballyPositioned`, which runs after composition — so on the composition that first sees
+        // the arrival there is no destination yet. It was dropped, with its id already recorded as
+        // known, and nothing was ever flown on a real board while every test here passed: each of them
+        // places both anchors before touching the stack, which is the one order the board never does.
+        anchors.placeForTest(handAnchorId("Something"), from())
+        show()
+
+        stack.value = listOf(entry("spell-1"))
+        composeTestRule.waitForIdle()
+        assertEquals("there is nowhere to fly to yet", emptyList<String>(), seen.map { it.id })
+
+        anchors.placeForTest("spell-1", to())
+        composeTestRule.waitForIdle()
+
+        assertEquals("the arrival was still waiting for its destination", listOf("spell-1"), seen.map { it.id })
     }
 
     @Test
@@ -78,6 +107,23 @@ class CardFlightsTest {
         assertEquals("ability-1", flight.id)
         assertEquals(from(), flight.from)
         assertEquals(to(), flight.to)
+    }
+
+    @Test
+    fun `an ability flies from its permanent even though its name is still in the hand`() {
+        // **An ability is named after the card that made it**, and the hand is keyed by name — so a
+        // planeswalker's +1 matched the box its own card had occupied in hand before it was ever
+        // cast, and flew out of the hand instead of out of the permanent on the board. The source is
+        // an id and the server said it; the name is a fallback for the one case with no id at all.
+        anchors.placeForTest(handAnchorId("Something"), Rect(0f, 0f, 40f, 40f))
+        anchors.placeForTest("liliana", from())
+        anchors.placeForTest("plus-one", to())
+        show()
+
+        stack.value = listOf(entry("plus-one", sourceId = "liliana"))
+        composeTestRule.waitForIdle()
+
+        assertEquals("it should leave the permanent, not the hand", from(), seen.single().from)
     }
 
     @Test

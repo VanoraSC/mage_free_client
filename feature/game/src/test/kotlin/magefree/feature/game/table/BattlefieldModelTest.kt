@@ -1,5 +1,6 @@
 package magefree.feature.game.table
 
+import androidx.compose.ui.unit.dp
 import magefree.designsystem.card.BoardBadge
 import magefree.designsystem.card.BoardCardSignal
 import magefree.feature.game.board.BoardAction
@@ -652,4 +653,37 @@ class RowHeightTest {
             role = PermanentRole.Creature,
             state = magefree.designsystem.card.BoardCardState(card = magefree.designsystem.card.CardDisplay(name = id)),
         )
+}
+
+/**
+ * How much height one side is given out of the space above the phase bar and the hand.
+ *
+ * **The gap between the two sides is height too**, and it was never taken out of the budget — so each
+ * side was sized for half a gap more than it had. Invisible on a board with slack; with a hand on
+ * screen there is none, and the surplus came out as the non-creature row overlapping the creatures and
+ * running under the phase bar.
+ */
+class SideHeightTest {
+    @Test
+    fun `the gap between the two sides comes out of the budget`() {
+        val whole = 400.dp
+
+        val each = sideHeightFor(whole, sideCount = 2)
+
+        assertTrue(
+            "two sides plus the gap between them must fit in what there is, got $each each",
+            each * 2 + CentreLineGapForTest <= whole,
+        )
+    }
+
+    @Test
+    fun `a single side pays for no gap, because there is nothing to be apart from`() {
+        // A spectator's board, or one seat left. There is no centre line to leave room for.
+        assertEquals(400.dp, sideHeightFor(400.dp, sideCount = 1))
+    }
+
+    @Test
+    fun `a board too small for the gap asks for nothing rather than a negative height`() {
+        assertEquals(0.dp, sideHeightFor(0.dp, sideCount = 2))
+    }
 }

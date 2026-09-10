@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
@@ -111,6 +112,10 @@ import magefree.network.game.CombatGroup
  * @param onToggleStop invoked when a stoppable step is pressed.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
+ * @param stackVisible whether to draw the stack at all. False is *Show battlefield* — the layer is a
+ *   layer, and the one thing it can still cover is a permanent the player is being asked to pick. The
+ *   stack is passed either way rather than emptied, so the animation host does not see a spell it has
+ *   already flown in arrive a second time when the panel comes back.
  * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
  *   because a stack is two affordances rather than one — the upright copies are the card you would pick
  *   up, and the turned ones are the cards already lying down — and what each *means* is a question
@@ -135,6 +140,7 @@ fun BattlefieldLayout(
     phases: PhaseBarState? = null,
     onToggleStop: ((PhaseBarStep) -> Unit)? = null,
     stack: List<TableStackObject> = emptyList(),
+    stackVisible: Boolean = true,
     combat: List<CombatGroup> = emptyList(),
 ) {
     val palette = rememberCounterPalette()
@@ -161,7 +167,13 @@ fun BattlefieldLayout(
             val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
             val bottomStack = bottomStackHeight(hand, handTile, phases != null)
             val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
-            val sideHeight = contentHeight / sides.size.coerceAtLeast(1)
+
+            // **The gap between the two sides is height too.** `CentreLineGap` separates them and is
+            // deliberately much larger than a row gap, and it was never taken out of the budget — so
+            // each side was sized for half a gap more than it had. On a board with slack that was
+            // invisible; with a hand on screen the slack is gone, and the surplus came out as the
+            // non-creature row overlapping the creatures and running under the phase bar.
+            val sideHeight = sideHeightFor(contentHeight, sides.size)
 
             // **The rail is a column of numbers, so it is as narrow as numbers are.** It was a card wide
             // while it drew the top card of every pile; those became counts, and the width they were using
@@ -254,24 +266,7 @@ fun BattlefieldLayout(
                                         artFor = artFor,
                                         onInspect = onInspect,
                                         anchors = anchors,
-                                        modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else OPPONENT_WEIGHT),
-                                    )
-                                }
-
-                                // **The stack opens the centre line, and closes it again.** The gap between the
-                                // two front rows is where a table puts the stack and where the arrows have the
-                                // shortest way to go. It holds no height when nothing is on it — the board's
-                                // own rule — and the height it takes when something is is honest movement,
-                                // because a spell arriving is a game action.
-                                if (stack.isNotEmpty()) {
-                                    StackRegion(
-                                        stack = stack,
-                                        cardWidth = cardWidth,
-                                        palette = palette,
-                                        artFor = artFor,
-                                        anchors = anchors,
-                                        onInspect = onInspect,
-                                        modifier = Modifier.fillMaxWidth().weight(STACK_WEIGHT),
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
                                     )
                                 }
 
@@ -285,7 +280,7 @@ fun BattlefieldLayout(
                                         artFor = artFor,
                                         onInspect = onInspect,
                                         anchors = anchors,
-                                        modifier = Modifier.fillMaxWidth().weight(if (stack.isEmpty()) 1f else VIEWER_WEIGHT),
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
                                     )
                                 }
                             }
@@ -331,22 +326,66 @@ fun BattlefieldLayout(
                 }
             }
 
+            // **The stack floats on the centre line rather than sitting in it.** In the flow it had a
+            // weight, so a spell arriving compressed both battlefields — and because one card width is
+            // shared by the whole table, compressing the centre resized every card on it. A player
+            // watching a spell go on the stack watched their board shrink around it.
+            //
+            // Floating costs nothing it was buying: it still lands on the centre line, where a table
+            // puts it and where the arrows have the shortest way to go. It simply stops changing the
+            // size of everything else while it is there.
+            //
+            // **Which arrival is still travelling**, so the stack can lay a card out without drawing
+            // it yet — see [StackFlights.arriving]. Read before the region is composed because that
+            // is what it is for.
+            val flights = rememberCardFlights(stack = stack, anchors = anchors, visible = stackVisible)
+            val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
+
+            if (stackVisible && stack.isNotEmpty()) {
+                StackRegion(
+                    stack = stack,
+                    cardWidth = cardWidth,
+                    palette = palette,
+                    artFor = artFor,
+                    anchors = anchors,
+                    onInspect = onInspect,
+                    arriving = flights.arriving - landed.value,
+                    modifier =
+                        Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth()
+                            .padding(horizontal = StackInset)
+                            // **A floating layer says that it floats.** Draw order in a `Box` is
+                            // composition order, which is a fact about this function's text rather
+                            // than about the board — and a permanent drew over the stack panel while
+                            // every line here said it should not. What is a layer is stated.
+                            .zIndex(STACK_LAYER_Z),
+                )
+            }
+
             // **Over everything, and touching nothing.** The arrows are drawn last so they are not covered
             // by the cards they run between, and the `Canvas` takes no pointer input, so the cards
             // underneath answer a press exactly as they did before there were arrows.
-            TargetArrows(stack = stack, anchors = anchors, combat = combat, modifier = Modifier.fillMaxSize())
+            // **An object that is not drawn has nothing to draw an arrow from.** [BoardAnchors] does
+            // not prune, so with the stack hidden its ids still answer with the box they last had —
+            // and the arrow would come out of empty air on the board the player just asked to see.
+            TargetArrows(
+                stack = if (stackVisible) stack else emptyList(),
+                anchors = anchors,
+                combat = combat,
+                modifier = Modifier.fillMaxSize().zIndex(ARROW_LAYER_Z),
+            )
 
             // **A card arriving on the stack, drawn travelling.** Above the arrows and above the cards,
             // because it is the one thing on the board that is momentarily more important than either;
-            // it lands exactly on the stack card that is already drawn underneath it and then stops
+            // it lands exactly on the stack card the region is holding a place for and then stops
             // existing, so nothing here is load-bearing for correctness — see [CardFlights].
-            val flights = rememberCardFlights(stack = stack, anchors = anchors)
-            val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
             CardFlightOverlay(
-                flights = flights.filterNot { it.id in landed.value },
+                flights = flights.flights.filterNot { it.id in landed.value },
                 palette = palette,
                 artFor = artFor,
                 onLanded = { id -> landed.value = landed.value + id },
+                modifier = Modifier.zIndex(FLIGHT_LAYER_Z),
             )
         }
     }
@@ -482,6 +521,7 @@ private fun SideRows(
                     onInspect = onInspect,
                     anchors = anchors,
                     alignment = row.alignment,
+                    towardCentre = towardCentre,
                 )
             }
         }
@@ -500,6 +540,7 @@ private fun PermanentRow(
     onInspect: ((String) -> Unit)?,
     anchors: BoardAnchors,
     alignment: Alignment,
+    towardCentre: Alignment.Vertical,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth(), contentAlignment = alignment) {
@@ -532,7 +573,11 @@ private fun PermanentRow(
                     .let { base -> if (scrolls) base.horizontalScroll(rememberScrollState()) else base }
                     .testTag(tag),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
-            verticalAlignment = Alignment.CenterVertically,
+            // **Entries share the edge nearest the centre line, not their centres.** A pile is taller
+            // than a card, so a row that centred them left a lone creature floating halfway down the
+            // pile beside it — Liliana's Reaver sitting below the tokens it is standing next to. The
+            // rows already meet on the centre line; their contents should too.
+            verticalAlignment = towardCentre,
         ) {
             entries.forEach { entry ->
                 when (entry) {
@@ -562,6 +607,11 @@ private fun PermanentRow(
                             // Every member, not just the front one: a pile draws them all in one
                             // place, and a member anchored where it used to be drew an arrow from there.
                             anchorModifier = anchors.anchorModifier(entry.permanents.map { it.id }),
+                            // Only the half it has. A pile cannot gain the other one — a token that
+                            // taps leaves for a pile of its own — so room kept for it is room nothing
+                            // will ever occupy, and it showed as a pile of tapped tokens hanging a
+                            // title bar below the cards beside it.
+                            halves = entry.halves(),
                         )
                 }
             }
@@ -852,6 +902,9 @@ private val RowGap = 3.dp
  */
 private val CentreLineGap = 20.dp
 
+/** The gap between the two sides, for a test that asserts the budget accounts for it. */
+internal val CentreLineGapForTest: Dp get() = CentreLineGap
+
 /**
  * How much of the board's height the hand is sized against.
  *
@@ -885,20 +938,55 @@ private fun bottomStackHeight(
 /** Room the phase bar takes, for working out what is left above it. */
 private val PhaseBarAllowance = 28.dp
 
-/*
- * How the centre column is shared while the stack is on it.
+/**
+ * How far in from the centre line the stack floats.
  *
- * **The viewer's half gives up less than the opponent's.** Both are compressed, because the stack has
- * to be big enough to read and the height has to come from somewhere — but the row a player is
- * deciding *with* is their own, and squeezing both equally makes the wrong one hardest to read. The
- * opponent's row stays legible; it is being consulted rather than acted on.
+ * **The stack is a floating layer and takes no part in sizing the board.** It used to sit *in* the
+ * centre column with a weight, which meant a spell arriving compressed both battlefields — and
+ * because one card width is shared by the whole table, compressing the centre resized every card on
+ * it. A player watching a spell go on the stack watched their board shrink around it.
  *
- * A weight rather than a fixed height, so the same rule holds on a phone and on a tablet. With an
- * empty stack both sides are one, exactly as they were: no empty region holds height, and no region
- * that is not there may skew the two halves it is not between.
+ * Floating it costs nothing that it was buying: it still lands on the centre line, which is where a
+ * table puts it and where the arrows have the shortest way to go. What it stops doing is changing the
+ * size of everything else while it is there.
  */
-private const val OPPONENT_WEIGHT = 1f
+private val StackInset = 8.dp
 
-private const val STACK_WEIGHT = 1.4f
+/*
+ * The board's own layers, stated rather than implied.
+ *
+ * A `Box` draws its children in composition order, which is a fact about the order lines appear in
+ * this file — and it did not hold: the opponent's newest non-creature permanent drew over the stack
+ * panel, which is composed after the whole battlefield. Anything that floats over the board now says
+ * so, and the numbers say which is over which. The battlefield itself stays at the default 0.
+ */
 
-private const val VIEWER_WEIGHT = 1.3f
+/** The stack: a panel over the board, opaque, and over the permanents it lands among. */
+private const val STACK_LAYER_Z = 1f
+
+/** The arrows, over the cards they run between — including the stack's own. */
+private const val ARROW_LAYER_Z = 2f
+
+/** A card in flight, over everything: for its half-second it is the most important thing drawn. */
+private const val FLIGHT_LAYER_Z = 3f
+
+/**
+ * How much height one side gets, out of the space above the phase bar and the hand.
+ *
+ * **The gap between the two sides is height too.** `CentreLineGap` separates them and is deliberately
+ * much larger than a row gap, and it was never taken out of the budget — so each side was sized for
+ * half a gap more than it actually had. On a board with slack that was invisible; with a hand on
+ * screen there is no slack, and the surplus came out as the non-creature row overlapping the creatures
+ * and running under the phase bar.
+ *
+ * A gap between two sides is `sideCount - 1` of them, which is zero for a spectator's single side and
+ * one for an ordinary game.
+ */
+internal fun sideHeightFor(
+    contentHeight: Dp,
+    sideCount: Int,
+): Dp {
+    val sides = sideCount.coerceAtLeast(1)
+    val gaps = CentreLineGap * (sides - 1).coerceAtLeast(0)
+    return ((contentHeight - gaps) / sides).coerceAtLeast(0.dp)
+}

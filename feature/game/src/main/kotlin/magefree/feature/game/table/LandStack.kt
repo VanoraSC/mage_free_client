@@ -101,6 +101,8 @@ import kotlin.math.sin
  * @param onPress called with the half that was pressed. Hit testing does the work: the turned cards are
  *   drawn over the upright ones, so a press on the exposed strip below them reaches a turned card and a
  *   press on the top half reaches an upright one, with no coordinate arithmetic anywhere.
+ * @param halves which halves this stack keeps room for. Both for a land, which taps in place; a token
+ *   pile passes only the one it has, because tap state is what makes it its own pile.
  * @param modifier the [Modifier] for the stack.
  */
 @Composable
@@ -111,9 +113,10 @@ internal fun LandStack(
     artFor: TableArtResolver?,
     onPress: ((LandStackHalf) -> Unit)?,
     anchorModifier: Modifier = Modifier,
+    halves: StackHalves = StackHalves.Both,
     modifier: Modifier = Modifier,
 ) {
-    val geometry = LandStackGeometry(width)
+    val geometry = LandStackGeometry(width, halves)
     val upright = minOf(stack.untapped.size, PILE_FAN_LIMIT)
     val turned = minOf(stack.tapped.size, PILE_FAN_LIMIT)
 
@@ -342,6 +345,11 @@ private object StackShape {
     /** The card is square at board size. Nothing below assumes that; it reads the ratio. */
     const val CARD_HEIGHT: Float = 1f / BOARD_CARD_ASPECT_RATIO
 
+    /** How far down and right the diagonal runs across the three slots it holds. */
+    val fanX: Float get() = stepX * (PILE_FAN_LIMIT - 1)
+
+    val fanY: Float get() = stepY * (PILE_FAN_LIMIT - 1)
+
     private val turn: Float = TAPPED_TURN_DEGREES * PI.toFloat() / 180f
     private val turnCos: Float = abs(cos(turn))
     private val turnSin: Float = abs(sin(turn))
@@ -383,39 +391,99 @@ private object StackShape {
      *
      * **Only when the leaning card is the wider one.** Written as a maximum rather than as a
      * subtraction because that is the difference between the two cases, and this arithmetic has been
-     * inverted once already.
+     * inverted once already. A stack with no turned half has nothing leaning past its left edge and so
+     * shifts nothing.
      */
-    val overhang: Float = maxOf(0f, turnedHalfWidth - 0.5f)
+    fun overhang(halves: StackHalves): Float = if (halves.turned) maxOf(0f, turnedHalfWidth - 0.5f) else 0f
 
     /**
-     * **The footprint never changes when a land taps.** It always allows for the turned half, whether
-     * or not anything is in it. A stack that grew as its first land tapped would resize the column,
-     * which resizes every card on the board — and §7.3 is clear that movement means a game action
-     * happened. One land turning must not make the opponent's creatures jump.
+     * Where the first turned card's centre sits below the top of the stack.
+     *
+     * **[turnedDrop] is a relationship to the upright card underneath, so a stack with no upright half
+     * does not pay it.** With one, the turned card lands on that card's title bar and the drop is the
+     * distance to it. With none — every copy in this pile is tapped — there is nothing to lie across,
+     * and dropping anyway left the pile's cards a title bar lower than every card beside them while
+     * its box still started level with them. That is the sag Pete saw on a pile of two tapped Zombies
+     * and did not see on a single one, which is drawn as a card and never had a half to reserve.
+     */
+    fun turnedTopCentre(halves: StackHalves): Float = if (halves.upright) CARD_HEIGHT / 2f + turnedDrop else turnedHalfHeight
+
+    /**
+     * **A land stack's footprint never changes when a land taps.** It allows for the turned half
+     * whether or not anything is in it, because a land moves between the halves of the stack it is
+     * already in: one that grew as its first land tapped would resize the column, which resizes every
+     * card on the board, and §7.3 is clear that movement means a game action happened.
+     *
+     * **A token pile is the other case, and it is why this takes an argument at all.** Tap state is
+     * part of a token pile's identity — a tapped Zombie is doing something, so it is drawn as its own
+     * pile rather than as the turned half of one — which means a pile is uniformly upright or
+     * uniformly turned and can never gain the half it does not have. Reserving one anyway made every
+     * pile on the board a full half-card taller and wider than the cards in it, and the board pays for
+     * that in card size everywhere.
      *
      * The width is the furthest right edge on the diagonal: an upright card's own, or a leaning card's
      * centred on the same point, whichever reaches further. The height is the same question downward,
-     * where a leaning card also has the title band it was dropped past to pay for.
+     * measured from whichever half starts highest.
      */
-    val totalWidth: Float = overhang + stepX * (PILE_FAN_LIMIT - 1) + maxOf(1f, 0.5f + turnedHalfWidth)
-    val totalHeight: Float = stepY * (PILE_FAN_LIMIT - 1) + maxOf(CARD_HEIGHT, 2f * turnedHalfHeight + titleBand)
+    fun totalWidth(halves: StackHalves): Float =
+        overhang(halves) + fanX +
+            maxOf(
+                if (halves.upright) 1f else 0f,
+                if (halves.turned) 0.5f + turnedHalfWidth else 0f,
+            )
+
+    fun totalHeight(halves: StackHalves): Float =
+        fanY +
+            maxOf(
+                if (halves.upright) CARD_HEIGHT else 0f,
+                if (halves.turned) turnedTopCentre(halves) + turnedHalfHeight else 0f,
+            )
 
     /** The upright half's own right edge, which is nearer than the stack's — a leaning card reaches past it. */
-    val uprightWidth: Float = overhang + stepX * (PILE_FAN_LIMIT - 1) + 1f
+    fun uprightWidth(halves: StackHalves): Float = overhang(halves) + fanX + 1f
 }
 
-/** [StackShape] in dp, for a card [cardWidth] wide. */
+/**
+ * Which halves a stack keeps room for.
+ *
+ * **Not which halves it currently holds** — for a land stack the answer is both, always, because a
+ * land taps into the stack it is already in and a footprint that changed under it would move every
+ * card on the board. It is a question about what this stack *can* hold, which is why it is a property
+ * of the caller rather than something read off the contents.
+ */
+internal data class StackHalves(
+    val upright: Boolean,
+    val turned: Boolean,
+) {
+    companion object {
+        /** A land stack: a land can tap without leaving, so both halves are always reserved. */
+        val Both: StackHalves = StackHalves(upright = true, turned = true)
+
+        /**
+         * A token pile, which is uniformly upright or uniformly turned by construction — see
+         * [BattlefieldSide.entriesIn]. A pile with neither half is not a thing the row draws; it
+         * reserves both rather than collapsing to nothing, since a zero-sized box is the one answer
+         * that could not be right.
+         */
+        fun of(stack: TableLandStack): StackHalves =
+            StackHalves(upright = stack.untapped.isNotEmpty(), turned = stack.tapped.isNotEmpty())
+                .takeIf { it.upright || it.turned } ?: Both
+    }
+}
+
+/** [StackShape] in dp, for a card [cardWidth] wide holding [halves]. */
 private class LandStackGeometry(
     val cardWidth: Dp,
+    val halves: StackHalves,
 ) {
     val cardHeight: Dp = cardWidth * StackShape.CARD_HEIGHT
-    val totalWidth: Dp = cardWidth * StackShape.totalWidth
-    val totalHeight: Dp = cardWidth * StackShape.totalHeight
+    val totalWidth: Dp = cardWidth * StackShape.totalWidth(halves)
+    val totalHeight: Dp = cardWidth * StackShape.totalHeight(halves)
 
     /** Slot 0 is furthest back — up and left; slot 2 is the top card, lowest and furthest right. */
     fun uprightCentre(slot: Int): Offset2 =
         Offset2(
-            x = cardWidth * (StackShape.overhang + StackShape.stepX * slot + 0.5f),
+            x = cardWidth * (StackShape.overhang(halves) + StackShape.stepX * slot + 0.5f),
             y = cardWidth * (StackShape.stepY * slot + StackShape.CARD_HEIGHT / 2f),
         )
 
@@ -430,10 +498,11 @@ private class LandStackGeometry(
      * It also makes the travel honest. A card leaning over in slot two drops onto slot two; it does not
      * fly across the board to a separate pile, because there is no separate pile.
      */
-    fun turnedCentre(slot: Int): Offset2 {
-        val upright = uprightCentre(slot)
-        return Offset2(x = upright.x, y = upright.y + cardWidth * StackShape.turnedDrop)
-    }
+    fun turnedCentre(slot: Int): Offset2 =
+        Offset2(
+            x = uprightCentre(slot).x,
+            y = cardWidth * (StackShape.turnedTopCentre(halves) + StackShape.stepY * slot),
+        )
 
     /**
      * Each half's own count sits in a different corner, because the halves overlap.
@@ -444,7 +513,8 @@ private class LandStackGeometry(
      * the other direction. Per half rather than per stack: a board with four upright and two turned
      * says four over the upright ones and nothing over the turned ones, which is the truth.
      */
-    fun uprightBox(): HalfBox = HalfBox(left = 0.dp, width = cardWidth * StackShape.uprightWidth, height = totalHeight, atTop = true)
+    fun uprightBox(): HalfBox =
+        HalfBox(left = 0.dp, width = cardWidth * StackShape.uprightWidth(halves), height = totalHeight, atTop = true)
 
     fun turnedBox(): HalfBox = HalfBox(left = 0.dp, width = totalWidth, height = totalHeight, atTop = false)
 }
@@ -484,16 +554,19 @@ private val CountShape = RoundedCornerShape(2.dp)
 private val CountPadding = 2.dp
 
 /**
- * How much room a stack needs, in card widths — the same whatever is in it.
+ * How much room a stack needs, in card widths — the same whatever is in the halves it keeps.
  *
  * Exposed so the board can size its lands by asking rather than by re-deriving the geometry. It used
  * to re-derive it, and the two copies disagreed the moment the card became square and the lean became
  * forty-five degrees: this one still described a card lying flat on its side.
+ *
+ * [halves] defaults to both, which is a land stack — the caller that must never change size. A token
+ * pile passes its own, since it can only ever hold the one it was built from.
  */
-internal fun stackWidthInCards(): Float = StackShape.totalWidth
+internal fun stackWidthInCards(halves: StackHalves = StackHalves.Both): Float = StackShape.totalWidth(halves)
 
-/** How tall a stack is, in card widths — again the same whatever is in it. */
-internal fun stackHeightInCards(): Float = StackShape.totalHeight
+/** How tall a stack is, in card widths — again the same whatever is in the halves it keeps. */
+internal fun stackHeightInCards(halves: StackHalves = StackHalves.Both): Float = StackShape.totalHeight(halves)
 
 /**
  * Which part of a stack was pressed.

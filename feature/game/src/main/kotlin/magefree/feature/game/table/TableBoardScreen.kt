@@ -188,6 +188,11 @@ fun TableBoardScreen(
                             ?: KnownHand(),
                     phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
                     stack = tableStack(snapshot),
+                    // *Show battlefield* takes the stack with it. It is the one layer left over the
+                    // board once the panel is gone, and what it covers is exactly what the player
+                    // pressed the control to reach — a permanent the question is about. One control,
+                    // two states: the battlefield, or the question.
+                    stackVisible = uiState.areControlsVisible,
                     combat = snapshot.combat,
                     // A press on a step cycles its stop for the turn being played. What that then does
                     // is the pass policy's, which reads the same store this writes.
