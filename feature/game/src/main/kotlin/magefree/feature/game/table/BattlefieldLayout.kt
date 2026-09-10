@@ -164,12 +164,18 @@ fun BattlefieldLayout(
             val boardWidth = maxWidth - BoardMargin * 2
             val boardHeight = maxHeight - BoardMargin * 2
 
-            // The bottom of the screen is the hand with the phase bar resting on it. Both belong to the
-            // viewer and both are read between decisions, so they sit together and the board's own rows
-            // stop above them rather than being overlaid by them.
+            // The bottom of the screen is the viewer's hand, read between decisions, so the board's own
+            // rows stop above it rather than being overlaid by it.
             val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
             val bottomStack = bottomStackHeight(hand, handTile)
-            val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
+
+            // **And the top of the screen is the opponent's hand, which cost the budget nothing.** It
+            // was added after this arithmetic was written and never entered it, so every card on the
+            // board was sized against a whole card height the board did not have — which is why the
+            // non-creature row ran off the bottom and over the hand on a board with anything in it.
+            // It is a full card tall: unlike the viewer's, none of it hangs off the edge.
+            val topStack = topStackHeight(opponentHand, handTile)
+            val contentHeight = (boardHeight - bottomStack - topStack).coerceAtLeast(0.dp)
 
             // **The gap between the two sides is height too.** `CentreLineGap` separates them and is
             // deliberately much larger than a row gap, and it was never taken out of the budget — so
@@ -774,10 +780,17 @@ private fun mainCardWidths(
         return MainCardWidths(creature = PreferredCreatureWidth, other = PreferredOtherWidth)
     }
 
+    val creature = minOf(PreferredCreatureWidth, byWidth(PermanentRole.Creature))
     var widths =
         MainCardWidths(
-            creature = minOf(PreferredCreatureWidth, byWidth(PermanentRole.Creature)),
-            other = minOf(PreferredOtherWidth, byWidth(PermanentRole.Other)),
+            creature = creature,
+            // **Never wider than a creature.** A row's width problem is its own, so a crowded creature
+            // row does not shrink the back row *to pay for it* — but it does cap it, because the
+            // ordering is the whole point of having two sizes. A board of six creatures and three
+            // enchantments drew the enchantments half again the size of the creatures: the cards a
+            // player is asked about most, drawn smallest, on the busiest board. Equal rather than the
+            // ratio applied downward, because shrinking a card that has the room buys nothing.
+            other = minOf(PreferredOtherWidth, byWidth(PermanentRole.Other), creature),
         )
 
     // **A pile is taller than a card, and the height budget has to know it.** The fan staggers
@@ -1006,6 +1019,20 @@ private fun bottomStackHeight(
     hand: List<TableCard>,
     handTile: Dp,
 ): Dp = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile)
+
+/**
+ * How much of the top of the screen the opponent's hand has claimed.
+ *
+ * **A whole card, not the fraction the viewer's hand costs.** The viewer's hangs off the bottom edge
+ * and only the part carrying the name is on screen; the opponent's sits inside the column and is drawn
+ * complete. It arrived after the sizing arithmetic was written and was never added to it, so the board
+ * sized every card against height it did not have — and an empty hand takes none of it, which is why
+ * the fault only showed once the opponent was holding something.
+ */
+private fun topStackHeight(
+    hand: KnownHand,
+    handTile: Dp,
+): Dp = if (hand.count == 0) 0.dp else handTile / BOARD_CARD_ASPECT_RATIO
 
 /**
  * How far in from the centre line the stack floats.

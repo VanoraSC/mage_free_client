@@ -271,17 +271,54 @@ class BattlefieldLayoutTest {
     }
 
     @Test
-    fun `a crowded creature row never shrinks the permanents behind it`() {
-        // A row's width problem is its own. Twelve creatures say nothing about how wide an
-        // enchantment should be drawn, and under one shared width the back row paid for the front
-        // one — the board taking room from a card that had it.
+    fun `the opponent's hand costs the board height, and the board sizes itself for it`() {
+        // **The hand at the top was added after this arithmetic was written and never entered it.**
+        // It is a whole card tall — unlike the viewer's, none of it hangs off the edge — so every card
+        // on the board was sized against height the board did not have, and the viewer's back row ran
+        // off the bottom and over their own hand.
         //
-        // Measured against the crowded row on the *same* board rather than against a second board:
-        // comparing two boards only says the artifact did not get smaller, which stayed true under
-        // one shared width too — the swarm shrank everything, and a shrunken artifact beside twelve
-        // shrunken creatures still measured no worse than an unshrunken one squeezed by height. The
-        // fact with teeth is that here the artifact is drawn *wider than the creatures beside it*,
-        // which one shared width cannot produce at all.
+        // Measured as the thing that has to be true rather than as a number: every row the board draws
+        // must end above the hand it is drawn over.
+        // **Measured as the sizing seeing it**, rather than as the rows staying inside the board.
+        // Below `MinCardWidth` the board has admitted it is out of room and a card overflows whatever
+        // the arithmetic says, so "nothing overflows" is not a property that holds at the floor — but
+        // "a hand at the top costs the cards height" holds everywhere, and it is the actual fault.
+        composeTestRule.setContent {
+            MageTheme {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    listOf("empty" to KnownHand(), "held" to KnownHand(hidden = 7)).forEach { (id, theirHand) ->
+                        val board = oneSided(id, listOf(bears(), talisman()))
+                        BattlefieldLayout(
+                            model = battlefieldModel(board),
+                            hand = handCards(board.copy(hand = listOf(forestCard()))),
+                            opponentHand = theirHand,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+
+        val withNoHand = cardWidthIn(BattlefieldTestTags.row("empty", "front"))
+        val withAHand = cardWidthIn(BattlefieldTestTags.row("held", "front"))
+
+        assertTrue(
+            "a creature measured $withNoHand against an empty hand and $withAHand against seven cards",
+            withAHand < withNoHand,
+        )
+    }
+
+    @Test
+    fun `a crowded creature row caps the permanents behind it rather than being dwarfed by them`() {
+        // **Found on a real board, and it read as the sizing being backwards.** A row's width problem
+        // is its own, so a crowded creature row does not shrink the back row *to pay for it* — but
+        // leaving the back row entirely alone drew six enchantments half again the size of the twelve
+        // creatures in front of them. The cards a player is asked about most, drawn smallest, on
+        // exactly the board where it matters.
+        //
+        // So the back row is capped at the creature width: never larger, and no smaller than it has
+        // to be. Equal rather than the ratio applied downward, because shrinking a card that has the
+        // room buys nothing.
         show(oneSided("me", List(12) { creature(it) } + listOf(talisman())))
 
         val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
@@ -289,8 +326,25 @@ class BattlefieldLayoutTest {
 
         assertTrue(
             "twelve creatures measured $creature and the artifact behind them $other",
-            other > creature,
+            other <= creature + ROUNDING_SLACK_PX,
         )
+        assertTrue(
+            "the artifact was shrunk past the creatures it sits behind: $other against $creature",
+            other >= creature - ROUNDING_SLACK_PX,
+        )
+    }
+
+    @Test
+    fun `a crowded back row does not shrink the creatures in front of it`() {
+        // The surviving half of the rule, and the direction that still holds outright: the creature
+        // row's width is decided by the creature row. Twelve artifacts say nothing about how big a
+        // Bear should be, and the ordering the two sizes exist to state is unaffected.
+        show(oneSided("me", listOf(bears()) + List(12) { talisman("t$it") }))
+
+        val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
+        val other = cardWidthIn(BattlefieldTestTags.row("me", "back"))
+
+        assertTrue("one creature measured $creature behind twelve artifacts at $other", creature > other)
     }
 
     @Test
@@ -667,6 +721,8 @@ private fun bears(
     id: String = "bears",
     tapped: Boolean = false,
 ) = permanent(id, "Grizzly Bears", listOf(CardType.Creature), isCreature = true, tapped = tapped)
+
+private fun forestCard() = GameCard(id = "h-1", name = "Forest", cardTypes = listOf(CardType.Land))
 
 private fun creature(index: Int) = permanent("creature-$index", "Saproling", listOf(CardType.Creature), isCreature = true)
 
