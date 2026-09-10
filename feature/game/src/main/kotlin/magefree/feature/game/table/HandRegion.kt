@@ -169,11 +169,13 @@ fun HandRegion(
                     onTap = { onPlay?.invoke(card.id) },
                     onLongPress = onInspect?.let { inspect -> { inspect(card.id) } },
                     // Where this card is, so casting it can be drawn as the card travelling to the
-                    // stack. The anchors keep the box after the card has gone, which is what makes
-                    // the origin available at the moment it is needed — see [CardFlights].
+                    // stack. Under its **name**: a spell on the stack does not carry the id of the
+                    // card it was cast from, and the name is what both ends do carry — see
+                    // [handAnchorId]. The anchors keep the box after the card has gone, which is what
+                    // makes the origin available at the moment it is needed — see [CardFlights].
                     modifier =
                         Modifier
-                            .then(anchors?.anchorModifier(handAnchorId(card.id)) ?: Modifier)
+                            .then(anchors?.anchorModifier(handAnchorId(card.card.name)) ?: Modifier)
                             .testTag(HandTestTags.card(card.id)),
                 )
             }
@@ -221,7 +223,7 @@ private fun ElsewhereCard(
             onLongPress = onInspect?.let { inspect -> { inspect(card.id) } },
             modifier =
                 Modifier
-                    .then(anchors?.anchorModifier(handAnchorId(card.id)) ?: Modifier)
+                    .then(anchors?.anchorModifier(handAnchorId(card.card.name)) ?: Modifier)
                     .testTag(HandTestTags.card(card.id)),
         )
 

@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -69,6 +70,8 @@ import magefree.designsystem.card.CounterPalette
  * @param anchors where each object is drawn, so an arrow can start from it.
  * @param onInspect called with an object's id when it is pressed — the same press every other card on
  *   this board answers to.
+ * @param arriving objects whose flight is still running. Their place is held and measured — the flight
+ *   lands on it — but they are not drawn until it does. See [StackFlights].
  * @param modifier the [Modifier] for the region.
  */
 @Composable
@@ -79,6 +82,7 @@ internal fun StackRegion(
     artFor: TableArtResolver?,
     anchors: BoardAnchors,
     onInspect: ((String) -> Unit)?,
+    arriving: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
 ) {
     if (stack.isEmpty()) return
@@ -130,7 +134,16 @@ internal fun StackRegion(
                         counterPalette = palette,
                         // The arrow leaves from the card, not from the text beside it: the card is the
                         // object, and the text is what it says.
-                        modifier = anchors.anchorModifier(entry.id),
+                        modifier =
+                            anchors
+                                .anchorModifier(entry.id)
+                                // **Laid out, and not yet drawn.** A card still travelling here has
+                                // its place held: the flight lands on this box, so it has to be
+                                // measured — but drawing it too means the card appears at its
+                                // destination *first* and the flight that follows reads as a second
+                                // copy chasing the one that already arrived. `alpha` and not a
+                                // branch, because the box is the whole point. See [CardFlights].
+                                .alpha(if (entry.id in arriving) 0f else 1f),
                     )
 
                     // A vanilla creature spell has no rules text, and draws none rather than an empty

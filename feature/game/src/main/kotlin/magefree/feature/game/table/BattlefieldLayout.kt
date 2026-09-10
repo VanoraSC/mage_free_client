@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import magefree.designsystem.board.BoardSurface
 import magefree.designsystem.card.BOARD_CARD_ASPECT_RATIO
 import magefree.designsystem.card.BoardCard
@@ -333,6 +334,13 @@ fun BattlefieldLayout(
             // Floating costs nothing it was buying: it still lands on the centre line, where a table
             // puts it and where the arrows have the shortest way to go. It simply stops changing the
             // size of everything else while it is there.
+            //
+            // **Which arrival is still travelling**, so the stack can lay a card out without drawing
+            // it yet — see [StackFlights.arriving]. Read before the region is composed because that
+            // is what it is for.
+            val flights = rememberCardFlights(stack = stack, anchors = anchors, visible = stackVisible)
+            val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
+
             if (stackVisible && stack.isNotEmpty()) {
                 StackRegion(
                     stack = stack,
@@ -341,11 +349,17 @@ fun BattlefieldLayout(
                     artFor = artFor,
                     anchors = anchors,
                     onInspect = onInspect,
+                    arriving = flights.arriving - landed.value,
                     modifier =
                         Modifier
                             .align(Alignment.Center)
                             .fillMaxWidth()
-                            .padding(horizontal = StackInset),
+                            .padding(horizontal = StackInset)
+                            // **A floating layer says that it floats.** Draw order in a `Box` is
+                            // composition order, which is a fact about this function's text rather
+                            // than about the board — and a permanent drew over the stack panel while
+                            // every line here said it should not. What is a layer is stated.
+                            .zIndex(STACK_LAYER_Z),
                 )
             }
 
@@ -359,20 +373,19 @@ fun BattlefieldLayout(
                 stack = if (stackVisible) stack else emptyList(),
                 anchors = anchors,
                 combat = combat,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().zIndex(ARROW_LAYER_Z),
             )
 
             // **A card arriving on the stack, drawn travelling.** Above the arrows and above the cards,
             // because it is the one thing on the board that is momentarily more important than either;
-            // it lands exactly on the stack card that is already drawn underneath it and then stops
+            // it lands exactly on the stack card the region is holding a place for and then stops
             // existing, so nothing here is load-bearing for correctness — see [CardFlights].
-            val flights = rememberCardFlights(stack = stack, anchors = anchors, visible = stackVisible)
-            val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
             CardFlightOverlay(
-                flights = flights.filterNot { it.id in landed.value },
+                flights = flights.flights.filterNot { it.id in landed.value },
                 palette = palette,
                 artFor = artFor,
                 onLanded = { id -> landed.value = landed.value + id },
+                modifier = Modifier.zIndex(FLIGHT_LAYER_Z),
             )
         }
     }
@@ -938,6 +951,24 @@ private val PhaseBarAllowance = 28.dp
  * size of everything else while it is there.
  */
 private val StackInset = 8.dp
+
+/*
+ * The board's own layers, stated rather than implied.
+ *
+ * A `Box` draws its children in composition order, which is a fact about the order lines appear in
+ * this file — and it did not hold: the opponent's newest non-creature permanent drew over the stack
+ * panel, which is composed after the whole battlefield. Anything that floats over the board now says
+ * so, and the numbers say which is over which. The battlefield itself stays at the default 0.
+ */
+
+/** The stack: a panel over the board, opaque, and over the permanents it lands among. */
+private const val STACK_LAYER_Z = 1f
+
+/** The arrows, over the cards they run between — including the stack's own. */
+private const val ARROW_LAYER_Z = 2f
+
+/** A card in flight, over everything: for its half-second it is the most important thing drawn. */
+private const val FLIGHT_LAYER_Z = 3f
 
 /**
  * How much height one side gets, out of the space above the phase bar and the hand.

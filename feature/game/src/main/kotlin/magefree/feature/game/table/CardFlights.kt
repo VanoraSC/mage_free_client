@@ -58,6 +58,21 @@ internal data class CardFlight(
 )
 
 /**
+ * What the stack's arrivals mean for this frame.
+ *
+ * @property flights the cards to draw travelling.
+ * @property arriving every object whose arrival is still being played out — the ones in [flights],
+ *   and the ones waiting for their destination to be measured. **The stack draws these in place but
+ *   invisible.** A flight lands on a card that is already drawn underneath it, so without this the
+ *   card appears at its destination *first* and the flight that follows reads as a second copy of it
+ *   chasing the one that already arrived. Laid out either way, because the flight needs the box.
+ */
+internal data class StackFlights(
+    val flights: List<CardFlight> = emptyList(),
+    val arriving: Set<String> = emptySet(),
+)
+
+/**
  * The flights to draw for this snapshot's stack.
  *
  * Kept across recompositions so a flight survives the snapshots that arrive while it is running, and
@@ -75,7 +90,7 @@ internal fun rememberCardFlights(
     stack: List<TableStackObject>,
     anchors: BoardAnchors,
     visible: Boolean = true,
-): List<CardFlight> {
+): StackFlights {
     var known by remember { mutableStateOf(emptySet<String>()) }
     var arriving by remember { mutableStateOf(emptyList<TableStackObject>()) }
     var flights by remember { mutableStateOf(emptyList<CardFlight>()) }
@@ -109,12 +124,15 @@ internal fun rememberCardFlights(
                 stillArriving += entry
                 return@forEach
             }
-            // A spell was in hand under its own id; an ability was never anywhere, and comes out of
-            // the permanent that produced it. The hand is tried first, because a card cast from hand
-            // is the case a player sees most. Neither: the board never measured an origin — an
-            // opponent's card out of a hand this client cannot see — and there is no flight to draw.
+            // A spell was in hand under its own name — see [handAnchorId], which is where the id it
+            // does *not* keep is explained. An ability was never anywhere, and comes out of the
+            // permanent that produced it. The hand is tried first, because a card cast from hand is
+            // the case a player sees most. Neither: the board never measured an origin — an
+            // opponent's card, out of a hand this client cannot see — and there is no flight to draw.
             // That is settled once the destination is known, so it stops waiting either way.
-            val from = anchors.boxOf(handAnchorId(entry.id)) ?: entry.sourceId?.let(anchors::boxOf)
+            val from =
+                anchors.boxOf(handAnchorId(entry.state.card.name))
+                    ?: entry.sourceId?.let(anchors::boxOf)
             if (from != null && from != to) started += CardFlight(id = entry.id, entry = entry, from = from, to = to)
         }
         if (started.isNotEmpty() || stillArriving.size != arriving.size) {
@@ -122,7 +140,10 @@ internal fun rememberCardFlights(
             arriving = stillArriving
         }
     }
-    return flights
+    return StackFlights(
+        flights = flights,
+        arriving = (flights.map { it.id } + arriving.map { it.id }).toSet(),
+    )
 }
 
 /**
@@ -206,10 +227,22 @@ object CardFlightTestTags {
 private const val FLIGHT_MILLIS = 320
 
 /**
- * The anchor id a card in hand reports itself under.
+ * The anchor a card in hand reports itself under: **its name, not its object id.**
  *
- * **Its own namespace, because a spell's two ends share an object id.** A card cast from hand keeps
- * that id onto the stack, so anchoring both under it means the stack's placement overwrites the
- * hand's and the flight has nowhere to start from — it would simply never animate, silently.
+ * **A spell on the stack does not carry the id of the card it was cast from, and this is the whole
+ * reason no spell ever flew.** Upstream builds a stack spell's view from the `Spell` itself —
+ * `new CardView(spell, …)` → `super(sourceCard.getId(), …)` — and `Spell.getId()` returns
+ * `ability.getId()`, a fresh UUID per ability instance (`AbilityImpl`: `this.id = UUID.randomUUID()`).
+ * The card's own id is on `Spell.getSourceId()`, which no `CardView` field exposes and so nothing the
+ * bridge can translate. Matching the two ends by id cannot work and never could.
+ *
+ * What both ends *do* carry is the card's name, so that is the key. Two copies of one card in hand
+ * resolve to whichever laid out last — which is a real card of that name, in the hand, and the only
+ * thing the flight claims. It never says anything about the game: it is where a card was.
+ *
+ * **Its own namespace**, because these keys share a map with the server's object ids and a name is
+ * not one. And keyed this way, the anchors never being pruned stops being an accident and becomes the
+ * mechanism: when the last copy leaves the hand, its box stays under its name, which is exactly the
+ * place the card flies out of.
  */
-internal fun handAnchorId(cardId: String): String = "hand:$cardId"
+internal fun handAnchorId(cardName: String): String = "hand:$cardName"
