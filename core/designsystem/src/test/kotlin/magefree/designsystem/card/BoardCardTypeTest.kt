@@ -52,7 +52,7 @@ class BoardCardTypeTest {
     }
 
     @Test
-    fun `a mana symbol is three quarters of the strip across`() {
+    fun `a mana symbol is half the strip across`() {
         // **Pete's own figure, and the reason the cost is asked for as a diameter.** A disc is drawn
         // slightly over the line it sits in, so a caller passing the wanted diameter in as a font size
         // gets a circle a fifth too big — the conversion lives in `symbolFontSizeFor` and this is what
@@ -61,17 +61,19 @@ class BoardCardTypeTest {
         val type = density.titleTypeFor(strip.dp)
 
         val diameter = symbolDiameterOf(type.cost.value)
-        assertEquals("a symbol should be three quarters of a $strip strip", strip * 0.75f, diameter, TOLERANCE)
+        assertEquals("a symbol should be half of a $strip strip", strip * 0.50f, diameter, TOLERANCE)
     }
 
     @Test
-    fun `the cost is drawn larger than the name, because a symbol is read and a name is skimmed`() {
-        // Three quarters of the strip against a name sized for two lines of it. A cost is a handful of
-        // discs a player reads at a glance to know what they are looking at; a name is prose they
-        // already half-know from the picture.
+    fun `the cost is drawn close to the name's size, neither dwarfing it nor lost beside it`() {
+        // Half the strip against a name sized for two lines of it, so they sit within a few percent of
+        // each other. Three quarters was the first figure and it made a three-symbol cost the loudest
+        // thing on the card; a symbol much *smaller* than the name would be a colour nobody can pick
+        // out at board size, which is the one thing the cost is there for.
         val type = density.titleTypeFor(30.dp)
 
-        assertTrue("cost ${type.cost} against name ${type.name}", type.cost > type.name)
+        val ratio = type.cost.value / type.name.value
+        assertTrue("cost ${type.cost} against name ${type.name} is a ratio of $ratio", ratio in 0.8f..1.4f)
     }
 
     /**

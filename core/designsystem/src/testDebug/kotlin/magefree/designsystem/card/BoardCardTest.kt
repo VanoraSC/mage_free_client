@@ -63,6 +63,24 @@ class BoardCardTest {
      */
 
     @Test
+    fun `the mana cost sits on the strip's right edge, whatever the name is`() {
+        // **Position is layout, which Robolectric does measure**, so unlike the type sizes this one
+        // can be pinned here.
+        //
+        // Found on a board: Duress had its cost immediately beside its short name with the rest of the
+        // strip empty to the right. The name was taking only the width its text needed, which packs
+        // both children to the *start*; it fills what is left now, so the cost is pushed to the edge —
+        // where a real card prints it and where a player's eye goes for it.
+        show(BoardCardState(card = BEARS))
+
+        val strip = composeTestRule.onNodeWithTag(BoardCardTestTags.TITLE, useUnmergedTree = true).fetchSemanticsNode()
+        val cost = composeTestRule.onNodeWithTag(BoardCardTestTags.COST, useUnmergedTree = true).fetchSemanticsNode()
+
+        val gap = strip.boundsInRoot.right - cost.boundsInRoot.right
+        assertTrue("the cost ended ${gap}px short of the strip's right edge", gap <= EDGE_SLACK_PX)
+    }
+
+    @Test
     fun `the black border carries the name and cost, because the art crop has neither`() {
         // The tier draws the illustration on its own, and a real card prints its name in the part of
         // the frame the crop leaves out — so the border says it instead. This is the one place the
@@ -589,6 +607,15 @@ class BoardCardTest {
         const val BARE = "bare"
         const val ENCHANTED = "enchanted"
         const val ATTACHMENT_ART = "attachment-art"
+
+        /**
+         * How far the cost may sit from the strip's right edge and still count as on it.
+         *
+         * The strip's own horizontal padding, plus rounding. What this must not admit is the cost
+         * packed against the *name* instead, which on a short-named card leaves most of the strip
+         * empty to its right — tens of pixels, not a few.
+         */
+        const val EDGE_SLACK_PX = 6
 
         /** The black frame, both sides, plus a pixel of rounding slack. */
         const val BORDER_SLACK_PX = 8

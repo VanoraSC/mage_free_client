@@ -68,5 +68,10 @@ private const val NAME_HEIGHT_SHARE = 0.40f
 
 private const val NAME_LINE_SPACING = 1.15f
 
-/** A mana symbol's diameter, as a share of the strip. Pete's own figure. */
-private const val MANA_DIAMETER_SHARE = 0.75f
+/**
+ * A mana symbol's diameter, as a share of the strip. Pete's own figure.
+ *
+ * Three quarters first, which was too heavy beside the name at board size — a cost of three symbols
+ * read as the loudest thing on the card.
+ */
+private const val MANA_DIAMETER_SHARE = 0.50f

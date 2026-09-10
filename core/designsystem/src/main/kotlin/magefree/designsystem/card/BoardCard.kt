@@ -871,7 +871,12 @@ private fun CardTitleBar(
                 color = BoardSurface.onCardBorder,
                 maxLines = BOARD_CARD_NAME_LINES,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false).testTag(BoardCardTestTags.NAME),
+                // **Fills what is left, so the cost is pushed to the right edge.** `fill = false` let
+                // the name take only the width its text needed, which packed both to the *start* — so
+                // a short name like Duress had its cost sitting immediately beside it with the rest of
+                // the strip empty to the right. The cost belongs on the edge, where a real card prints
+                // it and where a player's eye goes for it whatever the name is.
+                modifier = Modifier.weight(1f).testTag(BoardCardTestTags.NAME),
             )
             card.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
                 SymbolText(
