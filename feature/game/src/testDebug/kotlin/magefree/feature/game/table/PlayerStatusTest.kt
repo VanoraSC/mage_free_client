@@ -116,12 +116,17 @@ class PlayerStatusTest {
     }
 
     @Test
-    fun `an empty zone shows no count for it`() {
+    fun `an empty zone shows no count for it, and exile is the exception`() {
         // The same rule as the counters, and the same reason: a graveyard of nothing is not news.
+        //
+        // **Exile is drawn anyway**, which is 0123's one carve-out. Every other absence is
+        // unremarkable; an empty exile is a thing a player checks *for* — whether the card that
+        // vanished is coming back — and inferring "nothing there" from a missing row is the one answer
+        // a board should never make somebody guess at.
         show(twoSeats())
 
         composeTestRule.onNodeWithTag(VitalsTestTags.graveyard("me"), useUnmergedTree = true).assertDoesNotExist()
-        composeTestRule.onNodeWithTag(VitalsTestTags.exile("me"), useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(VitalsTestTags.exile("me"), useUnmergedTree = true).assertExists()
     }
 
     @Test

@@ -29,10 +29,11 @@ import magefree.cards.art.CardArtSize
 import magefree.designsystem.card.CardPreview
 import magefree.designsystem.card.CardPreviewState
 import magefree.designsystem.component.MageSecondaryButton
-import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.PhaseBarTurn
+import magefree.designsystem.component.phase.PhaseRailState
 import magefree.designsystem.component.phase.PhaseStop
 import magefree.designsystem.component.phase.StepIds
-import magefree.designsystem.component.phase.standardTurnSteps
+import magefree.designsystem.component.phase.standardRailSteps
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.LandStackHalf
@@ -94,6 +95,10 @@ fun BattlefieldPreviewScreen(
     var reading by remember { mutableStateOf<ReadingCard?>(null) }
     // The stops are the one part of the phase bar a player changes, so the preview keeps them live.
     var stops by remember { mutableStateOf(emptyMap<String, PhaseStop>()) }
+
+    // The rail has a column per side, so the preview keeps a set per side too — pressing one column
+    // must visibly not move the other, which is the whole point of the two columns.
+    var opponentStops by remember { mutableStateOf(emptyMap<String, PhaseStop>()) }
     val board = catalogBoard(step)
 
     // The stacking rule is about a *transition* — a card turning a quarter and travelling into the
@@ -112,19 +117,33 @@ fun BattlefieldPreviewScreen(
                 onPlayFromHand = { id -> inspected = "played $id" },
                 vitals = tableVitals(state),
                 onExpandVitals = { seat -> expandedSeat = seat },
+                // The rail draws each seat's graveyard at its own end, so the preview hands it the piles.
+                graveyards = zones,
                 phases =
-                    PhaseBarState(
+                    PhaseRailState(
                         steps =
-                            standardTurnSteps(
-                                stops = stops,
-                                // The mains are rules on your own turn, and the preview is always yours.
-                                locked = setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN),
+                            standardRailSteps(
+                                yours = stops,
+                                opponents = opponentStops,
+                                // The mains are rules on your own turn, and free on somebody else's.
+                                lockedYours = setOf(StepIds.PRECOMBAT_MAIN, StepIds.POSTCOMBAT_MAIN),
+                                lockedBoth =
+                                    setOf(
+                                        StepIds.DECLARE_ATTACKERS,
+                                        StepIds.DECLARE_BLOCKERS,
+                                        StepIds.COMBAT_DAMAGE,
+                                    ),
                             ),
                         currentStepId = StepIds.PRECOMBAT_MAIN,
                     ),
-                // The same three-state cycle the board runs, so the preview shows what a press does.
-                onToggleStop = { step ->
-                    stops = stops + (step.id to (stops[step.id] ?: PhaseStop.None).next())
+                // The same three-state cycle the board runs, per column, so the preview shows both
+                // what a press does and which side it lands on.
+                onToggleStop = { step, side ->
+                    if (side == PhaseBarTurn.Yours) {
+                        stops = stops + (step.id to (stops[step.id] ?: PhaseStop.None).next())
+                    } else {
+                        opponentStops = opponentStops + (step.id to (opponentStops[step.id] ?: PhaseStop.None).next())
+                    }
                 },
                 artFor = artFor,
                 // §7.1: a tap on a card *is* the way to read it, wherever the card is. On the

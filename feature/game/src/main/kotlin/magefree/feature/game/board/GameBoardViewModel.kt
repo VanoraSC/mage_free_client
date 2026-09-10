@@ -119,10 +119,10 @@ data class GameBoardUiState(
     /**
      * Which priority windows the player has asked to be stopped at, both sides.
      *
-     * Carried here so the phase bar draws exactly what was sent to the server — one object, published
+     * Carried here so the rail draws exactly what was sent to the server — one object, published
      * to both, rather than two that could disagree about what is set.
      */
-    val stops: BoardStops = BoardStops(),
+    val stops: BoardStops = BoardStops.Default,
     /**
      * What this client has been shown, folded across **every** snapshot.
      *
@@ -266,11 +266,12 @@ class GameBoardViewModel
             stops.stops
                 .onEach { current ->
                     _uiState.value = _uiState.value.copy(stops = current)
-                    // The same marks on both sides: a mark is about the step, not about whose turn it
-                    // is. Only the rule differs — your own main phases stop however the marks read.
+                    // **Each side's own marks.** The rail has a column per side, so the two sets the
+                    // server has always kept are the two sets the player sets. Your own main phases
+                    // stop however your column reads — that is a rule, not a mark.
                     gameClient.setPriorityStops(
-                        yourTurn = current.asSteps(forced = OWN_MAIN_PHASE_STOPS),
-                        opponentTurn = current.asSteps(),
+                        yourTurn = current.asSteps(TurnSide.Yours, forced = OWN_MAIN_PHASE_STOPS),
+                        opponentTurn = current.asSteps(TurnSide.Theirs),
                     )
                 }.launchIn(viewModelScope)
 
@@ -344,7 +345,10 @@ class GameBoardViewModel
          * question cannot spend the same stop twice.
          */
         private fun consumeOneShotStop(state: GameState) {
-            stops.consumeOnce(state.step.stoppableId() ?: return)
+            // **The side this window belongs to**, from the seat the server marked active. A one-shot
+            // on your own upkeep must not be spent by an opponent's upkeep arriving first: the two are
+            // separate marks, and the window that arrives has to be the one that was asked for.
+            stops.consumeOnce(state.turnSide(), state.step.stoppableId() ?: return)
         }
 
         /**
@@ -515,8 +519,11 @@ class GameBoardViewModel
          * upstream, because a stop the server has not been told about is a stop that cannot happen —
          * `HumanPlayer.priority()` passes for an unset step without ever sending a prompt.
          */
-        fun pressStop(stepId: String) {
-            stops.press(stepId)
+        fun pressStop(
+            side: TurnSide,
+            stepId: String,
+        ) {
+            stops.press(side, stepId)
         }
 
         /**

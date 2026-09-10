@@ -190,7 +190,14 @@ class TableBoardScreenTest {
         // — so the detail had nothing to show and drew nothing, which is a dead affordance.
         render(runningGame(), selectedObjectId = "gy-1")
 
-        composeTestRule.onNodeWithText("Ancestral Recall").assertIsDisplayed()
+        // **Inside the preview**, because the name is now on the board twice: the rail draws the top
+        // card of each graveyard, and the top card of this one is this card. Two nodes with the same
+        // text is the rail working, so the assertion says which one it means.
+        composeTestRule
+            .onNode(
+                hasText("Ancestral Recall") and hasAnyAncestor(hasTestTag(CardPreviewTestTags.PANEL)),
+                useUnmergedTree = true,
+            ).assertExists()
     }
 
     @Test

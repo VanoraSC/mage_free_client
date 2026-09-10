@@ -52,6 +52,8 @@ import magefree.designsystem.text.SymbolText
  * @param vitals the player, from [tableVitals].
  * @param palette the board's live counter palette, so a kind keeps one colour across the whole board.
  * @param onExpand opens the full list, or `null` for a strip that is only being read.
+ * @param onZonePress opens one pile — the count *is* the door to it. `null` leaves the counts as
+ *   numbers, which is what a strip nobody can act on should be.
  * @param modifier the [Modifier] for the strip.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -61,6 +63,7 @@ fun VitalsStrip(
     palette: CounterPalette,
     modifier: Modifier = Modifier,
     onExpand: (() -> Unit)? = null,
+    onZonePress: ((TableZoneKind) -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -89,7 +92,12 @@ fun VitalsStrip(
             horizontalArrangement = Arrangement.spacedBy(ChipGap, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(RowGap),
         ) {
-            ZoneCount(zone = BoardZone.Hand, count = vitals.handCount, tag = VitalsTestTags.hand(vitals.playerId))
+            ZoneCount(
+                zone = BoardZone.Hand,
+                count = vitals.handCount,
+                tag = VitalsTestTags.hand(vitals.playerId),
+                onOpen = onZonePress?.let { open -> { open(TableZoneKind.Hand) } },
+            )
             // The library shows even at zero, and it is the only one that does: an empty library is a
             // loss on the next draw, which is a game state rather than an absence.
             ZoneCount(
@@ -99,8 +107,23 @@ fun VitalsStrip(
                 always = true,
                 alarming = vitals.isDecking,
             )
-            ZoneCount(zone = BoardZone.Graveyard, count = vitals.graveyardCount, tag = VitalsTestTags.graveyard(vitals.playerId))
-            ZoneCount(zone = BoardZone.Exile, count = vitals.exileCount, tag = VitalsTestTags.exile(vitals.playerId))
+            ZoneCount(
+                zone = BoardZone.Graveyard,
+                count = vitals.graveyardCount,
+                tag = VitalsTestTags.graveyard(vitals.playerId),
+                onOpen = onZonePress?.let { open -> { open(TableZoneKind.Graveyard) } },
+            )
+            // **Exile is drawn even at zero**, which no other pile is. Every other absence is
+            // unremarkable; an empty exile is a thing a player checks *for* — whether the card that
+            // vanished is coming back — and inferring "nothing there" from a missing row is the one
+            // answer a board should never make somebody guess at.
+            ZoneCount(
+                zone = BoardZone.Exile,
+                count = vitals.exileCount,
+                tag = VitalsTestTags.exile(vitals.playerId),
+                always = true,
+                onOpen = onZonePress?.let { open -> { open(TableZoneKind.Exile) } },
+            )
         }
 
         // **The pool by colour, in the game's own symbols.** One amber chip carrying the total said
@@ -176,12 +199,15 @@ private fun ZoneCount(
     tag: String,
     always: Boolean = false,
     alarming: Boolean = false,
+    onOpen: (() -> Unit)? = null,
 ) {
     if (count <= 0 && !always) return
     Row(
         horizontalArrangement = Arrangement.spacedBy(ZoneIconGap),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.testTag(tag),
+        // A count is a door to the pile it counts: pressing it opens that pile, ordered and
+        // scrollable. The library has none, because a library is not a thing you may look through.
+        modifier = Modifier.let { base -> onOpen?.let { base.clickable(onClick = it) } ?: base }.testTag(tag),
     ) {
         ZoneIcon(zone = zone)
         Text(

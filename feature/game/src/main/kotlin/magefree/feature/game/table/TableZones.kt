@@ -225,3 +225,14 @@ private fun String.isOrdinaryExile(): Boolean = isBlank() || equals(DEFAULT_EXIL
 
 /** Upstream's name for the exile pile that is not any effect's own. */
 private const val DEFAULT_EXILE_ZONE = "Permanent"
+
+/**
+ * One seat's pile of [kind], or `null` for a seat or a kind this snapshot has none of.
+ *
+ * The rail and the viewer both go through this, so the card drawn on the rail and the card at the top
+ * of the opened list are the same object rather than two lookups that could disagree.
+ */
+fun List<TableZonePile>.pileFor(
+    playerId: String,
+    kind: TableZoneKind,
+): TableZonePile? = firstOrNull { it.playerId == playerId && it.kind == kind }
