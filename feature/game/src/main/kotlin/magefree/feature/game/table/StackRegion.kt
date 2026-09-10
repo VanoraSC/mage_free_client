@@ -1,6 +1,7 @@
 package magefree.feature.game.table
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -122,7 +123,16 @@ internal fun StackRegion(
         ) {
             stack.forEach { entry ->
                 Row(
-                    modifier = Modifier.fillMaxHeight().testTag(StackTestTags.entry(entry.id)),
+                    // **The text is part of the object, so pressing it opens the object.** The card
+                    // alone answered a press, and the card is the smaller half of what is drawn — a
+                    // player reading the rules and reaching for them hit nothing at all. What it says
+                    // and what it is are one thing here.
+                    modifier =
+                        Modifier
+                            .fillMaxHeight()
+                            .then(
+                                onInspect?.let { inspect -> Modifier.clickable { inspect(entry.id) } } ?: Modifier,
+                            ).testTag(StackTestTags.entry(entry.id)),
                     horizontalArrangement = Arrangement.spacedBy(TextGap),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

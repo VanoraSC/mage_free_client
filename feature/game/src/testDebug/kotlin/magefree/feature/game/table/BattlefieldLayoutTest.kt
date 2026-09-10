@@ -230,20 +230,43 @@ class BattlefieldLayoutTest {
         // Nothing about a game says a Forest matters more when there is only one of it. A card has a
         // size; the board shrinks it when it gets busy and never grows it when it gets quiet.
         //
-        // **Never past the preferred size**, and no bigger than a board with four creatures on it.
-        // The equality this used to assert held only while both boards clamped at a ceiling; the
-        // preferred size is now larger than an 891x411 board can give a row, so both are sized by the
-        // space instead and land within a pixel of each other by different arithmetic. The half of
-        // the rule about a *busy* board shrinking is asserted by the test below this one.
+        // **Never past its share of the screen**, and no bigger than a board with four creatures on
+        // it. The ceiling is a fraction of the screen's own width rather than a dp, so a board twice
+        // as wide draws cards twice as big and a card never takes more of the screen than it is
+        // allowed either way.
         showPair(
             left = oneSided("sparse", listOf(creature(0))),
             right = oneSided("some", List(4) { creature(it) }),
         )
 
+        val ceiling = SCREEN_WIDTH_DP * CREATURE_SHARE
         val sparse = cardWidthIn(BattlefieldTestTags.row("sparse", "front"))
         val some = cardWidthIn(BattlefieldTestTags.row("some", "front"))
-        assertTrue("a sparse board drew $sparse, past the preferred $PreferredCreatureWidth", sparse <= PreferredCreatureWidth.value)
+        assertTrue("a sparse board drew $sparse, past its $ceiling share of the screen", sparse <= ceiling + ROUNDING_SLACK_PX)
         assertTrue("a sparse board drew $sparse against a busier board's $some", sparse - some <= ROUNDING_SLACK_PX)
+    }
+
+    @Test
+    fun `a creature takes a seventh of the screen and everything else a tenth`() {
+        // Pete's own numbers, and the shape of the rule: a ceiling on how much of the *screen* one
+        // card may take. Stated in dp it meant something different on every device; stated as a share
+        // it means the same thing everywhere, which is what a ceiling has to do.
+        //
+        // An uncrowded board, so nothing else is binding — this is the ceiling being measured, not the
+        // constraint chain under it.
+        show(oneSided("me", listOf(bears(), talisman(), forest())))
+
+        val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
+        val other = cardWidthIn(BattlefieldTestTags.row("me", "back"))
+
+        assertTrue(
+            "a creature measured $creature against a ceiling of ${SCREEN_WIDTH_DP * CREATURE_SHARE}",
+            creature <= SCREEN_WIDTH_DP * CREATURE_SHARE + ROUNDING_SLACK_PX,
+        )
+        assertTrue(
+            "a non-creature measured $other against a ceiling of ${SCREEN_WIDTH_DP * OTHER_SHARE}",
+            other <= SCREEN_WIDTH_DP * OTHER_SHARE + ROUNDING_SLACK_PX,
+        )
     }
 
     @Test
@@ -316,9 +339,11 @@ class BattlefieldLayoutTest {
         // creatures in front of them. The cards a player is asked about most, drawn smallest, on
         // exactly the board where it matters.
         //
-        // So the back row is capped at the creature width: never larger, and no smaller than it has
-        // to be. Equal rather than the ratio applied downward, because shrinking a card that has the
-        // room buys nothing.
+        // So the back row is capped at the creature width. It may still come out smaller — its own
+        // ceiling is a tenth of the screen and a crowded creature row floors at the legible width,
+        // which is more than that — but it may never come out larger, which is the ordering the two
+        // sizes exist to state.
+
         show(oneSided("me", List(12) { creature(it) } + listOf(talisman())))
 
         val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
@@ -327,10 +352,6 @@ class BattlefieldLayoutTest {
         assertTrue(
             "twelve creatures measured $creature and the artifact behind them $other",
             other <= creature + ROUNDING_SLACK_PX,
-        )
-        assertTrue(
-            "the artifact was shrunk past the creatures it sits behind: $other against $creature",
-            other >= creature - ROUNDING_SLACK_PX,
         )
     }
 
@@ -355,10 +376,13 @@ class BattlefieldLayoutTest {
         // while the lone artifact behind is not capped at all, and the pair ends up closer together
         // than a quarter apart.
         //
+        // Eight of them, because three still fit at their ceiling on a board this wide: the cap has
+        // to actually bind for there to be anything to observe.
+        //
         // Worth pinning because the obvious wrong fix is to hold the ratio by shrinking the
         // *uncapped* role to match — which would take room from a card that has it, to preserve a
         // proportion nobody asked to be preserved at the cost of card size.
-        show(oneSided("me", List(3) { creature(it) } + listOf(talisman())))
+        show(oneSided("me", List(8) { creature(it) } + listOf(talisman())))
 
         val creature = cardWidthIn(BattlefieldTestTags.row("me", "front"))
         val other = cardWidthIn(BattlefieldTestTags.row("me", "back"))
@@ -817,8 +841,22 @@ private const val ROUNDING_SLACK_PX = 2
  */
 private const val LEAN_MARGIN = 1.35f
 
-/** How much larger a creature is drawn than a permanent that is not one. 0121's own figure. */
-private const val CREATURE_RATIO = 1.25f
+/**
+ * The screen these tests run on, from the `@Config` qualifier at the top of the class.
+ *
+ * Written out because the ceilings are a *share* of it, so a test that could not name it would be
+ * asserting against a number nobody could check. Robolectric renders at mdpi, so a dp is a pixel and
+ * the measured widths compare directly.
+ */
+private const val SCREEN_WIDTH_DP = 891f
+
+/** A creature's share of the screen, and a non-creature's. Pete's own figures. */
+private const val CREATURE_SHARE = 0.15f
+
+private const val OTHER_SHARE = 0.10f
+
+/** How much larger a creature is drawn than a permanent that is not one, at their ceilings. */
+private const val CREATURE_RATIO = CREATURE_SHARE / OTHER_SHARE
 
 /**
  * How far the ratio may drift and still count as held.
