@@ -402,54 +402,65 @@ class BattlefieldLayoutTest {
     }
 
     @Test
-    fun `a stack shows three faces and then starts counting`() {
-        // The fan caps so ten Plains cost the width of three, and the count only appears where the
-        // picture stops answering the question: one, two and three are visible by looking, and four
-        // is the first number a glance cannot give you.
+    fun `a stack of four draws one card and says four`() {
+        // **The picture answers *which land* and the tally answers *how many*.** The fan drew up to
+        // three faces per half and only counted past that, which spent a card and a half of width on
+        // a number — and the number was the part a glance could not give you anyway.
         show(oneSided("me", (1..4).map { plains("p$it") }))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p1")).assertIsDisplayed()
-        composeTestRule.onNodeWithText("×4").assertIsDisplayed()
+        assertEquals("one card, however many copies", 1, cardsInStack("p1").size)
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1"), useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithText("4").assertIsDisplayed()
     }
 
     @Test
-    fun `three of a kind need no count, because three is countable`() {
-        show(oneSided("me", (1..3).map { plains("p$it") }))
+    fun `one of a land still says one, because nothing else does`() {
+        // The fan's badges appeared at four, when the picture stopped being countable. Nothing is
+        // countable now — one Plains and four Plains draw the same face — so the number is always
+        // there, and a stack that hid it would be a stack that answers *how many* with silence.
+        show(oneSided("me", listOf(plains("p1"))))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1")).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1"), useUnmergedTree = true).assertExists()
     }
 
     @Test
-    fun `tapping one splits the stack and the count goes away`() {
-        // Pete's worked example, rendered: four Plains with a count, one tapped, and the untapped
-        // stack is back to three faces and no badge — beside a tapped stack of one.
-        show(oneSided("me", listOf(plains("p1", tapped = true)) + (2..4).map { plains("p$it") }))
-
-        // Still one stack — tapping moved a copy into its other half rather than splitting it in two.
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.stack("p2")).assertIsDisplayed()
-        composeTestRule.onNodeWithText("×4").assertDoesNotExist()
-    }
-
-    @Test
-    fun `each half counts only itself`() {
-        // Four upright and two turned is not a stack of six with a badge saying so: the two turned
-        // ones are right there, visible, and counting them again would be counting cards the player
-        // can already see. Only the half that has run out of places to draw says a number.
+    fun `a mixed stack is one turned card over one upright card`() {
+        // Pete's own wording. Two faces and no more, whatever the counts are: what a player needs from
+        // the picture is *is there anything left to tap*, and one of each state answers it.
         show(oneSided("me", (1..4).map { plains("p$it") } + (5..6).map { plains("p$it", tapped = true) }))
 
-        composeTestRule.onNodeWithText("×4").assertIsDisplayed()
-        composeTestRule.onNodeWithText("×6").assertDoesNotExist()
-        composeTestRule.onNodeWithText("×2").assertDoesNotExist()
+        assertEquals("one upright and one turned", 2, cardsInStack("p1").size)
     }
 
     @Test
-    fun `a fully tapped stack counts on its turned half`() {
-        // The end of the worked example: tap the last of four and there are three turned faces and a
-        // count, with nothing upright at all.
-        show(oneSided("me", (1..4).map { plains("p$it", tapped = true) }))
+    fun `each number counts its own half`() {
+        // Four standing and two turned is two numbers, not a total: *how many can I still tap* is the
+        // question the bar exists to answer, and a six would answer a different one.
+        show(oneSided("me", (1..4).map { plains("p$it") } + (5..6).map { plains("p$it", tapped = true) }))
 
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackTappedCount("p1")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1")).assertDoesNotExist()
+        composeTestRule.onNodeWithText("4").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2").assertIsDisplayed()
+        composeTestRule.onNodeWithText("6").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a half with nothing in it writes nothing`() {
+        // A grey zero beside an untouched stack is noise, and the absence says the same thing. Both
+        // ends of the rule: nothing standing writes no standing number, and nothing turned writes no
+        // turned one.
+        show(oneSided("me", (1..4).map { plains("p$it", tapped = true) }))
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackTappedCount("p1"), useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1"), useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `an untouched stack writes no turned number`() {
+        show(oneSided("me", (1..4).map { plains("p$it") }))
+
+        composeTestRule.onNodeWithTag(BattlefieldTestTags.stackCount("p1"), useUnmergedTree = true).assertExists()
+        composeTestRule
+            .onNodeWithTag(BattlefieldTestTags.stackTappedCount("p1"), useUnmergedTree = true)
+            .assertDoesNotExist()
     }
 
     @Test
@@ -610,14 +621,18 @@ class BattlefieldLayoutTest {
         // The same fault in the other direction, and the expensive one: every upright pile claimed the
         // leaning half's overhang and the drop below it, so a board that made tokens shrank every card
         // on it — both sides, every row — to fit room nothing would ever occupy.
+        //
+        // Measured from the end of the tally rather than from the box's edge: the bar is on the left
+        // of every stack now and the card starts after it. What must not be there is the *overhang*,
+        // which is a further fifth of a card and belongs to a lean this pile can never have.
         show(oneSided("me", listOf(bears("standing")) + (1..2).map { zombie("z$it") }))
 
-        val box = bounds(BattlefieldTestTags.stack("z1"))
+        val tally = bounds(BattlefieldTestTags.stackTally("z1"))
         val nearest = cardsInStack("z1").minOf { it.left }
 
         assertTrue(
-            "the pile's cards started ${nearest - box.left}px right of the left edge of their own box",
-            nearest - box.left <= ROUNDING_SLACK_PX,
+            "the pile's card started ${nearest - tally.right}px right of the tally beside it",
+            nearest - tally.right <= ROUNDING_SLACK_PX,
         )
     }
 

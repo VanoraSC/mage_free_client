@@ -884,10 +884,13 @@ object BattlefieldTestTags {
     /** One land stack, by the id it reports when tapped. */
     fun stack(stackId: String): String = "battlefield-stack-$stackId"
 
-    /** A stack count badge, present only past [PILE_FAN_LIMIT]. */
+    /** The bar down a stack's left edge carrying both counts. */
+    fun stackTally(stackId: String): String = "battlefield-stack-tally-$stackId"
+
+    /** How many copies are standing. Absent when none are. */
     fun stackCount(stackId: String): String = "battlefield-stack-count-$stackId"
 
-    /** The turned half's count badge. */
+    /** How many are turned. Absent when none are. */
     fun stackTappedCount(stackId: String): String = "battlefield-stack-tapped-count-$stackId"
 }
 

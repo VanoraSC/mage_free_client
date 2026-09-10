@@ -250,17 +250,18 @@ sealed interface RowEntry {
     /**
      * How much of the row this occupies, in card widths.
      *
-     * A pile is wider than a card — the fan staggers and the turned half reaches right — so a row
-     * that budgeted a card per entry would put its last pile off the edge.
+     * A pile is wider than a card — the tally sits down its left edge, and a turned card leans past
+     * the upright one's side — so a row that budgeted a card per entry would put its last pile off
+     * the edge.
      */
     fun widthInCards(): Float = if (this is Pile) stackWidthInCards(halves()) else 1f
 
     /**
      * How tall this is, in card **widths** — the unit `StackShape` measures in.
      *
-     * A pile is taller than a card: the fan staggers downward and the turned half hangs below. A
-     * layout that budgeted a card's height per row put the non-creature permanents off the bottom of
-     * the board the moment a pile appeared.
+     * **An upright pile is exactly a card tall**, which it was not while a pile was a fan: the
+     * stagger and the room kept below for a turned half came out of every card on the board. A turned
+     * one is genuinely taller, because a square on its corner is √2 across.
      */
     fun heightInCards(): Float = if (this is Pile) stackHeightInCards(halves()) else cardHeightInCards()
 
@@ -367,9 +368,6 @@ private fun TablePermanent.asOwnStack(): TableLandStack =
     } else {
         TableLandStack(untapped = listOf(this), tapped = emptyList())
     }
-
-/** How many faces each half of a stack shows before it starts counting instead. */
-const val PILE_FAN_LIMIT: Int = 3
 
 /**
  * Both halves of the board.
