@@ -50,6 +50,18 @@ class BoardCardTest {
         }
     }
 
+    /*
+     * **Nothing here measures text, and that is a limit of the harness rather than a choice.**
+     * Robolectric stubs the font metrics: every glyph is one pixel wide whatever the size, and a text
+     * node reports the height of the box it was given rather than of the lines in it. So a test that
+     * claimed a name was drawn larger, or that it had wrapped to a second line, would pass at any font
+     * size at all — including zero.
+     *
+     * The type's *arithmetic* is a pure function and is tested in `BoardCardTypeTest`; how it looks is
+     * an eyes-on check on a real device. Three tests asserting the rendering were written and deleted
+     * rather than left green and empty.
+     */
+
     @Test
     fun `the black border carries the name and cost, because the art crop has neither`() {
         // The tier draws the illustration on its own, and a real card prints its name in the part of
@@ -582,6 +594,19 @@ class BoardCardTest {
         const val BORDER_SLACK_PX = 8
 
         val BEARS = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear")
+
+        /** A short name that fits on one line beside its cost, even on the smaller card. */
+        val SHORT_NAMED = CardDisplay(name = "Bog", manaCost = "B", typeLine = "Land")
+
+        /** A name no card this size fits on one line — the wrapping case, from a real board. */
+        val LONG_NAMED = CardDisplay(name = "Liliana, Dreadhorde General", manaCost = "4BB", typeLine = "Planeswalker")
+
+        /** Two card sizes far enough apart that a share of the strip is visibly a different size. */
+        val SMALL_CARD = 90.dp
+        val LARGE_CARD = 180.dp
+
+        /** How far a measured centre may drift and still count as unmoved. */
+        const val ROUNDING_SLACK = 1.5
         val FOREST = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")
         val PACIFISM = BoardAttachment(name = "Pacifism", manaCost = "1W")
         val HOLY_STRENGTH = BoardAttachment(name = "Holy Strength", manaCost = "W")

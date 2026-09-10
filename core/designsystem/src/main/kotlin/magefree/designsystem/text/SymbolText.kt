@@ -16,6 +16,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 
@@ -198,6 +199,17 @@ fun SymbolText(
  * font size reads as small, because a disc's full width is doing the work a letter's x-height does.
  */
 private const val SYMBOL_SCALE = 1.2f
+
+/**
+ * The font size that draws a symbol [diameter] across.
+ *
+ * **Because a disc is not its font size.** Symbols are drawn slightly over the line they sit in — see
+ * [SYMBOL_SCALE] — so a caller that wants a circle of a particular size and passes that size as a font
+ * size gets one a fifth too big. Callers who are laying a symbol into a box they have measured ask for
+ * the diameter and let this do the conversion, which keeps the ratio in one place rather than repeated
+ * wherever somebody needed a circle to fit.
+ */
+fun symbolFontSizeFor(diameter: TextUnit): TextUnit = diameter / SYMBOL_SCALE
 
 /** Used only when a style carries no font size at all. */
 private val DefaultSymbolSize = 14.sp
