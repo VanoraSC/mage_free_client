@@ -1,11 +1,12 @@
 package magefree.feature.game.table
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -28,15 +29,15 @@ import magefree.designsystem.card.CounterPalette
  * second point bluntly — `StackAbilityView` carries a nested `sourceCard` and the reference GUI
  * replaces the ability with it outright — and the first is how the game is played on a table.
  *
- * **Where it flies from is the server's, not a guess.** A spell on the stack has the same object id it
- * had in hand, so the card that left is the card that arrived. An ability has no such continuity, and
- * the origin is `TableStackObject.sourceId` — upstream's `sourceCard.getId()`, carried over the wire
- * for this.
+ * **Where it flies from is the server's wherever the server says.** For an ability that is
+ * `TableStackObject.sourceId` — upstream's `sourceCard.getId()`, the permanent it was activated from,
+ * carried over the wire for exactly this — and an id settles it.
  *
- * **A spell's two ends therefore share an id, and the hand anchors under [handAnchorId] because of
- * it.** Anchored under the bare id, the stack's own placement overwrites the hand's the moment it is
- * drawn, the origin and the destination become the same box, and the flight silently never happens.
- * Found by the test below rather than on a board, which is the only reason it is not shipping.
+ * **A spell has no such id, and that is upstream's shape rather than a gap in the bridge.** A stack
+ * spell's view is built from the `Spell` itself, and `Spell.getId()` is `ability.getId()` — a fresh
+ * UUID per ability instance. The card's own id lives on `Spell.getSourceId()`, which no `CardView`
+ * field exposes. So the two ends of a cast cannot be joined by id at all, and the hand anchors under
+ * its card's **name** instead: see [handAnchorId].
  *
  * **Where it flies from and to is measured, never derived.** Both ends come out of [BoardAnchors],
  * which every card on this board already reports itself to. A hand card that has just been cast is
@@ -184,19 +185,27 @@ private fun FlyingCard(
     artFor: TableArtResolver?,
     onLanded: (String) -> Unit,
 ) {
-    // Starts at 0 and is asked for 1 on the first composition, so the flight begins the moment the
-    // card is on screen rather than needing an event to start it.
-    var started by remember { mutableStateOf(false) }
-    val progress by animateFloatAsState(
-        targetValue = if (started) 1f else 0f,
-        animationSpec = tween(durationMillis = FLIGHT_MILLIS, easing = LinearOutSlowInEasing),
-        finishedListener = { if (it == 1f) onLanded(flight.id) },
-        label = "cardFlight",
-    )
-    started = true
+    // **Run from an effect, not from a target flipped during composition.** The first cut asked
+    // `animateFloatAsState` for 0 and then wrote `started = true` in the composable's own body,
+    // relying on that write to invalidate the composition it was already in and come back around with
+    // a target of 1. It never came back around: the card sat on its origin at progress zero for the
+    // whole life of the object — and because the stack holds an arriving card's place without drawing
+    // it, that left a hole in the panel where the card should be rather than a missing animation.
+    //
+    // An `Animatable` driven by a `LaunchedEffect` starts because it was *told* to, which is the
+    // pattern the tapping animation next door already runs on. Landing is the effect's last line, so
+    // it cannot be missed either.
+    val progress = remember(flight.id) { Animatable(0f) }
+    LaunchedEffect(flight.id) {
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = FLIGHT_MILLIS, easing = LinearOutSlowInEasing),
+        )
+        onLanded(flight.id)
+    }
 
     val density = LocalDensity.current
-    val width = with(density) { flight.lerpWidth(progress).toDp() }
+    val width = with(density) { flight.lerpWidth(progress.value).toDp() }
 
     BoardCard(
         state = flight.entry.state,
@@ -206,8 +215,8 @@ private fun FlyingCard(
         modifier =
             Modifier
                 .graphicsLayer {
-                    translationX = flight.lerpLeft(progress)
-                    translationY = flight.lerpTop(progress)
+                    translationX = flight.lerpLeft(progress.value)
+                    translationY = flight.lerpTop(progress.value)
                 }.testTag(CardFlightTestTags.card(flight.id)),
     )
 }
