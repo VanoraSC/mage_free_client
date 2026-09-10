@@ -68,11 +68,14 @@ class StatusRailTest {
 
     @Test
     fun `an empty library still shows, because an empty library is a game state`() {
-        // Every other count disappears at zero. This one is a loss on the next draw, so it does not.
-        show(twoSeats(libraryCount = 0, exileCount = 0))
+        // Most counts disappear at zero. This one is a loss on the next draw, so it does not — and
+        // neither does exile, for 0123's own reason: an empty exile is a thing a player goes looking
+        // for. What still vanishes is the graveyard, which is the ordinary case.
+        show(twoSeats(libraryCount = 0, exileCount = 0, graveyardCount = 0))
 
         composeTestRule.onNodeWithTag(VitalsTestTags.library("me"), useUnmergedTree = true).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(VitalsTestTags.exile("me"), useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(VitalsTestTags.exile("me"), useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(VitalsTestTags.graveyard("me"), useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
@@ -115,6 +118,7 @@ class StatusRailTest {
 
     private fun twoSeats(
         libraryCount: Int = 30,
+        graveyardCount: Int = 2,
         exileCount: Int = 1,
     ) = GameState(
         gameId = "g1",
@@ -127,7 +131,7 @@ class StatusRailTest {
                     life = 20,
                     libraryCount = libraryCount,
                     handCount = 4,
-                    graveyardCount = 2,
+                    graveyardCount = graveyardCount,
                     exileCount = exileCount,
                     battlefield = listOf(GamePermanent(card = card("bears", "Grizzly Bears"))),
                 ),

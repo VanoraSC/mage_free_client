@@ -45,6 +45,7 @@ import magefree.feature.game.board.JOIN_FAILED_PREFIX
 import magefree.feature.game.board.PriorityUi
 import magefree.feature.game.board.QUIT_MATCH_CONFIRM_LABEL
 import magefree.feature.game.board.QUIT_MATCH_LABEL
+import magefree.feature.game.board.TurnSide
 import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
 
 /*
@@ -52,9 +53,9 @@ import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
  *
  * ```
  * ┌──────────────────────────────────────────────────────────┐
- * │  BattlefieldLayout — rail, lands, battlefields, phase     │  the board
- * │  bar, hand                                                │
+ * │  BattlefieldLayout — left rail, lands, battlefields, hand │  the board
  * ├───────────────────────────────────────────────────────────┤
+ * │  ZoneViewer — piles, ordered, on a scrim                  │  a look
  * │  PlayerOverlay — one seat's piles, on a scrim             │  a look
  * ├───────────────────────────────────────────────────────────┤
  * │  FloatingControls / HiddenControlsToggle                  │  the question
@@ -83,7 +84,7 @@ import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
  * portrait board put them along the bottom, and that is wrong here for a reason worth stating: the
  * hand is drawn from the bottom edge upward, and pressing a card in the hand is *how a priority
  * prompt is answered*. A panel over the hand covers the answer to its own question. The other three
- * regions are spoken for too — the status rail runs down the left, the phase bar sits on the hand,
+ * regions are spoken for too — the left rail runs down the whole left edge, the hand fills the bottom,
  * and the creature rows meet on the centre line, which is the one thing a glance at a battlefield has
  * to be able to read. What is left is the strip above the opponent's non-creature permanents, and
  * that is where it goes.
@@ -111,7 +112,7 @@ import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
  * @param artFor how the *board* resolves art, which is a different tier and a different request. Null
  *   draws the board's cards as their name plates alone, which is what a test sees.
  * @param onFlipDetailFace peeks at a double-faced card's other side in the detail overlay.
- * @param onPressStop cycles the stop on one step of the phase bar.
+ * @param onPressStop cycles the stop on one step of the rail, on one side of the turn.
  */
 @Composable
 fun TableBoardScreen(
@@ -124,7 +125,7 @@ fun TableBoardScreen(
     modifier: Modifier = Modifier,
     artFor: TableArtResolver? = null,
     onFlipDetailFace: () -> Unit = {},
-    onPressStop: (String) -> Unit = {},
+    onPressStop: (TurnSide, String) -> Unit = { _, _ -> },
 ) {
     val snapshot = uiState.snapshot
     val controls = uiState.controls
@@ -132,6 +133,11 @@ fun TableBoardScreen(
     // The seat whose piles are open. Purely a look: it sends nothing and it survives no snapshot, so
     // it is remembered here rather than carried in the UI state.
     var expandedSeat by remember { mutableStateOf<TableVitals?>(null) }
+
+    // Which piles are open, and empty for none. One is a graveyard pressed on the rail; several is a
+    // seat's counts pressed, which opens everything behind them at once. Held as the piles themselves
+    // rather than as ids, because a pile is what the viewer draws.
+    var openPiles by remember { mutableStateOf(emptyList<TableZonePile>()) }
 
     // **What a press on a card does.** Ordinarily it raises the card, and the raised card is where the
     // act is committed — one gesture everywhere, and a look at what you are about to do. While a cost
@@ -150,8 +156,12 @@ fun TableBoardScreen(
 
     // Back closes whatever is open over the board, innermost first, before it leaves the board.
     BackHandler(enabled = uiState.selectedObjectId != null) { onCardTap(null) }
-    BackHandler(enabled = uiState.selectedObjectId == null && expandedSeat != null) { expandedSeat = null }
-    BackHandler(enabled = uiState.selectedObjectId == null && expandedSeat == null, onBack = onExit)
+    BackHandler(enabled = uiState.selectedObjectId == null && openPiles.isNotEmpty()) { openPiles = emptyList() }
+    BackHandler(enabled = uiState.selectedObjectId == null && openPiles.isEmpty() && expandedSeat != null) { expandedSeat = null }
+    BackHandler(
+        enabled = uiState.selectedObjectId == null && openPiles.isEmpty() && expandedSeat == null,
+        onBack = onExit,
+    )
 
     Surface(modifier = modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize().testTag(TableBoardTestTags.SCREEN)) {
@@ -164,6 +174,10 @@ fun TableBoardScreen(
                 // What this client has been shown, kept across snapshots because the server clears
                 // its reveals on the next update and will not say it twice. See [KnownHand].
                 val seenCards = uiState.seenCards
+                // Every seat's piles, built once: the rail draws each graveyard's top card from them
+                // and a press opens one of them whole, so the card on the rail and the card at the top
+                // of the opened list cannot disagree about which it is.
+                val zones = tableZones(snapshot, picks, seenCards)
 
                 BattlefieldLayout(
                     model = battlefieldModel(snapshot, picks),
@@ -186,7 +200,11 @@ fun TableBoardScreen(
                             .firstOrNull { !it.isViewer }
                             ?.let { seenCards.knownHandFor(snapshot, it.playerId) }
                             ?: KnownHand(),
-                    phases = phaseBarState(snapshot, stops = uiState.stops, locked = lockedStops(snapshot)),
+                    phases = phaseRailState(snapshot, stops = uiState.stops),
+                    // Each seat's graveyard, drawn at its own end of the rail — the top card, which is
+                    // what a graveyard looks like on a table and the one card most worth seeing.
+                    zones = zones,
+                    onOpenPiles = { piles -> openPiles = piles },
                     stack = tableStack(snapshot),
                     // *Show battlefield* takes the stack with it. It is the one layer left over the
                     // board once the panel is gone, and what it covers is exactly what the player
@@ -196,7 +214,7 @@ fun TableBoardScreen(
                     combat = snapshot.combat,
                     // A press on a step cycles its stop for the turn being played. What that then does
                     // is the pass policy's, which reads the same store this writes.
-                    onToggleStop = { step -> onPressStop(step.id) },
+                    onToggleStop = { step, side -> onPressStop(side.asTurnSide(), step.id) },
                     artFor = artFor,
                     // Every press on a card is the same press: it raises the card. What may then be
                     // done to it is the preview's question, and the server's answer — except while a
@@ -219,11 +237,25 @@ fun TableBoardScreen(
                     modifier = Modifier.fillMaxSize(),
                 )
 
+                // **The piles, opened and scrolled, in the server's own order.** A graveyard is not a
+                // set — what died last is on top — and half the reason to open one is to answer *what
+                // just went there*. A graveyard arrives here on its own from the rail; a press on the
+                // counts brings everything behind them — exile always, and whatever else holds cards.
+                if (openPiles.isNotEmpty()) {
+                    ZoneViewer(
+                        piles = openPiles,
+                        onDismiss = { openPiles = emptyList() },
+                        artFor = artFor,
+                        onInspect = { id -> onCardTap(id) },
+                        modifier = Modifier.zIndex(SEAT_LAYER_Z),
+                    )
+                }
+
                 expandedSeat?.let { seat ->
                     PlayerOverlay(
                         vitals = seat,
                         onDismiss = { expandedSeat = null },
-                        zones = tableZones(snapshot, picks, seenCards).filter { it.playerId == seat.playerId },
+                        zones = zones.filter { it.playerId == seat.playerId },
                         artFor = artFor,
                         // A card read out of a pile opens the same detail as a card on the
                         // battlefield, so a target the server offered from a graveyard is answerable

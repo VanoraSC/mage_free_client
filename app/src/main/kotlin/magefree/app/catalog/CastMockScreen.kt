@@ -26,9 +26,9 @@ import androidx.compose.ui.unit.dp
 import magefree.app.game.ImmersiveSystemUi
 import magefree.designsystem.card.CardPreview
 import magefree.designsystem.component.MageSecondaryButton
-import magefree.designsystem.component.phase.PhaseBarState
+import magefree.designsystem.component.phase.PhaseRailState
 import magefree.designsystem.component.phase.StepIds
-import magefree.designsystem.component.phase.standardTurnSteps
+import magefree.designsystem.component.phase.standardRailSteps
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.game.table.BattlefieldLayout
 import magefree.feature.game.table.TableArtResolver
@@ -105,7 +105,7 @@ fun CastMockScreen(
                 vitals = tableVitals(state),
                 // The rail is part of the board, so the mock draws it: an interaction judged against a
                 // board that is missing a column is judged against the wrong amount of room.
-                phases = PhaseBarState(steps = standardTurnSteps(), currentStepId = StepIds.PRECOMBAT_MAIN),
+                phases = PhaseRailState(steps = standardRailSteps(), currentStepId = StepIds.PRECOMBAT_MAIN),
                 modifier = Modifier.fillMaxSize(),
             )
 

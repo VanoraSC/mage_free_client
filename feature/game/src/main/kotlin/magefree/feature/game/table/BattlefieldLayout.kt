@@ -31,9 +31,9 @@ import magefree.designsystem.card.BoardFocus
 import magefree.designsystem.card.CounterPalette
 import magefree.designsystem.card.boardCardWidthFitting
 import magefree.designsystem.card.rememberCounterPalette
-import magefree.designsystem.component.phase.PhaseBar
-import magefree.designsystem.component.phase.PhaseBarState
-import magefree.designsystem.component.phase.PhaseBarStep
+import magefree.designsystem.component.phase.PhaseBarTurn
+import magefree.designsystem.component.phase.PhaseRailState
+import magefree.designsystem.component.phase.PhaseRailStep
 import magefree.network.game.CombatGroup
 
 /*
@@ -41,19 +41,18 @@ import magefree.network.game.CombatGroup
  *
  * ```
  *  ┌──────┬───────────────┬──────────────────────────────┐
- *  │ opp  │               │   [ other permanents ]       │  back
- *  │ 20   │   opponent    │   [ creatures ]              │  front
- *  │ ♦7 ▤5│    lands      ├──────────────────────────────┤
- *  │ ✝2 ✖0│               │                              │
- *  │      ├───────────────┤   [ creatures ]              │  front
- *  │ 14   │    your       │   [ other permanents ]       │  back
- *  │ ♦5 ▤3│    lands      ├──────────────────────────────┤
- *  │ ✝1 ✖2│               │   phase bar                  │
+ *  │[card]│               │   [ other permanents ]       │  back
+ *  │ ▤5 ✝2│   opponent    │   [ creatures ]              │  front
+ *  │ ░│UP│ │    lands      ├──────────────────────────────┤
+ *  │ ░│M1│ │               │                              │
+ *  │ ░│EN│●├───────────────┤   [ creatures ]              │  front
+ *  │ ▤3 ✝1│    your       │   [ other permanents ]       │  back
+ *  │[card]│    lands      ├──────────────────────────────┤
  *  │      │               │   hand        [ elsewhere ]  │
  *  └──────┴───────────────┴──────────────────────────────┘
  * ```
  *
- * **Three columns, because the three things have different jobs.** The status rail is read
+ * **Three columns, because the three things have different jobs.** The left rail is read
  * occasionally and must never move. The lands are a fixed, bounded cost that grows all game. The
  * battlefield is what actually changes. The arrangement this replaced gave each *player* half the
  * screen and put their lands in a corner of it, which meant lands and creatures competed for the same
@@ -107,9 +106,11 @@ import magefree.network.game.CombatGroup
  *   player answering a target question. See [LifeTotal].
  * @param onPickPlayer answers the outstanding question with a player, by their id. Called only for a
  *   life total the prompt marked pickable; `null` for a board that is only being read.
- * @param phases the turn and where in it the game is. Null draws no bar — the same rule as everywhere
+ * @param phases the turn and where in it the game is, from [phaseRailState]. Null draws no rail — the same rule as everywhere
  *   else here, and the state a board has before a game starts.
- * @param onToggleStop invoked when a stoppable step is pressed.
+ * @param onToggleStop invoked with the step and the side whose column was pressed.
+ * @param zones every seat's piles: the rail draws each graveyard's top card and opens them.
+ * @param onOpenPiles opens piles — a graveyard on its own, or everything behind a seat's counts.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
  * @param stackVisible whether to draw the stack at all. False is *Show battlefield* — the layer is a
@@ -137,8 +138,10 @@ fun BattlefieldLayout(
     lifeTotals: LifeTotals = LifeTotals(opponents = emptyList(), viewer = null),
     onPickPlayer: ((String) -> Unit)? = null,
     opponentHand: KnownHand = KnownHand(),
-    phases: PhaseBarState? = null,
-    onToggleStop: ((PhaseBarStep) -> Unit)? = null,
+    phases: PhaseRailState? = null,
+    onToggleStop: ((PhaseRailStep, PhaseBarTurn) -> Unit)? = null,
+    zones: List<TableZonePile> = emptyList(),
+    onOpenPiles: ((List<TableZonePile>) -> Unit)? = null,
     stack: List<TableStackObject> = emptyList(),
     stackVisible: Boolean = true,
     combat: List<CombatGroup> = emptyList(),
@@ -161,12 +164,18 @@ fun BattlefieldLayout(
             val boardWidth = maxWidth - BoardMargin * 2
             val boardHeight = maxHeight - BoardMargin * 2
 
-            // The bottom of the screen is the hand with the phase bar resting on it. Both belong to the
-            // viewer and both are read between decisions, so they sit together and the board's own rows
-            // stop above them rather than being overlaid by them.
+            // The bottom of the screen is the viewer's hand, read between decisions, so the board's own
+            // rows stop above it rather than being overlaid by it.
             val handTile = handTileWidth(boardHeight * HAND_HEIGHT_SHARE)
-            val bottomStack = bottomStackHeight(hand, handTile, phases != null)
-            val contentHeight = (boardHeight - bottomStack).coerceAtLeast(0.dp)
+            val bottomStack = bottomStackHeight(hand, handTile)
+
+            // **And the top of the screen is the opponent's hand, which cost the budget nothing.** It
+            // was added after this arithmetic was written and never entered it, so every card on the
+            // board was sized against a whole card height the board did not have — which is why the
+            // non-creature row ran off the bottom and over the hand on a board with anything in it.
+            // It is a full card tall: unlike the viewer's, none of it hangs off the edge.
+            val topStack = topStackHeight(opponentHand, handTile)
+            val contentHeight = (boardHeight - bottomStack - topStack).coerceAtLeast(0.dp)
 
             // **The gap between the two sides is height too.** `CentreLineGap` separates them and is
             // deliberately much larger than a row gap, and it was never taken out of the budget — so
@@ -204,10 +213,19 @@ fun BattlefieldLayout(
 
             Row(modifier = Modifier.fillMaxSize().padding(BoardMargin)) {
                 if (hasRail) {
+                    // **The turn lives here now, not under the hand.** A vertical rail says whose turn
+                    // it is and which phase at once — one glance, two answers — and it costs the
+                    // battlefield nothing, because the counts and a card were already the widest
+                    // things in this column and the steps went in between them.
                     StatusRail(
                         vitals = vitals,
                         palette = palette,
+                        rail = phases,
+                        zones = zones,
+                        artFor = artFor,
                         onExpand = onExpandVitals,
+                        onOpenPiles = onOpenPiles,
+                        onToggleStop = onToggleStop,
                         modifier = Modifier.width(railWidth).fillMaxHeight(),
                     )
                     Spacer(modifier = Modifier.width(ZoneGap))
@@ -301,14 +319,6 @@ fun BattlefieldLayout(
                                 SeatLife(seat, onPickPlayer, anchors)
                             }
                         }
-                    }
-
-                    phases?.let { bar ->
-                        PhaseBar(
-                            state = bar,
-                            onToggleStop = { step -> onToggleStop?.invoke(step) },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = PhaseBarGap),
-                        )
                     }
 
                     // The hand hangs off the bottom edge: only the top of a card is read, and the quarter
@@ -770,10 +780,17 @@ private fun mainCardWidths(
         return MainCardWidths(creature = PreferredCreatureWidth, other = PreferredOtherWidth)
     }
 
+    val creature = minOf(PreferredCreatureWidth, byWidth(PermanentRole.Creature))
     var widths =
         MainCardWidths(
-            creature = minOf(PreferredCreatureWidth, byWidth(PermanentRole.Creature)),
-            other = minOf(PreferredOtherWidth, byWidth(PermanentRole.Other)),
+            creature = creature,
+            // **Never wider than a creature.** A row's width problem is its own, so a crowded creature
+            // row does not shrink the back row *to pay for it* — but it does cap it, because the
+            // ordering is the whole point of having two sizes. A board of six creatures and three
+            // enchantments drew the enchantments half again the size of the creatures: the cards a
+            // player is asked about most, drawn smallest, on the busiest board. Equal rather than the
+            // ratio applied downward, because shrinking a card that has the room buys nothing.
+            other = minOf(PreferredOtherWidth, byWidth(PermanentRole.Other), creature),
         )
 
     // **A pile is taller than a card, and the height budget has to know it.** The fan staggers
@@ -985,29 +1002,37 @@ internal val CentreLineGapForTest: Dp get() = CentreLineGap
  */
 private const val HAND_HEIGHT_SHARE = 0.30f
 
-/** Between the phase bar and the top of the hand it sits on. */
-private val PhaseBarGap = 14.dp
-
 /**
- * How much of the bottom of the screen the hand and the phase bar have already claimed.
+ * How much of the bottom of the screen the hand has already claimed.
  *
  * Used to work out what is left for the board's own columns. An allowance rather than a measurement:
- * the bar's height comes from its text, and threading a measured value up through the layout pass
- * would couple the board to components that draw themselves perfectly well without it. The columns are
- * placed by weight, so an allowance that is slightly off costs a few dp of card size and nothing else.
+ * threading a measured value up through the layout pass would couple the board to components that draw
+ * themselves perfectly well without it, and the columns are placed by weight, so an allowance that is
+ * slightly off costs a few dp of card size and nothing else.
+ *
+ * **The turn used to be down here too**, in a horizontal bar resting on the hand, and it took about
+ * forty dp of the board's height with it. It is on the left rail now, in a column the counts and a
+ * card had already sized, so that height went back to the battlefield — which is 0123's claim that the
+ * rail costs the board no width, arriving as height rather than as width.
  */
 private fun bottomStackHeight(
     hand: List<TableCard>,
     handTile: Dp,
-    hasPhases: Boolean,
-): Dp {
-    val handPart = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile)
-    val phasePart = if (hasPhases) PhaseBarAllowance + PhaseBarGap else 0.dp
-    return handPart + phasePart
-}
+): Dp = if (hand.isEmpty()) 0.dp else handVisibleHeight(handTile)
 
-/** Room the phase bar takes, for working out what is left above it. */
-private val PhaseBarAllowance = 28.dp
+/**
+ * How much of the top of the screen the opponent's hand has claimed.
+ *
+ * **A whole card, not the fraction the viewer's hand costs.** The viewer's hangs off the bottom edge
+ * and only the part carrying the name is on screen; the opponent's sits inside the column and is drawn
+ * complete. It arrived after the sizing arithmetic was written and was never added to it, so the board
+ * sized every card against height it did not have — and an empty hand takes none of it, which is why
+ * the fault only showed once the opponent was holding something.
+ */
+private fun topStackHeight(
+    hand: KnownHand,
+    handTile: Dp,
+): Dp = if (hand.count == 0) 0.dp else handTile / BOARD_CARD_ASPECT_RATIO
 
 /**
  * How far in from the centre line the stack floats.
