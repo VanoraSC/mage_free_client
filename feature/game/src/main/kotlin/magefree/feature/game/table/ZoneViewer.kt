@@ -140,7 +140,7 @@ private fun PileColumn(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = pile.kind.label,
+                text = pile.title ?: pile.kind.label,
                 style = BoardTypography.promptTitle,
                 color = BoardSurface.onSurface,
                 modifier = Modifier.testTag(ZoneViewerTestTags.title(pile.kind)),

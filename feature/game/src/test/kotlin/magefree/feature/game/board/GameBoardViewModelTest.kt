@@ -22,6 +22,7 @@ import magefree.network.game.GamePlayer
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
 import magefree.network.game.GameUnreachableFailure
+import magefree.network.game.GameZone
 import magefree.network.game.ManaPool
 import magefree.network.game.ManaType
 import magefree.network.game.MultiAmountEntry
@@ -1294,6 +1295,84 @@ class GameBoardViewModelTest {
         get() = calls.filterNot { it.startsWith("stops:") }
 
     private fun forest(id: String) = GameCard(id = id, name = "Forest", setCode = "M21", collectorNumber = "272")
+
+    // ---- reveals ---------------------------------------------------------------------------------------
+
+    @Test
+    fun `a reveal nobody was asked about is queued once, however many snapshots carry it`() =
+        runTest {
+            // Upstream keeps a reveal for one snapshot but can carry it across an update and a
+            // narration. The fold is in `onSnapshot`, so every emission is seen — and the same reveal
+            // seen twice is one announcement.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+
+            client.emitGameState(revealingState())
+            client.emitGameState(revealingState())
+
+            assertEquals(
+                listOf("Inquisition of Kozilek"),
+                viewModel.uiState.value.reveals
+                    .map { it.name },
+            )
+        }
+
+    @Test
+    fun `putting a reveal down does not let its next sighting put it back up`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(revealingState())
+
+            viewModel.dismissReveal()
+            client.emitGameState(revealingState())
+
+            assertEquals(
+                emptyList<String>(),
+                viewModel.uiState.value.reveals
+                    .map { it.name },
+            )
+        }
+
+    @Test
+    fun `two reveals are shown one after the other, oldest first`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(revealingState())
+            client.emitGameState(
+                dealtState().copy(
+                    revealed = listOf(GameZone(name = "Brainstorm", cards = listOf(GameCard(id = "top-1", name = "Island")))),
+                ),
+            )
+
+            assertEquals(
+                "Inquisition of Kozilek",
+                viewModel.uiState.value.reveals
+                    .first()
+                    .name,
+            )
+            viewModel.dismissReveal()
+            assertEquals(
+                listOf("Brainstorm"),
+                viewModel.uiState.value.reveals
+                    .map { it.name },
+            )
+        }
+
+    private fun revealingState() =
+        dealtState().copy(
+            revealed =
+                listOf(
+                    GameZone(
+                        name = "Inquisition of Kozilek",
+                        cards = listOf(GameCard(id = "opp-h-1", name = "Lightning Bolt")),
+                    ),
+                ),
+        )
 
     private fun dealtState() =
         GameState(

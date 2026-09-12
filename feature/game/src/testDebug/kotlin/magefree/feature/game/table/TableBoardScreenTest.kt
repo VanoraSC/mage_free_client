@@ -3,6 +3,7 @@ package magefree.feature.game.table
 import android.app.Application
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
@@ -83,12 +84,14 @@ class TableBoardScreenTest {
     private val taps = mutableListOf<String?>()
     private val actions = mutableListOf<BoardAction>()
     private var exits = 0
+    private var dismissedReveals = 0
 
     private fun render(
         state: GameState?,
         controlsVisible: Boolean = true,
         selectedObjectId: String? = null,
         joinError: String? = null,
+        reveals: List<RevealAnnouncement> = emptyList(),
     ) {
         composeTestRule.setContent {
             MageTheme {
@@ -102,12 +105,14 @@ class TableBoardScreenTest {
                             areControlsVisible = controlsVisible,
                             controls = state?.let { controlsFor(it) },
                             selectedObjectId = selectedObjectId,
+                            reveals = reveals,
                         ),
                     onExit = { exits += 1 },
                     onControlsVisibleChange = { visibilityRequests += it },
                     onCardTap = { taps += it },
                     onAction = { actions += it },
                     artRenderer = PlaceholderCardArtRenderer,
+                    onDismissReveal = { dismissedReveals += 1 },
                 )
             }
         }
@@ -431,6 +436,55 @@ class TableBoardScreenTest {
         typeLine = typeLine,
         cardTypes = types,
     )
+
+    // ---- reveals ------------------------------------------------------------------------------------
+
+    @Test
+    fun `a reveal nobody was asked about is announced over the board, named after its effect`() {
+        // The whole of 0124 on screen. The reveal is titled with the effect that caused it, because
+        // *Inquisition of Kozilek* says what just happened and *Revealed* only says where the cards are.
+        render(runningGame(), reveals = listOf(inquisitionReveal()))
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.REVEAL).assertExists()
+        composeTestRule
+            .onNodeWithTag(ZoneViewerTestTags.title(TableZoneKind.Revealed), useUnmergedTree = true)
+            .assertTextEquals("Inquisition of Kozilek")
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.card("rev-bolt"), useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `no reveal waiting draws no announcement`() {
+        render(runningGame())
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.REVEAL).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a press outside the announcement puts it down`() {
+        render(runningGame(), reveals = listOf(inquisitionReveal()))
+
+        // A corner, because the scrim fills the screen and its centre is behind the panel.
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.SCRIM).performTouchInput { click(topLeft) }
+
+        assertEquals(1, dismissedReveals)
+    }
+
+    @Test
+    fun `a press on a revealed card opens its detail`() {
+        render(runningGame(), reveals = listOf(inquisitionReveal()))
+
+        composeTestRule.onNodeWithTag(ZoneViewerTestTags.card("rev-bolt"), useUnmergedTree = true).performClick()
+
+        assertEquals(listOf("rev-bolt"), taps)
+        assertEquals("a press on a card is not a press outside", 0, dismissedReveals)
+    }
+
+    private fun inquisitionReveal() =
+        RevealAnnouncement(
+            key = "3|Inquisition of Kozilek|rev-bolt",
+            name = "Inquisition of Kozilek",
+            cards = listOf(card("rev-bolt", "Lightning Bolt", "Instant", "R")),
+        )
 
     /** A game in progress with the opponent holding priority — the board being watched. */
     private fun runningGame() =

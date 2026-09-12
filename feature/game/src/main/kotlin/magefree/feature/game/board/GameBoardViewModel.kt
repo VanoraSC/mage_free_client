@@ -11,8 +11,10 @@ import kotlinx.coroutines.launch
 import magefree.cards.CardCatalog
 import magefree.cards.art.CardArtFace
 import magefree.feature.game.BuildConfig
+import magefree.feature.game.table.RevealAnnouncement
 import magefree.feature.game.table.SeenCards
 import magefree.feature.game.table.fold
+import magefree.feature.game.table.revealsToAnnounce
 import magefree.network.game.GameClient
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
@@ -135,6 +137,14 @@ data class GameBoardUiState(
      * sees every emission, because that is what `onEach` on the flow means.
      */
     val seenCards: SeenCards = SeenCards(),
+    /**
+     * Reveals waiting to be shown, oldest first — see [revealsToAnnounce].
+     *
+     * **Here rather than in the composition, for the reason [seenCards] is.** A reveal exists in exactly
+     * one snapshot upstream, and a `StateFlow` conflates; only a fold in `onSnapshot` sees every one.
+     * The head is on screen; dismissing it shows the next.
+     */
+    val reveals: List<RevealAnnouncement> = emptyList(),
 )
 
 /**
@@ -263,6 +273,13 @@ class GameBoardViewModel
         private var outstandingPrompt: GamePrompt? = null
 
         /**
+         * Every reveal already queued this game, by [RevealAnnouncement.key], so one carried across two
+         * snapshots is announced once. Kept past dismissal on purpose: putting a reveal down must not
+         * let its next re-emission put it straight back up.
+         */
+        private var announcedReveals: Set<String> = emptySet()
+
+        /**
          * Begin observing [gameId] and take our seat in it. Idempotent — a recomposition or a
          * configuration change must not open a second subscription or re-join.
          */
@@ -345,7 +362,9 @@ class GameBoardViewModel
                     // folded while composing missed any reveal superseded before the next frame — an
                     // Inquisition with no legal target reveals, asks nothing, and is gone.
                     seenCards = previous.seenCards.fold(state),
+                    reveals = previous.reveals + state.revealsToAnnounce(announcedReveals),
                 )
+            announcedReveals = announcedReveals + _uiState.value.reveals.map { it.key }
 
             // Every emission, what it asked, and what the panel will now offer.
             narrate {
@@ -572,6 +591,11 @@ class GameBoardViewModel
             stepId: String,
         ) {
             stops.press(side, stepId)
+        }
+
+        /** Put down the reveal on screen, showing the next one if there is one. Sends nothing. */
+        fun dismissReveal() {
+            _uiState.value = _uiState.value.copy(reveals = _uiState.value.reveals.drop(1))
         }
 
         /**

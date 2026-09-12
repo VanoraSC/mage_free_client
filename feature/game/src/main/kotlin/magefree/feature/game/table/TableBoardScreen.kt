@@ -126,6 +126,7 @@ fun TableBoardScreen(
     artFor: TableArtResolver? = null,
     onFlipDetailFace: () -> Unit = {},
     onPressStop: (TurnSide, String) -> Unit = { _, _ -> },
+    onDismissReveal: () -> Unit = {},
 ) {
     val snapshot = uiState.snapshot
     val controls = uiState.controls
@@ -248,6 +249,29 @@ fun TableBoardScreen(
                         artFor = artFor,
                         onInspect = { id -> onCardTap(id) },
                         modifier = Modifier.zIndex(SEAT_LAYER_Z),
+                    )
+                }
+
+                // **A reveal nobody was asked about, announced** — see `revealsToAnnounce`. The same
+                // pile viewer, titled with the effect that revealed the cards, because a reveal is a
+                // pile and *Inquisition of Kozilek* says what just happened where *Revealed* only says
+                // where the cards are. Above the other piles: it is news, and they are a look.
+                uiState.reveals.firstOrNull()?.let { reveal ->
+                    ZoneViewer(
+                        piles =
+                            listOf(
+                                TableZonePile(
+                                    playerId = snapshot.viewerPlayerId.orEmpty(),
+                                    isViewer = true,
+                                    kind = TableZoneKind.Revealed,
+                                    cards = reveal.cards.map { it.asTableCard(snapshot, TableCardZone.Revealed) },
+                                    title = reveal.name,
+                                ),
+                            ),
+                        onDismiss = onDismissReveal,
+                        artFor = artFor,
+                        onInspect = { id -> onCardTap(id) },
+                        modifier = Modifier.zIndex(REVEAL_LAYER_Z).testTag(TableBoardTestTags.REVEAL),
                     )
                 }
 
@@ -446,6 +470,9 @@ object TableBoardTestTags {
     const val SCREEN: String = "table-board"
     const val MENU: String = "table-board-menu"
     const val STANDING: String = "table-board-standing"
+
+    /** A reveal nobody was asked about, announced over the board. */
+    const val REVEAL: String = "table-board-reveal"
 }
 
 /** What the corner menu calls leaving the board, shared with tests so the two agree. */
@@ -458,6 +485,13 @@ const val LEAVE_BOARD_LABEL: String = "Leave game"
  * cover — and the card detail sits over everything, because it is where a decision is made.
  */
 private const val SEAT_LAYER_Z = 1f
+
+/**
+ * A reveal being announced: above the piles a player opened, because it is news and they are a look —
+ * and below the controls and the card detail, so an outstanding question can still be answered over it
+ * and a card pressed inside it opens on top of it.
+ */
+private const val REVEAL_LAYER_Z = 1.5f
 
 private const val FLOATING_LAYER_Z = 2f
 
