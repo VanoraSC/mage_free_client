@@ -253,15 +253,12 @@ fun BattlefieldLayout(
                         tileWidth = handTile,
                         artFor = artFor,
                         onInspect = onInspect,
-                        // Where a card discarded out of that hand leaves from, and one returned to it
-                        // goes — the hand is only a count, so the region is the most there is to point at.
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .then(
-                                    model.opponents.firstOrNull()?.let { anchors.anchorModifier(opponentHandAnchorId(it.playerId)) }
-                                        ?: Modifier,
-                                ),
+                        modifier = Modifier.fillMaxWidth(),
+                        // Where a card discarded out of that hand leaves from, and one returned to it goes:
+                        // its last card. The hand is only a count, so no card is *the* card — but a card is
+                        // what comes out of a hand, and the whole strip is as wide as the screen.
+                        lastCardModifier =
+                            model.opponents.firstOrNull()?.let { anchors.anchorModifier(opponentHandAnchorId(it.playerId)) } ?: Modifier,
                     )
 
                     // The two board columns share what is left above the hand. `weight` rather than the
@@ -374,12 +371,15 @@ fun BattlefieldLayout(
             // **Which arrival is still travelling**, so the stack can lay a card out without drawing
             // it yet — see [StackFlights.arriving]. Read before the region is composed because that
             // is what it is for.
-            val flights = rememberCardFlights(stack = stack, anchors = anchors, visible = stackVisible)
+            // **The stack as drawn keeps a card long enough to be seen** — see [rememberPresentedStack]. The
+            // arrows below still read the server's stack: a card that has resolved is shown, not pointed from.
+            val presentedStack = rememberPresentedStack(stack)
+            val flights = rememberCardFlights(stack = presentedStack, anchors = anchors, visible = stackVisible)
             val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
 
-            if (stackVisible && stack.isNotEmpty()) {
+            if (stackVisible && presentedStack.isNotEmpty()) {
                 StackRegion(
-                    stack = stack,
+                    stack = presentedStack,
                     cardWidth = cardWidths.largest,
                     palette = palette,
                     artFor = artFor,

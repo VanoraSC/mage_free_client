@@ -90,6 +90,7 @@ class ZoneMovesTest {
 
         assertEquals(ZoneMoveKind.ToHand, move.kind)
         assertEquals(listOf(opponentHandAnchorId(THEM)), move.to)
+        assertTrue("the card it becomes is a new last card in that hand", move.freshDestination)
     }
 
     @Test

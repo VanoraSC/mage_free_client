@@ -54,6 +54,15 @@ board never measured draws no flight.
 - **The destination waits for the card.** A land that is the first of its name, and a card arriving in
   the hand, are drawn invisible until the flight lands, as a stack arrival already is. A graveyard keeps
   showing its previous top card until the card arrives.
+- **A discard is revealed before it goes.** Pete: *"see the card revealed from hand and then go to the
+  graveyard."* The card is held where it left the hand, lifted, for half a second, then flies. Out of an
+  opponent's hand it leaves from their last card rather than from the whole strip, which is as wide as the
+  screen and read as a card-detail view shrinking into the graveyard.
+- **A card stays on the stack long enough to be seen.** Pete: *"at least 500ms so it can be seen
+  animating."* Out of Full Control a spell can be cast and resolved between two snapshots, and it left the
+  stack before its flight landed. The stack region now keeps a card for its flight and at least half a
+  second after, whatever the server has done (§7.3: the presentation may trail the server). The arrows and
+  the card detail still read the server's stack.
 
 ## 4. Scope
 
@@ -69,3 +78,5 @@ and a reconnect's resync, which is not a sequence (§7.3).
 - [ ] A permanent returned to a hand flies to that hand.
 - [ ] A permanent exiled, or put anywhere else, flies to its owner's count panel.
 - [ ] A token that leaves the battlefield does not fly.
+- [ ] A discarded card is shown, card-sized, where it left the hand, then goes to the graveyard.
+- [ ] A spell that resolves at once is still seen on the stack for at least half a second after it lands.

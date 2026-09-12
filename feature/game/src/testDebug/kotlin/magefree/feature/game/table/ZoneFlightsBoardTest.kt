@@ -15,6 +15,7 @@ import magefree.network.game.GameCard
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -114,6 +115,24 @@ class ZoneFlightsBoardTest {
     }
 
     @Test
+    fun `an opponent's discard comes out of one card of their hand, not the whole of it`() {
+        // Pete saw the discard as *"the details view and then shrinking it"*: the flight left from the whole
+        // hand strip, which is as wide as the screen. It is a card, from where a card is.
+        play(
+            before = table(theirHand = 4),
+            after = table(theirHand = 3, theirGraveyard = listOf(bolt("b9"))),
+        )
+
+        val flight = composeTestRule.onNodeWithTag(CardFlightTestTags.card("zone:1:b9"), useUnmergedTree = true).fetchSemanticsNode()
+        val hand = composeTestRule.onNodeWithTag(OpponentHandTestTags.REGION).fetchSemanticsNode()
+
+        assertTrue(
+            "the card left ${flight.size.width}px wide from a hand ${hand.size.width}px wide",
+            flight.size.width * 2 < hand.size.width,
+        )
+    }
+
+    @Test
     fun `a creature that dies flies to its owner's graveyard`() {
         play(
             before = table(theirCreatures = listOf(bears("c1"))),
@@ -140,6 +159,7 @@ class ZoneFlightsBoardTest {
         theirCreatures: List<GameCard> = emptyList(),
         theirGraveyard: List<GameCard> = emptyList(),
         theirExile: List<GameCard> = emptyList(),
+        theirHand: Int = 4,
     ) = GameState(
         gameId = GAME,
         hasSnapshot = true,
@@ -154,7 +174,7 @@ class ZoneFlightsBoardTest {
                     name = "Computer",
                     life = 20,
                     libraryCount = 40,
-                    handCount = 4,
+                    handCount = theirHand,
                     isHuman = false,
                     battlefield = theirCreatures.map { GamePermanent(card = it) },
                     graveyard = theirGraveyard,

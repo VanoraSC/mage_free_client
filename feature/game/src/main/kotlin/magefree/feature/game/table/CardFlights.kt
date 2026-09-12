@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +18,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.delay
 import magefree.cards.art.CardArtRequest
 import magefree.designsystem.card.BoardCard
 import magefree.designsystem.card.BoardCardState
@@ -64,6 +66,11 @@ internal data class CardFlight(
     val art: CardArtRequest?,
     val from: Rect,
     val to: Rect,
+    /**
+     * How long the card is held where it started, lifted, before it travels. A card revealed out of a hand
+     * is shown there first, so a player sees *which* card it was before it goes. `0` sets off at once.
+     */
+    val holdMillis: Int = 0,
 )
 
 /**
@@ -165,6 +172,61 @@ internal fun rememberCardFlights(
 }
 
 /**
+ * The stack as the board draws it: the server's, and any card that has just left it before it has been
+ * on screen for [STACK_DWELL_MILLIS].
+ *
+ * **A spell that resolves at once was never seen.** Out of Full Control the server passes for the caster,
+ * and an opponent with nothing to say passes too, so a spell can be cast and resolved between two snapshots
+ * the board draws — its flight dropped for having nowhere left to land, and the stack never showing it.
+ * Pete: *"at least 500ms so it can be seen animating."* §7.3 allows exactly this: *"the board's
+ * presentation may trail the server, and that is intended."*
+ *
+ * **Only the stack region trails.** The arrows and the card detail still read the server's stack, so a
+ * card that has resolved is drawn, but not pointed from or acted on.
+ */
+@Composable
+internal fun rememberPresentedStack(stack: List<TableStackObject>): List<TableStackObject> {
+    val presented = remember { PresentedStack() }
+    val shown = presented.take(stack)
+    shown.forEach { entry ->
+        key(entry.id) {
+            LaunchedEffect(entry.id) {
+                delay(STACK_DWELL_MILLIS)
+                presented.dwelt(entry.id)
+            }
+        }
+    }
+    return shown
+}
+
+/** What the stack region is drawing, and which of it has been on screen long enough to go. */
+@Stable
+private class PresentedStack {
+    private var shown by mutableStateOf(emptyList<TableStackObject>())
+    private var dwelt by mutableStateOf(emptySet<String>())
+
+    fun take(stack: List<TableStackObject>): List<TableStackObject> {
+        val current = stack.associateBy { it.id }
+        val before = shown.map { it.id }.toSet()
+        // A new object goes on top, which is where anything put on the stack goes. Everything already shown
+        // keeps its place with the server's latest for it, and one that has left stays until it has dwelt.
+        val next =
+            stack.filter { it.id !in before } +
+                shown.mapNotNull { old -> current[old.id] ?: old.takeIf { it.id !in dwelt } }
+        if (next != shown) {
+            shown = next
+            val ids = next.map { it.id }.toSet()
+            dwelt = dwelt.filterTo(mutableSetOf()) { it in ids }
+        }
+        return next
+    }
+
+    fun dwelt(id: String) {
+        dwelt = dwelt + id
+    }
+}
+
+/**
  * The overlay that draws them.
  *
  * Each flight grows from its origin's size to the stack card's, along a straight line. Straight
@@ -206,7 +268,14 @@ private fun FlyingCard(
     // pattern the tapping animation next door already runs on. Landing is the effect's last line, so
     // it cannot be missed either.
     val progress = remember(flight.id) { Animatable(0f) }
+    // **A revealed card is shown before it goes.** Held on its origin, lifted, for the flight's hold; then
+    // it travels like any other.
+    var holding by remember(flight.id) { mutableStateOf(flight.holdMillis > 0) }
     LaunchedEffect(flight.id) {
+        if (flight.holdMillis > 0) {
+            delay(flight.holdMillis.toLong())
+            holding = false
+        }
         progress.animateTo(
             targetValue = 1f,
             animationSpec = tween(durationMillis = FLIGHT_MILLIS, easing = LinearOutSlowInEasing),
@@ -227,6 +296,8 @@ private fun FlyingCard(
                 .graphicsLayer {
                     translationX = flight.lerpLeft(progress.value)
                     translationY = flight.lerpTop(progress.value)
+                    scaleX = if (holding) REVEAL_SCALE else 1f
+                    scaleY = if (holding) REVEAL_SCALE else 1f
                 }.testTag(CardFlightTestTags.card(flight.id)),
     )
 }
@@ -251,6 +322,15 @@ object CardFlightTestTags {
  * in a row is never waiting on the last one. Decelerating, so it arrives rather than stopping.
  */
 private const val FLIGHT_MILLIS = 320
+
+/**
+ * The least time a card is on the stack, counted from when it sets off towards it: its flight, then at
+ * least half a second sitting there, however quickly the server resolves it.
+ */
+private const val STACK_DWELL_MILLIS = FLIGHT_MILLIS + 500L
+
+/** How much a card held on its origin is lifted — enough to read as pulled out of the hand. */
+private const val REVEAL_SCALE = 1.15f
 
 /**
  * The anchor a card in hand reports itself under: **its name, not its object id.**

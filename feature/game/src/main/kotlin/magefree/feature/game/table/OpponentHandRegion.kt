@@ -42,6 +42,8 @@ import magefree.designsystem.card.CardDisplay
  * @param artFor resolves a card's art, including the back's.
  * @param onInspect called with a known card's id when it is tapped. A back answers nothing, because
  *   there is nothing behind it to open.
+ * @param lastCardModifier applied to the last card in the hand, face-up or not — the card-sized place a
+ *   card leaves the hand from and arrives in, which the region as a whole is not.
  */
 @Composable
 fun OpponentHandRegion(
@@ -50,6 +52,7 @@ fun OpponentHandRegion(
     modifier: Modifier = Modifier,
     artFor: TableArtResolver? = null,
     onInspect: ((String) -> Unit)? = null,
+    lastCardModifier: Modifier = Modifier,
 ) {
     if (hand.count == 0) return
 
@@ -60,13 +63,16 @@ fun OpponentHandRegion(
     ) {
         // Known cards first, so a hand you have seen part of does not reshuffle what you know into the
         // middle of what you do not.
-        hand.cards.forEach { card ->
+        hand.cards.forEachIndexed { index, card ->
             BoardCard(
                 state = BoardCardState(card = card.card),
                 width = tileWidth,
                 art = artFor?.invoke(card.boardArt, card.card),
                 onTap = onInspect?.let { inspect -> { inspect(card.id) } },
-                modifier = Modifier.testTag(OpponentHandTestTags.known(card.id)),
+                modifier =
+                    Modifier
+                        .then(if (hand.hidden == 0 && index == hand.cards.lastIndex) lastCardModifier else Modifier)
+                        .testTag(OpponentHandTestTags.known(card.id)),
             )
         }
 
@@ -74,7 +80,10 @@ fun OpponentHandRegion(
             CardBack(
                 width = tileWidth,
                 artFor = artFor,
-                modifier = Modifier.testTag(OpponentHandTestTags.hidden(index)),
+                modifier =
+                    Modifier
+                        .then(if (index == hand.hidden - 1) lastCardModifier else Modifier)
+                        .testTag(OpponentHandTestTags.hidden(index)),
             )
         }
     }

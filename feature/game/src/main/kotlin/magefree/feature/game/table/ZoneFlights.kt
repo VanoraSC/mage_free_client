@@ -141,6 +141,8 @@ internal class ZoneFlights {
                                 art = artRequestOf(waiter.move.card),
                                 from = from,
                                 to = to,
+                                // A discard is shown where it left the hand before it goes to the graveyard.
+                                holdMillis = if (waiter.move.kind == ZoneMoveKind.Discarded) DISCARD_REVEAL_MILLIS else 0,
                             ),
                         cardId = waiter.move.cardId,
                     )
@@ -184,3 +186,11 @@ private fun GameCard.flightFace(): BoardCardState =
  * is the ceiling on the case that never resolves.
  */
 private const val DESTINATION_WAIT_MILLIS = 1_000L
+
+/**
+ * How long a discarded card is shown where it left the hand before it goes to the graveyard.
+ *
+ * Pete: *"see the card revealed from hand and then go to the graveyard."* Half a second, the least the
+ * stack gives a card to be seen, so the card is read rather than glimpsed.
+ */
+private const val DISCARD_REVEAL_MILLIS = 500

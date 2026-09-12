@@ -152,7 +152,15 @@ fun zoneMoves(
                             val hand = (listOf(seat.playerId) + handGrowth.keys).firstOrNull { (handGrowth[it] ?: 0) > 0 }
                             if (hand != null) {
                                 handGrowth[hand] = handGrowth.getValue(hand) - 1
-                                ZoneMove(card.id, ZoneMoveKind.ToHand, card, card.id, listOf(opponentHandAnchorId(hand)))
+                                // Fresh: the card it becomes is a new last card in that hand, not the one before it.
+                                ZoneMove(
+                                    card.id,
+                                    ZoneMoveKind.ToHand,
+                                    card,
+                                    card.id,
+                                    listOf(opponentHandAnchorId(hand)),
+                                    freshDestination = true,
+                                )
                             } else {
                                 ZoneMove(card.id, ZoneMoveKind.ToOther, card, card.id, listOf(zoneCountsAnchorId(seat.playerId)))
                             }
@@ -224,5 +232,9 @@ internal fun graveyardAnchorId(playerId: String): String = "graveyard:$playerId"
 /** Where a seat's zone counts are — the panel a press opens everything behind. */
 internal fun zoneCountsAnchorId(playerId: String): String = "zone-counts:$playerId"
 
-/** Where an opponent's hand is drawn along the top edge. */
+/**
+ * Where a card comes out of, and goes into, an opponent's hand: the last card drawn in it along the top
+ * edge. Card-sized on purpose — the whole strip is as wide as the screen, and a card flying out of that
+ * was a card the size of a hand shrinking into a graveyard.
+ */
 internal fun opponentHandAnchorId(playerId: String): String = "opponent-hand:$playerId"
