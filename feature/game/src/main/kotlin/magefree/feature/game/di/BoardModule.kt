@@ -9,8 +9,10 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 /**
- * DIAGNOSTIC — the logcat tag the board narrates under (`adb logcat -s MageBoardDiag`). Remove with the
- * `log` parameter once the ability-choice repro is explained.
+ * The logcat tag the board narrates under: `adb logcat -s MageBoardDiag`.
+ *
+ * Only builds with `BuildConfig.BOARD_DIAG` on write anything here — debug builds by default, release
+ * builds never unless `-PboardDiag=true` is passed. See `feature/game/build.gradle.kts`.
  */
 internal const val BOARD_DIAG_TAG: String = "MageBoardDiag"
 
@@ -41,7 +43,8 @@ val boardModule =
                 passPolicy = get(),
                 cardCatalog = get(),
                 stops = get(),
-                // DIAGNOSTIC (ability choice reverting to priority): remove with the rest once found.
+                // Wired unconditionally: the switch lives at the call sites, where it can keep a message
+                // from being built at all, rather than here, where it could only discard one.
                 log = { message -> Log.d(BOARD_DIAG_TAG, message) },
             )
         }

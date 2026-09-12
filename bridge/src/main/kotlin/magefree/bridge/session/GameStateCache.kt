@@ -90,9 +90,10 @@ public class GameStateCache(
      * retires one.
      */
     public fun observe(message: ServerMessage) {
-        // Diagnostic for the mulligan resync case. This traces every observation this cache makes for
-        // a game, so a live repro's bridge log shows exactly what retired the cached prompt (if
-        // anything did) rather than guessing from source alone. Remove once the root cause is fixed.
+        // **The question half of the game-exchange narration** (the answer half is in `GameRelay`).
+        // Traces every prompt transition this cache observes for a game, so a live repro's bridge log
+        // shows exactly what set or retired the cached prompt rather than leaving it to be guessed from
+        // source. At DEBUG — `BRIDGE_DIAG_LEVEL=DEBUG` turns it on (see `logback.xml`).
         val before = message.gameIdOrNull()?.let { snapshots[it]?.prompt }
         when (message) {
             is GameStarted -> put(message.gameId, message.state, prompt = null)
@@ -110,7 +111,7 @@ public class GameStateCache(
         message.gameIdOrNull()?.let { gameId ->
             val after = snapshots[gameId]?.prompt
             if (before != after) {
-                LOGGER.info(
+                LOGGER.debug(
                     "GameStateCache[{}] observed {} -> prompt {} (was {})",
                     gameId,
                     message::class.simpleName,
@@ -146,8 +147,8 @@ public class GameStateCache(
      */
     public fun answer(request: GetGameState): ServerMessage {
         val entry = snapshots[request.gameId]
-        // Temporary diagnostic (follow-up) — see observe()'s KDoc.
-        LOGGER.info("GameStateCache[{}] answer -> prompt {}", request.gameId, entry?.prompt)
+        // The resync half of the same narration: what a reconnecting client is handed back.
+        LOGGER.debug("GameStateCache[{}] answer -> prompt {}", request.gameId, entry?.prompt)
         if (entry == null) return unavailable(request.gameId)
         return GameStateSnapshot(
             gameId = request.gameId,

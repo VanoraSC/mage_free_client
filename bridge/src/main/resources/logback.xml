@@ -10,4 +10,12 @@
     </root>
 
     <logger name="io.netty" level="INFO" />
+
+    <!--
+        The game-exchange narration: every prompt the bridge relays (GameStateCache) and every answer the
+        app sends back (GameRelay), logged at DEBUG. Off by default; set BRIDGE_DIAG_LEVEL=DEBUG in the
+        container's environment to turn it on — no rebuild, only a restart. The dev compose file does.
+    -->
+    <logger name="magefree.bridge.mapping.GameRelay" level="${BRIDGE_DIAG_LEVEL:-INFO}" />
+    <logger name="magefree.bridge.session.GameStateCache" level="${BRIDGE_DIAG_LEVEL:-INFO}" />
 </configuration>

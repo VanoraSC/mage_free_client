@@ -60,6 +60,10 @@ services:
       XMAGE_UPSTREAM: "xmage-server:17171"
       # Read by application.conf (`port = ${?BRIDGE_PORT}`); stated rather than implied.
       BRIDGE_PORT: "8080"
+      # The game-exchange narration (see bridge/src/main/resources/logback.xml): every prompt relayed
+      # and every answer the app sent. On for the dev bridge; set to INFO and `./scripts/dev up bridge`
+      # to silence it without a rebuild.
+      BRIDGE_DIAG_LEVEL: "DEBUG"
     ports:
       - "8080:8080"
     # `depends_on` waits for the container to start, not for the server to finish loading its card

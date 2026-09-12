@@ -55,11 +55,14 @@ public object GameRelay {
     ): GameActionResult = resultOf(GameActionCode.STOP_WATCHING, session.stopWatching(gameId))
 
     /*
-     * DIAGNOSTIC (ability choice reverting to priority). Every answer the app sends is logged beside
-     * the prompt transitions `GameStateCache` already logs, so one bridge log shows the whole exchange:
+     * **The answer half of the game-exchange narration.** Every answer the app sends is logged beside
+     * the prompt transitions `GameStateCache` logs, so one bridge log shows the whole exchange:
      * question out, answer in, next question. Without it a `PlayObject` and a `ChooseAbility` are
-     * indistinguishable — both arrive as `sendPlayerUUID` — and the log showed only that *something*
-     * answered. Remove with `GameStateCache`'s trace once the cause is found.
+     * indistinguishable — both arrive as `sendPlayerUUID` — and the log could show only that
+     * *something* answered.
+     *
+     * At DEBUG, so it costs nothing unless asked for: `BRIDGE_DIAG_LEVEL=DEBUG` in the container's
+     * environment turns it on, with no rebuild (see `logback.xml`).
      */
     private val LOGGER = LoggerFactory.getLogger(GameRelay::class.java)
 
@@ -69,8 +72,8 @@ public object GameRelay {
         value: Any?,
         call: () -> GameActionResult,
     ): GameActionResult {
-        LOGGER.info("GameRelay[{}] <- app {} {}", gameId, verb, value)
-        return call().also { result -> LOGGER.info("GameRelay[{}] -> {} {}", gameId, verb, result) }
+        LOGGER.debug("GameRelay[{}] <- app {} {}", gameId, verb, value)
+        return call().also { result -> LOGGER.debug("GameRelay[{}] -> {} {}", gameId, verb, result) }
     }
 
     /** Answers the outstanding prompt in [gameId] with an object id (`SessionImpl.sendPlayerUUID`). */
