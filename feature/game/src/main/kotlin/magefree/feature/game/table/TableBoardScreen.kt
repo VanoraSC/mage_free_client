@@ -357,18 +357,22 @@ fun TableBoardScreen(
             // attacking.
             uiState.selectedObjectId?.let { objectId ->
                 snapshot?.let { state ->
-                    // **A planeswalker's offered abilities are its buttons** — see [abilityButtons]. Only while
-                    // a press on it would be a Play, which is the question its abilities are the answer to.
-                    val offeredAbilities =
-                        if (controls?.actionFor(objectId) is BoardAction.PlayObject) {
-                            state.players
-                                .flatMap { it.battlefield }
-                                .firstOrNull { it.card.id == objectId }
-                                ?.let { abilityButtons(it.card, state.playable) }
-                                .orEmpty()
-                        } else {
-                            emptyList()
-                        }
+                    // **A planeswalker of the viewer's is its abilities, as buttons** — see [abilityButtons].
+                    // Every loyalty ability is drawn, always; the ones the server is offering can be pressed,
+                    // and only while a press on the planeswalker would be a Play, which is the question its
+                    // abilities answer. An opponent's is read as text: none of its buttons could ever work.
+                    val planeswalkerButtons =
+                        state.players
+                            .filter { it.isViewer }
+                            .flatMap { it.battlefield }
+                            .firstOrNull { it.card.id == objectId }
+                            ?.let { permanent ->
+                                abilityButtons(
+                                    card = permanent.card,
+                                    playable = state.playable,
+                                    activatable = controls?.actionFor(objectId) is BoardAction.PlayObject,
+                                )
+                            }.orEmpty()
                     raisedCard(
                         objectId = objectId,
                         snapshot = state,
@@ -381,7 +385,7 @@ fun TableBoardScreen(
                         val raised =
                             plain.copy(
                                 state =
-                                    plain.state.withAbilityButtons(offeredAbilities) { abilityId ->
+                                    plain.state.withAbilityButtons(planeswalkerButtons) { abilityId ->
                                         onAction(BoardAction.ActivateAbility(objectId = objectId, abilityId = abilityId))
                                     },
                             )

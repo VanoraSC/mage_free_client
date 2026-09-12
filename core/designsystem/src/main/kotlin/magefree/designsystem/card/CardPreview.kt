@@ -67,9 +67,9 @@ import magefree.designsystem.theme.Spacing
  *   it in one and not the other.
  * @property action the one thing that can be done with this card right now, or null when there is
  *   nothing. Naming it is the caller's job — see [CardPreviewAction].
- * @property abilityActions the object's own abilities that can be activated right now, one button each,
- *   in the order given — a planeswalker's, where "Play" says nothing about which of them. Empty for
- *   everything else; a caller that gives these gives no [action].
+ * @property abilityActions the object's own abilities, one button each, in the order given — a
+ *   planeswalker's, where "Play" says nothing about which of them. One that cannot be activated right now
+ *   is greyed rather than left out ([CardPreviewAction.enabled]). Empty for everything else.
  */
 data class CardPreviewState(
     val card: CardDisplay,
@@ -123,9 +123,12 @@ data class CardPreviewAttachment(
  *
  * @property label what the button says — *Play* for a land, *Cast* for a spell. Which word to use is a
  *   question about the card, so the caller answers it; this only draws what it is given.
+ * @property enabled whether it can be pressed. `false` draws it greyed and a press does nothing — an
+ *   ability the object has that cannot be activated right now, shown so the card still says it has it.
  */
 data class CardPreviewAction(
     val label: String,
+    val enabled: Boolean = true,
     val onAct: () -> Unit,
 )
 
@@ -355,6 +358,7 @@ private fun DetailPanel(
                         MagePrimaryButton(
                             text = ability.label,
                             onClick = ability.onAct,
+                            enabled = ability.enabled,
                             modifier = Modifier.fillMaxWidth().testTag(CardPreviewTestTags.abilityAction(index)),
                         )
                     }

@@ -12,74 +12,127 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A planeswalker's offered abilities, as buttons.
+ * A planeswalker's abilities, as buttons.
  *
- * What the server offers is not decided here, so what is worth pinning is the drawing of it: every
- * offered ability gets a button in the server's order, each reads as the ability it activates — through
- * upstream's fifty-character clip — and nothing is a button that the server did not list.
+ * What the server offers is not decided here, so what is worth pinning is the drawing of it: every loyalty
+ * ability is a button whether or not it can be used, only the ones the server listed can be pressed, each
+ * reads as the ability it activates — through upstream's fifty-character clip — and a line that is not a
+ * loyalty ability is not mistaken for one.
+ *
+ * The rules text is Liliana, Death's Majesty's as the server sends it, from the board Pete reported: her
+ * +1 offered, her −3 not (no creature card in the graveyard to target), and her −7 out of reach at six
+ * loyalty.
  */
 class AbilityButtonsTest {
     @Test
-    fun `a planeswalker gets a button per offered ability, in the server's order, named by its rules line`() {
-        val buttons = abilityButtons(liliana(), listOf(offered(listOf("minus-2", "plus-1"), listOf(MINUS, PLUS))))
+    fun `every loyalty ability is a button, in the card's order, and only the offered ones can be pressed`() {
+        val buttons = abilityButtons(majesty(), listOf(offered(listOf("plus-1"), listOf(PLUS))), activatable = true)
 
-        assertEquals(listOf("minus-2", "plus-1"), buttons.map { it.abilityId })
-        assertEquals(listOf(MINUS, PLUS), buttons.map { it.label })
+        assertEquals(listOf(PLUS, MINUS, ULTIMATE), buttons.map { it.label })
+        assertEquals(listOf("plus-1", null, null), buttons.map { it.abilityId })
     }
 
     @Test
-    fun `a name upstream clipped at fifty characters reads as the whole line`() {
+    fun `a name upstream clipped at fifty characters still finds its line`() {
         // `PlayableObjectStats.load`: longer than fifty, and it is cut to forty-nine and `...`.
-        val buttons = abilityButtons(liliana(), listOf(offered(listOf("minus-6"), listOf(ULTIMATE.take(49) + "..."))))
+        val buttons = abilityButtons(majesty(), listOf(offered(listOf("minus-3"), listOf(MINUS.take(49) + "..."))), activatable = true)
 
-        assertEquals(ULTIMATE, buttons.single().label)
-        assertEquals(ULTIMATE, buttons.single().rule)
+        assertEquals(listOf(null, "minus-3", null), buttons.map { it.abilityId })
     }
 
     @Test
-    fun `a name that matches no rules line keeps the name, and claims no line`() {
-        val buttons = abilityButtons(liliana(), listOf(offered(listOf("x"), listOf("+2: Something granted"))))
+    fun `outside a window where she can be activated, every ability is drawn and none can be pressed`() {
+        val buttons = abilityButtons(majesty(), listOf(offered(listOf("plus-1"), listOf(PLUS))), activatable = false)
 
-        assertEquals("+2: Something granted", buttons.single().label)
-        assertNull(buttons.single().rule)
+        assertEquals(3, buttons.size)
+        assertTrue(buttons.none { it.canActivate })
     }
 
     @Test
-    fun `an ability with no name at all is numbered`() {
+    fun `a planeswalker the server lists nothing for draws every ability greyed`() {
+        val buttons = abilityButtons(majesty(), emptyList(), activatable = true)
+
+        assertEquals(listOf(PLUS, MINUS, ULTIMATE), buttons.map { it.label })
+        assertTrue(buttons.none { it.canActivate })
+    }
+
+    @Test
+    fun `a loyalty line is told from any other line by its cost`() {
+        // `PayLoyaltyCost` writes `0` for a zero cost and `PayVariableLoyaltyCost` writes `-X`. A static
+        // ability that only mentions +1/+1 is not a loyalty ability, and neither is an activated ability
+        // with a colon in it that is paid for some other way — both stay text.
+        val walker =
+            majesty().copy(
+                rules =
+                    listOf(
+                        "Creatures you control get +1/+1.",
+                        "{T}: Add {B}.",
+                        "0: Draw a card.",
+                        "-X: Destroy target creature with mana value X.",
+                    ),
+            )
+
+        val buttons = abilityButtons(walker, emptyList(), activatable = false)
+
+        assertEquals(listOf("0: Draw a card.", "-X: Destroy target creature with mana value X."), buttons.map { it.label })
+    }
+
+    @Test
+    fun `an offered ability that is not one of its loyalty lines is still a button, after them`() {
+        val buttons =
+            abilityButtons(majesty(), listOf(offered(listOf("plus-1", "granted"), listOf(PLUS, "{T}: Add {B}."))), activatable = true)
+
+        assertEquals("{T}: Add {B}.", buttons.last().label)
+        assertEquals("granted", buttons.last().abilityId)
+        assertNull("no line of hers claimed", buttons.last().rule)
+    }
+
+    @Test
+    fun `an offered ability with no name at all is still a button, numbered`() {
         // An older bridge sends ids without names.
-        val buttons = abilityButtons(liliana(), listOf(offered(listOf("a", "b"), emptyList())))
+        val buttons = abilityButtons(majesty(), listOf(offered(listOf("a"), emptyList())), activatable = true)
 
-        assertEquals(listOf("Ability 1", "Ability 2"), buttons.map { it.label })
+        assertEquals("Ability 1", buttons.last().label)
+        assertEquals("a", buttons.last().abilityId)
     }
 
     @Test
     fun `a permanent that is not a planeswalker gets no buttons`() {
-        val bears = liliana().copy(cardTypes = listOf(CardType.Creature))
+        val bears = majesty().copy(cardTypes = listOf(CardType.Creature))
 
-        assertTrue(abilityButtons(bears, listOf(offered(listOf("a"), listOf(PLUS)))).isEmpty())
+        assertTrue(abilityButtons(bears, listOf(offered(listOf("a"), listOf(PLUS))), activatable = true).isEmpty())
     }
 
     @Test
-    fun `a planeswalker the server is not offering gets no buttons`() {
-        assertTrue(abilityButtons(liliana(), listOf(PlayableObject(objectId = "someone-else", abilityIds = listOf("a")))).isEmpty())
-    }
-
-    @Test
-    fun `the buttons replace the action, and a line that became a button is not also read as text`() {
+    fun `pressable buttons replace Play, a greyed one presses nothing, and every line that became a button leaves the text`() {
         val preview =
             CardPreviewState(
-                card = CardDisplay(name = "Liliana of the Veil"),
-                abilities = listOf(PLUS, MINUS),
+                card = CardDisplay(name = "Liliana, Death's Majesty"),
+                abilities = listOf(PLUS, MINUS, "A static ability."),
                 action = CardPreviewAction(label = "Play") {},
             )
         val pressed = mutableListOf<String>()
 
-        val shown = preview.withAbilityButtons(listOf(AbilityButton("plus-1", PLUS, PLUS))) { pressed += it }
-        shown.abilityActions.single().onAct()
+        val shown =
+            preview.withAbilityButtons(listOf(AbilityButton("plus-1", PLUS, PLUS), AbilityButton(null, MINUS, MINUS))) { pressed += it }
+        shown.abilityActions.forEach { it.onAct() }
 
         assertNull(shown.action)
-        assertEquals(listOf(MINUS), shown.abilities)
+        assertEquals(listOf(true, false), shown.abilityActions.map { it.enabled })
+        assertEquals(listOf("A static ability."), shown.abilities)
         assertEquals(listOf("plus-1"), pressed)
+    }
+
+    @Test
+    fun `a planeswalker none of whose abilities can be pressed keeps its action`() {
+        // A planeswalker that is the target of a spell: the press on it picks it, and greyed buttons must not
+        // take that away.
+        val target = CardPreviewAction(label = "Choose as target") {}
+        val preview = CardPreviewState(card = CardDisplay(name = "Liliana, Death's Majesty"), action = target)
+
+        val shown = preview.withAbilityButtons(listOf(AbilityButton(null, PLUS, PLUS))) {}
+
+        assertEquals(target, shown.action)
     }
 
     @Test
@@ -89,10 +142,10 @@ class AbilityButtonsTest {
         assertEquals(preview, preview.withAbilityButtons(emptyList()) {})
     }
 
-    private fun liliana() =
+    private fun majesty() =
         GameCard(
             id = "pw-1",
-            name = "Liliana of the Veil",
+            name = "Liliana, Death's Majesty",
             cardTypes = listOf(CardType.Planeswalker),
             rules = listOf(PLUS, MINUS, ULTIMATE),
         )
@@ -103,7 +156,7 @@ class AbilityButtonsTest {
     ) = PlayableObject(objectId = "pw-1", abilityIds = ids, abilityNames = names)
 }
 
-private const val PLUS = "+1: Each player discards a card."
-private const val MINUS = "−2: Target player sacrifices a creature."
-private const val ULTIMATE =
-    "−6: Separate all permanents target player controls into two piles. That player sacrifices all permanents in the pile of their choice."
+private const val PLUS = "+1: Create a 2/2 black Zombie creature token. Mill two cards."
+private const val MINUS =
+    "-3: Return target creature card from your graveyard to the battlefield. That creature is a black Zombie in addition to its other colors and types."
+private const val ULTIMATE = "-7: Destroy all non-Zombie creatures."

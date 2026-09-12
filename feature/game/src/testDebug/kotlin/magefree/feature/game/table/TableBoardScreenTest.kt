@@ -3,6 +3,8 @@ package magefree.feature.game.table
 import android.app.Application
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
@@ -431,13 +433,15 @@ class TableBoardScreenTest {
     // ---- a planeswalker's abilities ---------------------------------------------------------------
 
     @Test
-    fun `a planeswalker's offered abilities are buttons on its card, in place of Play`() {
-        // Pete: the abilities, in a column, instead of the Play button. The ultimate's name arrives clipped
-        // at fifty characters — upstream's own `PlayableObjectStats` — and the button reads the whole line.
+    fun `every one of a planeswalker's loyalty abilities is a button, the ones offered pressable, in place of Play`() {
+        // Pete: the abilities in a column instead of Play, and *"grey them out so they're always present,
+        // even if you can't use them"*. The −2 is not offered here; the ultimate's name arrives clipped at
+        // fifty characters — upstream's own `PlayableObjectStats` — and its button reads the whole line.
         render(planeswalkerGame(), selectedObjectId = "pw-1")
 
-        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(0)).assertTextEquals(LILIANA_PLUS)
-        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).assertTextEquals(LILIANA_ULTIMATE)
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(0)).assertTextEquals(LILIANA_PLUS).assertIsEnabled()
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).assertTextEquals(LILIANA_MINUS).assertIsNotEnabled()
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(2)).assertTextEquals(LILIANA_ULTIMATE).assertIsEnabled()
         composeTestRule.onNodeWithTag(CardPreviewTestTags.ACTION).assertDoesNotExist()
     }
 
@@ -445,17 +449,35 @@ class TableBoardScreenTest {
     fun `pressing one of them asks to activate that ability of that planeswalker`() {
         render(planeswalkerGame(), selectedObjectId = "pw-1")
 
-        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).performScrollTo().performClick()
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(2)).performScrollTo().performClick()
 
         assertEquals(listOf<BoardAction>(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-6")), actions)
     }
 
     @Test
-    fun `a planeswalker the server is not offering has neither buttons nor Play`() {
+    fun `a greyed ability presses nothing`() {
+        render(planeswalkerGame(), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).performScrollTo().performClick()
+
+        assertTrue("nothing is sent for an ability the server did not offer", actions.isEmpty())
+    }
+
+    @Test
+    fun `with nothing offered every ability is still there, greyed, and there is no Play`() {
         render(planeswalkerGame().copy(playable = emptyList()), selectedObjectId = "pw-1")
 
-        composeTestRule.onNodeWithTag(CardPreviewTestTags.ABILITY_ACTIONS).assertDoesNotExist()
+        listOf(0, 1, 2).forEach { index ->
+            composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(index)).assertIsNotEnabled()
+        }
         composeTestRule.onNodeWithTag(CardPreviewTestTags.ACTION).assertDoesNotExist()
+    }
+
+    @Test
+    fun `an opponent's planeswalker is read, not given buttons`() {
+        render(planeswalkerGame(onViewersSide = false), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.ABILITY_ACTIONS).assertDoesNotExist()
     }
 
     // ---- dragging out of the hand -----------------------------------------------------------------
@@ -655,12 +677,12 @@ class TableBoardScreenTest {
      * Liliana of the Veil on the viewer's side, with her +1 and her ultimate offered — the name of the
      * ultimate clipped at fifty characters, as upstream sends it.
      */
-    private fun planeswalkerGame(): GameState {
+    private fun planeswalkerGame(onViewersSide: Boolean = true): GameState {
         val base = priorityGame()
         return base.copy(
             players =
                 base.players.map { player ->
-                    if (!player.isViewer) {
+                    if (player.isViewer != onViewersSide) {
                         player
                     } else {
                         val liliana =
@@ -690,9 +712,11 @@ class TableBoardScreenTest {
 }
 
 private const val LILIANA_PLUS = "+1: Each player discards a card."
-private const val LILIANA_MINUS = "−2: Target player sacrifices a creature."
+
+// The minus is an ASCII hyphen, because that is what upstream writes: `PayLoyaltyCost` is `Integer.toString`.
+private const val LILIANA_MINUS = "-2: Target player sacrifices a creature."
 private const val LILIANA_ULTIMATE =
-    "−6: Separate all permanents target player controls into two piles. That player sacrifices all permanents in the pile of their choice."
+    "-6: Separate all permanents target player controls into two piles. That player sacrifices all permanents in the pile of their choice."
 
 /** The server's own text for the spell the stack tests put on it. */
 private const val BOLT_TEXT = "Lightning Bolt deals 3 damage to any target."

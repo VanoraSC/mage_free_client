@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -110,7 +111,7 @@ class CardPreviewTest {
                 abilityActions =
                     listOf(
                         CardPreviewAction(label = "+1: Each player discards a card.") { pressed += "plus" },
-                        CardPreviewAction(label = "−2: Target player sacrifices a creature.") { pressed += "minus" },
+                        CardPreviewAction(label = "-2: Target player sacrifices a creature.") { pressed += "minus" },
                     ),
             ),
         )
@@ -122,6 +123,29 @@ class CardPreviewTest {
         composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).performScrollTo().performClick()
 
         assertEquals(listOf("minus"), pressed)
+    }
+
+    @Test
+    fun `an ability that cannot be activated now is drawn greyed, and a press on it does nothing`() {
+        val pressed = mutableListOf<String>()
+        show(
+            bears().copy(
+                abilityActions =
+                    listOf(
+                        CardPreviewAction(label = "-3: Return target creature card from your graveyard.", enabled = false) {
+                            pressed += "minus"
+                        },
+                    ),
+            ),
+        )
+
+        composeTestRule
+            .onNodeWithTag(CardPreviewTestTags.abilityAction(0))
+            .assertIsNotEnabled()
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(emptyList<String>(), pressed)
     }
 
     @Test
