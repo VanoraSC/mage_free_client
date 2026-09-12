@@ -98,9 +98,10 @@ class ScryfallImageSource(
      * `include_extras` and named does not. `exact` is used rather than `fuzzy`: a fuzzy miss returns
      * *some other card*, which would put the wrong picture on the board rather than no picture.
      *
-     * Emblems do not resolve, and are not made to: upstream names one `Emblem Nixilis` where Scryfall
-     * names it `Ob Nixilis Reignited Emblem`, and guessing between those is how a board ends up
-     * confidently showing the wrong card.
+     * Emblems are not looked up here: upstream names one `Emblem Nixilis` where Scryfall names it
+     * `Ob Nixilis Reignited Emblem`, and guessing between those is how a board ends up confidently
+     * showing the wrong card. They are resolved to a printing from upstream's own table instead — see
+     * [emblemArtRequest].
      */
     private fun resolveToken(
         set: String,

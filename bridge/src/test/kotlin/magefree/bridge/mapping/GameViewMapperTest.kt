@@ -567,6 +567,51 @@ class GameViewMapperTest {
     }
 
     @Test
+    fun `a command object carries its image number`() {
+        // The third part of upstream's own emblem image key, `SET/Name/N`. Commander Masters prints two
+        // `Emblem Chandra`s, and this is the only thing on the view that says which one a seat has.
+        val view =
+            GameViews.game(
+                myPlayerId = alice,
+                players =
+                    listOf(
+                        GameViews.player(
+                            playerId = alice,
+                            commandList = listOf(GameViews.emblem(name = "Emblem Chandra", setCode = "CMM", imageNumber = 2)),
+                        ),
+                    ),
+            )
+
+        val mapped =
+            GameViewMapper
+                .map(view)
+                .players
+                .single()
+                .commandList
+                .single()
+
+        assertEquals(2, mapped.imageNumber)
+    }
+
+    @Test
+    fun `an emblem's trigger on the stack names the emblem's image, read off its source card`() {
+        // `GameView` builds an emblem trigger's source as `new CardView(new EmblemView(...))`: the
+        // emblem's name, the set upstream chose for its image, no card number, and an image number. The
+        // ability names none of these itself, so all of them come off the source card.
+        val trigger =
+            GameViews.stackAbilityView(
+                sourceCard = GameViews.card(name = "Emblem Chandra", setCode = "CMM", collectorNumber = "", imageNumber = 2),
+            )
+
+        val mapped = GameViewMapper.mapCard(trigger)
+
+        assertEquals("Emblem Chandra", mapped.name)
+        assertEquals("CMM", mapped.setCode)
+        assertNull(mapped.collectorNumber)
+        assertEquals(2, mapped.imageNumber)
+    }
+
+    @Test
     fun `a command object implementation the mapper does not know keeps its fields`() {
         // The branch is on the concrete type, so a fifth implementation would fall through it. It must
         // arrive as UNKNOWN with everything the interface exposes intact -- never dropped.

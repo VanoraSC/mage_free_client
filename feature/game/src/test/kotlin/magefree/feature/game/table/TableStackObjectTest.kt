@@ -1,5 +1,7 @@
 package magefree.feature.game.table
 
+import magefree.cards.art.CardArtRequest
+import magefree.cards.art.CardArtSize
 import magefree.network.game.CardType
 import magefree.network.game.GameCard
 import magefree.network.game.GamePermanent
@@ -55,6 +57,31 @@ class TableStackObjectTest {
     @Test
     fun `an empty stack is empty, which is the ordinary state`() {
         assertTrue(tableStack(GameState(gameId = "g")).isEmpty())
+    }
+
+    @Test
+    fun `an emblem's trigger is drawn with the emblem's image`() {
+        // Liliana, the Last Hope's end-step trigger, as the bridge sends it: its source is the emblem,
+        // which names the set upstream chose for its image and no card number, so there was no printing
+        // to ask for and it drew as a placeholder. Nothing here needs Liliana herself to be anywhere.
+        val trigger = GameCard(id = "trigger", name = "Emblem Liliana", setCode = "EMN", sourceId = "emblem")
+
+        val art = tableStack(stateWith(trigger)).single().art
+
+        assertEquals(CardArtRequest(setCode = "temn", collectorNumber = "9", size = CardArtSize.ART_CROP), art)
+    }
+
+    @Test
+    fun `an emblem's trigger uses its image number where one set has two of that name`() {
+        val trigger = GameCard(id = "trigger", name = "Emblem Chandra", setCode = "CMM", imageNumber = 2, sourceId = "emblem")
+
+        assertEquals("79", tableStack(stateWith(trigger)).single().art?.collectorNumber)
+    }
+
+    @Test
+    fun `a card with no number that is in no emblem table still has no art`() {
+        assertNull(tableStack(stateWith(GameCard(id = "x", name = "Emblem Karn", setCode = "DMU"))).single().art)
+        assertNull(tableStack(stateWith(GameCard(id = "y", name = "Lightning Bolt", setCode = "10E"))).single().art)
     }
 
     private fun stateWith(vararg cards: GameCard) = GameState(gameId = "g", stack = cards.toList())

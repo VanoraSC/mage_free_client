@@ -107,6 +107,17 @@ fun PlayerOverlay(
         ) {
             StatusColumn(vitals = vitals, modifier = Modifier.width(StatusWidth).fillMaxHeight())
 
+            // **The command zone, as cards.** An emblem is read the way any card is — its picture, and
+            // its text when pressed — so it is drawn as one, not as a name in the list beside it.
+            if (vitals.commandObjects.isNotEmpty()) {
+                CommandColumn(
+                    objects = vitals.commandObjects,
+                    artFor = artFor,
+                    onInspect = onInspect,
+                    modifier = Modifier.width(ZoneColumnWidth).fillMaxHeight(),
+                )
+            }
+
             // A column per pile, in the rail's own order, so the two agree about which zone is which.
             zones.forEach { zone ->
                 ZoneColumn(
@@ -120,7 +131,7 @@ fun PlayerOverlay(
     }
 }
 
-/** The numbers, the counters, the designations and the command zone — everything that is not a card. */
+/** The numbers, the counters and the designations — everything that is not a card. */
 @Composable
 private fun StatusColumn(
     vitals: TableVitals,
@@ -164,11 +175,41 @@ private fun StatusColumn(
                 Line(label = designation, value = "", tag = PlayerOverlayTestTags.designation(designation))
             }
         }
+    }
+}
 
-        if (vitals.commandObjects.isNotEmpty()) {
-            Section(title = "In the command zone")
-            vitals.commandObjects.forEach { name ->
-                Line(label = name, value = "", tag = PlayerOverlayTestTags.command(name))
+/** The command zone: every emblem, commander, dungeon and plane this seat has, in the server's order. */
+@Composable
+private fun CommandColumn(
+    objects: List<TableCommandObject>,
+    artFor: TableArtResolver?,
+    onInspect: ((String) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.testTag(PlayerOverlayTestTags.COMMAND_ZONE),
+        verticalArrangement = Arrangement.spacedBy(RowGap),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "$COMMAND_ZONE_LABEL ${objects.size}",
+            style = BoardTypography.counter,
+            color = BoardSurface.onSurfaceMuted,
+            maxLines = 1,
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(RowGap),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            objects.forEach { command ->
+                BoardCard(
+                    state = BoardCardState(card = command.card),
+                    width = ZoneCardWidth,
+                    art = artFor?.invoke(command.boardArt, command.card),
+                    onTap = onInspect?.let { inspect -> { inspect(command.id) } },
+                    modifier = Modifier.testTag(PlayerOverlayTestTags.command(command.id)),
+                )
             }
         }
     }
@@ -285,7 +326,11 @@ object PlayerOverlayTestTags {
 
     fun designation(name: String): String = "player-overlay-designation-$name"
 
-    fun command(name: String): String = "player-overlay-command-$name"
+    /** The command zone's column, drawn only when the seat has something in it. */
+    const val COMMAND_ZONE: String = "player-overlay-command-zone"
+
+    /** One object in the command zone, by its server object id. */
+    fun command(objectId: String): String = "player-overlay-command-$objectId"
 
     /** One pile's column. */
     fun zone(kind: TableZoneKind): String = "player-overlay-zone-${kind.name}"
@@ -299,6 +344,9 @@ object PlayerOverlayTestTags {
     /** One card in one of the columns, by its server object id. */
     fun card(cardId: String): String = "player-overlay-card-$cardId"
 }
+
+/** What the command zone's column is headed, beside how much is in it. */
+private const val COMMAND_ZONE_LABEL = "Command"
 
 /** What an opened but empty pile says, since the column is there and has to say something. */
 private const val EMPTY_MESSAGE = "Empty"

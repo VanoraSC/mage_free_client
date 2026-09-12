@@ -11,9 +11,10 @@ import magefree.network.game.GameState
  * The card the player has raised, wherever it was raised from.
  *
  * **One surface, one lookup.** A press on this board can name a permanent, an Aura on one, a card in
- * hand, a card offered from a graveyard, a card in an open pile, an object on the stack, or a
- * candidate a prompt carried with it. All seven open the same detail view, so all seven are resolved
- * here rather than at seven call sites that would each answer "what is this id" slightly differently.
+ * hand, a card offered from a graveyard, a card in an open pile, an object on the stack, an object in a
+ * command zone, or a candidate a prompt carried with it. All eight open the same detail view, so all
+ * eight are resolved here rather than at eight call sites that would each answer "what is this id"
+ * slightly differently.
  *
  * **A permanent resolves to more than its card.** What a player wants from a raised permanent is what
  * it is *now* — the abilities it has after layers, and what is attached to it — and both are things
@@ -53,6 +54,17 @@ internal fun raisedCard(
     stack.firstOrNull { it.id == objectId }?.let { entry ->
         return RaisedCard(stackPreview(entry).copy(action = action), entry.art.full())
     }
+    // **A command object reads like a stack object.** An emblem is text acting on the game from outside
+    // every zone, and its rules are the server's game-aware text for it, so they go where a stack
+    // object's do.
+    snapshot
+        ?.let { state -> tableVitals(state).flatMap { it.commandObjects }.firstOrNull { it.id == objectId } }
+        ?.let { command ->
+            return RaisedCard(
+                CardPreviewState(card = command.card, abilities = command.rules, action = action),
+                command.fullArt,
+            )
+        }
     snapshot
         ?.let { state ->
             (handCards(state) + playableElsewhere(state) + tableZones(state).flatMap { it.cards })

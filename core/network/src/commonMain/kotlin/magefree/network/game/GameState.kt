@@ -211,6 +211,8 @@ data class GameCommandObject(
     val setCode: String? = null,
     val collectorNumber: String? = null,
     val rules: List<String> = emptyList(),
+    /** Which of several same-named images in its set this is; `0` for the only one. See [GameCard.imageNumber]. */
+    val imageNumber: Int = 0,
 )
 
 /**
@@ -306,6 +308,14 @@ data class GameCard(
      * `Face Down` — or null for an ordinary card. Upstream's own image name.
      */
     val imageName: String? = null,
+    /**
+     * Which of several same-named images in its set this object uses, and `0` where there is one.
+     *
+     * Upstream's own image key for a token or an emblem is `SET/Name/N`, and this is the `N` — the only
+     * thing telling Commander Masters' two `Emblem Chandra`s apart. For an ability on the stack it is
+     * the source's, like [setCode].
+     */
+    val imageNumber: Int = 0,
     val objectType: MageObjectType = MageObjectType.Unknown,
     val icons: List<GameCardIcon> = emptyList(),
 )

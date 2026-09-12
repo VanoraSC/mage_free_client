@@ -507,6 +507,17 @@ class GameSerializationTest {
     }
 
     @Test
+    fun `an image number round-trips, and a frame without one reads as the only image of its name`() {
+        val emblem =
+            GameCommandObjectView(id = "cmd-3", name = "Emblem Chandra", kind = CommandObjectKind.EMBLEM, setCode = "CMM", imageNumber = 2)
+
+        assertEquals(2, json.decodeFromString<GameCommandObjectView>(json.encodeToString(emblem)).imageNumber)
+        // Additive: an older bridge sends nothing, which must read as 0 on both shapes rather than fail.
+        assertEquals(0, json.decodeFromString<GameCommandObjectView>("""{"id":"c","name":"n"}""").imageNumber)
+        assertEquals(0, json.decodeFromString<GameCardView>("""{"id":"c","name":"n"}""").imageNumber)
+    }
+
+    @Test
     fun `a command object kind this build has never heard of decodes to UNKNOWN instead of throwing`() {
         // The same forward-compatibility promise CardTypeCode makes: upstream adds command-object
         // kinds, and one this build does not know must cost a single value, not the whole snapshot.

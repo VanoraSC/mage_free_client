@@ -5,6 +5,7 @@ import magefree.cards.art.CardArtFace
 import magefree.cards.art.CardArtRequest
 import magefree.cards.art.CardArtSize
 import magefree.cards.art.cardBackRequest
+import magefree.cards.art.emblemArtRequest
 import magefree.cards.art.faceDownArtRequest
 import magefree.cards.art.tokenArtRequest
 import magefree.designsystem.card.BoardAttachment
@@ -595,6 +596,15 @@ internal fun artRequestOf(card: GameCard): CardArtRequest? {
             ?: cardBackRequest(CardArtSize.ART_CROP)
     }
     val set = card.setCode?.takeIf { it.isNotBlank() } ?: return null
+    // **An emblem names no printing, but upstream's table names one for it.** What reaches here is an
+    // emblem's trigger on the stack, whose source is the emblem itself: its name, the set upstream chose
+    // for its image and no card number. Only an exact key in that table answers, so an ordinary card
+    // with a missing number is not mistaken for one. It depends on nothing but the emblem, which is
+    // what lets it outlive the planeswalker that made it.
+    if (card.collectorNumber.isNullOrBlank()) {
+        emblemArtRequest(setCode = set, name = card.name, imageNumber = card.imageNumber, size = CardArtSize.ART_CROP)
+            ?.let { return it }
+    }
     if (card.isToken) return tokenArtRequest(setCode = set, name = card.name, size = CardArtSize.ART_CROP)
     val number = card.collectorNumber?.takeIf { it.isNotBlank() } ?: return null
     return CardArtRequest(

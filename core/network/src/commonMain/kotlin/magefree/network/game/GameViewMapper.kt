@@ -207,6 +207,7 @@ internal object GameViewMapper {
             setCode = setCode,
             collectorNumber = collectorNumber,
             rules = rules,
+            imageNumber = imageNumber,
         )
 
     private fun CommandObjectKindCode.toCommandObjectKind(): CommandObjectKind =
@@ -246,6 +247,7 @@ internal object GameViewMapper {
             isToken = token,
             sourceId = sourceId,
             imageName = imageName,
+            imageNumber = imageNumber,
             objectType = objectType.toObjectType(),
             // The server's own `CardView.getCardIcons()`, generated from the game-aware ability set.
             // Carried through unchanged, hint and text included: the hint is what an ability icon is

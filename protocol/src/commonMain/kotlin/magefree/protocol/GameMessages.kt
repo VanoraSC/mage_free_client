@@ -911,6 +911,16 @@ public data class GameCardView(
      * different things as one. Null for an ordinary card.
      */
     val imageName: String? = null,
+    /**
+     * Which of several same-named images in one set this object uses — `CardView.getImageNumber()`,
+     * read from the source card for an ability on the stack, the same object [setCode] is read from.
+     *
+     * `0` where the set has one image of that name, which is nearly always. It is the third part of
+     * upstream's own image key for tokens and emblems (`SET/Name/N`, `findTokenLink`), and the only
+     * thing that tells Commander Masters' two `Emblem Chandra`s apart. Additive: an older peer sends
+     * nothing and every object reads as the only one of its name.
+     */
+    val imageNumber: Int = 0,
 )
 
 /**
@@ -1102,6 +1112,8 @@ public data class GameCommandObjectView(
     val setCode: String? = null,
     val collectorNumber: String? = null,
     val rules: List<String> = emptyList(),
+    /** `CommandObjectView.getImageNumber()` — see [GameCardView.imageNumber]. `0` for the only image of a name. */
+    val imageNumber: Int = 0,
 )
 
 /**

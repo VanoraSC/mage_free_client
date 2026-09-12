@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import magefree.designsystem.theme.MageTheme
+import magefree.network.game.CommandObjectKind
 import magefree.network.game.GameCommandObject
 import magefree.network.game.GameCounter
 import magefree.network.game.GamePlayer
@@ -159,7 +160,7 @@ class PlayerStatusTest {
         composeTestRule.onNodeWithTag(PlayerOverlayTestTags.counter("energy")).assertIsDisplayed()
         composeTestRule.onNodeWithTag(PlayerOverlayTestTags.designation("Monarch")).assertIsDisplayed()
         composeTestRule.onNodeWithTag(PlayerOverlayTestTags.designation("City's Blessing")).assertIsDisplayed()
-        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.command("Emblem — Elspeth")).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.command("e1")).assertIsDisplayed()
         composeTestRule.onNodeWithText("Life").assertIsDisplayed()
 
         // A press outside closes it; a press on the panel does not, for the reason the card preview
@@ -169,6 +170,46 @@ class PlayerStatusTest {
 
         composeTestRule.onNodeWithTag(PlayerOverlayTestTags.SCRIM).performTouchInput { click(topLeft) }
         assertEquals(listOf("closed"), expanded)
+    }
+
+    @Test
+    fun `an emblem in the command zone is a card, and pressing it asks to read it`() {
+        val state =
+            twoSeats(
+                commandList =
+                    listOf(GameCommandObject(id = "e1", name = "Emblem Liliana", kind = CommandObjectKind.Emblem, setCode = "EMN")),
+            )
+        val inspected = mutableListOf<String>()
+        composeTestRule.setContent {
+            MageTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PlayerOverlay(
+                        vitals = tableVitals(state).first { it.isViewer },
+                        onDismiss = { expanded += "closed" },
+                        onInspect = { inspected += it },
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.command("e1"), useUnmergedTree = true).performClick()
+
+        assertEquals(listOf("e1"), inspected)
+        assertEquals("a press on the emblem is not a press outside", emptyList<String>(), expanded)
+    }
+
+    @Test
+    fun `a seat with nothing in its command zone draws no column for it`() {
+        val state = twoSeats()
+        composeTestRule.setContent {
+            MageTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PlayerOverlay(vitals = tableVitals(state).first { it.isViewer }, onDismiss = {})
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag(PlayerOverlayTestTags.COMMAND_ZONE).assertDoesNotExist()
     }
 }
 
