@@ -179,6 +179,18 @@ public data class SetPriorityStops(
      * rather than silently changing a preference it never mentioned.
      */
     val autoTargetLevel: Int = UPSTREAM_AUTO_TARGET_DEFAULT,
+    /**
+     * Whether the **server** passes priority for the player the moment they put a spell on the stack —
+     * upstream's `UserData.passPriorityCast`, which its preferences dialog calls *"Pass priority
+     * automatically after you have put a spell on the stack"*.
+     *
+     * `HumanPlayer.priority()` checks it before anything else when priority comes back to a player who
+     * has just cast, so the pass happens on the server and no prompt is sent. Off is upstream's default
+     * and is what an older peer sending nothing gets.
+     */
+    val passPriorityCast: Boolean = false,
+    /** The same, for a non-mana **activated ability** — upstream's `UserData.passPriorityActivation`. */
+    val passPriorityActivation: Boolean = false,
 ) : ClientMessage
 
 /**

@@ -4,11 +4,13 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +40,7 @@ import magefree.feature.game.board.BoardAction
 import magefree.feature.game.board.CONCEDE_CONFIRM_LABEL
 import magefree.feature.game.board.CONCEDE_LABEL
 import magefree.feature.game.board.FLIP_FACE_LABEL
+import magefree.feature.game.board.FULL_CONTROL_LABEL
 import magefree.feature.game.board.FloatingControls
 import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.HiddenControlsToggle
@@ -113,6 +116,7 @@ import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
  *   draws the board's cards as their name plates alone, which is what a test sees.
  * @param onFlipDetailFace peeks at a double-faced card's other side in the detail overlay.
  * @param onPressStop cycles the stop on one step of the rail, on one side of the turn.
+ * @param onSetFullControl turns Full Control on or off — see `BoardStops.fullControl`.
  */
 @Composable
 fun TableBoardScreen(
@@ -126,6 +130,7 @@ fun TableBoardScreen(
     artFor: TableArtResolver? = null,
     onFlipDetailFace: () -> Unit = {},
     onPressStop: (TurnSide, String) -> Unit = { _, _ -> },
+    onSetFullControl: (Boolean) -> Unit = {},
 ) {
     val snapshot = uiState.snapshot
     val controls = uiState.controls
@@ -291,7 +296,18 @@ fun TableBoardScreen(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(ControlsPadding),
             ) {
-                BoardCornerMenu(onExit = onExit, onAction = onAction)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(ControlsPadding),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (uiState.stops.fullControl) FullControlBadge()
+                    BoardCornerMenu(
+                        onExit = onExit,
+                        onAction = onAction,
+                        fullControl = uiState.stops.fullControl,
+                        onSetFullControl = onSetFullControl,
+                    )
+                }
 
                 if (uiState.areControlsVisible) {
                     FloatingControls(
@@ -446,6 +462,36 @@ object TableBoardTestTags {
     const val SCREEN: String = "table-board"
     const val MENU: String = "table-board-menu"
     const val STANDING: String = "table-board-standing"
+
+    /** The corner menu's Full Control item. */
+    const val FULL_CONTROL: String = "table-board-full-control"
+
+    /** What says Full Control is on, beside the menu. Absent while it is off. */
+    const val FULL_CONTROL_BADGE: String = "table-board-full-control-badge"
+}
+
+/**
+ * Says Full Control is on, beside the menu that turns it off.
+ *
+ * **A pinned mode has to look pinned.** Off is the ordinary game. On, priority comes back after every one
+ * of the player's own casts, and a player who had forgotten setting it would read each of those windows
+ * as the board waiting for no reason.
+ */
+@Composable
+private fun FullControlBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = modifier.testTag(TableBoardTestTags.FULL_CONTROL_BADGE),
+    ) {
+        Text(
+            text = FULL_CONTROL_LABEL,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = Spacing.small, vertical = Spacing.extraSmall),
+        )
+    }
 }
 
 /** What the corner menu calls leaving the board, shared with tests so the two agree. */
@@ -490,6 +536,8 @@ private val ControlsPadding = 8.dp
 private fun BoardCornerMenu(
     onExit: () -> Unit,
     onAction: (BoardAction) -> Unit,
+    fullControl: Boolean = false,
+    onSetFullControl: (Boolean) -> Unit = {},
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
     var confirming by rememberSaveable { mutableStateOf<String?>(null) }
@@ -508,6 +556,19 @@ private fun BoardCornerMenu(
                 confirming = null
             },
         ) {
+            // **A mode, not an act**, so it does not confirm: it ends nothing, and a second press puts
+            // it back. The check says which way it is set.
+            DropdownMenuItem(
+                text = { Text(FULL_CONTROL_LABEL) },
+                trailingIcon = {
+                    if (fullControl) Icon(imageVector = Icons.Filled.Check, contentDescription = null)
+                },
+                onClick = {
+                    open = false
+                    onSetFullControl(!fullControl)
+                },
+                modifier = Modifier.testTag(TableBoardTestTags.FULL_CONTROL),
+            )
             DropdownMenuItem(
                 text = { Text(LEAVE_BOARD_LABEL) },
                 onClick = {

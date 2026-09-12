@@ -20,6 +20,7 @@ import magefree.designsystem.theme.MageTheme
 import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.feature.game.board.BoardAction
 import magefree.feature.game.board.BoardControlsTestTags
+import magefree.feature.game.board.BoardStops
 import magefree.feature.game.board.BoardUi
 import magefree.feature.game.board.CONCEDE_CONFIRM_LABEL
 import magefree.feature.game.board.CONCEDE_LABEL
@@ -83,12 +84,14 @@ class TableBoardScreenTest {
     private val taps = mutableListOf<String?>()
     private val actions = mutableListOf<BoardAction>()
     private var exits = 0
+    private val fullControlRequests = mutableListOf<Boolean>()
 
     private fun render(
         state: GameState?,
         controlsVisible: Boolean = true,
         selectedObjectId: String? = null,
         joinError: String? = null,
+        fullControl: Boolean = false,
     ) {
         composeTestRule.setContent {
             MageTheme {
@@ -102,12 +105,14 @@ class TableBoardScreenTest {
                             areControlsVisible = controlsVisible,
                             controls = state?.let { controlsFor(it) },
                             selectedObjectId = selectedObjectId,
+                            stops = BoardStops.Default.copy(fullControl = fullControl),
                         ),
                     onExit = { exits += 1 },
                     onControlsVisibleChange = { visibilityRequests += it },
                     onCardTap = { taps += it },
                     onAction = { actions += it },
                     artRenderer = PlaceholderCardArtRenderer,
+                    onSetFullControl = { fullControlRequests += it },
                 )
             }
         }
@@ -385,6 +390,39 @@ class TableBoardScreenTest {
 
         composeTestRule.onNodeWithText(CONCEDE_CONFIRM_LABEL).performClick()
         assertEquals(listOf<BoardAction>(BoardAction.Concede), actions)
+    }
+
+    @Test
+    fun `full control is turned on from the corner menu, in one press`() {
+        // A mode rather than an act: it ends nothing, so it does not confirm, and nothing is sent to the
+        // game from here — the request goes to the stops, which reach the server on their own.
+        render(priorityGame())
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.MENU).performClick()
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL).performClick()
+
+        assertEquals(listOf(true), fullControlRequests)
+        assertTrue("no game action is sent", actions.isEmpty())
+    }
+
+    @Test
+    fun `full control on says so beside the menu, and the menu turns it off`() {
+        // A pinned mode has to look pinned: a player who forgot setting it would read every priority
+        // window after their own casts as the board waiting for nothing.
+        render(priorityGame(), fullControl = true)
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL_BADGE).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TableBoardTestTags.MENU).performClick()
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL).performClick()
+
+        assertEquals(listOf(false), fullControlRequests)
+    }
+
+    @Test
+    fun `full control off draws no badge`() {
+        render(priorityGame())
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL_BADGE).assertDoesNotExist()
     }
 
     // ---- a question answered from its own content -----------------------------------------------

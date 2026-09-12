@@ -265,10 +265,16 @@ interface GameClient {
      * this client because priority is the only thing it affects and the board is the only place it is
      * set; the bridge applies it with `SessionImpl.updatePreferencesForServer`, exactly as upstream's
      * own client does when its preferences change.
+     *
+     * @param passPriorityCast whether the server passes for the player the moment they put a spell on
+     *   the stack — upstream's `UserData.passPriorityCast`, checked first thing in `priority()`.
+     * @param passPriorityActivation the same for a non-mana activated ability.
      */
     suspend fun setPriorityStops(
         yourTurn: PriorityStopSteps,
         opponentTurn: PriorityStopSteps,
+        passPriorityCast: Boolean = false,
+        passPriorityActivation: Boolean = false,
     ): Result<Unit>
 }
 

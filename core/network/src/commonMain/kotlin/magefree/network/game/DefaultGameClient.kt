@@ -101,6 +101,8 @@ internal class DefaultGameClient(
     override suspend fun setPriorityStops(
         yourTurn: PriorityStopSteps,
         opponentTurn: PriorityStopSteps,
+        passPriorityCast: Boolean,
+        passPriorityActivation: Boolean,
     ): Result<Unit> =
         runCatching {
             // Told, not asked: the bridge applies it to the live upstream user and has nothing to
@@ -113,6 +115,8 @@ internal class DefaultGameClient(
                     // single-candidate choice and never fires the event, so the client is not asked —
                     // which is how a turn-1 Inquisition took a card without showing the hand.
                     autoTargetLevel = AUTO_TARGET_OFF,
+                    passPriorityCast = passPriorityCast,
+                    passPriorityActivation = passPriorityActivation,
                 ),
             )
         }

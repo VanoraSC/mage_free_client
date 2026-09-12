@@ -76,7 +76,13 @@ class FakeGameClient(
     override suspend fun setPriorityStops(
         yourTurn: PriorityStopSteps,
         opponentTurn: PriorityStopSteps,
-    ): Result<Unit> = record("stops:${yourTurn.stepsSet()}|${opponentTurn.stepsSet()}")
+        passPriorityCast: Boolean,
+        passPriorityActivation: Boolean,
+    ): Result<Unit> =
+        record(
+            "stops:${yourTurn.stepsSet()}|${opponentTurn.stepsSet()}" +
+                passesAfter(cast = passPriorityCast, activation = passPriorityActivation),
+        )
 
     override suspend fun useSpecialAction(gameId: String): Result<Unit> = record("special:$gameId")
 
@@ -185,3 +191,16 @@ private fun PriorityStopSteps.stepsSet(): String =
         if (main2) add("main2")
         if (endOfTurn) add("endOfTurn")
     }.joinToString(",")
+
+/**
+ * Which of the player's own acts the server is told to pass after, named — and nothing at all when it is
+ * told neither, so a recorded call from before the flags existed reads exactly as it did.
+ */
+private fun passesAfter(
+    cast: Boolean,
+    activation: Boolean,
+): String =
+    listOfNotNull("cast".takeIf { cast }, "activation".takeIf { activation })
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(",", prefix = "|pass-after:")
+        .orEmpty()

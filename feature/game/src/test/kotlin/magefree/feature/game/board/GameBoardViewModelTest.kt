@@ -541,6 +541,53 @@ class GameBoardViewModelTest {
             assertEquals(listOf(OPENING_STOPS), client.calls.filter { it.startsWith("stops:") })
         }
 
+    // ---- full control --------------------------------------------------------------------------------
+
+    @Test
+    fun `out of full control, the server is told to pass after the player's own cast from the start`() =
+        runTest {
+            // Upstream's own `passPriorityCast` / `passPriorityActivation`: `HumanPlayer.priority()` passes
+            // for the player the moment their spell or ability lands, before a prompt is built. So the
+            // flags are the whole feature, and they have to reach the server when a board opens rather
+            // than only when somebody changes them.
+            val client = FakeGameClient()
+
+            viewModel(client).observe(GAME_ID)
+
+            assertTrue(client.calls.single { it.startsWith("stops:") }.endsWith(PASS_AFTER_CASTING))
+        }
+
+    @Test
+    fun `turning full control on takes the pass back and keeps every stop`() =
+        runTest {
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+            client.calls.clear()
+
+            viewModel.setFullControl(true)
+
+            assertEquals(listOf("stops:main1,main2,endOfTurn|endOfTurn"), client.calls)
+            assertTrue("the board draws what was sent", viewModel.uiState.value.stops.fullControl)
+        }
+
+    @Test
+    fun `full control is not lost when a stop is pressed`() =
+        runTest {
+            // It lives with the stops and every press copies them, so a press that rebuilt the set from
+            // the marks alone would quietly hand the player's own casts back to the server's auto-pass.
+            val client = FakeGameClient()
+            val store = StopStore()
+            viewModel(client, stops = store).observe(GAME_ID)
+            store.setFullControl(true)
+            client.calls.clear()
+
+            store.press(TurnSide.Yours, StepIds.UPKEEP)
+
+            assertEquals(listOf("stops:upkeep,main1,main2,endOfTurn|endOfTurn"), client.calls)
+        }
+
     @Test
     fun `the end step is stopped at on both turns without anybody asking`() =
         runTest {
@@ -560,7 +607,7 @@ class GameBoardViewModelTest {
 
             assertEquals(
                 "one press takes the default off, which is what makes it a default",
-                listOf("stops:main1,main2,endOfTurn|"),
+                listOf("stops:main1,main2,endOfTurn|$PASS_AFTER_CASTING"),
                 client.calls,
             )
         }
@@ -580,7 +627,7 @@ class GameBoardViewModelTest {
             store.press(TurnSide.Yours, StepIds.UPKEEP)
 
             // Their side is untouched; yours carries the upkeep and the forced mains.
-            assertEquals(listOf("stops:upkeep,main1,main2,endOfTurn|endOfTurn"), client.calls)
+            assertEquals(listOf("stops:upkeep,main1,main2,endOfTurn|endOfTurn$PASS_AFTER_CASTING"), client.calls)
         }
 
     @Test
@@ -597,7 +644,7 @@ class GameBoardViewModelTest {
 
             store.press(TurnSide.Theirs, StepIds.UPKEEP)
 
-            assertEquals(listOf("stops:main1,main2,endOfTurn|upkeep,endOfTurn"), client.calls)
+            assertEquals(listOf("stops:main1,main2,endOfTurn|upkeep,endOfTurn$PASS_AFTER_CASTING"), client.calls)
         }
 
     @Test
@@ -615,7 +662,7 @@ class GameBoardViewModelTest {
 
             store.press(TurnSide.Yours, StepIds.BEGIN_COMBAT)
 
-            assertEquals(listOf("stops:main1,beforeCombat,main2,endOfTurn|endOfTurn"), client.calls)
+            assertEquals(listOf("stops:main1,beforeCombat,main2,endOfTurn|endOfTurn$PASS_AFTER_CASTING"), client.calls)
         }
 
     @Test
@@ -1387,9 +1434,15 @@ class GameBoardViewModelTest {
         const val GAME_ID = "g-1"
 
         /**
-         * What a player who has pressed nothing sends: the two main phases, which are a rule on their
-         * own turn, and the end step on both, which is 0123's one default.
+         * Full Control off, which is where a player starts: the server passes after their own spell and
+         * their own activated ability.
          */
-        const val OPENING_STOPS = "stops:main1,main2,endOfTurn|endOfTurn"
+        const val PASS_AFTER_CASTING = "|pass-after:cast,activation"
+
+        /**
+         * What a player who has pressed nothing sends: the two main phases, which are a rule on their
+         * own turn, the end step on both, which is 0123's one default, and Full Control off.
+         */
+        const val OPENING_STOPS = "stops:main1,main2,endOfTurn|endOfTurn$PASS_AFTER_CASTING"
     }
 }

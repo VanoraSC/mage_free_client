@@ -296,6 +296,10 @@ class GameBoardViewModel
                     gameClient.setPriorityStops(
                         yourTurn = current.asSteps(TurnSide.Yours, forced = OWN_MAIN_PHASE_STOPS),
                         opponentTurn = current.asSteps(TurnSide.Theirs),
+                        // **Full Control off is upstream's own pass-after-casting.** The server passes
+                        // the moment the player's spell or ability lands, before a prompt is built.
+                        passPriorityCast = !current.fullControl,
+                        passPriorityActivation = !current.fullControl,
                     )
                 }.launchIn(viewModelScope)
 
@@ -572,6 +576,12 @@ class GameBoardViewModel
             stepId: String,
         ) {
             stops.press(side, stepId)
+        }
+
+        /** Turns Full Control on or off. It reaches the server with the stops — see [BoardStops.fullControl]. */
+        fun setFullControl(on: Boolean) {
+            narrate { "full control $on" }
+            stops.setFullControl(on)
         }
 
         /**

@@ -143,6 +143,12 @@ const val CONCEDE_CONFIRM_LABEL: String = "Concede — you lose this game"
 
 const val QUIT_MATCH_LABEL: String = "Quit match"
 
+/**
+ * The pinned mode that keeps priority after the player's own casts — MTGO's name for it, which is the
+ * name a player who wants it will look for.
+ */
+const val FULL_CONTROL_LABEL: String = "Full control"
+
 const val QUIT_MATCH_CONFIRM_LABEL: String = "Quit — you leave the whole match"
 
 /** Prefix for a game action the server declined, carrying its own reason. */
