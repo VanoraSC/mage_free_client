@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import magefree.cards.CardCatalog
 import magefree.cards.art.CardArtFace
+import magefree.feature.game.BuildConfig
 import magefree.feature.game.table.SeenCards
 import magefree.feature.game.table.fold
 import magefree.network.game.GameClient
@@ -197,7 +198,30 @@ class GameBoardViewModel
         private val passPolicy: PassPolicy,
         private val cardCatalog: CardCatalog,
         private val stops: StopStore,
+        /**
+         * Where the board narrates what it received and what it sent — every snapshot, every action, the
+         * question it believed it was answering. Written for a repro that would not repeat on demand
+         * (an ability choice that came back as a priority prompt), and kept so the next occurrence is
+         * already logged.
+         *
+         * A no-op by default so tests stay quiet; the app wires it to logcat. Every call goes through
+         * [narrate], which builds its message only when `BuildConfig.BOARD_DIAG` is on — see
+         * `feature/game/build.gradle.kts` for the switch.
+         */
+        private val log: (String) -> Unit = {},
     ) : ViewModel() {
+        /**
+         * Logs [message] when the board's narration is compiled in.
+         *
+         * **A lambda, and inline, so a build with the switch off costs nothing.** The messages are
+         * string templates over the UI state; passed as plain strings they would be assembled on every
+         * snapshot and then thrown away. Behind a compile-time `false` the compiler and R8 remove the
+         * branch outright, which is as close as Kotlin gets to an `#ifdef`.
+         */
+        private inline fun narrate(message: () -> String) {
+            if (BuildConfig.BOARD_DIAG) log(message())
+        }
+
         private val _uiState = MutableStateFlow(GameBoardUiState(board = BoardUi(gameId = "")))
 
         val uiState: StateFlow<GameBoardUiState> = _uiState.asStateFlow()
@@ -323,6 +347,13 @@ class GameBoardViewModel
                     seenCards = previous.seenCards.fold(state),
                 )
 
+            // Every emission, what it asked, and what the panel will now offer.
+            narrate {
+                "snapshot step=${state.step} active=${state.activePlayerId} prompt=${state.prompt.diag()} " +
+                    "changed=$promptChanged controls=${_uiState.value.controls?.let { it::class.simpleName }} " +
+                    "cast=${_uiState.value.cast?.cardName} visible=${_uiState.value.areControlsVisible}"
+            }
+
             // The one place the app decides *when* to answer a priority prompt. Asked once per
             // prompt instance, so a re-emission of the same question cannot pass twice.
             val prompt = state.prompt
@@ -402,6 +433,11 @@ class GameBoardViewModel
          */
         fun act(action: BoardAction) {
             val id = gameId
+            // What was sent, and what the board believed it was answering when it sent it.
+            narrate {
+                "act $action while prompt=${latestState?.prompt.diag()} " +
+                    "controls=${_uiState.value.controls?.let { it::class.simpleName }} visible=${_uiState.value.areControlsVisible}"
+            }
             _uiState.value = _uiState.value.copy(actionError = null, selectedObjectId = null)
             when (action) {
                 is BoardAction.PlayObject -> {
@@ -475,10 +511,22 @@ class GameBoardViewModel
         private fun send(call: suspend (GameClient) -> Result<Unit>) {
             viewModelScope.launch {
                 call(gameClient).onFailure { error ->
+                    narrate { "send failed: $error" }
                     _uiState.value = _uiState.value.copy(actionError = error.asBoardMessage())
                 }
             }
         }
+
+        /**
+         * A prompt, short enough to read in a logcat line: its kind, and for an ability
+         * choice the ids it offered, which is what an answer has to match on the server.
+         */
+        private fun GamePrompt?.diag(): String =
+            when (this) {
+                null -> "none"
+                is GamePrompt.ChooseAbility -> "ChooseAbility${choices.map { it.abilityId }}"
+                else -> this::class.simpleName.orEmpty()
+            }
 
         /**
          * What to tell the player about an action that did not happen.
@@ -534,6 +582,7 @@ class GameBoardViewModel
          * controls, and survives this by construction.
          */
         fun setControlsVisible(visible: Boolean) {
+            narrate { "controls visible=$visible while prompt=${latestState?.prompt.diag()}" }
             _uiState.value = _uiState.value.copy(areControlsVisible = visible)
         }
 
@@ -542,6 +591,7 @@ class GameBoardViewModel
          * or is the card already raised. Sends nothing: inspecting is not acting.
          */
         fun selectCard(objectId: String?) {
+            narrate { "select $objectId while prompt=${latestState?.prompt.diag()}" }
             val current = _uiState.value.selectedObjectId
             val next = if (objectId == current) null else objectId
             _uiState.value = _uiState.value.copy(selectedObjectId = next, detailFace = null)

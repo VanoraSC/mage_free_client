@@ -7,6 +7,27 @@ plugins {
 android {
     namespace = "magefree.feature.game"
 
+    // **The board's diagnostic narration, as a compile-time switch.** Kotlin has no preprocessor, so the
+    // `#ifdef` is a `BuildConfig` constant: the log sites build their message only inside
+    // `if (BuildConfig.BOARD_DIAG)`, and with the constant `false` the compiler and R8 drop the whole
+    // branch — a release build carries no logging code, not merely disabled logging code.
+    //
+    // On for debug builds and off for release, and either can be overridden without editing this file:
+    // `-PboardDiag=true|false` on the command line, or `boardDiag=…` in `gradle.properties` (the repo's,
+    // or `~/.gradle/gradle.properties` for a personal default Android Studio also picks up).
+    buildFeatures {
+        buildConfig = true
+    }
+    val boardDiag = providers.gradleProperty("boardDiag")
+    buildTypes {
+        debug {
+            buildConfigField("boolean", "BOARD_DIAG", boardDiag.getOrElse("true").toBooleanStrict().toString())
+        }
+        release {
+            buildConfigField("boolean", "BOARD_DIAG", boardDiag.getOrElse("false").toBooleanStrict().toString())
+        }
+    }
+
     testOptions {
         unitTests {
             // the board's Compose tests render the real screen under Robolectric so every

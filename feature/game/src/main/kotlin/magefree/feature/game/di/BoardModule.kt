@@ -1,11 +1,20 @@
 package magefree.feature.game.di
 
+import android.util.Log
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
 import magefree.feature.game.board.PassPolicy
 import magefree.feature.game.board.StopStore
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+
+/**
+ * The logcat tag the board narrates under: `adb logcat -s MageBoardDiag`.
+ *
+ * Only builds with `BuildConfig.BOARD_DIAG` on write anything here — debug builds by default, release
+ * builds never unless `-PboardDiag=true` is passed. See `feature/game/build.gradle.kts`.
+ */
+internal const val BOARD_DIAG_TAG: String = "MageBoardDiag"
 
 /**
  * Koin provisioning for `:feature:game` (was Hilt's `BoardModule`).
@@ -29,6 +38,14 @@ val boardModule =
         factory<PassPolicy> { ManualPassPolicy }
 
         viewModel {
-            GameBoardViewModel(gameClient = get(), passPolicy = get(), cardCatalog = get(), stops = get())
+            GameBoardViewModel(
+                gameClient = get(),
+                passPolicy = get(),
+                cardCatalog = get(),
+                stops = get(),
+                // Wired unconditionally: the switch lives at the call sites, where it can keep a message
+                // from being built at all, rather than here, where it could only discard one.
+                log = { message -> Log.d(BOARD_DIAG_TAG, message) },
+            )
         }
     }
