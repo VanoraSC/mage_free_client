@@ -8,6 +8,7 @@ import magefree.protocol.GameActionResult
 import magefree.protocol.GameFailureCode
 import magefree.protocol.ManaTypeCode
 import magefree.protocol.PlayerActionCode
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
 /**
@@ -53,33 +54,64 @@ public object GameRelay {
         gameId: UUID,
     ): GameActionResult = resultOf(GameActionCode.STOP_WATCHING, session.stopWatching(gameId))
 
+    /*
+     * DIAGNOSTIC (ability choice reverting to priority). Every answer the app sends is logged beside
+     * the prompt transitions `GameStateCache` already logs, so one bridge log shows the whole exchange:
+     * question out, answer in, next question. Without it a `PlayObject` and a `ChooseAbility` are
+     * indistinguishable — both arrive as `sendPlayerUUID` — and the log showed only that *something*
+     * answered. Remove with `GameStateCache`'s trace once the cause is found.
+     */
+    private val LOGGER = LoggerFactory.getLogger(GameRelay::class.java)
+
+    private inline fun logged(
+        verb: String,
+        gameId: UUID,
+        value: Any?,
+        call: () -> GameActionResult,
+    ): GameActionResult {
+        LOGGER.info("GameRelay[{}] <- app {} {}", gameId, verb, value)
+        return call().also { result -> LOGGER.info("GameRelay[{}] -> {} {}", gameId, verb, result) }
+    }
+
     /** Answers the outstanding prompt in [gameId] with an object id (`SessionImpl.sendPlayerUUID`). */
     public fun sendPlayerUuid(
         session: SessionImpl,
         gameId: UUID,
         value: UUID,
-    ): GameActionResult = resultOf(GameActionCode.SEND_UUID, session.sendPlayerUUID(gameId, value))
+    ): GameActionResult =
+        logged("sendPlayerUUID", gameId, value) {
+            resultOf(GameActionCode.SEND_UUID, session.sendPlayerUUID(gameId, value))
+        }
 
     /** Answers the outstanding prompt in [gameId] with a yes/no (`SessionImpl.sendPlayerBoolean`). */
     public fun sendPlayerBoolean(
         session: SessionImpl,
         gameId: UUID,
         value: Boolean,
-    ): GameActionResult = resultOf(GameActionCode.SEND_BOOLEAN, session.sendPlayerBoolean(gameId, value))
+    ): GameActionResult =
+        logged("sendPlayerBoolean", gameId, value) {
+            resultOf(GameActionCode.SEND_BOOLEAN, session.sendPlayerBoolean(gameId, value))
+        }
 
     /** Answers the outstanding prompt in [gameId] with a number (`SessionImpl.sendPlayerInteger`). */
     public fun sendPlayerInteger(
         session: SessionImpl,
         gameId: UUID,
         value: Int,
-    ): GameActionResult = resultOf(GameActionCode.SEND_INTEGER, session.sendPlayerInteger(gameId, value))
+    ): GameActionResult =
+        logged("sendPlayerInteger", gameId, value) {
+            resultOf(GameActionCode.SEND_INTEGER, session.sendPlayerInteger(gameId, value))
+        }
 
     /** Answers the outstanding prompt in [gameId] with text (`SessionImpl.sendPlayerString`). */
     public fun sendPlayerString(
         session: SessionImpl,
         gameId: UUID,
         value: String,
-    ): GameActionResult = resultOf(GameActionCode.SEND_STRING, session.sendPlayerString(gameId, value))
+    ): GameActionResult =
+        logged("sendPlayerString", gameId, value) {
+            resultOf(GameActionCode.SEND_STRING, session.sendPlayerString(gameId, value))
+        }
 
     /**
      * Unlocks [manaType] from [playerId]'s mana pool in [gameId] (`SessionImpl.sendPlayerManaType`).

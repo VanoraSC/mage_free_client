@@ -1,11 +1,18 @@
 package magefree.feature.game.di
 
+import android.util.Log
 import magefree.feature.game.board.GameBoardViewModel
 import magefree.feature.game.board.ManualPassPolicy
 import magefree.feature.game.board.PassPolicy
 import magefree.feature.game.board.StopStore
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+
+/**
+ * DIAGNOSTIC — the logcat tag the board narrates under (`adb logcat -s MageBoardDiag`). Remove with the
+ * `log` parameter once the ability-choice repro is explained.
+ */
+internal const val BOARD_DIAG_TAG: String = "MageBoardDiag"
 
 /**
  * Koin provisioning for `:feature:game` (was Hilt's `BoardModule`).
@@ -29,6 +36,13 @@ val boardModule =
         factory<PassPolicy> { ManualPassPolicy }
 
         viewModel {
-            GameBoardViewModel(gameClient = get(), passPolicy = get(), cardCatalog = get(), stops = get())
+            GameBoardViewModel(
+                gameClient = get(),
+                passPolicy = get(),
+                cardCatalog = get(),
+                stops = get(),
+                // DIAGNOSTIC (ability choice reverting to priority): remove with the rest once found.
+                log = { message -> Log.d(BOARD_DIAG_TAG, message) },
+            )
         }
     }

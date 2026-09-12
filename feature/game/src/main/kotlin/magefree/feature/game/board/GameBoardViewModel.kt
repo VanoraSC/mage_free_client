@@ -197,6 +197,12 @@ class GameBoardViewModel
         private val passPolicy: PassPolicy,
         private val cardCatalog: CardCatalog,
         private val stops: StopStore,
+        /**
+         * DIAGNOSTIC — where the board narrates what it received and what it sent, for a live repro of
+         * an ability choice that came back as a priority prompt. A no-op by default so tests stay quiet;
+         * the app wires it to logcat under [BOARD_DIAG_TAG]. Remove once the cause is found.
+         */
+        private val log: (String) -> Unit = {},
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(GameBoardUiState(board = BoardUi(gameId = "")))
 
@@ -323,6 +329,13 @@ class GameBoardViewModel
                     seenCards = previous.seenCards.fold(state),
                 )
 
+            // DIAGNOSTIC — every emission, what it asked, and what the panel will now offer.
+            log(
+                "snapshot step=${state.step} active=${state.activePlayerId} prompt=${state.prompt.diag()} " +
+                    "changed=$promptChanged controls=${_uiState.value.controls?.let { it::class.simpleName }} " +
+                    "cast=${_uiState.value.cast?.cardName} visible=${_uiState.value.areControlsVisible}",
+            )
+
             // The one place the app decides *when* to answer a priority prompt. Asked once per
             // prompt instance, so a re-emission of the same question cannot pass twice.
             val prompt = state.prompt
@@ -402,6 +415,11 @@ class GameBoardViewModel
          */
         fun act(action: BoardAction) {
             val id = gameId
+            // DIAGNOSTIC — what was sent, and what the board believed it was answering when it sent it.
+            log(
+                "act $action while prompt=${latestState?.prompt.diag()} " +
+                    "controls=${_uiState.value.controls?.let { it::class.simpleName }} visible=${_uiState.value.areControlsVisible}",
+            )
             _uiState.value = _uiState.value.copy(actionError = null, selectedObjectId = null)
             when (action) {
                 is BoardAction.PlayObject -> {
@@ -475,10 +493,22 @@ class GameBoardViewModel
         private fun send(call: suspend (GameClient) -> Result<Unit>) {
             viewModelScope.launch {
                 call(gameClient).onFailure { error ->
+                    log("send failed: $error")
                     _uiState.value = _uiState.value.copy(actionError = error.asBoardMessage())
                 }
             }
         }
+
+        /**
+         * DIAGNOSTIC — a prompt, short enough to read in a logcat line: its kind, and for an ability
+         * choice the ids it offered, which is what an answer has to match on the server.
+         */
+        private fun GamePrompt?.diag(): String =
+            when (this) {
+                null -> "none"
+                is GamePrompt.ChooseAbility -> "ChooseAbility${choices.map { it.abilityId }}"
+                else -> this::class.simpleName.orEmpty()
+            }
 
         /**
          * What to tell the player about an action that did not happen.
@@ -534,6 +564,7 @@ class GameBoardViewModel
          * controls, and survives this by construction.
          */
         fun setControlsVisible(visible: Boolean) {
+            log("controls visible=$visible while prompt=${latestState?.prompt.diag()}")
             _uiState.value = _uiState.value.copy(areControlsVisible = visible)
         }
 
@@ -542,6 +573,7 @@ class GameBoardViewModel
          * or is the card already raised. Sends nothing: inspecting is not acting.
          */
         fun selectCard(objectId: String?) {
+            log("select $objectId while prompt=${latestState?.prompt.diag()}")
             val current = _uiState.value.selectedObjectId
             val next = if (objectId == current) null else objectId
             _uiState.value = _uiState.value.copy(selectedObjectId = next, detailFace = null)
