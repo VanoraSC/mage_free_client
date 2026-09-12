@@ -91,6 +91,13 @@ data class TableZonePile(
      * they are* are different answers, and a column that showed four blanks would be inventing cards.
      */
     val hidden: Int = 0,
+    /**
+     * What to call this pile when it is opened, or `null` for its kind's own label.
+     *
+     * A pile of revealed cards is named after the effect that revealed it — *Inquisition of Kozilek*
+     * says what just happened, and *Revealed* only says where the cards are.
+     */
+    val title: String? = null,
 ) {
     /** How many cards are in it, seen or not. */
     val count: Int get() = cards.size + hidden
