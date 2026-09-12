@@ -38,7 +38,7 @@ class CardFlightLandingTest {
         composeTestRule.setContent {
             MageTheme {
                 CardFlightOverlay(
-                    flights = listOf(CardFlight(id = "s1", entry = entry(), from = from(), to = to())),
+                    flights = listOf(CardFlight(id = "s1", state = entry().state, art = null, from = from(), to = to())),
                     palette = rememberCounterPalette(),
                     artFor = null,
                     onLanded = { landed += it },

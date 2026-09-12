@@ -179,7 +179,7 @@ class CardFlightsTest {
         composeTestRule.setContent {
             MageTheme {
                 CardFlightOverlay(
-                    flights = listOf(CardFlight(id = "s1", entry = entry("s1"), from = from(), to = to())),
+                    flights = listOf(CardFlight(id = "s1", state = entry("s1").state, art = null, from = from(), to = to())),
                     palette = magefree.designsystem.card.rememberCounterPalette(),
                     artFor = null,
                     onLanded = {},

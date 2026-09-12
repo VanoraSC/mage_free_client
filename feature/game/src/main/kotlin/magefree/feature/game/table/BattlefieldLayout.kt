@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -119,6 +120,8 @@ import magefree.network.game.CombatGroup
  *   layer, and the one thing it can still cover is a permanent the player is being asked to pick. The
  *   stack is passed either way rather than emptied, so the animation host does not see a spell it has
  *   already flown in arrive a second time when the panel comes back.
+ * @param zoneMoves the cards the latest snapshot moved between zones, from [rememberZoneMoves], drawn
+ *   travelling — see [ZoneFlights].
  * @param onLandPress called with a land stack and the half of it that was pressed. Lands are separate
  *   because a stack is two affordances rather than one — the upright copies are the card you would pick
  *   up, and the turned ones are the cards already lying down — and what each *means* is a question
@@ -148,11 +151,15 @@ fun BattlefieldLayout(
     stack: List<TableStackObject> = emptyList(),
     stackVisible: Boolean = true,
     combat: List<CombatGroup> = emptyList(),
+    zoneMoves: ZoneMoveBatch = ZoneMoveBatch(),
 ) {
     val palette = rememberCounterPalette()
     // Where everything is, measured as it is placed, so the target arrows can be drawn between real
     // positions rather than from a second copy of this layout's arithmetic.
     val anchors = rememberBoardAnchors()
+    // Cards changing zone, and the destinations being held for them. Read before anything is composed,
+    // because what is hidden is decided by what is travelling.
+    val zoneFlights = rememberZoneFlights(batch = zoneMoves, anchors = anchors)
 
     androidx.compose.runtime.CompositionLocalProvider(LocalBoardFocus provides focus) {
         BoxWithConstraints(
@@ -229,6 +236,8 @@ fun BattlefieldLayout(
                         onExpand = onExpandVitals,
                         onOpenPiles = onOpenPiles,
                         onToggleStop = onToggleStop,
+                        anchors = anchors,
+                        arriving = zoneFlights.hidden,
                         modifier = Modifier.width(railWidth).fillMaxHeight(),
                     )
                     Spacer(modifier = Modifier.width(ZoneGap))
@@ -244,7 +253,15 @@ fun BattlefieldLayout(
                         tileWidth = handTile,
                         artFor = artFor,
                         onInspect = onInspect,
-                        modifier = Modifier.fillMaxWidth(),
+                        // Where a card discarded out of that hand leaves from, and one returned to it
+                        // goes — the hand is only a count, so the region is the most there is to point at.
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    model.opponents.firstOrNull()?.let { anchors.anchorModifier(opponentHandAnchorId(it.playerId)) }
+                                        ?: Modifier,
+                                ),
                     )
 
                     // The two board columns share what is left above the hand. `weight` rather than the
@@ -264,6 +281,8 @@ fun BattlefieldLayout(
                                     palette = palette,
                                     artFor = artFor,
                                     onLandPress = onLandPress,
+                                    anchors = anchors,
+                                    hidden = zoneFlights.hidden,
                                     modifier = Modifier.width(landZoneWidth).fillMaxHeight(),
                                 )
                                 Spacer(modifier = Modifier.width(ZoneGap))
@@ -287,6 +306,7 @@ fun BattlefieldLayout(
                                         artFor = artFor,
                                         onInspect = onInspect,
                                         anchors = anchors,
+                                        hidden = zoneFlights.hidden,
                                         modifier = Modifier.fillMaxWidth().weight(1f),
                                     )
                                 }
@@ -301,6 +321,7 @@ fun BattlefieldLayout(
                                         artFor = artFor,
                                         onInspect = onInspect,
                                         anchors = anchors,
+                                        hidden = zoneFlights.hidden,
                                         modifier = Modifier.fillMaxWidth().weight(1f),
                                     )
                                 }
@@ -335,6 +356,7 @@ fun BattlefieldLayout(
                         onInspect = onInspect,
                         anchors = anchors,
                         onDragPlay = onDragFromHand,
+                        hidden = zoneFlights.hidden,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -395,10 +417,14 @@ fun BattlefieldLayout(
             // it lands exactly on the stack card the region is holding a place for and then stops
             // existing, so nothing here is load-bearing for correctness — see [CardFlights].
             CardFlightOverlay(
-                flights = flights.flights.filterNot { it.id in landed.value },
+                // The stack's arrivals and the cards changing zone, one overlay: a card in the air is the
+                // same thing wherever it is headed.
+                flights = flights.flights.filterNot { it.id in landed.value } + zoneFlights.flights,
                 palette = palette,
                 artFor = artFor,
-                onLanded = { id -> landed.value = landed.value + id },
+                onLanded = { id ->
+                    if (zoneFlights.owns(id)) zoneFlights.landed(id) else landed.value = landed.value + id
+                },
                 modifier = Modifier.zIndex(FLIGHT_LAYER_Z),
             )
         }
@@ -423,6 +449,8 @@ private fun LandColumn(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)?,
+    anchors: BoardAnchors,
+    hidden: Set<String>,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -444,6 +472,8 @@ private fun LandColumn(
                         palette = palette,
                         artFor = artFor,
                         onLandPress = onLandPress,
+                        anchors = anchors,
+                        hidden = hidden,
                     )
                 }
             }
@@ -461,6 +491,8 @@ private fun LandRow(
     palette: CounterPalette,
     artFor: TableArtResolver?,
     onLandPress: ((TableLandStack, LandStackHalf) -> Unit)?,
+    anchors: BoardAnchors,
+    hidden: Set<String>,
 ) {
     FlowRow(
         modifier = Modifier.testTag(tag),
@@ -474,6 +506,11 @@ private fun LandRow(
                 palette = palette,
                 artFor = artFor,
                 onPress = onLandPress?.let { press -> { half -> press(stack, half) } },
+                // Every copy, on the front card, the way a token pile is anchored: a land played onto
+                // this stack lands on it, and an arrow at any copy points at it.
+                anchorModifier = anchors.anchorModifier((stack.untapped + stack.tapped).map { it.id }),
+                // A stack whose every copy is still on its way from the hand is not here yet.
+                modifier = Modifier.alpha(if ((stack.untapped + stack.tapped).all { it.id in hidden }) 0f else 1f),
             )
         }
     }
@@ -510,6 +547,7 @@ private fun SideRows(
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
     anchors: BoardAnchors,
+    hidden: Set<String>,
     modifier: Modifier = Modifier,
 ) {
     // The viewer's front row comes first, so packing to the top puts it against the middle; the
@@ -534,6 +572,7 @@ private fun SideRows(
                     artFor = artFor,
                     onInspect = onInspect,
                     anchors = anchors,
+                    hidden = hidden,
                     alignment = row.alignment,
                     towardCentre = towardCentre,
                 )
@@ -553,6 +592,7 @@ private fun PermanentRow(
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
     anchors: BoardAnchors,
+    hidden: Set<String>,
     alignment: Alignment,
     towardCentre: Alignment.Vertical,
     modifier: Modifier = Modifier,
@@ -603,6 +643,7 @@ private fun PermanentRow(
                             artFor = artFor,
                             onInspect = onInspect,
                             anchors = anchors,
+                            hidden = entry.permanent.id in hidden,
                         )
 
                     // The lands' own renderer, because a pile of tokens *is* the same thing: several
@@ -626,6 +667,7 @@ private fun PermanentRow(
                             // will ever occupy, and it showed as a pile of tapped tokens hanging a
                             // title bar below the cards beside it.
                             halves = entry.halves(),
+                            modifier = Modifier.alpha(if (entry.permanents.all { it.id in hidden }) 0f else 1f),
                         )
                 }
             }
@@ -642,6 +684,7 @@ private fun PermanentCard(
     artFor: TableArtResolver?,
     onInspect: ((String) -> Unit)?,
     anchors: BoardAnchors,
+    hidden: Boolean = false,
 ) {
     // Resolved here rather than inside the card, because loading an image is a composition-time thing
     // and the card tier takes a plain lambda. Keyed by the server's own id, which is what the card
@@ -661,8 +704,9 @@ private fun PermanentCard(
         // the Aura the one card on the board that cannot be opened — and it is the card most likely to
         // be the answer to whatever the player is asking.
         onAttachmentTap = onInspect?.let { inspect -> { attachment -> inspect(attachment.id) } },
-        // Where this permanent is, for an arrow from whatever is targeting it.
-        modifier = anchors.anchorModifier(permanent.id),
+        // Where this permanent is, for an arrow from whatever is targeting it. Laid out but not drawn
+        // while it is still on its way here — see [ZoneFlights].
+        modifier = anchors.anchorModifier(permanent.id).alpha(if (hidden) 0f else 1f),
         counterPalette = palette,
         // What the board is about right now, which decides which of a card's signals gets the strong
         // border. Ambient, because every card on one board shares the answer — see [LocalBoardFocus].

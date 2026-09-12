@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
@@ -66,6 +67,8 @@ import kotlin.math.roundToInt
  *   on every card-like object in every screen.
  * @param onDragPlay called with a card's id when it is dragged up out of the hand — the commit itself,
  *   not the look a tap gives. `null` offers no drag at all.
+ * @param hidden cards laid out in place but not drawn, because they are on their way here — see
+ *   [ZoneFlights].
  */
 @Composable
 fun HandRegion(
@@ -78,6 +81,7 @@ fun HandRegion(
     elsewhere: List<TableCard> = emptyList(),
     anchors: BoardAnchors? = null,
     onDragPlay: ((String) -> Unit)? = null,
+    hidden: Set<String> = emptySet(),
 ) {
     if (cards.isEmpty() && elsewhere.isEmpty()) return
 
@@ -161,7 +165,8 @@ fun HandRegion(
                         .offset { IntOffset(x = 0, y = dragged.roundToInt()) }
                         .width(tileWidth)
                         .align(Alignment.TopStart)
-                        .then(draggable),
+                        .then(draggable)
+                        .alpha(if (card.id in hidden) 0f else 1f),
             ) {
                 // **The same card the battlefield draws.** A card does not change what it looks like
                 // by being in a hand: it is the same object, and a player picking one to cast is
@@ -179,10 +184,11 @@ fun HandRegion(
                     // stack. Under its **name**: a spell on the stack does not carry the id of the
                     // card it was cast from, and the name is what both ends do carry — see
                     // [handAnchorId]. The anchors keep the box after the card has gone, which is what
-                    // makes the origin available at the moment it is needed — see [CardFlights].
+                    // makes the origin available at the moment it is needed — see [CardFlights]. And
+                    // under its **id** as well, for a card that goes anywhere but the stack and keeps it.
                     modifier =
                         Modifier
-                            .then(anchors?.anchorModifier(handAnchorId(card.card.name)) ?: Modifier)
+                            .then(anchors?.anchorModifier(listOf(handAnchorId(card.card.name), handCardAnchorId(card.id))) ?: Modifier)
                             .testTag(HandTestTags.card(card.id)),
                 )
             }

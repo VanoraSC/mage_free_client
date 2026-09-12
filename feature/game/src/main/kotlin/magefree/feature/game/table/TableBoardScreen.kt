@@ -183,6 +183,8 @@ fun TableBoardScreen(
                 // and a press opens one of them whole, so the card on the rail and the card at the top
                 // of the opened list cannot disagree about which it is.
                 val zones = tableZones(snapshot, picks, seenCards)
+                // What this snapshot moved between zones, against the one before it — see [ZoneFlights].
+                val zoneMoves = rememberZoneMoves(snapshot)
 
                 BattlefieldLayout(
                     model = battlefieldModel(snapshot, picks),
@@ -217,6 +219,7 @@ fun TableBoardScreen(
                     // two states: the battlefield, or the question.
                     stackVisible = uiState.areControlsVisible,
                     combat = snapshot.combat,
+                    zoneMoves = zoneMoves,
                     // A press on a step cycles its stop for the turn being played. What that then does
                     // is the pass policy's, which reads the same store this writes.
                     onToggleStop = { step, side -> onPressStop(side.asTurnSide(), step.id) },

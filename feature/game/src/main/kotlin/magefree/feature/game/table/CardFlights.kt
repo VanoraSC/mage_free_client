@@ -17,7 +17,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import magefree.cards.art.CardArtRequest
 import magefree.designsystem.card.BoardCard
+import magefree.designsystem.card.BoardCardState
 import magefree.designsystem.card.CounterPalette
 
 /*
@@ -50,10 +52,16 @@ import magefree.designsystem.card.CounterPalette
  * correct before it starts and correct after it ends.
  */
 
-/** One card in flight: what it is, where it came from, and where it is going. */
+/**
+ * One card in flight: what it looks like, where it came from, and where it is going.
+ *
+ * A face and a printing rather than a stack entry, because a card travels to more places than the
+ * stack — see [ZoneFlights] — and the drawing of it does not care where it is headed.
+ */
 internal data class CardFlight(
     val id: String,
-    val entry: TableStackObject,
+    val state: BoardCardState,
+    val art: CardArtRequest?,
     val from: Rect,
     val to: Rect,
 )
@@ -141,7 +149,9 @@ internal fun rememberCardFlights(
             val from =
                 entry.sourceId?.let(anchors::boxOf)
                     ?: anchors.boxOf(handAnchorId(entry.state.card.name))
-            if (from != null && from != to) started += CardFlight(id = entry.id, entry = entry, from = from, to = to)
+            if (from != null && from != to) {
+                started += CardFlight(id = entry.id, state = entry.state, art = entry.art, from = from, to = to)
+            }
         }
         if (started.isNotEmpty() || stillArriving.size != arriving.size) {
             flights = flights + started
@@ -208,9 +218,9 @@ private fun FlyingCard(
     val width = with(density) { flight.lerpWidth(progress.value).toDp() }
 
     BoardCard(
-        state = flight.entry.state,
+        state = flight.state,
         width = width,
-        art = artFor?.invoke(flight.entry.art, flight.entry.state.card),
+        art = artFor?.invoke(flight.art, flight.state.card),
         counterPalette = palette,
         modifier =
             Modifier

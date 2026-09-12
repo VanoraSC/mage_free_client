@@ -1,0 +1,219 @@
+package magefree.feature.game.table
+
+import android.app.Application
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import magefree.designsystem.theme.MageTheme
+import magefree.feature.cards.PlaceholderCardArtRenderer
+import magefree.feature.game.board.BoardUi
+import magefree.feature.game.board.GameBoardUiState
+import magefree.feature.game.board.controlsFor
+import magefree.network.game.CardType
+import magefree.network.game.GameCard
+import magefree.network.game.GamePermanent
+import magefree.network.game.GamePlayer
+import magefree.network.game.GameState
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/**
+ * Cards changing zone on a real board, from one snapshot to the next.
+ *
+ * **The test the stack's flights did not have.** Every other flight test places its anchors by hand, and
+ * that is how no stack flight ever ran on a real board while all of them passed — and how the land column
+ * turned out never to have reported an anchor at all. This one draws the whole screen, lets it measure
+ * itself, changes the snapshot, and looks for the card in the air. A region that forgets to report where
+ * it is fails here and nowhere else.
+ *
+ * The clock is held once the first board has settled, because a flight is on screen for a third of a
+ * second and an idling test would let it land before looking.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, qualifiers = "w891dp-h411dp")
+class ZoneFlightsBoardTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    private val snapshot = mutableStateOf(GameState(gameId = GAME))
+
+    private fun play(
+        before: GameState,
+        after: GameState,
+    ) {
+        snapshot.value = before
+        composeTestRule.setContent {
+            MageTheme {
+                val state = snapshot.value
+                TableBoardScreen(
+                    uiState =
+                        GameBoardUiState(
+                            board = BoardUi.from(state),
+                            snapshot = state,
+                            isJoining = false,
+                            controls = controlsFor(state),
+                        ),
+                    onExit = {},
+                    onControlsVisibleChange = {},
+                    onCardTap = {},
+                    onAction = {},
+                    artRenderer = PlaceholderCardArtRenderer,
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.mainClock.autoAdvance = false
+        snapshot.value = after
+        // **The write has to be announced.** With the clock held nothing idles, and a state written from
+        // the test is not seen by the composition until its apply notification is sent — without this the
+        // board never recomposed at all, and every flight looked missing.
+        Snapshot.sendApplyNotifications()
+        // Frames to compose the new board, to measure it, and for the flight that measuring starts.
+        repeat(FRAMES_TO_TAKE_OFF) { composeTestRule.mainClock.advanceTimeByFrame() }
+    }
+
+    private fun assertFlying(cardId: String) {
+        composeTestRule.onNodeWithTag(CardFlightTestTags.card("zone:1:$cardId"), useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `a land played onto an empty table flies from the hand`() {
+        play(
+            before = table(hand = listOf(swamp("s1"))),
+            after = table(myLands = listOf(swamp("s1"))),
+        )
+
+        assertFlying("s1")
+    }
+
+    @Test
+    fun `a land joining a stack already on the table flies to it`() {
+        // The stack's front card does not move when a copy joins it, so the new copy's own box is never
+        // reported — the stack's is, and that is what the flight has to find.
+        play(
+            before = table(hand = listOf(swamp("s2")), myLands = listOf(swamp("s1"))),
+            after = table(myLands = listOf(swamp("s1"), swamp("s2"))),
+        )
+
+        assertFlying("s2")
+    }
+
+    @Test
+    fun `a discarded card flies to the graveyard on the rail`() {
+        play(
+            before = table(hand = listOf(bolt("b1"), bolt("b2"))),
+            after = table(hand = listOf(bolt("b2")), myGraveyard = listOf(bolt("b1"))),
+        )
+
+        assertFlying("b1")
+    }
+
+    @Test
+    fun `a creature that dies flies to its owner's graveyard`() {
+        play(
+            before = table(theirCreatures = listOf(bears("c1"))),
+            after = table(theirGraveyard = listOf(bears("c1"))),
+        )
+
+        assertFlying("c1")
+    }
+
+    @Test
+    fun `an exiled creature flies to its owner's count panel`() {
+        play(
+            before = table(theirCreatures = listOf(bears("c1"))),
+            after = table(theirExile = listOf(bears("c1"))),
+        )
+
+        assertFlying("c1")
+    }
+
+    private fun table(
+        hand: List<GameCard> = emptyList(),
+        myLands: List<GameCard> = emptyList(),
+        myGraveyard: List<GameCard> = emptyList(),
+        theirCreatures: List<GameCard> = emptyList(),
+        theirGraveyard: List<GameCard> = emptyList(),
+        theirExile: List<GameCard> = emptyList(),
+    ) = GameState(
+        gameId = GAME,
+        hasSnapshot = true,
+        turn = 3,
+        viewerPlayerId = ME,
+        activePlayerId = ME,
+        hand = hand,
+        players =
+            listOf(
+                GamePlayer(
+                    playerId = THEM,
+                    name = "Computer",
+                    life = 20,
+                    libraryCount = 40,
+                    handCount = 4,
+                    isHuman = false,
+                    battlefield = theirCreatures.map { GamePermanent(card = it) },
+                    graveyard = theirGraveyard,
+                    exile = theirExile,
+                ),
+                GamePlayer(
+                    playerId = ME,
+                    name = "you",
+                    isViewer = true,
+                    life = 20,
+                    libraryCount = 40,
+                    handCount = hand.size,
+                    battlefield = myLands.map { GamePermanent(card = it) },
+                    graveyard = myGraveyard,
+                ),
+            ),
+    )
+
+    private fun swamp(id: String) =
+        GameCard(
+            id = id,
+            name = "Swamp",
+            setCode = "10E",
+            collectorNumber = "371",
+            typeLine = "Basic Land — Swamp",
+            cardTypes = listOf(CardType.Land),
+        )
+
+    private fun bolt(id: String) =
+        GameCard(
+            id = id,
+            name = "Lightning Bolt",
+            setCode = "10E",
+            collectorNumber = "203",
+            manaCost = "{R}",
+            cardTypes = listOf(CardType.Instant),
+        )
+
+    private fun bears(id: String) =
+        GameCard(
+            id = id,
+            name = "Grizzly Bears",
+            setCode = "10E",
+            collectorNumber = "268",
+            power = "2",
+            toughness = "2",
+            isCreature = true,
+            cardTypes = listOf(CardType.Creature),
+        )
+}
+
+private const val GAME = "g-1"
+private const val ME = "p-you"
+private const val THEM = "p-opp"
+
+/**
+ * Frames between a snapshot changing and a card being in the air — see [ZoneFlightsBoardTest.play].
+ *
+ * A composition, a layout that reports the new boxes, and a recomposition that starts the flight, with
+ * room to spare; six frames is a tenth of a second, well inside the third of a second a flight lasts.
+ */
+private const val FRAMES_TO_TAKE_OFF = 6

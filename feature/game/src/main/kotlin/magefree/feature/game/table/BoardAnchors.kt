@@ -85,6 +85,19 @@ class BoardAnchors {
     fun boxOf(id: String): Rect? = boxes[id]
 
     /**
+     * Drops what was last measured for [id], so the next box it reports is the only one it has.
+     *
+     * **For a card about to be drawn somewhere new.** Entries are never pruned, which is what lets a card
+     * that has just left fly out of where it was — and it is exactly wrong for a destination: a card
+     * returning to the hand it was once in would answer with the box it had then, and fly to where it
+     * used to sit before its new place had been laid out. A card arriving on a new node reports its box
+     * when that node is first placed, so forgetting the old one costs nothing but the wait.
+     */
+    fun forget(id: String) {
+        boxes.remove(id)
+    }
+
+    /**
      * Records [box] for [id] without a layout pass, for a test that is about what the anchors are
      * *used for* rather than about the measuring.
      *
