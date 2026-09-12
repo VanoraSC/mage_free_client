@@ -113,6 +113,8 @@ import magefree.network.game.CombatGroup
  * @param onOpenPiles opens piles — a graveyard on its own, or everything behind a seat's counts.
  * @param onPlayFromHand called with a hand card's id when it is tapped. What that *does* is the cast
  *   flow's business; the board only says which card the player reached for.
+ * @param onDragFromHand called with a hand card's id when it is dragged out of the hand — which, unlike
+ *   a tap, means *play it now*. `null` offers no drag.
  * @param stackVisible whether to draw the stack at all. False is *Show battlefield* — the layer is a
  *   layer, and the one thing it can still cover is a permanent the player is being asked to pick. The
  *   stack is passed either way rather than emptied, so the animation host does not see a spell it has
@@ -133,6 +135,7 @@ fun BattlefieldLayout(
     hand: List<TableCard> = emptyList(),
     playableElsewhere: List<TableCard> = emptyList(),
     onPlayFromHand: ((String) -> Unit)? = null,
+    onDragFromHand: ((String) -> Unit)? = null,
     vitals: List<TableVitals> = emptyList(),
     onExpandVitals: ((TableVitals) -> Unit)? = null,
     lifeTotals: LifeTotals = LifeTotals(opponents = emptyList(), viewer = null),
@@ -331,6 +334,7 @@ fun BattlefieldLayout(
                         onPlay = onPlayFromHand,
                         onInspect = onInspect,
                         anchors = anchors,
+                        onDragPlay = onDragFromHand,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

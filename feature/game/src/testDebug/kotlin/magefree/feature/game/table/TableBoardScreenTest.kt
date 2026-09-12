@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import magefree.designsystem.card.CardPreviewTestTags
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.cards.PlaceholderCardArtRenderer
@@ -423,6 +424,23 @@ class TableBoardScreenTest {
         render(priorityGame())
 
         composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL_BADGE).assertDoesNotExist()
+    }
+
+    // ---- dragging out of the hand -----------------------------------------------------------------
+
+    @Test
+    fun `dragging an offered card out of the hand plays it, without raising it first`() {
+        // Pete: a drag should *jump to play*. A tap raises the card so it can be read; a card pulled
+        // out of the hand toward the table has been read already, and raising it made the player press
+        // Play anyway.
+        render(priorityGame())
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("h-1")).performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 200f)
+        }
+
+        assertEquals(listOf<BoardAction>(BoardAction.PlayObject("h-1")), actions)
+        assertTrue("nothing is raised", taps.isEmpty())
     }
 
     // ---- a question answered from its own content -----------------------------------------------

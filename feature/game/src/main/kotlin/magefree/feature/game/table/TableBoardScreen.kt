@@ -226,6 +226,12 @@ fun TableBoardScreen(
                     // cost is being paid, where the press *is* the answer. See [press].
                     onInspect = press,
                     onPlayFromHand = press,
+                    // **A drag out of the hand is the commit.** It does what the raised card's button
+                    // would — the prompt's own `actionFor`, so it is Play in a priority window and a pick
+                    // in a target question — without raising the card first. The hand only offers the
+                    // drag on a card the server marked playable; should the question have moved on since,
+                    // it falls back to the look rather than sending something the server no longer offers.
+                    onDragFromHand = { id -> controls?.actionFor(id)?.let(onAction) ?: onCardTap(id) },
                     // A stack's two halves name two different permanents, and the board says which.
                     // Pressing an upright copy reaches the one a hand would pick up — which, mid-cast,
                     // is the copy whose mana ability pays for the spell. Pressing a turned one reaches

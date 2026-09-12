@@ -64,6 +64,8 @@ import kotlin.math.roundToInt
  * @param onPlay called with a card's id when it is tapped — §7.1's *act on this object*.
  * @param onInspect called with a card's id on long press — §7.1's *inspect*, which is the same gesture
  *   on every card-like object in every screen.
+ * @param onDragPlay called with a card's id when it is dragged up out of the hand — the commit itself,
+ *   not the look a tap gives. `null` offers no drag at all.
  */
 @Composable
 fun HandRegion(
@@ -75,6 +77,7 @@ fun HandRegion(
     onInspect: ((String) -> Unit)? = null,
     elsewhere: List<TableCard> = emptyList(),
     anchors: BoardAnchors? = null,
+    onDragPlay: ((String) -> Unit)? = null,
 ) {
     if (cards.isEmpty() && elsewhere.isEmpty()) return
 
@@ -127,19 +130,23 @@ fun HandRegion(
             // Later cards are drawn on top, so an overlap reads left to right and the rightmost card is
             // whole — the same convention the land stacks use for the copy you would reach for.
 
-            // Dragged upward out of the hand, a playable card does what its button does — §7.1's
-            // accelerator, which always has a tap path. Offered only for a card the server marked
-            // playable: dragging an uncastable card would either do nothing, which is confusing, or
-            // submit an action the server had not offered, which is worse.
+            // **Dragged upward out of the hand, a playable card is played** — §7.1's accelerator, which
+            // always has a tap path. It skips the raised card on purpose: a tap is a look, and a card
+            // pulled out of the hand toward the table has already been looked at. It went through the
+            // tap's path first, which raised the detail and made the player press Play anyway.
+            //
+            // Offered only for a card the server marked playable: dragging an uncastable card would
+            // either do nothing, which is confusing, or submit an action the server had not offered,
+            // which is worse.
             var dragged by remember(card.id) { mutableFloatStateOf(0f) }
             val draggable =
-                if (onPlay == null || !card.isPlayable) {
+                if (onDragPlay == null || !card.isPlayable) {
                     Modifier
                 } else {
                     Modifier.pointerInput(card.id) {
                         detectVerticalDragGestures(
                             onDragEnd = {
-                                if (dragged <= -DragThreshold.toPx()) onPlay(card.id)
+                                if (dragged <= -DragThreshold.toPx()) onDragPlay(card.id)
                                 dragged = 0f
                             },
                             onDragCancel = { dragged = 0f },

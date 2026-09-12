@@ -47,6 +47,7 @@ class HandRegionTest {
 
     private val played = mutableListOf<String>()
     private val inspected = mutableListOf<String>()
+    private val dragged = mutableListOf<String>()
 
     private fun show(state: GameState) {
         composeTestRule.setContent {
@@ -56,6 +57,7 @@ class HandRegionTest {
                         model = battlefieldModel(state),
                         hand = handCards(state),
                         onPlayFromHand = { played += it },
+                        onDragFromHand = { dragged += it },
                         onInspect = { inspected += it },
                     )
                 }
@@ -115,17 +117,30 @@ class HandRegionTest {
     }
 
     @Test
-    fun `dragging a playable card out of the hand plays it`() {
-        // §7.1's accelerator, and it does exactly what the button does. The threshold matters: this
-        // gesture submits a game action, and the cost of firing it by accident is a spell on the stack
-        // the player did not intend.
+    fun `dragging a playable card out of the hand plays it, rather than raising it`() {
+        // §7.1's accelerator. It is the commit, not the look a tap gives: it used to go down the tap's
+        // path, which raised the card and left the player pressing Play anyway. The threshold matters —
+        // this gesture submits a game action, and the cost of firing it by accident is a spell on the
+        // stack the player did not intend.
         show(stateWith(3))
 
         composeTestRule.onNodeWithTag(HandTestTags.card("h1")).performTouchInput {
             swipeUp(startY = centerY, endY = centerY - 200f)
         }
 
-        assertEquals(listOf("h1"), played)
+        assertEquals(listOf("h1"), dragged)
+        assertEquals("a drag is not a tap", emptyList<String>(), played)
+    }
+
+    @Test
+    fun `a short drag that stays in the hand plays nothing`() {
+        show(stateWith(3))
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("h1")).performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 20f)
+        }
+
+        assertEquals(emptyList<String>(), dragged)
     }
 
     @Test
@@ -138,6 +153,7 @@ class HandRegionTest {
             swipeUp(startY = centerY, endY = centerY - 200f)
         }
 
+        assertEquals(emptyList<String>(), dragged)
         assertEquals(emptyList<String>(), played)
     }
 
