@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -820,9 +822,22 @@ internal fun BadgeSquare(badge: BoardBadge) {
  *
  * **The one place this tier writes anything of its own.** An art crop carries no name — a real card
  * prints it above the illustration, and that part of the frame is exactly what the crop leaves out —
- * so the black border has to say it. It is set small and it truncates: at board size a player is
- * reading a name they already half-know from the picture, and the inspect view is where a card is
- * actually read.
+ * so the border has to say it.
+ *
+ * **Everything in it is measured off the strip's own height, not set in dp.** The card's size is
+ * derived from the board — a creature is a share of the screen, a land is a smaller one, and a busy
+ * row shrinks both — so a fixed 11sp name is right at one size and wrong at every other: it fills a
+ * small card's strip and floats in a large one's. The strip is measured and the type is a fraction of
+ * it, which makes the card look the same at every size it is drawn at.
+ *
+ * **The name may take two lines; the cost may never take two.** A name is prose and wraps where prose
+ * wraps — most two-word card names break cleanly, and two lines of a real name beat one line of an
+ * ellipsis. A cost is a row of symbols with no natural break in it at all, so it stays on one line and
+ * is measured first: the name takes what is left.
+ *
+ * **And the cost does not move when the name wraps.** It is centred on the *strip*, not on the text
+ * beside it, so a two-line name grows upward and downward around a cost that has not shifted. The row
+ * fills the strip, so centring is against the strip whatever the name does.
  *
  * The cost goes through the symbol renderer, because `{1}{G}` written out is punctuation.
  */
@@ -831,7 +846,7 @@ private fun CardTitleBar(
     card: CardDisplay,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    BoxWithConstraints(
         modifier =
             modifier
                 // **The strip is the card's colour.** A board is read by colour before it is read by
@@ -842,24 +857,36 @@ private fun CardTitleBar(
                 .background(cardFrameIdentity(card.manaCost, card.typeLine).color)
                 .padding(horizontal = BoardCardPadding)
                 .testTag(BoardCardTestTags.TITLE),
-        horizontalArrangement = Arrangement.spacedBy(BoardCardPadding),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = card.name,
-            style = BoardTypography.cardName,
-            color = BoardSurface.onCardBorder,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        card.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
-            SymbolText(
-                text = cost,
-                style = BoardTypography.cardName,
+        val type = with(LocalDensity.current) { titleTypeFor(maxHeight) }
+
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(BoardCardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = card.name,
+                style = BoardTypography.cardName.copy(fontSize = type.name, lineHeight = type.line),
                 color = BoardSurface.onCardBorder,
-                maxLines = 1,
+                maxLines = BOARD_CARD_NAME_LINES,
+                overflow = TextOverflow.Ellipsis,
+                // **Fills what is left, so the cost is pushed to the right edge.** `fill = false` let
+                // the name take only the width its text needed, which packed both to the *start* — so
+                // a short name like Duress had its cost sitting immediately beside it with the rest of
+                // the strip empty to the right. The cost belongs on the edge, where a real card prints
+                // it and where a player's eye goes for it whatever the name is.
+                modifier = Modifier.weight(1f).testTag(BoardCardTestTags.NAME),
             )
+            card.manaCost?.takeIf { it.isNotBlank() }?.let { cost ->
+                SymbolText(
+                    text = cost,
+                    style = BoardTypography.cardName.copy(fontSize = type.cost),
+                    color = BoardSurface.onCardBorder,
+                    maxLines = 1,
+                    modifier = Modifier.testTag(BoardCardTestTags.COST),
+                )
+            }
         }
     }
 }
@@ -1004,6 +1031,18 @@ object BoardCardTestTags {
 
     /** The name and cost strip the black border carries, since the art crop has neither. */
     const val TITLE: String = "board-card-title"
+
+    /**
+     * The name inside that strip, and the cost beside it.
+     *
+     * Tagged separately because their *sizes and positions* are the contract, not their text: the type
+     * is a share of the strip so that a card looks the same at every size the board draws it at, and
+     * the cost is centred on the strip rather than on the name so a wrapped name does not move it.
+     * Neither of those is observable from the words.
+     */
+    const val NAME: String = "board-card-name"
+
+    const val COST: String = "board-card-cost"
     const val STATS: String = "board-card-stats"
     const val COUNTERS: String = "board-card-counters"
     const val BADGES: String = "board-card-badges"

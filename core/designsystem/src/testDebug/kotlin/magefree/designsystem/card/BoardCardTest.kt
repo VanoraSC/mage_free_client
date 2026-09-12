@@ -50,6 +50,36 @@ class BoardCardTest {
         }
     }
 
+    /*
+     * **Nothing here measures text, and that is a limit of the harness rather than a choice.**
+     * Robolectric stubs the font metrics: every glyph is one pixel wide whatever the size, and a text
+     * node reports the height of the box it was given rather than of the lines in it. So a test that
+     * claimed a name was drawn larger, or that it had wrapped to a second line, would pass at any font
+     * size at all — including zero.
+     *
+     * The type's *arithmetic* is a pure function and is tested in `BoardCardTypeTest`; how it looks is
+     * an eyes-on check on a real device. Three tests asserting the rendering were written and deleted
+     * rather than left green and empty.
+     */
+
+    @Test
+    fun `the mana cost sits on the strip's right edge, whatever the name is`() {
+        // **Position is layout, which Robolectric does measure**, so unlike the type sizes this one
+        // can be pinned here.
+        //
+        // Found on a board: Duress had its cost immediately beside its short name with the rest of the
+        // strip empty to the right. The name was taking only the width its text needed, which packs
+        // both children to the *start*; it fills what is left now, so the cost is pushed to the edge —
+        // where a real card prints it and where a player's eye goes for it.
+        show(BoardCardState(card = BEARS))
+
+        val strip = composeTestRule.onNodeWithTag(BoardCardTestTags.TITLE, useUnmergedTree = true).fetchSemanticsNode()
+        val cost = composeTestRule.onNodeWithTag(BoardCardTestTags.COST, useUnmergedTree = true).fetchSemanticsNode()
+
+        val gap = strip.boundsInRoot.right - cost.boundsInRoot.right
+        assertTrue("the cost ended ${gap}px short of the strip's right edge", gap <= EDGE_SLACK_PX)
+    }
+
     @Test
     fun `the black border carries the name and cost, because the art crop has neither`() {
         // The tier draws the illustration on its own, and a real card prints its name in the part of
@@ -578,10 +608,32 @@ class BoardCardTest {
         const val ENCHANTED = "enchanted"
         const val ATTACHMENT_ART = "attachment-art"
 
+        /**
+         * How far the cost may sit from the strip's right edge and still count as on it.
+         *
+         * The strip's own horizontal padding, plus rounding. What this must not admit is the cost
+         * packed against the *name* instead, which on a short-named card leaves most of the strip
+         * empty to its right — tens of pixels, not a few.
+         */
+        const val EDGE_SLACK_PX = 6
+
         /** The black frame, both sides, plus a pixel of rounding slack. */
         const val BORDER_SLACK_PX = 8
 
         val BEARS = CardDisplay(name = "Grizzly Bears", manaCost = "1G", typeLine = "Creature — Bear")
+
+        /** A short name that fits on one line beside its cost, even on the smaller card. */
+        val SHORT_NAMED = CardDisplay(name = "Bog", manaCost = "B", typeLine = "Land")
+
+        /** A name no card this size fits on one line — the wrapping case, from a real board. */
+        val LONG_NAMED = CardDisplay(name = "Liliana, Dreadhorde General", manaCost = "4BB", typeLine = "Planeswalker")
+
+        /** Two card sizes far enough apart that a share of the strip is visibly a different size. */
+        val SMALL_CARD = 90.dp
+        val LARGE_CARD = 180.dp
+
+        /** How far a measured centre may drift and still count as unmoved. */
+        const val ROUNDING_SLACK = 1.5
         val FOREST = CardDisplay(name = "Forest", typeLine = "Basic Land — Forest")
         val PACIFISM = BoardAttachment(name = "Pacifism", manaCost = "1W")
         val HOLY_STRENGTH = BoardAttachment(name = "Holy Strength", manaCost = "W")

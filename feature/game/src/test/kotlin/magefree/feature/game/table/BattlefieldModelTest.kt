@@ -623,13 +623,32 @@ class CombatDeclarationTest {
  */
 class RowHeightTest {
     @Test
-    fun `a row holding a pile costs more height than a row of cards`() {
+    fun `a pile of upright tokens costs exactly what one card costs`() {
+        // **It used to cost half again as much**, because a pile was a fan of three staggering down
+        // and to the right with room kept below for a turned half. A pile is one card and a tally now,
+        // so twelve Zombies cost the row what one Zombie costs — which is the whole reason the fan
+        // went: the extra height came out of every card on the board, both sides, every row.
         val cards = listOf(RowEntry.Single(permanentFor("b1")))
         val pile = listOf(RowEntry.Pile(listOf(permanentFor("z1"), permanentFor("z2"))))
 
+        assertEquals(cards.heightInCards(), pile.heightInCards())
+    }
+
+    @Test
+    fun `a pile of tapped tokens costs the room a leaning card needs, and no more`() {
+        // A turned card is a square on its corner — √2 across — so it genuinely is taller than an
+        // upright one. What it must not also carry is a fan, or a drop onto an upright card that this
+        // pile can never contain.
+        val upright = listOf(RowEntry.Pile(listOf(permanentFor("z1"), permanentFor("z2"))))
+        val turned = listOf(RowEntry.Pile(listOf(permanentFor("z1", tapped = true), permanentFor("z2", tapped = true))))
+
         assertTrue(
-            "a pile fans downward and its turned half hangs below",
-            pile.heightInCards() > cards.heightInCards(),
+            "a leaning pile measured ${turned.heightInCards()} against an upright ${upright.heightInCards()}",
+            turned.heightInCards() > upright.heightInCards(),
+        )
+        assertTrue(
+            "a leaning card is √2 tall, not two cards: ${turned.heightInCards()}",
+            turned.heightInCards() < 2f * upright.heightInCards(),
         )
     }
 
@@ -647,12 +666,18 @@ class RowHeightTest {
         assertEquals(0f, emptyList<RowEntry>().heightInCards())
     }
 
-    private fun permanentFor(id: String) =
-        TablePermanent(
-            id = id,
-            role = PermanentRole.Creature,
-            state = magefree.designsystem.card.BoardCardState(card = magefree.designsystem.card.CardDisplay(name = id)),
-        )
+    private fun permanentFor(
+        id: String,
+        tapped: Boolean = false,
+    ) = TablePermanent(
+        id = id,
+        role = PermanentRole.Creature,
+        state =
+            magefree.designsystem.card.BoardCardState(
+                card = magefree.designsystem.card.CardDisplay(name = id),
+                tapped = tapped,
+            ),
+    )
 }
 
 /**

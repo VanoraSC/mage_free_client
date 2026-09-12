@@ -195,13 +195,13 @@ fun BattlefieldLayout(
             // open on a board with two lands and run out on one with six kinds of them — and running out is
             // what puts a Swamp on its own line below the Islands. So it asks for one row of stacks per
             // side and is capped, never reserved.
-            val landWidth = landCardWidth(sides, afterRail * LAND_ZONE_CEILING, sideHeight)
+            val landWidth = landCardWidth(sides, afterRail * LAND_ZONE_CEILING, sideHeight, maxWidth)
             val landZoneWidth = minOf(landZoneWidth(sides, landWidth), afterRail * LAND_ZONE_CEILING)
             val mainWidth = afterRail - landZoneWidth - if (landZoneWidth > 0.dp) ZoneGap else 0.dp
 
             // A size per kind of permanent, each shared across both sides: a creature on the far side is the
             // same size as one on this side, because the game does not say one is nearer. See [MainCardWidths].
-            val cardWidths = mainCardWidths(sides, mainWidth, sideHeight)
+            val cardWidths = mainCardWidths(sides, mainWidth, sideHeight, maxWidth)
 
             // **The creatures belong on the screen's centre line, not their column's.** The battlefield is
             // the third column, so centring inside it puts the creatures well right of the middle with a
@@ -674,7 +674,7 @@ private fun PermanentCard(
  * stack-widths, not card-widths. The column then has to fit inside one side's own height too, because
  * a stack is taller than a card by the same staggering.
  *
- * Capped at [PreferredCardWidth] and floored at [MinCardWidth]: a board with two lands draws two
+ * Capped at [preferredLandWidth] and floored at [MinCardWidth]: a board with two lands draws two
  * ordinary lands rather than two the height of the battlefield, and a board with more kinds of land
  * than anyone plays wraps rather than shrinking past legibility.
  */
@@ -682,10 +682,12 @@ private fun landCardWidth(
     sides: List<BattlefieldSide>,
     zoneCeiling: Dp,
     sideHeight: Dp,
+    screenWidth: Dp,
 ): Dp {
     val stacks = sides.map { it.landStacks() }
     val most = stacks.maxOfOrNull { it.size } ?: 0
-    if (most == 0) return PreferredCardWidth
+    val preferred = preferredLandWidth(screenWidth)
+    if (most == 0) return preferred
 
     // The busiest side's line, measured in card widths, so the answer is one division rather than a
     // search. Every stack costs the same, occupied or not, which is what keeps the board from resizing
@@ -694,7 +696,7 @@ private fun landCardWidth(
     val byWidth = (zoneCeiling - StackGap * (most - 1)) / widest.coerceAtLeast(1f)
     val byHeight = sideHeight / stackHeightInCards()
 
-    return minOf(byWidth, byHeight, PreferredCardWidth).coerceAtLeast(MinCardWidth)
+    return minOf(byWidth, byHeight, preferred).coerceAtLeast(MinCardWidth)
 }
 
 /** What the land column actually asks for at [landWidth] — one line of the busiest side's stacks. */
@@ -757,6 +759,7 @@ private fun mainCardWidths(
     sides: List<BattlefieldSide>,
     mainWidth: Dp,
     sideHeight: Dp,
+    screenWidth: Dp,
 ): MainCardWidths {
     // **Entries, not permanents.** A pile of twelve Zombie tokens is one thing in the row, and counting
     // the tokens instead is what made a token board size every card on the table — both sides, every
@@ -771,16 +774,19 @@ private fun mainCardWidths(
     // can read.
     fun byWidth(role: PermanentRole): Dp {
         val count = busiest(role)
-        if (count == 0) return preferredWidthFor(role)
+        if (count == 0) return preferredWidthFor(role, screenWidth)
         return ((mainWidth - CardGap * (count - 1)) / count).coerceAtLeast(LegibleCardWidth)
     }
 
     val roles = listOf(PermanentRole.Creature, PermanentRole.Other)
     if (roles.all { busiest(it) == 0 }) {
-        return MainCardWidths(creature = PreferredCreatureWidth, other = PreferredOtherWidth)
+        return MainCardWidths(
+            creature = preferredCreatureWidth(screenWidth),
+            other = preferredOtherWidth(screenWidth),
+        )
     }
 
-    val creature = minOf(PreferredCreatureWidth, byWidth(PermanentRole.Creature))
+    val creature = minOf(preferredCreatureWidth(screenWidth), byWidth(PermanentRole.Creature))
     var widths =
         MainCardWidths(
             creature = creature,
@@ -790,7 +796,7 @@ private fun mainCardWidths(
             // enchantments drew the enchantments half again the size of the creatures: the cards a
             // player is asked about most, drawn smallest, on the busiest board. Equal rather than the
             // ratio applied downward, because shrinking a card that has the room buys nothing.
-            other = minOf(PreferredOtherWidth, byWidth(PermanentRole.Other), creature),
+            other = minOf(preferredOtherWidth(screenWidth), byWidth(PermanentRole.Other), creature),
         )
 
     // **A pile is taller than a card, and the height budget has to know it.** The fan staggers
@@ -838,7 +844,10 @@ private fun Dp.afterAssemblies(
 }
 
 /** The size a permanent of [role] is drawn at when the board has room for it. */
-private fun preferredWidthFor(role: PermanentRole): Dp = if (role == PermanentRole.Creature) PreferredCreatureWidth else PreferredOtherWidth
+private fun preferredWidthFor(
+    role: PermanentRole,
+    screenWidth: Dp,
+): Dp = if (role == PermanentRole.Creature) preferredCreatureWidth(screenWidth) else preferredOtherWidth(screenWidth)
 
 /**
  * One row of a side's battlefield: which bucket feeds it, and where it sits across the width.
@@ -884,10 +893,13 @@ object BattlefieldTestTags {
     /** One land stack, by the id it reports when tapped. */
     fun stack(stackId: String): String = "battlefield-stack-$stackId"
 
-    /** A stack count badge, present only past [PILE_FAN_LIMIT]. */
+    /** The bar down a stack's left edge carrying both counts. */
+    fun stackTally(stackId: String): String = "battlefield-stack-tally-$stackId"
+
+    /** How many copies are standing. Absent when none are. */
     fun stackCount(stackId: String): String = "battlefield-stack-count-$stackId"
 
-    /** The turned half's count badge. */
+    /** How many are turned. Absent when none are. */
     fun stackTappedCount(stackId: String): String = "battlefield-stack-tapped-count-$stackId"
 }
 
@@ -909,42 +921,50 @@ private const val LAND_ZONE_CEILING = 0.34f
 private val RailWidth = 76.dp
 
 /**
- * The size a **land** is drawn at when the board has room for it.
+ * How large a permanent may be drawn, as a share of the **screen's** own width.
  *
- * A ceiling, not a target: it is what a quiet board looks like, and every other constraint can only
- * take it down. Smaller than the battlefield's own, because §7.4's whole point about lands is that
- * they are the most numerous permanents and the least individually interesting — a land is read by
- * which land it is, and that is the one thing its picture says at any size.
+ * **A share rather than a dp, because "too big" was never about dp.** The preferred sizes were fixed
+ * — 252dp and a quarter more — and on a phone in landscape that is a fifth of the screen for one
+ * creature. Stated as a share, the ceiling means the same thing on every device it lands on, which is
+ * what a ceiling on *how much of the board one card may take* has to mean.
+ *
+ * **Of the screen, not of the battlefield column.** That is Pete's own frame and it is the honest one:
+ * a player looking at a card is judging it against the screen in front of them, not against a column
+ * whose width depends on how many kinds of land are in play.
+ *
+ * Ceilings, not targets: what a quiet board looks like, and every other constraint can only take them
+ * down.
  */
-private val PreferredCardWidth = 112.dp
+private const val CREATURE_WIDTH_SHARE = 0.15f
 
 /**
- * The size a **non-creature** permanent is drawn at when the board has room for it.
+ * A non-creature permanent's share.
  *
- * Half again the land's, and the size Pete picked off a board he liked the look of — this is the one
- * of the two that was measured rather than derived. An artifact or an enchantment is usually read once,
- * when it arrives, and remembered after that; this is the width at which reading it once works.
- *
- * The land column is bounded, so the width this takes comes out of empty board rather than out of the
- * lands.
+ * Two thirds of a creature's. **A creature is the permanent a player is asked about most** — what is
+ * attacking, what can block, what its power has become after four effects — and it carries the
+ * counters and badges that say so on top of the picture. An artifact or an enchantment is usually read
+ * once, when it arrives, and remembered after that.
  */
-internal val PreferredOtherWidth = 252.dp
+private const val OTHER_WIDTH_SHARE = 0.10f
 
 /**
- * The size a **creature** is drawn at when the board has room for it.
+ * A land's share, which is the non-creature's.
  *
- * A quarter larger than [PreferredOtherWidth], which is Pete's own figure from the same board. It is
- * the one derived from the other on purpose: the pair is a *ratio*, and a ratio written as two
- * independent numbers drifts apart the first time either is adjusted.
- *
- * A creature is the permanent a player is asked about most — what is attacking, what can block, what
- * its power has become after four effects — and it is the one carrying the counters and badges that
- * say so, on top of the picture. The extra quarter is where those go.
+ * §7.4's point about lands is that they are the most numerous permanents and the least individually
+ * interesting: a land is read by *which land it is*, and that is the one thing its picture says at any
+ * size. The land column is bounded, so the width this does not take goes back to the battlefield
+ * rather than to the lands.
  */
-internal val PreferredCreatureWidth = PreferredOtherWidth * CREATURE_SIZE_ADVANTAGE
+private const val LAND_WIDTH_SHARE = 0.10f
 
-/** How much larger a creature is drawn than everything else that is not a land. Pete's own figure. */
-private const val CREATURE_SIZE_ADVANTAGE = 1.25f
+/** The largest a creature is drawn on a screen [screenWidth] across. */
+internal fun preferredCreatureWidth(screenWidth: Dp): Dp = screenWidth * CREATURE_WIDTH_SHARE
+
+/** The largest anything that is not a creature or a land is drawn. */
+internal fun preferredOtherWidth(screenWidth: Dp): Dp = screenWidth * OTHER_WIDTH_SHARE
+
+/** The largest a land is drawn. */
+internal fun preferredLandWidth(screenWidth: Dp): Dp = screenWidth * LAND_WIDTH_SHARE
 
 /**
  * Below this a card stops being readable, so the row scrolls rather than shrinking further.
