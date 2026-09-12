@@ -3,6 +3,7 @@ package magefree.feature.game.table
 import android.app.Application
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import magefree.designsystem.card.CardPreviewTestTags
@@ -426,6 +428,36 @@ class TableBoardScreenTest {
         composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL_BADGE).assertDoesNotExist()
     }
 
+    // ---- a planeswalker's abilities ---------------------------------------------------------------
+
+    @Test
+    fun `a planeswalker's offered abilities are buttons on its card, in place of Play`() {
+        // Pete: the abilities, in a column, instead of the Play button. The ultimate's name arrives clipped
+        // at fifty characters — upstream's own `PlayableObjectStats` — and the button reads the whole line.
+        render(planeswalkerGame(), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(0)).assertTextEquals(LILIANA_PLUS)
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).assertTextEquals(LILIANA_ULTIMATE)
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.ACTION).assertDoesNotExist()
+    }
+
+    @Test
+    fun `pressing one of them asks to activate that ability of that planeswalker`() {
+        render(planeswalkerGame(), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).performScrollTo().performClick()
+
+        assertEquals(listOf<BoardAction>(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-6")), actions)
+    }
+
+    @Test
+    fun `a planeswalker the server is not offering has neither buttons nor Play`() {
+        render(planeswalkerGame().copy(playable = emptyList()), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.ABILITY_ACTIONS).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.ACTION).assertDoesNotExist()
+    }
+
     // ---- dragging out of the hand -----------------------------------------------------------------
 
     @Test
@@ -619,6 +651,34 @@ class TableBoardScreenTest {
         )
     }
 
+    /**
+     * Liliana of the Veil on the viewer's side, with her +1 and her ultimate offered — the name of the
+     * ultimate clipped at fifty characters, as upstream sends it.
+     */
+    private fun planeswalkerGame(): GameState {
+        val base = priorityGame()
+        return base.copy(
+            players =
+                base.players.map { player ->
+                    if (!player.isViewer) {
+                        player
+                    } else {
+                        val liliana =
+                            card("pw-1", "Liliana of the Veil", "Legendary Planeswalker — Liliana", "1BB", listOf(CardType.Planeswalker))
+                                .copy(rules = listOf(LILIANA_PLUS, LILIANA_MINUS, LILIANA_ULTIMATE))
+                        player.copy(battlefield = player.battlefield + GamePermanent(card = liliana))
+                    }
+                },
+            playable =
+                base.playable +
+                    PlayableObject(
+                        objectId = "pw-1",
+                        abilityIds = listOf("plus-1", "minus-6"),
+                        abilityNames = listOf(LILIANA_PLUS, LILIANA_ULTIMATE.take(49) + "..."),
+                    ),
+        )
+    }
+
     /** The same game with the viewer holding priority and one card offered — the board being played. */
     private fun priorityGame() =
         runningGame().copy(
@@ -628,6 +688,11 @@ class TableBoardScreenTest {
             prompt = GamePrompt.Select(message = "Select an ability to play"),
         )
 }
+
+private const val LILIANA_PLUS = "+1: Each player discards a card."
+private const val LILIANA_MINUS = "−2: Target player sacrifices a creature."
+private const val LILIANA_ULTIMATE =
+    "−6: Separate all permanents target player controls into two piles. That player sacrifices all permanents in the pile of their choice."
 
 /** The server's own text for the spell the stack tests put on it. */
 private const val BOLT_TEXT = "Lightning Bolt deals 3 damage to any target."

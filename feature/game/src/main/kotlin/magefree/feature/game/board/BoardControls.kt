@@ -108,6 +108,21 @@ sealed interface BoardAction {
         val abilityId: String,
     ) : BoardAction
 
+    /**
+     * Activate one particular ability of an object the server is offering — a planeswalker's, pressed on
+     * its raised card.
+     *
+     * **One press, and upstream's two steps.** `HumanPlayer` activates an object's ability by being sent
+     * the object and then asking which of its abilities to use, and for a loyalty ability it always asks
+     * (`suppressAbilityPicker` skips the question only for a land play, an alternative cost or a mana
+     * ability). So this sends [objectId], and the question that follows is answered with [abilityId] —
+     * but only if that question offers it.
+     */
+    data class ActivateAbility(
+        val objectId: String,
+        val abilityId: String,
+    ) : BoardAction
+
     /** Choose the first or the second pile. */
     data class ChoosePile(
         val first: Boolean,

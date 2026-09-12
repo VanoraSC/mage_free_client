@@ -263,6 +263,13 @@ class GameBoardViewModel
         private var outstandingPrompt: GamePrompt? = null
 
         /**
+         * The ability the player pressed on a raised card, while the server is being asked which of that
+         * object's abilities to use — see [BoardAction.ActivateAbility]. The app's own record of what it
+         * sent, dropped as soon as the next question arrives, answered or not.
+         */
+        private var pendingAbility: BoardAction.ActivateAbility? = null
+
+        /**
          * Begin observing [gameId] and take our seat in it. Idempotent — a recomposition or a
          * configuration change must not open a second subscription or re-join.
          */
@@ -358,6 +365,9 @@ class GameBoardViewModel
                     "cast=${_uiState.value.cast?.cardName} visible=${_uiState.value.areControlsVisible}"
             }
 
+            // An ability pressed on a raised card, answered when the server asks which one.
+            answerPendingAbility(state.prompt, promptChanged)
+
             // The one place the app decides *when* to answer a priority prompt. Asked once per
             // prompt instance, so a re-emission of the same question cannot pass twice.
             val prompt = state.prompt
@@ -365,6 +375,34 @@ class GameBoardViewModel
                 policyAskedFor = prompt
                 consumeOneShotStop(state)
                 if (passPolicy.decide(state) == PassDecision.PassImmediately) sendPass()
+            }
+        }
+
+        /**
+         * Answers the server's ability question with the ability the player already pressed on the card.
+         *
+         * **Only the question that was expected, and only once.** A new [GamePrompt.ChooseAbility] that
+         * offers the pressed id is answered with it. Any other new question drops the record without
+         * answering, so a question that does not offer that ability is left on screen for the player
+         * rather than answered with a guess.
+         *
+         * **A snapshot with no question is not an answer.** An update can arrive between the press and
+         * the question, and dropping the record there would leave the player picking the ability they
+         * had already picked. A re-emission of the same question keeps waiting too.
+         */
+        private fun answerPendingAbility(
+            prompt: GamePrompt?,
+            promptChanged: Boolean,
+        ) {
+            val pending = pendingAbility ?: return
+            if (!promptChanged || prompt == null) return
+            pendingAbility = null
+            if (prompt is GamePrompt.ChooseAbility && prompt.choices.any { it.abilityId == pending.abilityId }) {
+                narrate { "answering ${prompt.diag()} with the pressed ${pending.abilityId}" }
+                val id = gameId
+                send { it.chooseAbility(id, pending.abilityId) }
+            } else {
+                narrate { "pressed ability ${pending.abilityId} not offered by ${prompt.diag()}; left to the player" }
             }
         }
 
@@ -477,6 +515,12 @@ class GameBoardViewModel
 
                 is BoardAction.AnswerAsk -> send { it.answerAsk(id, action.yes) }
                 is BoardAction.ChooseAbility -> send { it.chooseAbility(id, action.abilityId) }
+                is BoardAction.ActivateAbility -> {
+                    // The object now; the ability once the server asks which — see [answerPendingAbility].
+                    pendingAbility = action
+                    _uiState.value = _uiState.value.copy(cast = CastUi(cardName = nameOf(action.objectId)))
+                    send { it.playObject(id, action.objectId) }
+                }
                 is BoardAction.ChoosePile -> send { it.choosePile(id, action.first) }
                 is BoardAction.ChooseChoice -> send { it.chooseChoice(id, action.key, action.special) }
                 is BoardAction.PlayManaSource -> send { it.playManaSource(id, action.sourceId) }
@@ -516,6 +560,8 @@ class GameBoardViewModel
             viewModelScope.launch {
                 call(gameClient).onFailure { error ->
                     narrate { "send failed: $error" }
+                    // A press the server never received has no question coming after it.
+                    pendingAbility = null
                     _uiState.value = _uiState.value.copy(actionError = error.asBoardMessage())
                 }
             }

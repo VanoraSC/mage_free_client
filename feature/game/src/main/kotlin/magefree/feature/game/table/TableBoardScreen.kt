@@ -354,6 +354,18 @@ fun TableBoardScreen(
             // attacking.
             uiState.selectedObjectId?.let { objectId ->
                 snapshot?.let { state ->
+                    // **A planeswalker's offered abilities are its buttons** — see [abilityButtons]. Only while
+                    // a press on it would be a Play, which is the question its abilities are the answer to.
+                    val offeredAbilities =
+                        if (controls?.actionFor(objectId) is BoardAction.PlayObject) {
+                            state.players
+                                .flatMap { it.battlefield }
+                                .firstOrNull { it.card.id == objectId }
+                                ?.let { abilityButtons(it.card, state.playable) }
+                                .orEmpty()
+                        } else {
+                            emptyList()
+                        }
                     raisedCard(
                         objectId = objectId,
                         snapshot = state,
@@ -362,7 +374,14 @@ fun TableBoardScreen(
                         candidates = controls?.candidateCards.orEmpty(),
                         actionLabel = controls?.actionLabelFor(objectId),
                         onAct = { controls?.actionFor(objectId)?.let(onAction) },
-                    )?.let { raised ->
+                    )?.let { plain ->
+                        val raised =
+                            plain.copy(
+                                state =
+                                    plain.state.withAbilityButtons(offeredAbilities) { abilityId ->
+                                        onAction(BoardAction.ActivateAbility(objectId = objectId, abilityId = abilityId))
+                                    },
+                            )
                         // The peek at a double-faced card's other side, carried through unchanged from
                         // the overlay this replaced. It is offered only where the catalog says there
                         // *is* another face, and it is local: which face the object is actually showing

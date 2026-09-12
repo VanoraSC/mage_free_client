@@ -67,6 +67,9 @@ import magefree.designsystem.theme.Spacing
  *   it in one and not the other.
  * @property action the one thing that can be done with this card right now, or null when there is
  *   nothing. Naming it is the caller's job — see [CardPreviewAction].
+ * @property abilityActions the object's own abilities that can be activated right now, one button each,
+ *   in the order given — a planeswalker's, where "Play" says nothing about which of them. Empty for
+ *   everything else; a caller that gives these gives no [action].
  */
 data class CardPreviewState(
     val card: CardDisplay,
@@ -75,6 +78,7 @@ data class CardPreviewState(
     val abilities: List<String> = emptyList(),
     val oracleText: String? = null,
     val action: CardPreviewAction? = null,
+    val abilityActions: List<CardPreviewAction> = emptyList(),
     val attachments: List<CardPreviewAttachment> = emptyList(),
     val provenance: CardPreviewProvenance? = null,
     val flip: CardPreviewFlip? = null,
@@ -338,6 +342,25 @@ private fun DetailPanel(
                 }
             }
 
+            // **What can be done, before what is printed.** One button per ability, down the column, each
+            // saying which ability it is — a single Play on a planeswalker named the card and left the
+            // question of which ability for later.
+            if (state.abilityActions.isNotEmpty()) {
+                HorizontalDivider()
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(Spacing.small),
+                    modifier = Modifier.testTag(CardPreviewTestTags.ABILITY_ACTIONS),
+                ) {
+                    state.abilityActions.forEachIndexed { index, ability ->
+                        MagePrimaryButton(
+                            text = ability.label,
+                            onClick = ability.onAct,
+                            modifier = Modifier.fillMaxWidth().testTag(CardPreviewTestTags.abilityAction(index)),
+                        )
+                    }
+                }
+            }
+
             state.oracleText?.takeIf { it.isNotBlank() }?.let { oracle ->
                 HorizontalDivider()
                 SymbolText(
@@ -384,6 +407,12 @@ object CardPreviewTestTags {
     const val PROVENANCE: String = "card-preview-provenance"
     const val FLIP: String = "card-preview-flip"
     const val ACTION: String = "card-preview-action"
+
+    /** The column of an object's own ability buttons. */
+    const val ABILITY_ACTIONS: String = "card-preview-ability-actions"
+
+    /** One ability's button, by its place in the column. */
+    fun abilityAction(index: Int): String = "card-preview-ability-action-$index"
 
     /** One attached permanent's block, by its name. */
     fun attachment(name: String): String = "card-preview-attachment-$name"

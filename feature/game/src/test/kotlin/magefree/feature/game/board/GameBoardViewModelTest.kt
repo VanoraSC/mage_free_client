@@ -541,6 +541,87 @@ class GameBoardViewModelTest {
             assertEquals(listOf(OPENING_STOPS), client.calls.filter { it.startsWith("stops:") })
         }
 
+    // ---- an ability pressed on a raised card ----------------------------------------------------------
+
+    @Test
+    fun `pressing an ability sends the planeswalker, then answers the question that follows with that ability`() =
+        runTest {
+            // Upstream's two steps behind one press: the object is sent, `HumanPlayer` asks which ability
+            // — always, for a loyalty ability — and the answer is the one the player already pressed.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            client.calls.clear()
+
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-2"))
+            assertEquals(listOf("play:$GAME_ID:pw-1"), client.gameCalls)
+
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+
+            assertEquals(listOf("play:$GAME_ID:pw-1", "ability:$GAME_ID:minus-2"), client.gameCalls)
+        }
+
+    @Test
+    fun `a question that does not offer the pressed ability is left to the player`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "ultimate"))
+            client.calls.clear()
+
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+
+            assertEquals("nothing is guessed", emptyList<String>(), client.gameCalls)
+            assertNotNull("the question is on screen", viewModel.uiState.value.controls)
+        }
+
+    @Test
+    fun `the pressed ability is answered once, and never again for a later question`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-2"))
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+            client.emitGameState(selectState())
+            client.calls.clear()
+
+            // Next turn the player taps the same planeswalker and is asked again. That question is theirs.
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion(message = "Choose again")))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+        }
+
+    @Test
+    fun `an update with no question between the press and the question does not lose the press`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-2"))
+            client.calls.clear()
+
+            client.emitGameState(selectState().copy(prompt = null))
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+
+            assertEquals(listOf("ability:$GAME_ID:minus-2"), client.gameCalls)
+        }
+
+    private fun lilianaQuestion(message: String = "Choose spell or ability to play") =
+        GamePrompt.ChooseAbility(
+            message = message,
+            choices =
+                listOf(
+                    AbilityChoice("plus-1", "+1: Each player discards a card."),
+                    AbilityChoice("minus-2", "−2: Target player sacrifices a creature."),
+                ),
+        )
+
     // ---- full control --------------------------------------------------------------------------------
 
     @Test
