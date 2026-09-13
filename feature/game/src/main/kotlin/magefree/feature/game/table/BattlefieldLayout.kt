@@ -157,9 +157,13 @@ fun BattlefieldLayout(
     // Where everything is, measured as it is placed, so the target arrows can be drawn between real
     // positions rather than from a second copy of this layout's arithmetic.
     val anchors = rememberBoardAnchors()
+    // **The stack as drawn keeps a card long enough to be seen** — see [rememberPresentedStack]. Read up here
+    // because a spell's card leaving it for a graveyard waits for the stack to let the spell go.
+    val presentedStack = rememberPresentedStack(stack)
     // Cards changing zone, and the destinations being held for them. Read before anything is composed,
     // because what is hidden is decided by what is travelling.
-    val zoneFlights = rememberZoneFlights(batch = zoneMoves, anchors = anchors)
+    val zoneFlights =
+        rememberZoneFlights(batch = zoneMoves, anchors = anchors, onStack = presentedStack.mapTo(mutableSetOf()) { it.id })
 
     androidx.compose.runtime.CompositionLocalProvider(LocalBoardFocus provides focus) {
         BoxWithConstraints(
@@ -371,9 +375,8 @@ fun BattlefieldLayout(
             // **Which arrival is still travelling**, so the stack can lay a card out without drawing
             // it yet — see [StackFlights.arriving]. Read before the region is composed because that
             // is what it is for.
-            // **The stack as drawn keeps a card long enough to be seen** — see [rememberPresentedStack]. The
-            // arrows below still read the server's stack: a card that has resolved is shown, not pointed from.
-            val presentedStack = rememberPresentedStack(stack)
+            // The stack region draws [presentedStack]; the arrows below still read the server's stack, so a
+            // card that has resolved is shown, not pointed from.
             val flights = rememberCardFlights(stack = presentedStack, anchors = anchors, visible = stackVisible)
             val landed = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptySet<String>()) }
 

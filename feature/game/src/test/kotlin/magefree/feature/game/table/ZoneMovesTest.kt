@@ -5,6 +5,7 @@ import magefree.network.game.GameCard
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
+import magefree.network.game.MageObjectType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -148,6 +149,106 @@ class ZoneMovesTest {
 
         assertTrue(zoneMoves(table(hand = listOf(bolt("b1"))), other).isEmpty())
     }
+
+    @Test
+    fun `a spell that resolves flies from the stack to its owner's graveyard, once the stack lets it go`() {
+        // `Spell.getId()` is its ability's id, not its card's, so the card it becomes is found by name.
+        val move =
+            zoneMoves(table(stack = listOf(spell("ability-of-b1"))), table(theirGraveyard = listOf(bolt("b1")))).single()
+
+        assertEquals(ZoneMoveKind.SpellToGraveyard, move.kind)
+        assertEquals("b1", move.cardId)
+        assertEquals("ability-of-b1", move.from)
+        assertEquals("ability-of-b1", move.leavesStack)
+        assertEquals(listOf(graveyardAnchorId(THEM)), move.to)
+    }
+
+    @Test
+    fun `a spell exiled as it resolves flies to its owner's count panel`() {
+        val move = zoneMoves(table(stack = listOf(spell("s1"))), table(theirExile = listOf(bolt("b1")))).single()
+
+        assertEquals(ZoneMoveKind.SpellToExile, move.kind)
+        assertEquals(listOf(zoneCountsAnchorId(THEM)), move.to)
+    }
+
+    @Test
+    fun `an ability leaving the stack goes nowhere`() {
+        val ability = GameCard(id = "a1", name = "Lightning Bolt", objectType = MageObjectType.AbilityOnStackFromCard, sourceId = "src")
+
+        assertTrue(zoneMoves(table(stack = listOf(ability)), table(theirGraveyard = listOf(bolt("b1")))).isEmpty())
+    }
+
+    @Test
+    fun `a spell still on the stack has not moved, whatever reached a graveyard`() {
+        val before = table(stack = listOf(spell("s1")))
+        val after = table(stack = listOf(spell("s1")), theirGraveyard = listOf(bolt("b1")))
+
+        assertTrue(zoneMoves(before, after).isEmpty())
+    }
+
+    @Test
+    fun `a card of another name reaching a graveyard is not the spell`() {
+        assertTrue(zoneMoves(table(stack = listOf(spell("s1"))), table(theirGraveyard = listOf(bears("c9")))).isEmpty())
+    }
+
+    @Test
+    fun `the card a resolved spell became is not also read as a discard`() {
+        // Their hand fell in the same snapshot — they cast something else — and the spell's card reached
+        // their graveyard. It is one card, and it came off the stack.
+        val moves =
+            zoneMoves(
+                table(stack = listOf(spell("s1")), theirHand = 5),
+                table(theirHand = 4, theirGraveyard = listOf(bolt("b1"))),
+            )
+
+        assertEquals(listOf(ZoneMoveKind.SpellToGraveyard), moves.map { it.kind })
+    }
+
+    @Test
+    fun `an opponent's land played flies from their hand to where it lands`() {
+        val move = zoneMoves(table(theirHand = 5), table(theirHand = 4, theirBattlefield = listOf(swamp("s9")))).single()
+
+        assertEquals(ZoneMoveKind.PlayedFromHand, move.kind)
+        assertEquals(opponentHandAnchorId(THEM), move.from)
+        assertEquals(listOf("s9"), move.to)
+        assertTrue(move.freshDestination)
+    }
+
+    @Test
+    fun `an opponent's land joining a stack lands on the stack`() {
+        val move =
+            zoneMoves(
+                table(theirHand = 5, theirBattlefield = listOf(swamp("s1"))),
+                table(theirHand = 4, theirBattlefield = listOf(swamp("s1"), swamp("s9"))),
+            ).single()
+
+        assertEquals(listOf("s1", "s9"), move.to)
+    }
+
+    @Test
+    fun `a land an opponent puts onto the battlefield while their hand stands still does not fly`() {
+        // Fetched from their library: nothing left their hand.
+        assertTrue(zoneMoves(table(theirHand = 5), table(theirHand = 5, theirBattlefield = listOf(swamp("s9")))).isEmpty())
+    }
+
+    @Test
+    fun `a creature arriving while an opponent's hand shrank is not a land played`() {
+        // Cast and resolved between two snapshots: it went by the stack, and only lands are played.
+        assertTrue(zoneMoves(table(theirHand = 5), table(theirHand = 4, theirBattlefield = listOf(bears("c9")))).isEmpty())
+    }
+
+    @Test
+    fun `a land and a discard in one snapshot take one card of the hand each`() {
+        val moves =
+            zoneMoves(
+                table(theirHand = 5),
+                table(theirHand = 3, theirBattlefield = listOf(swamp("s9")), theirGraveyard = listOf(bolt("b9"))),
+            )
+
+        assertEquals(listOf(ZoneMoveKind.PlayedFromHand, ZoneMoveKind.Discarded), moves.map { it.kind })
+    }
+
+    private fun spell(id: String) = bolt(id).copy(objectType = MageObjectType.Spell)
 
     private fun table(
         hand: List<GameCard> = emptyList(),

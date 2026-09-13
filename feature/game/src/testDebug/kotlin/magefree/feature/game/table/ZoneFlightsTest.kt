@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -133,6 +134,70 @@ class ZoneFlightsTest {
 
         assertTrue(flights.flights.isEmpty())
         assertTrue(flights.hidden.isEmpty())
+    }
+
+    @Test
+    fun `a spell's card waits for the stack to stop showing the spell, then flies from it`() {
+        anchors.placeForTest("s1", from())
+        anchors.placeForTest(graveyardAnchorId("me"), to())
+        val onStack = mutableStateOf(setOf("s1"))
+        composeTestRule.setContent {
+            MageTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    flights = rememberZoneFlights(batch = batch.value, anchors = anchors, onStack = onStack.value)
+                }
+            }
+        }
+
+        batch.value =
+            ZoneMoveBatch(
+                1,
+                listOf(
+                    ZoneMove("b1", ZoneMoveKind.SpellToGraveyard, bolt("b1"), "s1", listOf(graveyardAnchorId("me")), leavesStack = "s1"),
+                ),
+            )
+        composeTestRule.waitForIdle()
+        assertTrue("the stack is still showing it", flights.flights.isEmpty())
+        assertEquals("its graveyard keeps the old top card meanwhile", setOf("b1"), flights.hidden)
+
+        onStack.value = emptySet()
+        composeTestRule.waitForIdle()
+
+        assertEquals(from(), flights.flights.single().from)
+    }
+
+    @Test
+    fun `a move still waiting when the next moves arrive is given up on all the same`() {
+        // Its wait used to be keyed by its batch, so the next batch cancelled it and the card stayed hidden.
+        composeTestRule.mainClock.autoAdvance = false
+        anchors.placeForTest(handCardAnchorId("s1"), from())
+        anchors.placeForTest(handCardAnchorId("b1"), from())
+        anchors.placeForTest(graveyardAnchorId("me"), to())
+        composeTestRule.setContent {
+            MageTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    flights = rememberZoneFlights(batch = batch.value, anchors = anchors)
+                }
+            }
+        }
+        settle()
+
+        batch.value = ZoneMoveBatch(1, listOf(played("s1")))
+        settle()
+        batch.value = ZoneMoveBatch(2, listOf(discard("b1")))
+        settle()
+        assertTrue("its destination was never measured, so it waits", "s1" in flights.hidden)
+
+        composeTestRule.mainClock.advanceTimeBy(3_000)
+        settle()
+
+        assertTrue("and is given up on, so its card is shown again", "s1" !in flights.hidden)
+    }
+
+    /** Announces what was written and draws a frame — a held clock idles nothing on its own. */
+    private fun settle() {
+        Snapshot.sendApplyNotifications()
+        composeTestRule.mainClock.advanceTimeByFrame()
     }
 
     private fun from() = Rect(left = 10f, top = 400f, right = 70f, bottom = 460f)

@@ -15,6 +15,7 @@ import magefree.network.game.GameCard
 import magefree.network.game.GamePermanent
 import magefree.network.game.GamePlayer
 import magefree.network.game.GameState
+import magefree.network.game.MageObjectType
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -133,6 +134,67 @@ class ZoneFlightsBoardTest {
     }
 
     @Test
+    fun `an opponent's land flies from their hand to their land column`() {
+        play(
+            before = table(theirHand = 4),
+            after = table(theirHand = 3, theirLands = listOf(swamp("s9"))),
+        )
+
+        assertFlying("s9")
+    }
+
+    @Test
+    fun `a resolved spell leaves the stack for its graveyard once it has been seen there`() {
+        // The server resolves it at once; the stack goes on showing it for half a second after it arrived,
+        // and only then does its card fly — out of the stack, not out of nowhere.
+        composeTestRule.mainClock.autoAdvance = false
+        snapshot.value = table(stack = listOf(boltSpell()))
+        showBoard()
+        settleFrames()
+        snapshot.value = table(myGraveyard = listOf(bolt("b1")))
+        settleFrames()
+
+        composeTestRule.mainClock.advanceTimeBy(300)
+        settleFrames()
+        composeTestRule.onNodeWithTag(StackTestTags.entry(SPELL), useUnmergedTree = true).assertExists()
+        composeTestRule.onNodeWithTag(CardFlightTestTags.card("zone:1:b1"), useUnmergedTree = true).assertDoesNotExist()
+
+        composeTestRule.mainClock.advanceTimeBy(500)
+        settleFrames()
+
+        assertFlying("b1")
+    }
+
+    /** The board over [snapshot], without settling anything. */
+    private fun showBoard() {
+        composeTestRule.setContent {
+            MageTheme {
+                val state = snapshot.value
+                TableBoardScreen(
+                    uiState =
+                        GameBoardUiState(
+                            board = BoardUi.from(state),
+                            snapshot = state,
+                            isJoining = false,
+                            controls = controlsFor(state),
+                        ),
+                    onExit = {},
+                    onControlsVisibleChange = {},
+                    onCardTap = {},
+                    onAction = {},
+                    artRenderer = PlaceholderCardArtRenderer,
+                )
+            }
+        }
+    }
+
+    /** Announces what was written and draws it, with the clock held. */
+    private fun settleFrames() {
+        Snapshot.sendApplyNotifications()
+        repeat(3) { composeTestRule.mainClock.advanceTimeByFrame() }
+    }
+
+    @Test
     fun `a creature that dies flies to its owner's graveyard`() {
         play(
             before = table(theirCreatures = listOf(bears("c1"))),
@@ -160,6 +222,8 @@ class ZoneFlightsBoardTest {
         theirGraveyard: List<GameCard> = emptyList(),
         theirExile: List<GameCard> = emptyList(),
         theirHand: Int = 4,
+        theirLands: List<GameCard> = emptyList(),
+        stack: List<GameCard> = emptyList(),
     ) = GameState(
         gameId = GAME,
         hasSnapshot = true,
@@ -167,6 +231,7 @@ class ZoneFlightsBoardTest {
         viewerPlayerId = ME,
         activePlayerId = ME,
         hand = hand,
+        stack = stack,
         players =
             listOf(
                 GamePlayer(
@@ -176,7 +241,7 @@ class ZoneFlightsBoardTest {
                     libraryCount = 40,
                     handCount = theirHand,
                     isHuman = false,
-                    battlefield = theirCreatures.map { GamePermanent(card = it) },
+                    battlefield = (theirCreatures + theirLands).map { GamePermanent(card = it) },
                     graveyard = theirGraveyard,
                     exile = theirExile,
                 ),
@@ -213,6 +278,9 @@ class ZoneFlightsBoardTest {
             cardTypes = listOf(CardType.Instant),
         )
 
+    /** Lightning Bolt as a spell on the stack: an id of its own, and upstream's `SPELL` object type. */
+    private fun boltSpell() = bolt(SPELL).copy(objectType = MageObjectType.Spell)
+
     private fun bears(id: String) =
         GameCard(
             id = id,
@@ -229,6 +297,7 @@ class ZoneFlightsBoardTest {
 private const val GAME = "g-1"
 private const val ME = "p-you"
 private const val THEM = "p-opp"
+private const val SPELL = "spell-1"
 
 /**
  * Frames between a snapshot changing and a card being in the air — see [ZoneFlightsBoardTest.play].

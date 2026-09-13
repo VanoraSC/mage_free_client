@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,7 +70,6 @@ internal data class ZoneFlight(
 private data class WaitingMove(
     val flightId: String,
     val move: ZoneMove,
-    val generation: Int,
 )
 
 /**
@@ -98,13 +98,21 @@ internal class ZoneFlights {
         flying = flying.filterNot { it.flight.id == flightId }
     }
 
-    internal fun expire(generation: Int) {
-        waiting = waiting.filterNot { it.generation == generation }
+    /** Every move still waiting, by its flight's id — each given up on after its own wait. */
+    internal val waitingIds: List<String> get() = waiting.map { it.flightId }
+
+    internal fun expire(flightId: String) {
+        waiting = waiting.filterNot { it.flightId == flightId }
     }
 
+    /**
+     * @param onStack what the stack region is drawing right now, by id. A move out of the stack waits
+     *   while its spell is still among these — see [ZoneMove.leavesStack].
+     */
     internal fun take(
         batch: ZoneMoveBatch,
         anchors: BoardAnchors,
+        onStack: Set<String> = emptySet(),
     ) {
         // **The batch a board opens on is not flown.** It describes a move that happened before this
         // board was drawn, from a place the board never measured.
@@ -116,13 +124,18 @@ internal class ZoneFlights {
         if (batch.generation != seen) {
             seenGeneration = batch.generation
             batch.moves.forEach { move -> if (move.freshDestination) move.to.lastOrNull()?.let(anchors::forget) }
-            waiting = waiting + batch.moves.map { WaitingMove("zone:${batch.generation}:${it.cardId}", it, batch.generation) }
+            waiting = waiting + batch.moves.map { WaitingMove("zone:${batch.generation}:${it.cardId}", it) }
         }
         if (waiting.isEmpty()) return
 
         val still = mutableListOf<WaitingMove>()
         val started = mutableListOf<ZoneFlight>()
         waiting.forEach { waiter ->
+            // A spell still shown on the stack has not left it yet, whatever the server has done with it.
+            if (waiter.move.leavesStack != null && waiter.move.leavesStack in onStack) {
+                still += waiter
+                return@forEach
+            }
             // An origin the board never measured — a hand it does not draw — has nothing to fly from,
             // and the honest failure is no movement: the card is already where it went.
             val from = anchors.boxOf(waiter.move.from) ?: return@forEach
@@ -155,18 +168,29 @@ internal class ZoneFlights {
     }
 }
 
-/** The zone flights for the moves [batch] carries, kept across the snapshots they are drawn over. */
+/**
+ * The zone flights for the moves [batch] carries, kept across the snapshots they are drawn over.
+ *
+ * @param onStack what the stack region is drawing, by id — see [ZoneFlights.take].
+ */
 @Composable
 internal fun rememberZoneFlights(
     batch: ZoneMoveBatch,
     anchors: BoardAnchors,
+    onStack: Set<String> = emptySet(),
 ): ZoneFlights {
     val flights = remember { ZoneFlights() }
-    flights.take(batch, anchors)
-    // **A destination that is never measured must not hide a card for good.**
-    LaunchedEffect(batch.generation) {
-        delay(DESTINATION_WAIT_MILLIS)
-        flights.expire(batch.generation)
+    flights.take(batch, anchors, onStack)
+    // **A move that never gets to fly must not hide a card for good.** One wait per move, not per batch:
+    // keyed by the batch, the next batch's arrival cancelled the last one's wait, and a move of the older
+    // batch still waiting kept its card hidden for the rest of the game.
+    flights.waitingIds.forEach { flightId ->
+        key(flightId) {
+            LaunchedEffect(flightId) {
+                delay(DESTINATION_WAIT_MILLIS)
+                flights.expire(flightId)
+            }
+        }
     }
     return flights
 }
@@ -182,10 +206,12 @@ private fun GameCard.flightFace(): BoardCardState =
 /**
  * How long a move may wait for its destination to be measured before the card is given back.
  *
- * A destination is measured on the frame after it is composed, so any real wait is a frame or two. This
- * is the ceiling on the case that never resolves.
+ * A destination is measured on the frame after it is composed, so a wait for one is a frame or two; the
+ * longest real wait is a spell's card waiting for the stack to let the spell go, which is at most the
+ * stack's own dwell of under a second from when it appeared. This is the ceiling on the case that never
+ * resolves, with room above both.
  */
-private const val DESTINATION_WAIT_MILLIS = 1_000L
+private const val DESTINATION_WAIT_MILLIS = 1_500L
 
 /**
  * How long a discarded card is shown where it left the hand before it goes to the graveyard.

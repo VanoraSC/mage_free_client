@@ -1,7 +1,9 @@
 package magefree.feature.game.table
 
+import magefree.network.game.CardType
 import magefree.network.game.GameCard
 import magefree.network.game.GameState
+import magefree.network.game.MageObjectType
 
 /*
  * Cards changing zone, read off two snapshots.
@@ -23,7 +25,7 @@ import magefree.network.game.GameState
 
 /** What kind of move a [ZoneMove] is. */
 enum class ZoneMoveKind {
-    /** From the viewer's hand onto the battlefield — a land played, most of the time. */
+    /** From a hand onto the battlefield — a land played, most of the time. */
     PlayedFromHand,
 
     /** From a hand into a graveyard. */
@@ -37,6 +39,12 @@ enum class ZoneMoveKind {
 
     /** From the battlefield anywhere else — exile, a library, a zone the board draws only as a count. */
     ToOther,
+
+    /** From the stack into a graveyard — a spell that resolved, or was countered. */
+    SpellToGraveyard,
+
+    /** From the stack into exile — a spell exiled as it resolved, or instead of resolving. */
+    SpellToExile,
 }
 
 /**
@@ -49,6 +57,10 @@ enum class ZoneMoveKind {
  * @property freshDestination whether the last of [to] is a node being drawn for the first time. Whatever
  *   the board last measured under that id belongs to where the card *used* to be, so it is forgotten and
  *   the flight waits for the new box.
+ * @property leavesStack the stack object this move waits for the board to stop drawing, or `null`. A
+ *   spell's card reaches its graveyard the moment the server resolves it, but the stack goes on showing
+ *   the spell for a while (`rememberPresentedStack`) — and a card must not fly out of a stack that is
+ *   still showing it.
  */
 data class ZoneMove(
     val cardId: String,
@@ -57,6 +69,7 @@ data class ZoneMove(
     val from: String,
     val to: List<String>,
     val freshDestination: Boolean = false,
+    val leavesStack: String? = null,
 )
 
 /**
@@ -169,10 +182,7 @@ fun zoneMoves(
             }
     }
 
-    // **Out of an opponent's hand into their graveyard.** The hand has no ids, so this is a card that
-    // arrived in their graveyard having been nowhere this client could see, while their hand shrank by
-    // at least as many. A card milled from a library arrives the same way with the hand standing still,
-    // which is why the count is the condition.
+    // Every card any visible zone held before, so a card arriving can be told from one already there.
     val seenBefore =
         buildSet {
             previous.hand.forEach { add(it.id) }
@@ -182,12 +192,73 @@ fun zoneMoves(
                 seat.exile.forEach { add(it.id) }
             }
         }
+
+    // **Off the stack, into a graveyard or exile.** A spell on the stack does not carry its card's id —
+    // `Spell.getId()` is its ability's — so the card it becomes is found by **name**, the same join the hand
+    // makes for a cast: a spell gone from the stack, and a card of that name new to a graveyard or an exile
+    // pile in the same snapshot. Only spells (upstream's `MageObjectType.SPELL`): an ability leaving the
+    // stack goes nowhere. Each arrival is claimed once, so it is neither flown to twice nor also read as a
+    // discard.
+    val claimed = mutableSetOf<String>()
+    val onStackNow = current.stack.map { it.id }.toSet()
+    previous.stack
+        .filter { it.objectType == MageObjectType.Spell && it.id !in onStackNow }
+        .forEach { spell ->
+            val intoGraveyard =
+                current.players.firstNotNullOfOrNull { seat ->
+                    seat.graveyard.arrivalNamed(spell.name, seenBefore, claimed)?.let { seat.playerId to it }
+                }
+            val intoExile =
+                if (intoGraveyard != null) {
+                    null
+                } else {
+                    current.players.firstNotNullOfOrNull { seat ->
+                        seat.exile.arrivalNamed(spell.name, seenBefore, claimed)?.let { seat.playerId to it }
+                    }
+                }
+            val (owner, card) = intoGraveyard ?: intoExile ?: return@forEach
+            claimed += card.id
+            moves +=
+                ZoneMove(
+                    cardId = card.id,
+                    kind = if (intoGraveyard != null) ZoneMoveKind.SpellToGraveyard else ZoneMoveKind.SpellToExile,
+                    // The spell as it was on the stack is what leaves it.
+                    card = spell,
+                    from = spell.id,
+                    to = listOf(if (intoGraveyard != null) graveyardAnchorId(owner) else zoneCountsAnchorId(owner)),
+                    leavesStack = spell.id,
+                )
+        }
+
+    // **Out of an opponent's hand.** The hand has no ids, so what left it is read from its count falling
+    // while something arrived that no visible zone held before: a land on their battlefield — played, which
+    // never touches the stack — or a card in their graveyard, a discard. A land put onto the battlefield
+    // from a library, and a card milled from one, arrive the same way with the hand standing still, which is
+    // why the count is the condition. Lands take the count first, because a land played is the ordinary
+    // turn.
     current.players.filterNot { it.isViewer }.forEach { seat ->
         val before = previous.players.firstOrNull { it.playerId == seat.playerId } ?: return@forEach
-        val shrank = before.handCount - seat.handCount
+        var shrank = before.handCount - seat.handCount
         if (shrank <= 0) return@forEach
+        seat.battlefield
+            .map { it.card }
+            .filter { CardType.Land in it.cardTypes && !it.isToken && it.id !in seenBefore }
+            .take(shrank)
+            .forEach { land ->
+                shrank -= 1
+                moves +=
+                    ZoneMove(
+                        cardId = land.id,
+                        kind = ZoneMoveKind.PlayedFromHand,
+                        card = land,
+                        from = opponentHandAnchorId(seat.playerId),
+                        // Onto a stack of its name if they have one, as the viewer's own lands do.
+                        to = stackMatesOf(current, land.id) + land.id,
+                        freshDestination = true,
+                    )
+            }
         seat.graveyard
-            .filter { it.id !in seenBefore }
+            .filter { it.id !in seenBefore && it.id !in claimed }
             .takeLast(shrank)
             .forEach { card ->
                 moves +=
@@ -203,6 +274,13 @@ fun zoneMoves(
 
     return moves
 }
+
+/** The newest card named [name] in this pile that no visible zone held before and no move has claimed. */
+private fun List<GameCard>.arrivalNamed(
+    name: String,
+    seenBefore: Set<String>,
+    claimed: Set<String>,
+): GameCard? = lastOrNull { it.name == name && it.id !in seenBefore && it.id !in claimed }
 
 /** The other lands in the stack [cardId] is now part of, on whichever side it is. */
 private fun stackMatesOf(
