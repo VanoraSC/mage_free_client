@@ -172,6 +172,56 @@ class ZoneMovesTest {
     }
 
     @Test
+    fun `a creature spell that resolves flies from the stack to its new place on the battlefield`() {
+        // `PermanentCard` is built with its card's id, which is not the spell's.
+        val move = zoneMoves(table(stack = listOf(creatureSpell("s1"))), table(myBattlefield = listOf(bears("c1")))).single()
+
+        assertEquals(ZoneMoveKind.SpellToBattlefield, move.kind)
+        assertEquals("c1", move.cardId)
+        assertEquals("s1", move.from)
+        assertEquals("s1", move.leavesStack)
+        assertEquals(listOf("c1"), move.to)
+        assertTrue("a permanent drawn for the first time is waited for", move.freshDestination)
+    }
+
+    @Test
+    fun `an Aura that resolves lands on the permanent it is drawn on`() {
+        val aura = GameCard(id = "a1", name = "Pacifism", cardTypes = listOf(CardType.Enchantment))
+        val host = GamePermanent(card = bears("h1"))
+        val before = table(myPermanents = listOf(host), stack = listOf(aura.copy(id = "s1", objectType = MageObjectType.Spell)))
+        val after =
+            table(
+                myPermanents =
+                    listOf(
+                        host.copy(attachments = listOf("a1")),
+                        GamePermanent(card = aura, attachedTo = "h1", isAttachedToPermanent = true),
+                    ),
+            )
+
+        assertEquals(listOf("h1", "a1"), zoneMoves(before, after).single().to)
+    }
+
+    @Test
+    fun `a token copy of a spell joining a pile lands on the pile`() {
+        val move =
+            zoneMoves(
+                table(myBattlefield = listOf(token("t1")), stack = listOf(creatureSpell("s1"))),
+                table(myBattlefield = listOf(token("t1"), token("t2"))),
+            ).single()
+
+        assertEquals("t2", move.cardId)
+        assertEquals(listOf("t1", "t2"), move.to)
+    }
+
+    @Test
+    fun `a permanent already on the table is not the spell that left the stack`() {
+        // Countered, and exiled by the counterspell — nothing visible arrived.
+        val before = table(myBattlefield = listOf(bears("c0")), stack = listOf(creatureSpell("s1")))
+
+        assertTrue(zoneMoves(before, table(myBattlefield = listOf(bears("c0")))).isEmpty())
+    }
+
+    @Test
     fun `an ability leaving the stack goes nowhere`() {
         val ability = GameCard(id = "a1", name = "Lightning Bolt", objectType = MageObjectType.AbilityOnStackFromCard, sourceId = "src")
 
@@ -250,9 +300,14 @@ class ZoneMovesTest {
 
     private fun spell(id: String) = bolt(id).copy(objectType = MageObjectType.Spell)
 
+    private fun creatureSpell(id: String) = bears(id).copy(objectType = MageObjectType.Spell)
+
+    private fun token(id: String) = bears(id).copy(isToken = true)
+
     private fun table(
         hand: List<GameCard> = emptyList(),
         myBattlefield: List<GameCard> = emptyList(),
+        myPermanents: List<GamePermanent> = emptyList(),
         myGraveyard: List<GameCard> = emptyList(),
         theirBattlefield: List<GameCard> = emptyList(),
         theirGraveyard: List<GameCard> = emptyList(),
@@ -280,7 +335,7 @@ class ZoneMovesTest {
                     name = "Me",
                     isViewer = true,
                     handCount = hand.size,
-                    battlefield = myBattlefield.map { GamePermanent(card = it) },
+                    battlefield = myBattlefield.map { GamePermanent(card = it) } + myPermanents,
                     graveyard = myGraveyard,
                 ),
             ),

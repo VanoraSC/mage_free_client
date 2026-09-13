@@ -145,24 +145,42 @@ class ZoneFlightsBoardTest {
 
     @Test
     fun `a resolved spell leaves the stack for its graveyard once it has been seen there`() {
-        // The server resolves it at once; the stack goes on showing it for half a second after it arrived,
-        // and only then does its card fly — out of the stack, not out of nowhere.
+        resolve(spell = bolt(SPELL), after = table(myGraveyard = listOf(bolt("b1"))), cardId = "b1")
+    }
+
+    @Test
+    fun `a creature spell that resolves flies from the stack onto the battlefield`() {
+        resolve(spell = bears(SPELL), after = table(myCreatures = listOf(bears("c1"))), cardId = "c1")
+    }
+
+    /**
+     * [spell] on the stack, then the snapshot it resolved into: [cardId] must not fly while the stack is
+     * still showing the spell, and must once it has let it go.
+     *
+     * The server resolves it at once; the stack goes on showing it for half a second after it arrived, and
+     * only then does its card fly — out of the stack, not out of nowhere.
+     */
+    private fun resolve(
+        spell: GameCard,
+        after: GameState,
+        cardId: String,
+    ) {
         composeTestRule.mainClock.autoAdvance = false
-        snapshot.value = table(stack = listOf(boltSpell()))
+        snapshot.value = table(stack = listOf(spell.copy(objectType = MageObjectType.Spell)))
         showBoard()
         settleFrames()
-        snapshot.value = table(myGraveyard = listOf(bolt("b1")))
+        snapshot.value = after
         settleFrames()
 
         composeTestRule.mainClock.advanceTimeBy(300)
         settleFrames()
         composeTestRule.onNodeWithTag(StackTestTags.entry(SPELL), useUnmergedTree = true).assertExists()
-        composeTestRule.onNodeWithTag(CardFlightTestTags.card("zone:1:b1"), useUnmergedTree = true).assertDoesNotExist()
+        composeTestRule.onNodeWithTag(CardFlightTestTags.card("zone:1:$cardId"), useUnmergedTree = true).assertDoesNotExist()
 
         composeTestRule.mainClock.advanceTimeBy(500)
         settleFrames()
 
-        assertFlying("b1")
+        assertFlying(cardId)
     }
 
     /** The board over [snapshot], without settling anything. */
@@ -224,6 +242,7 @@ class ZoneFlightsBoardTest {
         theirHand: Int = 4,
         theirLands: List<GameCard> = emptyList(),
         stack: List<GameCard> = emptyList(),
+        myCreatures: List<GameCard> = emptyList(),
     ) = GameState(
         gameId = GAME,
         hasSnapshot = true,
@@ -252,7 +271,7 @@ class ZoneFlightsBoardTest {
                     life = 20,
                     libraryCount = 40,
                     handCount = hand.size,
-                    battlefield = myLands.map { GamePermanent(card = it) },
+                    battlefield = (myCreatures + myLands).map { GamePermanent(card = it) },
                     graveyard = myGraveyard,
                 ),
             ),
@@ -277,9 +296,6 @@ class ZoneFlightsBoardTest {
             manaCost = "{R}",
             cardTypes = listOf(CardType.Instant),
         )
-
-    /** Lightning Bolt as a spell on the stack: an id of its own, and upstream's `SPELL` object type. */
-    private fun boltSpell() = bolt(SPELL).copy(objectType = MageObjectType.Spell)
 
     private fun bears(id: String) =
         GameCard(

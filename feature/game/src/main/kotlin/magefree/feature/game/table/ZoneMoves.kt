@@ -40,6 +40,9 @@ enum class ZoneMoveKind {
     /** From the battlefield anywhere else — exile, a library, a zone the board draws only as a count. */
     ToOther,
 
+    /** From the stack onto the battlefield — a permanent spell that resolved. */
+    SpellToBattlefield,
+
     /** From the stack into a graveyard — a spell that resolved, or was countered. */
     SpellToGraveyard,
 
@@ -74,7 +77,7 @@ data class ZoneMove(
 
 /**
  * Every card that changed zone between [previous] and [current], in a stable order: out of the viewer's
- * hand, off the battlefield, then out of an opponent's hand.
+ * hand, off the battlefield, off the stack, then out of an opponent's hand.
  *
  * **No history moves nothing.** The first snapshot a board sees, and a snapshot of a different game,
  * are not a sequence — §7.3: *"a resync is not a sequence"*.
@@ -193,41 +196,20 @@ fun zoneMoves(
             }
         }
 
-    // **Off the stack, into a graveyard or exile.** A spell on the stack does not carry its card's id —
-    // `Spell.getId()` is its ability's — so the card it becomes is found by **name**, the same join the hand
-    // makes for a cast: a spell gone from the stack, and a card of that name new to a graveyard or an exile
-    // pile in the same snapshot. Only spells (upstream's `MageObjectType.SPELL`): an ability leaving the
-    // stack goes nowhere. Each arrival is claimed once, so it is neither flown to twice nor also read as a
+    // **Off the stack.** A spell on the stack does not carry its card's id — `Spell.getId()` is its
+    // ability's — so what it became is found by **name**, the same join the hand makes for a cast: a spell
+    // gone from the stack, and something of that name new to the battlefield, a graveyard or an exile pile
+    // in the same snapshot. Only spells (upstream's `MageObjectType.SPELL`): an ability leaving the stack
+    // goes nowhere. Each arrival is claimed once, so it is neither flown to twice nor also read as a
     // discard.
     val claimed = mutableSetOf<String>()
     val onStackNow = current.stack.map { it.id }.toSet()
     previous.stack
         .filter { it.objectType == MageObjectType.Spell && it.id !in onStackNow }
         .forEach { spell ->
-            val intoGraveyard =
-                current.players.firstNotNullOfOrNull { seat ->
-                    seat.graveyard.arrivalNamed(spell.name, seenBefore, claimed)?.let { seat.playerId to it }
-                }
-            val intoExile =
-                if (intoGraveyard != null) {
-                    null
-                } else {
-                    current.players.firstNotNullOfOrNull { seat ->
-                        seat.exile.arrivalNamed(spell.name, seenBefore, claimed)?.let { seat.playerId to it }
-                    }
-                }
-            val (owner, card) = intoGraveyard ?: intoExile ?: return@forEach
-            claimed += card.id
-            moves +=
-                ZoneMove(
-                    cardId = card.id,
-                    kind = if (intoGraveyard != null) ZoneMoveKind.SpellToGraveyard else ZoneMoveKind.SpellToExile,
-                    // The spell as it was on the stack is what leaves it.
-                    card = spell,
-                    from = spell.id,
-                    to = listOf(if (intoGraveyard != null) graveyardAnchorId(owner) else zoneCountsAnchorId(owner)),
-                    leavesStack = spell.id,
-                )
+            val move = spellArrival(spell, current, seenBefore, claimed) ?: return@forEach
+            claimed += move.cardId
+            moves += move
         }
 
     // **Out of an opponent's hand.** The hand has no ids, so what left it is read from its count falling
@@ -275,6 +257,53 @@ fun zoneMoves(
     return moves
 }
 
+/**
+ * Where [spell], gone from the stack, went: the battlefield first, then a graveyard, then exile — or
+ * `null` when nothing of its name arrived anywhere this client can see (a copy that ceased to exist, a
+ * spell returned to a hand).
+ *
+ * The battlefield first because a permanent spell that resolves is the ordinary case, and a card of the
+ * same name reaching a graveyard at the same moment is not this spell unless nothing arrived on the table.
+ */
+private fun spellArrival(
+    spell: GameCard,
+    current: GameState,
+    seenBefore: Set<String>,
+    claimed: Set<String>,
+): ZoneMove? {
+    fun move(
+        kind: ZoneMoveKind,
+        arrived: GameCard,
+        to: List<String>,
+        fresh: Boolean = false,
+    ) = ZoneMove(
+        cardId = arrived.id,
+        kind = kind,
+        // The spell as it was on the stack is what leaves it.
+        card = spell,
+        from = spell.id,
+        to = to,
+        freshDestination = fresh,
+        leavesStack = spell.id,
+    )
+
+    // A copy of a permanent spell resolves as a token, so tokens are looked at too.
+    current.players
+        .firstNotNullOfOrNull { seat -> seat.battlefield.map { it.card }.arrivalNamed(spell.name, seenBefore, claimed) }
+        ?.let { return move(ZoneMoveKind.SpellToBattlefield, it, arrivalAnchorsOf(current, it.id), fresh = true) }
+    current.players.forEach { seat ->
+        seat.graveyard
+            .arrivalNamed(spell.name, seenBefore, claimed)
+            ?.let { return move(ZoneMoveKind.SpellToGraveyard, it, listOf(graveyardAnchorId(seat.playerId))) }
+    }
+    current.players.forEach { seat ->
+        seat.exile
+            .arrivalNamed(spell.name, seenBefore, claimed)
+            ?.let { return move(ZoneMoveKind.SpellToExile, it, listOf(zoneCountsAnchorId(seat.playerId))) }
+    }
+    return null
+}
+
 /** The newest card named [name] in this pile that no visible zone held before and no move has claimed. */
 private fun List<GameCard>.arrivalNamed(
     name: String,
@@ -282,15 +311,43 @@ private fun List<GameCard>.arrivalNamed(
     claimed: Set<String>,
 ): GameCard? = lastOrNull { it.name == name && it.id !in seenBefore && it.id !in claimed }
 
-/** The other lands in the stack [cardId] is now part of, on whichever side it is. */
+/**
+ * Where a permanent new to the battlefield is drawn, best first — see [ZoneMove.to].
+ *
+ * **An attachment is drawn on its host,** with no box of its own, so it lands on the host. **A copy
+ * joining a pile** — a land onto a stack of its name, a token onto a pile of identical tokens — lands on
+ * the pile, whose front card does not move when a copy joins and so never reports the newcomer's box.
+ * Anything else answers under its own id once it is laid out.
+ */
+private fun arrivalAnchorsOf(
+    state: GameState,
+    cardId: String,
+): List<String> {
+    val permanent = state.players.flatMap { it.battlefield }.firstOrNull { it.card.id == cardId }
+    val host = permanent?.attachedTo?.takeIf { permanent.isAttachedToPermanent }
+    if (host != null) return listOf(host, cardId)
+    return stackMatesOf(state, cardId) + cardId
+}
+
+/** The other members of the land stack or token pile [cardId] is now part of, on whichever side it is. */
 private fun stackMatesOf(
     state: GameState,
     cardId: String,
 ): List<String> {
     val model = battlefieldModel(state)
-    return (model.opponents + listOfNotNull(model.viewer))
-        .flatMap { it.landStacks() }
-        .map { stack -> (stack.untapped + stack.tapped).map { it.id } }
+    val sides = model.opponents + listOfNotNull(model.viewer)
+    val landStacks = sides.flatMap { it.landStacks() }.map { stack -> (stack.untapped + stack.tapped).map { it.id } }
+    val tokenPiles =
+        sides.flatMap { side ->
+            side.permanents
+                .map { it.role }
+                .distinct()
+                .filter { it != PermanentRole.Land }
+                .flatMap { side.entriesIn(it) }
+                .filterIsInstance<RowEntry.Pile>()
+                .map { pile -> pile.members.map { it.id } }
+        }
+    return (landStacks + tokenPiles)
         .firstOrNull { cardId in it }
         ?.filter { it != cardId }
         .orEmpty()
