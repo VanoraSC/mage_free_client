@@ -28,6 +28,7 @@ import magefree.network.game.MultiAmountEntry
 import magefree.network.game.PhaseStep
 import magefree.network.game.PlayableObject
 import magefree.network.game.PromptOptions
+import magefree.network.game.TriggerAutoOrder
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -220,6 +221,10 @@ class GameBoardViewModelTest {
                 BoardAction.DistributeAmounts(listOf(1, 1)) to "multiAmount:$GAME_ID:1,1",
                 BoardAction.Concede to "concede:$GAME_ID",
                 BoardAction.QuitMatch to "quit:$GAME_ID",
+                BoardAction.ResolveStack to "passUntil:$GAME_ID:UntilStackResolved",
+                BoardAction.AlwaysOrderTrigger("rule", TriggerAutoOrder.ResolveFirst) to "triggerOrder:$GAME_ID:ResolveFirst:rule",
+                BoardAction.ResetTriggerOrder to "resetTriggerOrder:$GAME_ID",
+                BoardAction.ResetAutoAnswers to "resetAutoAnswers:$GAME_ID",
             ).forEach { (action, expected) ->
                 client.calls.clear()
                 viewModel.act(action)
@@ -611,6 +616,180 @@ class GameBoardViewModelTest {
 
             assertEquals(listOf("ability:$GAME_ID:minus-2"), client.gameCalls)
         }
+
+    // ---- the stack: trigger order, standing answers ----------------------------------------------------
+
+    @Test
+    fun `an arrangement answers each ordering question in turn, the bottom of the stack first`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            client.calls.clear()
+
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            assertEquals("first on the stack is the one that resolves last", listOf("target:$GAME_ID:t3"), client.gameCalls)
+
+            client.emitGameState(triggerQuestion("t1", "t2"))
+
+            // …and t1, the last, the server places itself.
+            assertEquals(listOf("target:$GAME_ID:t3", "target:$GAME_ID:t2"), client.gameCalls)
+        }
+
+    @Test
+    fun `the same ordering question sent again is not answered twice`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            client.calls.clear()
+
+            // An update that repeats the question — the life total moved, nothing was answered yet.
+            client.emitGameState(triggerQuestion("t1", "t2").copy(turn = 2))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+        }
+
+    @Test
+    fun `a trigger's own target question in between is the player's, and the arrangement carries on after it`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.calls.clear()
+
+            client.emitGameState(
+                dealtState().copy(prompt = GamePrompt.Target(message = "Select target creature", targetIds = listOf("o-1"))),
+            )
+            assertEquals("nothing is guessed for a trigger's target", emptyList<String>(), client.gameCalls)
+
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            assertEquals(listOf("target:$GAME_ID:t2"), client.gameCalls)
+        }
+
+    @Test
+    fun `an ordering question with a trigger the arrangement does not hold is left on screen, arranged`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.calls.clear()
+
+            // t9 fired because t3 went on the stack.
+            client.emitGameState(triggerQuestion("t1", "t2", "t9"))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+            val controls = viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder
+            assertFalse("it is asked, not placed", controls.isPlacing)
+            assertEquals(
+                "the new trigger first, the rest as they were arranged",
+                listOf("t9", "t1", "t2"),
+                controls.triggerGroups.map { it.id },
+            )
+        }
+
+    @Test
+    fun `while the arrangement answers a question the panel says it is placing them`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.emitGameState(triggerQuestion("t1", "t2"))
+
+            assertTrue((viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder).isPlacing)
+        }
+
+    @Test
+    fun `priority coming back ends the arrangement, so the next round is asked afresh`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2")))
+            client.emitGameState(selectState())
+            client.calls.clear()
+
+            // Same cards next turn — fresh triggers the player has not arranged.
+            client.emitGameState(triggerQuestion("t1", "t2"))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+            assertFalse((viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder).isPlacing)
+        }
+
+    @Test
+    fun `a placing the server never received gives the arrangement back to the player`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            client.actionResult = Result.failure(GameUnreachableFailure(IllegalStateException("dropped")))
+
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2")))
+
+            assertFalse((viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder).isPlacing)
+        }
+
+    @Test
+    fun `always yes tells the server the rule, then answers the question on screen`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(dealtState())
+            client.calls.clear()
+
+            viewModel.act(BoardAction.AlwaysAnswer(question = "{this}: you may gain 1 life.", yes = true))
+
+            assertEquals(listOf("autoAnswer:$GAME_ID:yes:{this}: you may gain 1 life.", "ask:$GAME_ID:true"), client.gameCalls)
+        }
+
+    @Test
+    fun `a rule the server refused leaves the question on screen unanswered`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(dealtState())
+            client.calls.clear()
+            client.actionResultFor = { call -> if (call.startsWith("autoAnswer:")) Result.failure(GameActionFailure("no")) else null }
+
+            viewModel.act(BoardAction.AlwaysAnswer(question = "Draw a card?", yes = false))
+
+            assertEquals(listOf("autoAnswer:$GAME_ID:no:Draw a card?"), client.gameCalls)
+        }
+
+    /** Upstream's ordering question: a target prompt marked `PICK_ABILITY`, one trigger per distinct card here. */
+    private fun triggerQuestion(vararg ids: String) =
+        dealtState().copy(
+            prompt =
+                GamePrompt.Target(
+                    message = "Pick triggered ability (goes to the stack first)",
+                    cards =
+                        ids.map {
+                            GameCard(
+                                id = it,
+                                name = "Source $it",
+                                rules = listOf("Whenever another creature enters the battlefield, you gain 1 life."),
+                            )
+                        },
+                    targetIds = ids.toList(),
+                    isRequired = true,
+                    options = PromptOptions(text = mapOf(PromptOptions.QUERY_TYPE to PromptOptions.PICK_ABILITY)),
+                ),
+        )
 
     private fun lilianaQuestion(message: String = "Choose spell or ability to play") =
         GamePrompt.ChooseAbility(

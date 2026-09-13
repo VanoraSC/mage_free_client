@@ -48,6 +48,8 @@ import magefree.feature.game.board.JOIN_FAILED_PREFIX
 import magefree.feature.game.board.PriorityUi
 import magefree.feature.game.board.QUIT_MATCH_CONFIRM_LABEL
 import magefree.feature.game.board.QUIT_MATCH_LABEL
+import magefree.feature.game.board.RESET_AUTO_ANSWERS_LABEL
+import magefree.feature.game.board.RESET_TRIGGER_ORDER_LABEL
 import magefree.feature.game.board.TurnSide
 import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
 
@@ -288,7 +290,7 @@ fun TableBoardScreen(
             // player wants to look. A prompt answered *on* the board keeps its corner, because the
             // answer to a priority prompt is a card in the hand and a panel over the hand covers the
             // answer to its own question.
-            val answeredHere = controls != null && controls.candidateCards.isNotEmpty()
+            val answeredHere = controls != null && (controls.candidateCards.isNotEmpty() || controls.triggerGroups.isNotEmpty())
 
             // The menu and the question share one anchor and one column, so neither has to know where
             // the other ended up. Explicitly z-ordered rather than left to declaration order, because
@@ -500,6 +502,12 @@ object TableBoardTestTags {
 
     /** What says Full Control is on, beside the menu. Absent while it is off. */
     const val FULL_CONTROL_BADGE: String = "table-board-full-control-badge"
+
+    /** The corner menu's item forgetting every always-first / always-last rule. */
+    const val RESET_TRIGGER_ORDER: String = "table-board-reset-trigger-order"
+
+    /** The corner menu's item forgetting every always-yes / always-no rule. */
+    const val RESET_AUTO_ANSWERS: String = "table-board-reset-auto-answers"
 }
 
 /**
@@ -600,6 +608,24 @@ private fun BoardCornerMenu(
                     onSetFullControl(!fullControl)
                 },
                 modifier = Modifier.testTag(TableBoardTestTags.FULL_CONTROL),
+            )
+            // **Standing rules, taken back.** The server keeps an always-first and an always-yes for the rest
+            // of the game; these are the only way to undo one.
+            DropdownMenuItem(
+                text = { Text(RESET_TRIGGER_ORDER_LABEL) },
+                onClick = {
+                    open = false
+                    onAction(BoardAction.ResetTriggerOrder)
+                },
+                modifier = Modifier.testTag(TableBoardTestTags.RESET_TRIGGER_ORDER),
+            )
+            DropdownMenuItem(
+                text = { Text(RESET_AUTO_ANSWERS_LABEL) },
+                onClick = {
+                    open = false
+                    onAction(BoardAction.ResetAutoAnswers)
+                },
+                modifier = Modifier.testTag(TableBoardTestTags.RESET_AUTO_ANSWERS),
             )
             DropdownMenuItem(
                 text = { Text(LEAVE_BOARD_LABEL) },

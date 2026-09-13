@@ -200,6 +200,42 @@ internal class DefaultGameClient(
         scope: PassPriorityScope,
     ): Result<Unit> = playerAction(gameId, GameViewMapper.toCode(scope))
 
+    override suspend fun setAutoAnswer(
+        gameId: String,
+        question: String,
+        yes: Boolean,
+    ): Result<Unit> =
+        playerAction(
+            gameId,
+            if (yes) PlayerActionCode.REQUEST_AUTO_ANSWER_TEXT_YES else PlayerActionCode.REQUEST_AUTO_ANSWER_TEXT_NO,
+            dataText = question,
+        )
+
+    override suspend fun resetAutoAnswers(gameId: String): Result<Unit> =
+        playerAction(gameId, PlayerActionCode.REQUEST_AUTO_ANSWER_RESET_ALL)
+
+    override suspend fun setTriggerAutoOrder(
+        gameId: String,
+        ruleText: String,
+        order: TriggerAutoOrder,
+    ): Result<Unit> {
+        // `HumanPlayer.setTriggerAutoOrder` throws on a rule still carrying the placeholder, on the server.
+        if (RULE_SOURCE_PLACEHOLDER in ruleText) {
+            return Result.failure(IllegalArgumentException("a trigger's rule must name its source, not $RULE_SOURCE_PLACEHOLDER"))
+        }
+        // **Upstream counts by going onto the stack; the player counts by resolving.** "First on the stack"
+        // is the one that resolves last.
+        val code =
+            when (order) {
+                TriggerAutoOrder.ResolveFirst -> PlayerActionCode.TRIGGER_AUTO_ORDER_NAME_LAST
+                TriggerAutoOrder.ResolveLast -> PlayerActionCode.TRIGGER_AUTO_ORDER_NAME_FIRST
+            }
+        return playerAction(gameId, code, dataText = ruleText)
+    }
+
+    override suspend fun resetTriggerAutoOrder(gameId: String): Result<Unit> =
+        playerAction(gameId, PlayerActionCode.TRIGGER_AUTO_ORDER_RESET_ALL)
+
     override suspend fun concede(gameId: String): Result<Unit> = playerAction(gameId, PlayerActionCode.CONCEDE)
 
     // --- reading -------------------------------------------------------------------------------------
@@ -373,7 +409,9 @@ internal class DefaultGameClient(
     private suspend fun playerAction(
         gameId: String,
         code: PlayerActionCode,
-    ): Result<Unit> = action { id -> bridgeClient.request(SendPlayerAction(gameId = gameId, action = code, requestId = id), id) }
+        dataText: String? = null,
+    ): Result<Unit> =
+        action { id -> bridgeClient.request(SendPlayerAction(gameId = gameId, action = code, dataText = dataText, requestId = id), id) }
 
     /**
      * Run one game action: mint an id, run [block], and map its correlated reply. Any transport throw
@@ -434,6 +472,9 @@ internal class DefaultGameClient(
     private companion object {
         /** Upstream's literal token for the extra "special" button on a select/mana prompt. */
         const val SPECIAL: String = "special"
+
+        /** What a rule says in place of its source's name until `Ability.getRule(sourceName)` fills it in. */
+        const val RULE_SOURCE_PLACEHOLDER: String = "{this}"
 
         /** Upstream's prefix that turns a choice key into "the choice's special option". */
         const val SPECIAL_CHOICE_PREFIX: String = "#"

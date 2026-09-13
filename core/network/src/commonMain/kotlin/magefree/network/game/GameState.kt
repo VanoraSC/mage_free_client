@@ -692,6 +692,22 @@ enum class PassPriorityScope {
 }
 
 /**
+ * Where a [GameClient.setTriggerAutoOrder] rule puts a triggered ability among the player's simultaneous
+ * triggers, **in resolution order** — the order a stack is read in, top first.
+ *
+ * Upstream names the same two rules by the order abilities go *onto* the stack, which is the reverse:
+ * resolving first is going on last. The names here are the player's; the mapping to upstream's is in one
+ * place, [DefaultGameClient].
+ */
+enum class TriggerAutoOrder {
+    /** Always resolves before the player's other simultaneous triggers — upstream's `TRIGGER_AUTO_ORDER_NAME_LAST`. */
+    ResolveFirst,
+
+    /** Always resolves after them — upstream's `TRIGGER_AUTO_ORDER_NAME_FIRST`. */
+    ResolveLast,
+}
+
+/**
  * The result of [GameClient.refreshGame]: the bridge's held snapshot of a game, plus when
  * it was captured.
  *

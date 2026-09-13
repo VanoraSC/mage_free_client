@@ -914,6 +914,109 @@ class BoardControlsTest {
         card = GameCard(id = id, name = name, power = "1", toughness = "1", isCreature = true),
     )
 
+    // ---- the stack: trigger order, standing answers, resolving it ---------------------------------------
+
+    @Test
+    fun `a trigger-ordering question is one arrangement of grouped triggers, with nothing to pick on the board`() {
+        val controls = controlsFor(baseState().copy(prompt = triggerQuestion(PromptOptions.PICK_ABILITY)))
+
+        assertTrue(controls is PromptControlsUi.TriggerOrder)
+        assertEquals(listOf(listOf("t1", "t2"), listOf("t3")), controls!!.triggerGroups.map { it.abilityIds })
+        assertTrue("nothing on the board answers it", controls.pickableObjectIds.isEmpty())
+        assertNull(controls.actionFor("t1"))
+        assertEquals("the question is asked as the result, not the server's one-at-a-time", ORDER_TRIGGERS_MESSAGE, controls.message)
+    }
+
+    @Test
+    fun `a target question of any other kind carrying cards is still a target question`() {
+        val controls = controlsFor(baseState().copy(prompt = triggerQuestion("PICK_TARGET")))
+
+        assertTrue(controls is PromptControlsUi.Targeting)
+    }
+
+    @Test
+    fun `a plain yes or no offers always yes and always no, keyed by the server's own wording`() {
+        val controls = controlsFor(baseState().copy(prompt = ask(autoAnswer = "{this}: you may gain 1 life.")))!!
+
+        assertEquals(
+            listOf(
+                BoardAction.AnswerAsk(yes = true),
+                BoardAction.AnswerAsk(yes = false),
+                BoardAction.AlwaysAnswer(question = "{this}: you may gain 1 life.", yes = true),
+                BoardAction.AlwaysAnswer(question = "{this}: you may gain 1 life.", yes = false),
+            ),
+            controls.buttons.map { it.action },
+        )
+    }
+
+    @Test
+    fun `a question that names its own answers offers no always`() {
+        val controls = controlsFor(baseState().copy(prompt = ask(autoAnswer = "Mulligan?", yes = "Mulligan", no = "Keep")))!!
+
+        assertEquals(listOf(BoardAction.AnswerAsk(yes = true), BoardAction.AnswerAsk(yes = false)), controls.buttons.map { it.action })
+    }
+
+    @Test
+    fun `a question without the server's remembering key offers no always`() {
+        val controls = controlsFor(baseState().copy(prompt = ask(autoAnswer = null)))!!
+
+        assertEquals(2, controls.buttons.size)
+    }
+
+    @Test
+    fun `with something on the stack priority offers to resolve it, and with nothing it does not`() {
+        val select = GamePrompt.Select(message = "Play spells and abilities")
+
+        val withStack = controlsFor(baseState().copy(prompt = select, stack = listOf(GameCard(id = "s1", name = "Lightning Bolt"))))!!
+        val without = controlsFor(baseState().copy(prompt = select))!!
+
+        assertTrue(withStack.buttons.any { it.action == BoardAction.ResolveStack && it.label == RESOLVE_STACK_LABEL })
+        assertFalse(without.buttons.any { it.action == BoardAction.ResolveStack })
+    }
+
+    private fun triggerQuestion(queryType: String) =
+        GamePrompt.Target(
+            message = "Pick triggered ability (goes to the stack first)",
+            cards =
+                listOf(
+                    GameCard(
+                        id = "t1",
+                        name = "Soul Warden",
+                        rules = listOf("Whenever another creature enters the battlefield, you gain 1 life."),
+                    ),
+                    GameCard(
+                        id = "t2",
+                        name = "Soul Warden",
+                        rules = listOf("Whenever another creature enters the battlefield, you gain 1 life."),
+                    ),
+                    GameCard(
+                        id = "t3",
+                        name = "Auriok Champion",
+                        rules = listOf("Whenever another creature enters the battlefield, you may gain 1 life."),
+                    ),
+                ),
+            targetIds = listOf("t1", "t2", "t3"),
+            isRequired = true,
+            options = PromptOptions(text = mapOf(PromptOptions.QUERY_TYPE to queryType)),
+        )
+
+    private fun ask(
+        autoAnswer: String?,
+        yes: String = "Yes",
+        no: String = "No",
+    ) = GamePrompt.Ask(
+        message = "Auriok Champion: you may gain 1 life.",
+        options =
+            PromptOptions(
+                text =
+                    buildMap {
+                        put(PromptOptions.LEFT_BUTTON_TEXT, yes)
+                        put(PromptOptions.RIGHT_BUTTON_TEXT, no)
+                        autoAnswer?.let { put(PromptOptions.AUTO_ANSWER_MESSAGE, it) }
+                    },
+            ),
+    )
+
     private fun baseState(pool: ManaPool = ManaPool()) =
         GameState(
             gameId = "g-1",

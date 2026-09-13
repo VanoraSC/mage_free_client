@@ -6,6 +6,7 @@ import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
 import magefree.network.game.ManaType
 import magefree.network.game.PromptOptions
+import magefree.network.game.TriggerAutoOrder
 
 /*
  * The **answering** half of the board: a pure projection of the server's outstanding
@@ -102,6 +103,47 @@ sealed interface BoardAction {
     data class AnswerAsk(
         val yes: Boolean,
     ) : BoardAction
+
+    /**
+     * Answer this yes/no question with [yes], and have the server answer every later one worded [question]
+     * the same without asking — upstream's own auto-answer, kept for the rest of the game.
+     *
+     * @property question the prompt's own `autoAnswerMessage`, which is what upstream remembers it by.
+     */
+    data class AlwaysAnswer(
+        val question: String,
+        val yes: Boolean,
+    ) : BoardAction
+
+    /**
+     * The player's arrangement of their simultaneous triggers, **the first to resolve first**, confirmed
+     * once. The server asks where each goes one question at a time, and the ViewModel answers each from
+     * this — see `TriggerOrder.kt`.
+     */
+    data class OrderTriggers(
+        val resolveOrder: List<String>,
+    ) : BoardAction
+
+    /**
+     * Always place triggers whose rule reads [ruleText] by [order] — upstream's own auto-order rule, kept
+     * by the server for the rest of the game. It places nothing now: the arrangement on screen does that.
+     */
+    data class AlwaysOrderTrigger(
+        val ruleText: String,
+        val order: TriggerAutoOrder,
+    ) : BoardAction
+
+    /**
+     * Keep passing until the stack has resolved — upstream's `PASS_PRIORITY_UNTIL_STACK_RESOLVED`. The server
+     * passes the priority window that is open now as well, so nothing else is sent.
+     */
+    data object ResolveStack : BoardAction
+
+    /** Forget every [AlwaysOrderTrigger] rule. */
+    data object ResetTriggerOrder : BoardAction
+
+    /** Forget every [AlwaysAnswer] rule. */
+    data object ResetAutoAnswers : BoardAction
 
     /** Choose one of an object's abilities, or one mode of a modal spell. */
     data class ChooseAbility(
@@ -348,6 +390,9 @@ sealed interface PromptControlsUi {
     /** Cards the prompt carried itself, for prompts whose candidates are not on the board. */
     val candidateCards: List<CandidateCardUi> get() = emptyList()
 
+    /** The player's simultaneous triggers, grouped, for an ordering question; empty for every other prompt. */
+    val triggerGroups: List<TriggerGroupUi> get() = emptyList()
+
     /** A number the player must pick, or null. */
     val amountRequest: AmountRequestUi? get() = null
 
@@ -583,6 +628,24 @@ sealed interface PromptControlsUi {
         val detail: String? = null,
     ) : PromptControlsUi
 
+    /**
+     * `GAME_TARGET` marked `PICK_ABILITY` — which of the player's simultaneous triggers goes on the stack
+     * next, asked as the order they all resolve in.
+     *
+     * Answered from its own content, as one arrangement: nothing on the board is pickable. See
+     * `TriggerOrder.kt` for how one press answers the server's one-at-a-time questions.
+     *
+     * @property isPlacing whether the arrangement the player already confirmed answers this question, so the
+     *   panel says so instead of asking again.
+     */
+    data class TriggerOrder(
+        override val message: String?,
+        override val triggerGroups: List<TriggerGroupUi>,
+        val isPlacing: Boolean = false,
+    ) : PromptControlsUi {
+        override val buttons: List<ControlButton> get() = emptyList()
+    }
+
     /** `GAME_GET_AMOUNT` / `GAME_PLAY_XMANA` — pick a number inside the server's bounds. */
     data class Amount(
         override val message: String?,
@@ -642,6 +705,12 @@ internal fun controlsFor(
                             buildList {
                                 // Pass stays first: it is the single most repeated interaction in a game.
                                 add(ControlButton(label = PASS_LABEL, action = BoardAction.PassPriority, isPrimary = true))
+                                // With something on the stack, the pass that lasts until it has resolved.
+                                if (state.stack.isNotEmpty()) {
+                                    add(
+                                        ControlButton(label = RESOLVE_STACK_LABEL, action = BoardAction.ResolveStack),
+                                    )
+                                }
                                 prompt.options.specialButtonText?.cleanedOrNull()?.let {
                                     add(ControlButton(label = it, action = BoardAction.UseSpecial))
                                 }
@@ -654,6 +723,11 @@ internal fun controlsFor(
             }
 
         is GamePrompt.Target -> {
+            // **Which trigger goes on the stack next** is a target question on the wire and a different
+            // question entirely: it is answered as one arrangement, from the panel.
+            if (prompt.options.isTriggerOrder && prompt.cards.isNotEmpty()) {
+                return PromptControlsUi.TriggerOrder(message = ORDER_TRIGGERS_MESSAGE, triggerGroups = triggerGroups(prompt.cards))
+            }
             // Both halves of the server's own answer: what may still be picked, and what it already
             // holds. Nothing is filtered out — a target the server lists is a target the server accepts.
             val pickable = (prompt.targetIds + prompt.options.possibleTargets).toSet()
@@ -734,24 +808,27 @@ internal fun controlsFor(
                     },
             )
 
-        is GamePrompt.Ask ->
+        is GamePrompt.Ask -> {
+            // The server's own wording wins over ours: it says "Mulligan"/"Keep" where "Yes"/"No" would be
+            // actively misleading.
+            val yesLabel = prompt.options.leftButtonText?.cleanedOrNull() ?: YES_LABEL
+            val noLabel = prompt.options.rightButtonText?.cleanedOrNull() ?: NO_LABEL
+            // **Always, only for a plain yes or no.** A question that names its own answers — "Mulligan" or
+            // "Keep" — is a decision about this moment, not a habit to hand the server.
+            val question = prompt.options.autoAnswerMessage?.takeIf { yesLabel == YES_LABEL && noLabel == NO_LABEL }
             PromptControlsUi.Choices(
                 message = message,
                 buttons =
-                    listOf(
-                        ControlButton(
-                            // The server's own wording wins over ours: it says "Mulligan"/"Keep" where
-                            // "Yes"/"No" would be actively misleading.
-                            label = prompt.options.leftButtonText?.cleanedOrNull() ?: YES_LABEL,
-                            action = BoardAction.AnswerAsk(yes = true),
-                            isPrimary = true,
-                        ),
-                        ControlButton(
-                            label = prompt.options.rightButtonText?.cleanedOrNull() ?: NO_LABEL,
-                            action = BoardAction.AnswerAsk(yes = false),
-                        ),
-                    ),
+                    buildList {
+                        add(ControlButton(label = yesLabel, action = BoardAction.AnswerAsk(yes = true), isPrimary = true))
+                        add(ControlButton(label = noLabel, action = BoardAction.AnswerAsk(yes = false)))
+                        if (question != null) {
+                            add(ControlButton(label = ALWAYS_YES_LABEL, action = BoardAction.AlwaysAnswer(question = question, yes = true)))
+                            add(ControlButton(label = ALWAYS_NO_LABEL, action = BoardAction.AlwaysAnswer(question = question, yes = false)))
+                        }
+                    },
             )
+        }
 
         is GamePrompt.ChooseAbility ->
             PromptControlsUi.Choices(

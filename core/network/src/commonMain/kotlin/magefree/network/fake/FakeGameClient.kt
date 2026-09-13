@@ -11,6 +11,7 @@ import magefree.network.game.GameStateUnavailableReason
 import magefree.network.game.ManaType
 import magefree.network.game.PassPriorityScope
 import magefree.network.game.PriorityStopSteps
+import magefree.network.game.TriggerAutoOrder
 
 /**
  * A scriptable [GameClient] test double for hermetic tests of downstream code — no bridge,
@@ -144,6 +145,22 @@ class FakeGameClient(
         gameId: String,
         scope: PassPriorityScope,
     ): Result<Unit> = record("passUntil:$gameId:$scope")
+
+    override suspend fun setAutoAnswer(
+        gameId: String,
+        question: String,
+        yes: Boolean,
+    ): Result<Unit> = record("autoAnswer:$gameId:${if (yes) "yes" else "no"}:$question")
+
+    override suspend fun resetAutoAnswers(gameId: String): Result<Unit> = record("resetAutoAnswers:$gameId")
+
+    override suspend fun setTriggerAutoOrder(
+        gameId: String,
+        ruleText: String,
+        order: TriggerAutoOrder,
+    ): Result<Unit> = record("triggerOrder:$gameId:$order:$ruleText")
+
+    override suspend fun resetTriggerAutoOrder(gameId: String): Result<Unit> = record("resetTriggerOrder:$gameId")
 
     override suspend fun concede(gameId: String): Result<Unit> = record("concede:$gameId")
 

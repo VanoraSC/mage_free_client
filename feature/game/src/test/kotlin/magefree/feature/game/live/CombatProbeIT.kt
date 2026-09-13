@@ -393,6 +393,9 @@ class CombatProbeIT {
                         controls.pickableObjectIds.firstOrNull()?.let(BoardAction::PlayManaSource)
                             ?: BoardAction.CancelPrompt
 
+                    // Simultaneous triggers go on in the order the panel shows them.
+                    is PromptControlsUi.TriggerOrder -> BoardAction.OrderTriggers(controls.triggerGroups.flatMap { it.abilityIds })
+
                     is PromptControlsUi.Targeting ->
                         controls.pickableObjectIds.firstOrNull()?.let(BoardAction::ChooseTarget)
                             ?: BoardAction.CancelPrompt

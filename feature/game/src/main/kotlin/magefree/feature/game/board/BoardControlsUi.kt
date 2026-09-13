@@ -113,7 +113,7 @@ internal fun FloatingControls(
     // this reads: a prompt answered *from its own content* carries cards, and one answered *by touching
     // the board* does not. So the panel does not need a flag — the cards it is holding say which kind
     // of question this is, and a search drawn at the other cap is a row of thumbnails.
-    val answeredHere = controls != null && controls.candidateCards.isNotEmpty()
+    val answeredHere = controls != null && (controls.candidateCards.isNotEmpty() || controls.triggerGroups.isNotEmpty())
 
     Surface(
         modifier = modifier.fillMaxWidth().heightIn(max = if (answeredHere) ControlsFullHeight else ControlsMaxHeight),
@@ -224,6 +224,10 @@ internal fun FloatingControls(
                 }
             }
 
+            (controls as? PromptControlsUi.TriggerOrder)?.let { order ->
+                TriggerOrderPanel(controls = order, artRenderer = artRenderer, onAction = onAction)
+            }
+
             if (controls != null && controls.candidateCards.isNotEmpty()) {
                 CandidateRow(
                     candidates = controls.candidateCards,
@@ -314,7 +318,7 @@ private fun DeclarationContext(declaration: DeclarationUi) {
 
 /** One instruction line inside the panel — how to answer a prompt that is answered on the board. */
 @Composable
-private fun Note(text: String) {
+internal fun Note(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
