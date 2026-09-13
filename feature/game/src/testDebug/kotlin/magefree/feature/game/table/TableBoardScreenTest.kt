@@ -3,6 +3,9 @@ package magefree.feature.game.table
 import android.app.Application
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
@@ -14,12 +17,15 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import magefree.designsystem.card.CardPreviewTestTags
 import magefree.designsystem.theme.MageTheme
 import magefree.feature.cards.PlaceholderCardArtRenderer
 import magefree.feature.game.board.BoardAction
 import magefree.feature.game.board.BoardControlsTestTags
+import magefree.feature.game.board.BoardStops
 import magefree.feature.game.board.BoardUi
 import magefree.feature.game.board.CONCEDE_CONFIRM_LABEL
 import magefree.feature.game.board.CONCEDE_LABEL
@@ -83,12 +89,14 @@ class TableBoardScreenTest {
     private val taps = mutableListOf<String?>()
     private val actions = mutableListOf<BoardAction>()
     private var exits = 0
+    private val fullControlRequests = mutableListOf<Boolean>()
 
     private fun render(
         state: GameState?,
         controlsVisible: Boolean = true,
         selectedObjectId: String? = null,
         joinError: String? = null,
+        fullControl: Boolean = false,
     ) {
         composeTestRule.setContent {
             MageTheme {
@@ -102,12 +110,14 @@ class TableBoardScreenTest {
                             areControlsVisible = controlsVisible,
                             controls = state?.let { controlsFor(it) },
                             selectedObjectId = selectedObjectId,
+                            stops = BoardStops.Default.copy(fullControl = fullControl),
                         ),
                     onExit = { exits += 1 },
                     onControlsVisibleChange = { visibilityRequests += it },
                     onCardTap = { taps += it },
                     onAction = { actions += it },
                     artRenderer = PlaceholderCardArtRenderer,
+                    onSetFullControl = { fullControlRequests += it },
                 )
             }
         }
@@ -387,6 +397,106 @@ class TableBoardScreenTest {
         assertEquals(listOf<BoardAction>(BoardAction.Concede), actions)
     }
 
+    @Test
+    fun `full control is turned on from the corner menu, in one press`() {
+        // A mode rather than an act: it ends nothing, so it does not confirm, and nothing is sent to the
+        // game from here — the request goes to the stops, which reach the server on their own.
+        render(priorityGame())
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.MENU).performClick()
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL).performClick()
+
+        assertEquals(listOf(true), fullControlRequests)
+        assertTrue("no game action is sent", actions.isEmpty())
+    }
+
+    @Test
+    fun `full control on says so beside the menu, and the menu turns it off`() {
+        // A pinned mode has to look pinned: a player who forgot setting it would read every priority
+        // window after their own casts as the board waiting for nothing.
+        render(priorityGame(), fullControl = true)
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL_BADGE).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TableBoardTestTags.MENU).performClick()
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL).performClick()
+
+        assertEquals(listOf(false), fullControlRequests)
+    }
+
+    @Test
+    fun `full control off draws no badge`() {
+        render(priorityGame())
+
+        composeTestRule.onNodeWithTag(TableBoardTestTags.FULL_CONTROL_BADGE).assertDoesNotExist()
+    }
+
+    // ---- a planeswalker's abilities ---------------------------------------------------------------
+
+    @Test
+    fun `every one of a planeswalker's loyalty abilities is a button, the ones offered pressable, in place of Play`() {
+        // Pete: the abilities in a column instead of Play, and *"grey them out so they're always present,
+        // even if you can't use them"*. The −2 is not offered here; the ultimate's name arrives clipped at
+        // fifty characters — upstream's own `PlayableObjectStats` — and its button reads the whole line.
+        render(planeswalkerGame(), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(0)).assertTextEquals(LILIANA_PLUS).assertIsEnabled()
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).assertTextEquals(LILIANA_MINUS).assertIsNotEnabled()
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(2)).assertTextEquals(LILIANA_ULTIMATE).assertIsEnabled()
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.ACTION).assertDoesNotExist()
+    }
+
+    @Test
+    fun `pressing one of them asks to activate that ability of that planeswalker`() {
+        render(planeswalkerGame(), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(2)).performScrollTo().performClick()
+
+        assertEquals(listOf<BoardAction>(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-6")), actions)
+    }
+
+    @Test
+    fun `a greyed ability presses nothing`() {
+        render(planeswalkerGame(), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).performScrollTo().performClick()
+
+        assertTrue("nothing is sent for an ability the server did not offer", actions.isEmpty())
+    }
+
+    @Test
+    fun `with nothing offered every ability is still there, greyed, and there is no Play`() {
+        render(planeswalkerGame().copy(playable = emptyList()), selectedObjectId = "pw-1")
+
+        listOf(0, 1, 2).forEach { index ->
+            composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(index)).assertIsNotEnabled()
+        }
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.ACTION).assertDoesNotExist()
+    }
+
+    @Test
+    fun `an opponent's planeswalker is read, not given buttons`() {
+        render(planeswalkerGame(onViewersSide = false), selectedObjectId = "pw-1")
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.ABILITY_ACTIONS).assertDoesNotExist()
+    }
+
+    // ---- dragging out of the hand -----------------------------------------------------------------
+
+    @Test
+    fun `dragging an offered card out of the hand plays it, without raising it first`() {
+        // Pete: a drag should *jump to play*. A tap raises the card so it can be read; a card pulled
+        // out of the hand toward the table has been read already, and raising it made the player press
+        // Play anyway.
+        render(priorityGame())
+
+        composeTestRule.onNodeWithTag(HandTestTags.card("h-1")).performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 200f)
+        }
+
+        assertEquals(listOf<BoardAction>(BoardAction.PlayObject("h-1")), actions)
+        assertTrue("nothing is raised", taps.isEmpty())
+    }
+
     // ---- a question answered from its own content -----------------------------------------------
 
     @Test
@@ -563,6 +673,34 @@ class TableBoardScreenTest {
         )
     }
 
+    /**
+     * Liliana of the Veil on the viewer's side, with her +1 and her ultimate offered — the name of the
+     * ultimate clipped at fifty characters, as upstream sends it.
+     */
+    private fun planeswalkerGame(onViewersSide: Boolean = true): GameState {
+        val base = priorityGame()
+        return base.copy(
+            players =
+                base.players.map { player ->
+                    if (player.isViewer != onViewersSide) {
+                        player
+                    } else {
+                        val liliana =
+                            card("pw-1", "Liliana of the Veil", "Legendary Planeswalker — Liliana", "1BB", listOf(CardType.Planeswalker))
+                                .copy(rules = listOf(LILIANA_PLUS, LILIANA_MINUS, LILIANA_ULTIMATE))
+                        player.copy(battlefield = player.battlefield + GamePermanent(card = liliana))
+                    }
+                },
+            playable =
+                base.playable +
+                    PlayableObject(
+                        objectId = "pw-1",
+                        abilityIds = listOf("plus-1", "minus-6"),
+                        abilityNames = listOf(LILIANA_PLUS, LILIANA_ULTIMATE.take(49) + "..."),
+                    ),
+        )
+    }
+
     /** The same game with the viewer holding priority and one card offered — the board being played. */
     private fun priorityGame() =
         runningGame().copy(
@@ -572,6 +710,13 @@ class TableBoardScreenTest {
             prompt = GamePrompt.Select(message = "Select an ability to play"),
         )
 }
+
+private const val LILIANA_PLUS = "+1: Each player discards a card."
+
+// The minus is an ASCII hyphen, because that is what upstream writes: `PayLoyaltyCost` is `Integer.toString`.
+private const val LILIANA_MINUS = "-2: Target player sacrifices a creature."
+private const val LILIANA_ULTIMATE =
+    "-6: Separate all permanents target player controls into two piles. That player sacrifices all permanents in the pile of their choice."
 
 /** The server's own text for the spell the stack tests put on it. */
 private const val BOLT_TEXT = "Lightning Bolt deals 3 damage to any target."

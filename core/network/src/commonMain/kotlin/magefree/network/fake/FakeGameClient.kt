@@ -11,6 +11,7 @@ import magefree.network.game.GameStateUnavailableReason
 import magefree.network.game.ManaType
 import magefree.network.game.PassPriorityScope
 import magefree.network.game.PriorityStopSteps
+import magefree.network.game.TriggerAutoOrder
 
 /**
  * A scriptable [GameClient] test double for hermetic tests of downstream code — no bridge,
@@ -76,7 +77,13 @@ class FakeGameClient(
     override suspend fun setPriorityStops(
         yourTurn: PriorityStopSteps,
         opponentTurn: PriorityStopSteps,
-    ): Result<Unit> = record("stops:${yourTurn.stepsSet()}|${opponentTurn.stepsSet()}")
+        passPriorityCast: Boolean,
+        passPriorityActivation: Boolean,
+    ): Result<Unit> =
+        record(
+            "stops:${yourTurn.stepsSet()}|${opponentTurn.stepsSet()}" +
+                passesAfter(cast = passPriorityCast, activation = passPriorityActivation),
+        )
 
     override suspend fun useSpecialAction(gameId: String): Result<Unit> = record("special:$gameId")
 
@@ -139,6 +146,22 @@ class FakeGameClient(
         scope: PassPriorityScope,
     ): Result<Unit> = record("passUntil:$gameId:$scope")
 
+    override suspend fun setAutoAnswer(
+        gameId: String,
+        question: String,
+        yes: Boolean,
+    ): Result<Unit> = record("autoAnswer:$gameId:${if (yes) "yes" else "no"}:$question")
+
+    override suspend fun resetAutoAnswers(gameId: String): Result<Unit> = record("resetAutoAnswers:$gameId")
+
+    override suspend fun setTriggerAutoOrder(
+        gameId: String,
+        ruleText: String,
+        order: TriggerAutoOrder,
+    ): Result<Unit> = record("triggerOrder:$gameId:$order:$ruleText")
+
+    override suspend fun resetTriggerAutoOrder(gameId: String): Result<Unit> = record("resetTriggerOrder:$gameId")
+
     override suspend fun concede(gameId: String): Result<Unit> = record("concede:$gameId")
 
     /**
@@ -185,3 +208,16 @@ private fun PriorityStopSteps.stepsSet(): String =
         if (main2) add("main2")
         if (endOfTurn) add("endOfTurn")
     }.joinToString(",")
+
+/**
+ * Which of the player's own acts the server is told to pass after, named — and nothing at all when it is
+ * told neither, so a recorded call from before the flags existed reads exactly as it did.
+ */
+private fun passesAfter(
+    cast: Boolean,
+    activation: Boolean,
+): String =
+    listOfNotNull("cast".takeIf { cast }, "activation".takeIf { activation })
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(",", prefix = "|pass-after:")
+        .orEmpty()

@@ -143,6 +143,12 @@ const val CONCEDE_CONFIRM_LABEL: String = "Concede — you lose this game"
 
 const val QUIT_MATCH_LABEL: String = "Quit match"
 
+/**
+ * The pinned mode that keeps priority after the player's own casts — MTGO's name for it, which is the
+ * name a player who wants it will look for.
+ */
+const val FULL_CONTROL_LABEL: String = "Full control"
+
 const val QUIT_MATCH_CONFIRM_LABEL: String = "Quit — you leave the whole match"
 
 /** Prefix for a game action the server declined, carrying its own reason. */
@@ -233,3 +239,40 @@ const val DECLARING_BLOCKERS_TITLE: String = "Declaring blockers"
 const val WITHDRAW_ATTACKER_ACTION_LABEL: String = "Don't attack with this"
 
 const val WITHDRAW_BLOCKER_ACTION_LABEL: String = "Don't block with this"
+
+// ---- the stack: ordering triggers, standing answers, resolving it ----------------------------------
+
+/**
+ * What the trigger-ordering panel asks, in place of the server's *"Pick triggered ability (goes to the
+ * stack first)"* — which is the question one press at a time, backwards. The panel asks for the result.
+ */
+const val ORDER_TRIGGERS_MESSAGE: String = "Your triggers go on the stack — drag them into the order they resolve."
+
+/** The two ends of the arrangement, left and right: a stack is read top first. */
+const val RESOLVES_FIRST_LABEL: String = "Resolves first"
+
+const val RESOLVES_LAST_LABEL: String = "Resolves last"
+
+/** The one press that commits the whole arrangement. */
+const val PUT_ON_STACK_LABEL: String = "Put on the stack"
+
+/** What the panel says while the server is still asking and the arrangement is answering it. */
+const val PLACING_TRIGGERS_NOTE: String = "Putting your triggers on the stack in that order…"
+
+/** Upstream's auto-order rules, named by resolving: kept by the server for the rest of the game. */
+const val ALWAYS_RESOLVE_FIRST_LABEL: String = "Always first"
+
+const val ALWAYS_RESOLVE_LAST_LABEL: String = "Always last"
+
+/** Upstream's auto-answers: this question, and every later one worded the same, for the rest of the game. */
+const val ALWAYS_YES_LABEL: String = "Always yes"
+
+const val ALWAYS_NO_LABEL: String = "Always no"
+
+/** The pass that lasts until the stack has resolved — upstream's F10. */
+const val RESOLVE_STACK_LABEL: String = "Resolve the stack"
+
+/** The corner menu's way to take back the standing rules above. */
+const val RESET_TRIGGER_ORDER_LABEL: String = "Forget always first / last"
+
+const val RESET_AUTO_ANSWERS_LABEL: String = "Forget always yes / no"

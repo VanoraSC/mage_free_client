@@ -38,7 +38,7 @@ class CardFlightLandingTest {
         composeTestRule.setContent {
             MageTheme {
                 CardFlightOverlay(
-                    flights = listOf(CardFlight(id = "s1", entry = entry(), from = from(), to = to())),
+                    flights = listOf(CardFlight(id = "s1", state = entry().state, art = null, from = from(), to = to())),
                     palette = rememberCounterPalette(),
                     artFor = null,
                     onLanded = { landed += it },
@@ -54,6 +54,34 @@ class CardFlightLandingTest {
 
         assertTrue("the card never moved from $start", boundsOfFlight() != start)
         assertEquals("it never reported landing", listOf("s1"), landed)
+    }
+
+    @Test
+    fun `a revealed card is held where it started before it travels, and still lands`() {
+        // A discard is shown where it left the hand before it goes to the graveyard.
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            MageTheme {
+                CardFlightOverlay(
+                    flights = listOf(CardFlight(id = "s1", state = entry().state, art = null, from = from(), to = to(), holdMillis = 500)),
+                    palette = rememberCounterPalette(),
+                    artFor = null,
+                    onLanded = { landed += it },
+                )
+            }
+        }
+
+        composeTestRule.mainClock.advanceTimeBy(16)
+        val start = boundsOfFlight().center
+        composeTestRule.mainClock.advanceTimeBy(400)
+
+        assertEquals("it is still being shown where it left", start, boundsOfFlight().center)
+        assertTrue("and has not landed", landed.isEmpty())
+
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+
+        assertEquals("then it travels and lands", listOf("s1"), landed)
     }
 
     private fun boundsOfFlight() =

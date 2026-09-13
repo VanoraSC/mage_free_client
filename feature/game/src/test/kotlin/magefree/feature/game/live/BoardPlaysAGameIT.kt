@@ -372,6 +372,9 @@ class BoardPlaysAGameIT {
                     else -> pickATarget(state, controls)
                 }
 
+            // Simultaneous triggers go on in the order the panel shows them.
+            is PromptControlsUi.TriggerOrder -> BoardAction.OrderTriggers(controls.triggerGroups.flatMap { it.abilityIds })
+
             is PromptControlsUi.Mana ->
                 controls.pickableObjectIds.firstOrNull()?.let(BoardAction::PlayManaSource)
                     ?: BoardAction.CancelPrompt

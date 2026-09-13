@@ -97,8 +97,8 @@ data class CardArtRequest(
  * Verified end to end against a sample of the table's own entries: twelve of fourteen resolved to the
  * exact set and collector number the table names, including two that needed the bare-set fallback.
  * The two that did not are **emblems**, which upstream calls `Emblem Nixilis` where Scryfall calls it
- * `Ob Nixilis Reignited Emblem` — a difference of name shape that no rule recovers. Emblems keep the
- * placeholder, and the table stays available as a later refinement rather than a prerequisite.
+ * `Ob Nixilis Reignited Emblem` — a difference of name shape that no rule recovers. Emblems are
+ * therefore looked up in upstream's table itself, which is [emblemArtRequest].
  *
  * @param setCode the set upstream chose for the token's image, not the set of the card that made it.
  * @param name the token's name as the server sends it. The `" Token"` suffix is stripped here for the

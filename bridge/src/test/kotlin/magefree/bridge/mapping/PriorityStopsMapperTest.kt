@@ -69,4 +69,20 @@ class PriorityStopsMapperTest {
         assertEquals(42, applied.avatarId)
         assertEquals(before, applied.flagName)
     }
+
+    @Test
+    fun `passing after a cast is written both ways, so turning it off really turns it off`() {
+        // `HumanPlayer.priority()` passes for the player before anything else when these are set. The
+        // profile is mutated in place, so a mapper that only ever set them would leave a player who
+        // turned Full Control back on being passed for, for the rest of the session.
+        val base = UserData.getDefaultUserDataView()
+
+        PriorityStopsMapper.apply(SetPriorityStops(passPriorityCast = true, passPriorityActivation = true), base)
+        assertTrue(base.isPassPriorityCast)
+        assertTrue(base.isPassPriorityActivation)
+
+        PriorityStopsMapper.apply(SetPriorityStops(), base)
+        assertFalse(base.isPassPriorityCast, "cleared again")
+        assertFalse(base.isPassPriorityActivation)
+    }
 }

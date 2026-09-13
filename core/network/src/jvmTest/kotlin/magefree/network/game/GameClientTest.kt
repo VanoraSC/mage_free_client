@@ -293,6 +293,81 @@ class GameClientTest {
             assertEquals(expected.map { it.second }, sent.map { (it as SendPlayerAction).action })
         }
 
+    @Test
+    fun anAutoAnswerCarriesTheQuestionUpstreamRemembersItBy() =
+        runTest {
+            val client = client()
+
+            client.setAutoAnswer(GAME, "Whenever another creature enters, you may gain 1 life.", yes = true)
+            client.setAutoAnswer(GAME, "Draw a card?", yes = false)
+            client.resetAutoAnswers(GAME)
+
+            assertEquals(
+                listOf(
+                    SendPlayerAction(
+                        gameId = GAME,
+                        action = PlayerActionCode.REQUEST_AUTO_ANSWER_TEXT_YES,
+                        dataText = "Whenever another creature enters, you may gain 1 life.",
+                        requestId = REQUEST_ID,
+                    ),
+                    SendPlayerAction(
+                        gameId = GAME,
+                        action = PlayerActionCode.REQUEST_AUTO_ANSWER_TEXT_NO,
+                        dataText = "Draw a card?",
+                        requestId = REQUEST_ID,
+                    ),
+                    SendPlayerAction(gameId = GAME, action = PlayerActionCode.REQUEST_AUTO_ANSWER_RESET_ALL, requestId = REQUEST_ID),
+                ),
+                sent,
+            )
+        }
+
+    @Test
+    fun aTriggerAutoOrderIsNamedByResolvingAndSentByGoingOntoTheStack() =
+        runTest {
+            // Upstream's NAME_FIRST puts an ability onto the stack first, which is resolving last.
+            val client = client()
+            val rule = "Whenever another creature enters, Soul Warden: you gain 1 life."
+
+            client.setTriggerAutoOrder(GAME, rule, TriggerAutoOrder.ResolveFirst)
+            client.setTriggerAutoOrder(GAME, rule, TriggerAutoOrder.ResolveLast)
+            client.resetTriggerAutoOrder(GAME)
+
+            assertEquals(
+                listOf(
+                    SendPlayerAction(
+                        gameId = GAME,
+                        action = PlayerActionCode.TRIGGER_AUTO_ORDER_NAME_LAST,
+                        dataText = rule,
+                        requestId = REQUEST_ID,
+                    ),
+                    SendPlayerAction(
+                        gameId = GAME,
+                        action = PlayerActionCode.TRIGGER_AUTO_ORDER_NAME_FIRST,
+                        dataText = rule,
+                        requestId = REQUEST_ID,
+                    ),
+                    SendPlayerAction(gameId = GAME, action = PlayerActionCode.TRIGGER_AUTO_ORDER_RESET_ALL, requestId = REQUEST_ID),
+                ),
+                sent,
+            )
+        }
+
+    @Test
+    fun aTriggerRuleStillNamingItsSourceAsThisIsRefusedBeforeItIsSent() =
+        runTest {
+            // `HumanPlayer.setTriggerAutoOrder` throws on it, on the server.
+            val result =
+                client().setTriggerAutoOrder(
+                    GAME,
+                    "Whenever another creature enters, {this}: you gain 1 life.",
+                    TriggerAutoOrder.ResolveFirst,
+                )
+
+            assertTrue(result.isFailure)
+            assertTrue("nothing reaches the server", sent.isEmpty())
+        }
+
     // --- failures ------------------------------------------------------------------------------------
 
     @Test

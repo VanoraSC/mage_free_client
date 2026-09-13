@@ -1,5 +1,7 @@
 package magefree.feature.game.table
 
+import magefree.cards.art.CardArtRequest
+import magefree.network.game.CommandObjectKind
 import magefree.network.game.GameCommandObject
 import magefree.network.game.GameCounter
 import magefree.network.game.GamePlayer
@@ -7,6 +9,7 @@ import magefree.network.game.GameState
 import magefree.network.game.ManaPool
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -71,7 +74,80 @@ class TableVitalsTest {
         assertTrue(seat.isMonarch)
         assertTrue(seat.hasInitiative)
         assertEquals(listOf("City's Blessing"), seat.designations)
-        assertEquals(listOf("Emblem — Elspeth"), seat.commandObjects)
+        assertEquals(listOf("Emblem — Elspeth"), seat.commandObjects.map { it.card.name })
+    }
+
+    @Test
+    fun `an emblem is drawn from upstream's own image for it, since it names no printing`() {
+        // Liliana, the Last Hope's emblem as the server sends it: the set upstream chose for its image
+        // and no card number. It drew as a placeholder.
+        val emblem =
+            seatWith(
+                commandList =
+                    listOf(
+                        GameCommandObject(
+                            id = "e1",
+                            name = "Emblem Liliana",
+                            kind = CommandObjectKind.Emblem,
+                            setCode = "EMN",
+                            rules = listOf("At the beginning of your end step, create X 2/2 black Zombie creature tokens.", " "),
+                        ),
+                    ),
+            ).commandObjects.single()
+
+        assertEquals(CardArtRequest(setCode = "temn", collectorNumber = "9"), emblem.art)
+        assertEquals("Emblem", emblem.card.typeLine)
+        assertEquals(listOf("At the beginning of your end step, create X 2/2 black Zombie creature tokens."), emblem.rules)
+    }
+
+    @Test
+    fun `two emblems of one name in one set are drawn from their own images`() {
+        val (first, second) =
+            seatWith(
+                commandList =
+                    listOf(
+                        GameCommandObject(
+                            id = "c1",
+                            name = "Emblem Chandra",
+                            kind = CommandObjectKind.Emblem,
+                            setCode = "CMM",
+                            imageNumber = 1,
+                        ),
+                        GameCommandObject(
+                            id = "c2",
+                            name = "Emblem Chandra",
+                            kind = CommandObjectKind.Emblem,
+                            setCode = "CMM",
+                            imageNumber = 2,
+                        ),
+                    ),
+            ).commandObjects
+
+        assertEquals("78", first.art?.collectorNumber)
+        assertEquals("79", second.art?.collectorNumber)
+    }
+
+    @Test
+    fun `a commander is drawn from its own printing, and a dungeon or an unknown emblem from nothing`() {
+        val (commander, dungeon, karn) =
+            seatWith(
+                commandList =
+                    listOf(
+                        GameCommandObject(
+                            id = "a",
+                            name = "Atraxa, Praetors' Voice",
+                            kind = CommandObjectKind.Commander,
+                            setCode = "C16",
+                            collectorNumber = "28",
+                        ),
+                        GameCommandObject(id = "d", name = "Tomb of Annihilation", kind = CommandObjectKind.Dungeon, setCode = "AFR"),
+                        GameCommandObject(id = "k", name = "Emblem Karn", kind = CommandObjectKind.Emblem, setCode = "DMU"),
+                    ),
+            ).commandObjects
+
+        assertEquals(CardArtRequest(setCode = "C16", collectorNumber = "28"), commander.art)
+        assertNull("a dungeon names no printing", dungeon.art)
+        assertNull("upstream has no image for this emblem either", karn.art)
     }
 
     @Test

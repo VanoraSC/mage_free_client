@@ -570,6 +570,7 @@ class GameEventFoldTest {
                                                     name = "Emblem Elspeth",
                                                     kind = CommandObjectKind.EMBLEM,
                                                     rules = listOf("Creatures you control get +1/+1."),
+                                                    imageNumber = 2,
                                                 ),
                                             ),
                                     ),
@@ -586,6 +587,7 @@ class GameEventFoldTest {
         )
         assertEquals("28", command[0].collectorNumber)
         assertEquals(listOf("Creatures you control get +1/+1."), command[1].rules)
+        assertEquals("the third part of upstream's emblem image key", 2, command[1].imageNumber)
         assertNull("a dungeon or an emblem not printed on a card has no number", command[1].collectorNumber)
         assertTrue(
             folded.players
@@ -690,6 +692,7 @@ class GameEventFoldTest {
                         creature = true,
                         token = true,
                         objectType = magefree.protocol.MageObjectTypeCode.TOKEN,
+                        imageNumber = 3,
                     ),
                 controlledByViewer = true,
             )
@@ -723,6 +726,7 @@ class GameEventFoldTest {
         val board = folded.viewer!!.battlefield
         assertTrue("a token permanent must stay flagged as one", board[0].card.isToken)
         assertEquals(MageObjectType.Token, board[0].card.objectType)
+        assertEquals("which same-named image in its set, carried through", 3, board[0].card.imageNumber)
         assertFalse(board[1].card.isToken)
         assertEquals(MageObjectType.Permanent, board[1].card.objectType)
     }

@@ -5,11 +5,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import magefree.designsystem.theme.MageTheme
 import org.junit.Assert.assertEquals
@@ -99,6 +101,65 @@ class CardPreviewTest {
         composeTestRule.onNodeWithTag(CardPreviewTestTags.ACTION).performClick()
 
         assertEquals(1, acted)
+    }
+
+    @Test
+    fun `an object's abilities are a column of buttons, in order, each reporting its own press`() {
+        val pressed = mutableListOf<String>()
+        show(
+            bears().copy(
+                abilityActions =
+                    listOf(
+                        CardPreviewAction(label = "+1: Each player discards a card.") { pressed += "plus" },
+                        CardPreviewAction(label = "-2: Target player sacrifices a creature.") { pressed += "minus" },
+                    ),
+            ),
+        )
+
+        val first = composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(0)).fetchSemanticsNode()
+        val second = composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).fetchSemanticsNode()
+        assertTrue("a column, top down", first.positionInRoot.y < second.positionInRoot.y)
+
+        composeTestRule.onNodeWithTag(CardPreviewTestTags.abilityAction(1)).performScrollTo().performClick()
+
+        assertEquals(listOf("minus"), pressed)
+    }
+
+    @Test
+    fun `an ability that cannot be activated now is drawn greyed, and a press on it does nothing`() {
+        val pressed = mutableListOf<String>()
+        show(
+            bears().copy(
+                abilityActions =
+                    listOf(
+                        CardPreviewAction(label = "-3: Return target creature card from your graveyard.", enabled = false) {
+                            pressed += "minus"
+                        },
+                    ),
+            ),
+        )
+
+        composeTestRule
+            .onNodeWithTag(CardPreviewTestTags.abilityAction(0))
+            .assertIsNotEnabled()
+            .performScrollTo()
+            .performClick()
+
+        assertEquals(emptyList<String>(), pressed)
+    }
+
+    @Test
+    fun `the ability buttons come before the printed text`() {
+        // Pete's placement: what can be done now, above what the card says.
+        show(bears().copy(abilityActions = listOf(CardPreviewAction(label = "+1: Each player discards a card.") {})))
+
+        val button = composeTestRule.onNodeWithTag(CardPreviewTestTags.ABILITY_ACTIONS).fetchSemanticsNode()
+        val oracle = composeTestRule.onNodeWithTag(CardPreviewTestTags.ORACLE).fetchSemanticsNode()
+
+        assertTrue(
+            "buttons at ${button.positionInRoot.y}, text at ${oracle.positionInRoot.y}",
+            button.positionInRoot.y < oracle.positionInRoot.y,
+        )
     }
 
     @Test

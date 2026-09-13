@@ -190,6 +190,41 @@ interface GameClient {
     ): Result<Unit>
 
     /**
+     * Have the server answer every later yes/no question worded [question] with [yes], without sending it —
+     * upstream's `REQUEST_AUTO_ANSWER_TEXT_YES` / `_NO`, which `HumanPlayer.chooseUse` checks before it asks.
+     * [question] is the prompt's own [PromptOptions.autoAnswerMessage]. The server keeps the rule for the rest
+     * of this game.
+     *
+     * It does not answer the outstanding [GamePrompt.Ask]: that is still [answerAsk].
+     */
+    suspend fun setAutoAnswer(
+        gameId: String,
+        question: String,
+        yes: Boolean,
+    ): Result<Unit>
+
+    /** Forget every [setAutoAnswer] rule in this game — upstream's `REQUEST_AUTO_ANSWER_RESET_ALL`. */
+    suspend fun resetAutoAnswers(gameId: String): Result<Unit>
+
+    /**
+     * Place every later triggered ability whose rule reads [ruleText] by [order] among the player's
+     * simultaneous triggers, without asking — upstream's `TRIGGER_AUTO_ORDER_NAME_FIRST` / `_LAST`, which
+     * `HumanPlayer.chooseTriggeredAbility` checks before it asks. The server keeps the rule for the rest of
+     * this game.
+     *
+     * [ruleText] is the rule as `Ability.getRule(sourceName)` writes it — the source's name in place of
+     * `{this}`. Upstream refuses one still carrying `{this}`, so this does too, before sending anything.
+     */
+    suspend fun setTriggerAutoOrder(
+        gameId: String,
+        ruleText: String,
+        order: TriggerAutoOrder,
+    ): Result<Unit>
+
+    /** Forget every [setTriggerAutoOrder] rule in this game — upstream's `TRIGGER_AUTO_ORDER_RESET_ALL`. */
+    suspend fun resetTriggerAutoOrder(gameId: String): Result<Unit>
+
+    /**
      * Concede the game [gameId] (a player action, so it works whether or not a prompt is outstanding).
      * The game ends and a terminal [GameState.result] follows on [observeGame].
      */
@@ -265,10 +300,16 @@ interface GameClient {
      * this client because priority is the only thing it affects and the board is the only place it is
      * set; the bridge applies it with `SessionImpl.updatePreferencesForServer`, exactly as upstream's
      * own client does when its preferences change.
+     *
+     * @param passPriorityCast whether the server passes for the player the moment they put a spell on
+     *   the stack — upstream's `UserData.passPriorityCast`, checked first thing in `priority()`.
+     * @param passPriorityActivation the same for a non-mana activated ability.
      */
     suspend fun setPriorityStops(
         yourTurn: PriorityStopSteps,
         opponentTurn: PriorityStopSteps,
+        passPriorityCast: Boolean = false,
+        passPriorityActivation: Boolean = false,
     ): Result<Unit>
 }
 

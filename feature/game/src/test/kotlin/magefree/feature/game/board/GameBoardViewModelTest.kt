@@ -28,6 +28,7 @@ import magefree.network.game.MultiAmountEntry
 import magefree.network.game.PhaseStep
 import magefree.network.game.PlayableObject
 import magefree.network.game.PromptOptions
+import magefree.network.game.TriggerAutoOrder
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -220,6 +221,10 @@ class GameBoardViewModelTest {
                 BoardAction.DistributeAmounts(listOf(1, 1)) to "multiAmount:$GAME_ID:1,1",
                 BoardAction.Concede to "concede:$GAME_ID",
                 BoardAction.QuitMatch to "quit:$GAME_ID",
+                BoardAction.ResolveStack to "passUntil:$GAME_ID:UntilStackResolved",
+                BoardAction.AlwaysOrderTrigger("rule", TriggerAutoOrder.ResolveFirst) to "triggerOrder:$GAME_ID:ResolveFirst:rule",
+                BoardAction.ResetTriggerOrder to "resetTriggerOrder:$GAME_ID",
+                BoardAction.ResetAutoAnswers to "resetAutoAnswers:$GAME_ID",
             ).forEach { (action, expected) ->
                 client.calls.clear()
                 viewModel.act(action)
@@ -541,6 +546,308 @@ class GameBoardViewModelTest {
             assertEquals(listOf(OPENING_STOPS), client.calls.filter { it.startsWith("stops:") })
         }
 
+    // ---- an ability pressed on a raised card ----------------------------------------------------------
+
+    @Test
+    fun `pressing an ability sends the planeswalker, then answers the question that follows with that ability`() =
+        runTest {
+            // Upstream's two steps behind one press: the object is sent, `HumanPlayer` asks which ability
+            // — always, for a loyalty ability — and the answer is the one the player already pressed.
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            client.calls.clear()
+
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-2"))
+            assertEquals(listOf("play:$GAME_ID:pw-1"), client.gameCalls)
+
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+
+            assertEquals(listOf("play:$GAME_ID:pw-1", "ability:$GAME_ID:minus-2"), client.gameCalls)
+        }
+
+    @Test
+    fun `a question that does not offer the pressed ability is left to the player`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "ultimate"))
+            client.calls.clear()
+
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+
+            assertEquals("nothing is guessed", emptyList<String>(), client.gameCalls)
+            assertNotNull("the question is on screen", viewModel.uiState.value.controls)
+        }
+
+    @Test
+    fun `the pressed ability is answered once, and never again for a later question`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-2"))
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+            client.emitGameState(selectState())
+            client.calls.clear()
+
+            // Next turn the player taps the same planeswalker and is asked again. That question is theirs.
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion(message = "Choose again")))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+        }
+
+    @Test
+    fun `an update with no question between the press and the question does not lose the press`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(selectState())
+            viewModel.act(BoardAction.ActivateAbility(objectId = "pw-1", abilityId = "minus-2"))
+            client.calls.clear()
+
+            client.emitGameState(selectState().copy(prompt = null))
+            client.emitGameState(selectState().copy(prompt = lilianaQuestion()))
+
+            assertEquals(listOf("ability:$GAME_ID:minus-2"), client.gameCalls)
+        }
+
+    // ---- the stack: trigger order, standing answers ----------------------------------------------------
+
+    @Test
+    fun `an arrangement answers each ordering question in turn, the bottom of the stack first`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            client.calls.clear()
+
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            assertEquals("first on the stack is the one that resolves last", listOf("target:$GAME_ID:t3"), client.gameCalls)
+
+            client.emitGameState(triggerQuestion("t1", "t2"))
+
+            // …and t1, the last, the server places itself.
+            assertEquals(listOf("target:$GAME_ID:t3", "target:$GAME_ID:t2"), client.gameCalls)
+        }
+
+    @Test
+    fun `the same ordering question sent again is not answered twice`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            client.calls.clear()
+
+            // An update that repeats the question — the life total moved, nothing was answered yet.
+            client.emitGameState(triggerQuestion("t1", "t2").copy(turn = 2))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+        }
+
+    @Test
+    fun `a trigger's own target question in between is the player's, and the arrangement carries on after it`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.calls.clear()
+
+            client.emitGameState(
+                dealtState().copy(prompt = GamePrompt.Target(message = "Select target creature", targetIds = listOf("o-1"))),
+            )
+            assertEquals("nothing is guessed for a trigger's target", emptyList<String>(), client.gameCalls)
+
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            assertEquals(listOf("target:$GAME_ID:t2"), client.gameCalls)
+        }
+
+    @Test
+    fun `an ordering question with a trigger the arrangement does not hold is left on screen, arranged`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.calls.clear()
+
+            // t9 fired because t3 went on the stack.
+            client.emitGameState(triggerQuestion("t1", "t2", "t9"))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+            val controls = viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder
+            assertFalse("it is asked, not placed", controls.isPlacing)
+            assertEquals(
+                "the new trigger first, the rest as they were arranged",
+                listOf("t9", "t1", "t2"),
+                controls.triggerGroups.map { it.id },
+            )
+        }
+
+    @Test
+    fun `while the arrangement answers a question the panel says it is placing them`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2", "t3"))
+
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2", "t3")))
+            client.emitGameState(triggerQuestion("t1", "t2"))
+
+            assertTrue((viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder).isPlacing)
+        }
+
+    @Test
+    fun `priority coming back ends the arrangement, so the next round is asked afresh`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2")))
+            client.emitGameState(selectState())
+            client.calls.clear()
+
+            // Same cards next turn — fresh triggers the player has not arranged.
+            client.emitGameState(triggerQuestion("t1", "t2"))
+
+            assertEquals(emptyList<String>(), client.gameCalls)
+            assertFalse((viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder).isPlacing)
+        }
+
+    @Test
+    fun `a placing the server never received gives the arrangement back to the player`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(triggerQuestion("t1", "t2"))
+            client.actionResult = Result.failure(GameUnreachableFailure(IllegalStateException("dropped")))
+
+            viewModel.act(BoardAction.OrderTriggers(resolveOrder = listOf("t1", "t2")))
+
+            assertFalse((viewModel.uiState.value.controls as PromptControlsUi.TriggerOrder).isPlacing)
+        }
+
+    @Test
+    fun `always yes tells the server the rule, then answers the question on screen`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(dealtState())
+            client.calls.clear()
+
+            viewModel.act(BoardAction.AlwaysAnswer(question = "{this}: you may gain 1 life.", yes = true))
+
+            assertEquals(listOf("autoAnswer:$GAME_ID:yes:{this}: you may gain 1 life.", "ask:$GAME_ID:true"), client.gameCalls)
+        }
+
+    @Test
+    fun `a rule the server refused leaves the question on screen unanswered`() =
+        runTest {
+            val client = FakeGameClient()
+            val viewModel = viewModel(client)
+            viewModel.observe(GAME_ID)
+            client.emitGameState(dealtState())
+            client.calls.clear()
+            client.actionResultFor = { call -> if (call.startsWith("autoAnswer:")) Result.failure(GameActionFailure("no")) else null }
+
+            viewModel.act(BoardAction.AlwaysAnswer(question = "Draw a card?", yes = false))
+
+            assertEquals(listOf("autoAnswer:$GAME_ID:no:Draw a card?"), client.gameCalls)
+        }
+
+    /** Upstream's ordering question: a target prompt marked `PICK_ABILITY`, one trigger per distinct card here. */
+    private fun triggerQuestion(vararg ids: String) =
+        dealtState().copy(
+            prompt =
+                GamePrompt.Target(
+                    message = "Pick triggered ability (goes to the stack first)",
+                    cards =
+                        ids.map {
+                            GameCard(
+                                id = it,
+                                name = "Source $it",
+                                rules = listOf("Whenever another creature enters the battlefield, you gain 1 life."),
+                            )
+                        },
+                    targetIds = ids.toList(),
+                    isRequired = true,
+                    options = PromptOptions(text = mapOf(PromptOptions.QUERY_TYPE to PromptOptions.PICK_ABILITY)),
+                ),
+        )
+
+    private fun lilianaQuestion(message: String = "Choose spell or ability to play") =
+        GamePrompt.ChooseAbility(
+            message = message,
+            choices =
+                listOf(
+                    AbilityChoice("plus-1", "+1: Each player discards a card."),
+                    AbilityChoice("minus-2", "−2: Target player sacrifices a creature."),
+                ),
+        )
+
+    // ---- full control --------------------------------------------------------------------------------
+
+    @Test
+    fun `out of full control, the server is told to pass after the player's own cast from the start`() =
+        runTest {
+            // Upstream's own `passPriorityCast` / `passPriorityActivation`: `HumanPlayer.priority()` passes
+            // for the player the moment their spell or ability lands, before a prompt is built. So the
+            // flags are the whole feature, and they have to reach the server when a board opens rather
+            // than only when somebody changes them.
+            val client = FakeGameClient()
+
+            viewModel(client).observe(GAME_ID)
+
+            assertTrue(client.calls.single { it.startsWith("stops:") }.endsWith(PASS_AFTER_CASTING))
+        }
+
+    @Test
+    fun `turning full control on takes the pass back and keeps every stop`() =
+        runTest {
+            val client = FakeGameClient()
+            val store = StopStore()
+            val viewModel = viewModel(client, stops = store)
+            viewModel.observe(GAME_ID)
+            client.calls.clear()
+
+            viewModel.setFullControl(true)
+
+            assertEquals(listOf("stops:main1,main2,endOfTurn|endOfTurn"), client.calls)
+            assertTrue("the board draws what was sent", viewModel.uiState.value.stops.fullControl)
+        }
+
+    @Test
+    fun `full control is not lost when a stop is pressed`() =
+        runTest {
+            // It lives with the stops and every press copies them, so a press that rebuilt the set from
+            // the marks alone would quietly hand the player's own casts back to the server's auto-pass.
+            val client = FakeGameClient()
+            val store = StopStore()
+            viewModel(client, stops = store).observe(GAME_ID)
+            store.setFullControl(true)
+            client.calls.clear()
+
+            store.press(TurnSide.Yours, StepIds.UPKEEP)
+
+            assertEquals(listOf("stops:upkeep,main1,main2,endOfTurn|endOfTurn"), client.calls)
+        }
+
     @Test
     fun `the end step is stopped at on both turns without anybody asking`() =
         runTest {
@@ -560,7 +867,7 @@ class GameBoardViewModelTest {
 
             assertEquals(
                 "one press takes the default off, which is what makes it a default",
-                listOf("stops:main1,main2,endOfTurn|"),
+                listOf("stops:main1,main2,endOfTurn|$PASS_AFTER_CASTING"),
                 client.calls,
             )
         }
@@ -580,7 +887,7 @@ class GameBoardViewModelTest {
             store.press(TurnSide.Yours, StepIds.UPKEEP)
 
             // Their side is untouched; yours carries the upkeep and the forced mains.
-            assertEquals(listOf("stops:upkeep,main1,main2,endOfTurn|endOfTurn"), client.calls)
+            assertEquals(listOf("stops:upkeep,main1,main2,endOfTurn|endOfTurn$PASS_AFTER_CASTING"), client.calls)
         }
 
     @Test
@@ -597,7 +904,7 @@ class GameBoardViewModelTest {
 
             store.press(TurnSide.Theirs, StepIds.UPKEEP)
 
-            assertEquals(listOf("stops:main1,main2,endOfTurn|upkeep,endOfTurn"), client.calls)
+            assertEquals(listOf("stops:main1,main2,endOfTurn|upkeep,endOfTurn$PASS_AFTER_CASTING"), client.calls)
         }
 
     @Test
@@ -615,7 +922,7 @@ class GameBoardViewModelTest {
 
             store.press(TurnSide.Yours, StepIds.BEGIN_COMBAT)
 
-            assertEquals(listOf("stops:main1,beforeCombat,main2,endOfTurn|endOfTurn"), client.calls)
+            assertEquals(listOf("stops:main1,beforeCombat,main2,endOfTurn|endOfTurn$PASS_AFTER_CASTING"), client.calls)
         }
 
     @Test
@@ -1387,9 +1694,15 @@ class GameBoardViewModelTest {
         const val GAME_ID = "g-1"
 
         /**
-         * What a player who has pressed nothing sends: the two main phases, which are a rule on their
-         * own turn, and the end step on both, which is 0123's one default.
+         * Full Control off, which is where a player starts: the server passes after their own spell and
+         * their own activated ability.
          */
-        const val OPENING_STOPS = "stops:main1,main2,endOfTurn|endOfTurn"
+        const val PASS_AFTER_CASTING = "|pass-after:cast,activation"
+
+        /**
+         * What a player who has pressed nothing sends: the two main phases, which are a rule on their
+         * own turn, the end step on both, which is 0123's one default, and Full Control off.
+         */
+        const val OPENING_STOPS = "stops:main1,main2,endOfTurn|endOfTurn$PASS_AFTER_CASTING"
     }
 }

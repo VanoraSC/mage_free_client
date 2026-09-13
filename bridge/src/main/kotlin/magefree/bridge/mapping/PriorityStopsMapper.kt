@@ -44,6 +44,11 @@ internal object PriorityStopsMapper {
             // never asked — whenever this is above zero. Upstream defaults it to 1, which is what
             // took a card off a turn-1 Inquisition of Kozilek without showing the hand it revealed.
             data.autoTargetLevel = request.autoTargetLevel
+            // **Whether priority comes back after the player's own cast.** `HumanPlayer.priority()`
+            // passes for them before anything else when these are set — the app's Full Control, off.
+            // Written both ways, so turning Full Control back on actually clears them.
+            data.isPassPriorityCast = request.passPriorityCast
+            data.isPassPriorityActivation = request.passPriorityActivation
         }
 
     private fun SkipPrioritySteps.applyFrom(stops: PriorityStops) {

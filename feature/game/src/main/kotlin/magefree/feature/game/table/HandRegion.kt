@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
@@ -64,6 +65,10 @@ import kotlin.math.roundToInt
  * @param onPlay called with a card's id when it is tapped — §7.1's *act on this object*.
  * @param onInspect called with a card's id on long press — §7.1's *inspect*, which is the same gesture
  *   on every card-like object in every screen.
+ * @param onDragPlay called with a card's id when it is dragged up out of the hand — the commit itself,
+ *   not the look a tap gives. `null` offers no drag at all.
+ * @param hidden cards laid out in place but not drawn, because they are on their way here — see
+ *   [ZoneFlights].
  */
 @Composable
 fun HandRegion(
@@ -75,6 +80,8 @@ fun HandRegion(
     onInspect: ((String) -> Unit)? = null,
     elsewhere: List<TableCard> = emptyList(),
     anchors: BoardAnchors? = null,
+    onDragPlay: ((String) -> Unit)? = null,
+    hidden: Set<String> = emptySet(),
 ) {
     if (cards.isEmpty() && elsewhere.isEmpty()) return
 
@@ -127,19 +134,23 @@ fun HandRegion(
             // Later cards are drawn on top, so an overlap reads left to right and the rightmost card is
             // whole — the same convention the land stacks use for the copy you would reach for.
 
-            // Dragged upward out of the hand, a playable card does what its button does — §7.1's
-            // accelerator, which always has a tap path. Offered only for a card the server marked
-            // playable: dragging an uncastable card would either do nothing, which is confusing, or
-            // submit an action the server had not offered, which is worse.
+            // **Dragged upward out of the hand, a playable card is played** — §7.1's accelerator, which
+            // always has a tap path. It skips the raised card on purpose: a tap is a look, and a card
+            // pulled out of the hand toward the table has already been looked at. It went through the
+            // tap's path first, which raised the detail and made the player press Play anyway.
+            //
+            // Offered only for a card the server marked playable: dragging an uncastable card would
+            // either do nothing, which is confusing, or submit an action the server had not offered,
+            // which is worse.
             var dragged by remember(card.id) { mutableFloatStateOf(0f) }
             val draggable =
-                if (onPlay == null || !card.isPlayable) {
+                if (onDragPlay == null || !card.isPlayable) {
                     Modifier
                 } else {
                     Modifier.pointerInput(card.id) {
                         detectVerticalDragGestures(
                             onDragEnd = {
-                                if (dragged <= -DragThreshold.toPx()) onPlay(card.id)
+                                if (dragged <= -DragThreshold.toPx()) onDragPlay(card.id)
                                 dragged = 0f
                             },
                             onDragCancel = { dragged = 0f },
@@ -154,7 +165,8 @@ fun HandRegion(
                         .offset { IntOffset(x = 0, y = dragged.roundToInt()) }
                         .width(tileWidth)
                         .align(Alignment.TopStart)
-                        .then(draggable),
+                        .then(draggable)
+                        .alpha(if (card.id in hidden) 0f else 1f),
             ) {
                 // **The same card the battlefield draws.** A card does not change what it looks like
                 // by being in a hand: it is the same object, and a player picking one to cast is
@@ -172,10 +184,11 @@ fun HandRegion(
                     // stack. Under its **name**: a spell on the stack does not carry the id of the
                     // card it was cast from, and the name is what both ends do carry — see
                     // [handAnchorId]. The anchors keep the box after the card has gone, which is what
-                    // makes the origin available at the moment it is needed — see [CardFlights].
+                    // makes the origin available at the moment it is needed — see [CardFlights]. And
+                    // under its **id** as well, for a card that goes anywhere but the stack and keeps it.
                     modifier =
                         Modifier
-                            .then(anchors?.anchorModifier(handAnchorId(card.card.name)) ?: Modifier)
+                            .then(anchors?.anchorModifier(listOf(handAnchorId(card.card.name), handCardAnchorId(card.id))) ?: Modifier)
                             .testTag(HandTestTags.card(card.id)),
                 )
             }

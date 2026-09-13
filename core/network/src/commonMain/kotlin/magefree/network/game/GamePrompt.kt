@@ -241,6 +241,26 @@ data class PromptOptions(
     /** The targets that may still be chosen. */
     val possibleTargets: List<String> get() = ids[POSSIBLE_TARGETS].orEmpty()
 
+    /**
+     * What kind of question a [GamePrompt.Target] is — upstream's `PlayerQueryEvent.QueryType`, by name — or
+     * `null` when the server sent none. The only thing that tells [PICK_ABILITY] apart from an ordinary
+     * target choice: both arrive as `GAME_TARGET`, and upstream's own client reads exactly this key.
+     */
+    val queryType: String? get() = text[QUERY_TYPE]
+
+    /**
+     * Whether this is upstream's *"Pick triggered ability (goes to the stack first)"* — which of the player's
+     * simultaneous triggers goes onto the stack next (`HumanPlayer.chooseTriggeredAbility`).
+     */
+    val isTriggerOrder: Boolean get() = queryType == PICK_ABILITY
+
+    /**
+     * A yes/no question as upstream remembers an answer to it: the message with its source's name put back
+     * to `{this}` (`HumanPlayer.chooseUse`), or `null` when the question carried none. The key
+     * [GameClient.setAutoAnswer] takes.
+     */
+    val autoAnswerMessage: String? get() = text[AUTO_ANSWER_MESSAGE]
+
     /** The upstream keys these hints travel under; mirrored from the `GamePromptOptions`. */
     companion object {
         /** [text] key behind [leftButtonText]. */
@@ -263,5 +283,14 @@ data class PromptOptions(
 
         /** [ids] key behind [possibleTargets]. */
         const val POSSIBLE_TARGETS: String = "possibleTargets"
+
+        /** [text] key behind [queryType]. */
+        const val QUERY_TYPE: String = "queryType"
+
+        /** The [queryType] of a trigger-ordering question — see [isTriggerOrder]. */
+        const val PICK_ABILITY: String = "PICK_ABILITY"
+
+        /** [text] key behind [autoAnswerMessage] — upstream's `Constants.Option.AUTO_ANSWER_MESSAGE`. */
+        const val AUTO_ANSWER_MESSAGE: String = "autoAnswerMessage"
     }
 }

@@ -4,11 +4,13 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +40,7 @@ import magefree.feature.game.board.BoardAction
 import magefree.feature.game.board.CONCEDE_CONFIRM_LABEL
 import magefree.feature.game.board.CONCEDE_LABEL
 import magefree.feature.game.board.FLIP_FACE_LABEL
+import magefree.feature.game.board.FULL_CONTROL_LABEL
 import magefree.feature.game.board.FloatingControls
 import magefree.feature.game.board.GameBoardUiState
 import magefree.feature.game.board.HiddenControlsToggle
@@ -45,6 +48,8 @@ import magefree.feature.game.board.JOIN_FAILED_PREFIX
 import magefree.feature.game.board.PriorityUi
 import magefree.feature.game.board.QUIT_MATCH_CONFIRM_LABEL
 import magefree.feature.game.board.QUIT_MATCH_LABEL
+import magefree.feature.game.board.RESET_AUTO_ANSWERS_LABEL
+import magefree.feature.game.board.RESET_TRIGGER_ORDER_LABEL
 import magefree.feature.game.board.TurnSide
 import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
 
@@ -113,6 +118,7 @@ import magefree.feature.game.board.WAITING_FOR_FIRST_SNAPSHOT
  *   draws the board's cards as their name plates alone, which is what a test sees.
  * @param onFlipDetailFace peeks at a double-faced card's other side in the detail overlay.
  * @param onPressStop cycles the stop on one step of the rail, on one side of the turn.
+ * @param onSetFullControl turns Full Control on or off — see `BoardStops.fullControl`.
  */
 @Composable
 fun TableBoardScreen(
@@ -126,6 +132,7 @@ fun TableBoardScreen(
     artFor: TableArtResolver? = null,
     onFlipDetailFace: () -> Unit = {},
     onPressStop: (TurnSide, String) -> Unit = { _, _ -> },
+    onSetFullControl: (Boolean) -> Unit = {},
 ) {
     val snapshot = uiState.snapshot
     val controls = uiState.controls
@@ -178,6 +185,8 @@ fun TableBoardScreen(
                 // and a press opens one of them whole, so the card on the rail and the card at the top
                 // of the opened list cannot disagree about which it is.
                 val zones = tableZones(snapshot, picks, seenCards)
+                // What this snapshot moved between zones, against the one before it — see [ZoneFlights].
+                val zoneMoves = rememberZoneMoves(snapshot)
 
                 BattlefieldLayout(
                     model = battlefieldModel(snapshot, picks),
@@ -212,6 +221,7 @@ fun TableBoardScreen(
                     // two states: the battlefield, or the question.
                     stackVisible = uiState.areControlsVisible,
                     combat = snapshot.combat,
+                    zoneMoves = zoneMoves,
                     // A press on a step cycles its stop for the turn being played. What that then does
                     // is the pass policy's, which reads the same store this writes.
                     onToggleStop = { step, side -> onPressStop(side.asTurnSide(), step.id) },
@@ -221,6 +231,12 @@ fun TableBoardScreen(
                     // cost is being paid, where the press *is* the answer. See [press].
                     onInspect = press,
                     onPlayFromHand = press,
+                    // **A drag out of the hand is the commit.** It does what the raised card's button
+                    // would — the prompt's own `actionFor`, so it is Play in a priority window and a pick
+                    // in a target question — without raising the card first. The hand only offers the
+                    // drag on a card the server marked playable; should the question have moved on since,
+                    // it falls back to the look rather than sending something the server no longer offers.
+                    onDragFromHand = { id -> controls?.actionFor(id)?.let(onAction) ?: onCardTap(id) },
                     // A stack's two halves name two different permanents, and the board says which.
                     // Pressing an upright copy reaches the one a hand would pick up — which, mid-cast,
                     // is the copy whose mana ability pays for the spell. Pressing a turned one reaches
@@ -274,7 +290,7 @@ fun TableBoardScreen(
             // player wants to look. A prompt answered *on* the board keeps its corner, because the
             // answer to a priority prompt is a card in the hand and a panel over the hand covers the
             // answer to its own question.
-            val answeredHere = controls != null && controls.candidateCards.isNotEmpty()
+            val answeredHere = controls != null && (controls.candidateCards.isNotEmpty() || controls.triggerGroups.isNotEmpty())
 
             // The menu and the question share one anchor and one column, so neither has to know where
             // the other ended up. Explicitly z-ordered rather than left to declaration order, because
@@ -291,7 +307,18 @@ fun TableBoardScreen(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(ControlsPadding),
             ) {
-                BoardCornerMenu(onExit = onExit, onAction = onAction)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(ControlsPadding),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (uiState.stops.fullControl) FullControlBadge()
+                    BoardCornerMenu(
+                        onExit = onExit,
+                        onAction = onAction,
+                        fullControl = uiState.stops.fullControl,
+                        onSetFullControl = onSetFullControl,
+                    )
+                }
 
                 if (uiState.areControlsVisible) {
                     FloatingControls(
@@ -332,6 +359,22 @@ fun TableBoardScreen(
             // attacking.
             uiState.selectedObjectId?.let { objectId ->
                 snapshot?.let { state ->
+                    // **A planeswalker of the viewer's is its abilities, as buttons** — see [abilityButtons].
+                    // Every loyalty ability is drawn, always; the ones the server is offering can be pressed,
+                    // and only while a press on the planeswalker would be a Play, which is the question its
+                    // abilities answer. An opponent's is read as text: none of its buttons could ever work.
+                    val planeswalkerButtons =
+                        state.players
+                            .filter { it.isViewer }
+                            .flatMap { it.battlefield }
+                            .firstOrNull { it.card.id == objectId }
+                            ?.let { permanent ->
+                                abilityButtons(
+                                    card = permanent.card,
+                                    playable = state.playable,
+                                    activatable = controls?.actionFor(objectId) is BoardAction.PlayObject,
+                                )
+                            }.orEmpty()
                     raisedCard(
                         objectId = objectId,
                         snapshot = state,
@@ -340,7 +383,14 @@ fun TableBoardScreen(
                         candidates = controls?.candidateCards.orEmpty(),
                         actionLabel = controls?.actionLabelFor(objectId),
                         onAct = { controls?.actionFor(objectId)?.let(onAction) },
-                    )?.let { raised ->
+                    )?.let { plain ->
+                        val raised =
+                            plain.copy(
+                                state =
+                                    plain.state.withAbilityButtons(planeswalkerButtons) { abilityId ->
+                                        onAction(BoardAction.ActivateAbility(objectId = objectId, abilityId = abilityId))
+                                    },
+                            )
                         // The peek at a double-faced card's other side, carried through unchanged from
                         // the overlay this replaced. It is offered only where the catalog says there
                         // *is* another face, and it is local: which face the object is actually showing
@@ -446,6 +496,42 @@ object TableBoardTestTags {
     const val SCREEN: String = "table-board"
     const val MENU: String = "table-board-menu"
     const val STANDING: String = "table-board-standing"
+
+    /** The corner menu's Full Control item. */
+    const val FULL_CONTROL: String = "table-board-full-control"
+
+    /** What says Full Control is on, beside the menu. Absent while it is off. */
+    const val FULL_CONTROL_BADGE: String = "table-board-full-control-badge"
+
+    /** The corner menu's item forgetting every always-first / always-last rule. */
+    const val RESET_TRIGGER_ORDER: String = "table-board-reset-trigger-order"
+
+    /** The corner menu's item forgetting every always-yes / always-no rule. */
+    const val RESET_AUTO_ANSWERS: String = "table-board-reset-auto-answers"
+}
+
+/**
+ * Says Full Control is on, beside the menu that turns it off.
+ *
+ * **A pinned mode has to look pinned.** Off is the ordinary game. On, priority comes back after every one
+ * of the player's own casts, and a player who had forgotten setting it would read each of those windows
+ * as the board waiting for no reason.
+ */
+@Composable
+private fun FullControlBadge(modifier: Modifier = Modifier) {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = modifier.testTag(TableBoardTestTags.FULL_CONTROL_BADGE),
+    ) {
+        Text(
+            text = FULL_CONTROL_LABEL,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = Spacing.small, vertical = Spacing.extraSmall),
+        )
+    }
 }
 
 /** What the corner menu calls leaving the board, shared with tests so the two agree. */
@@ -490,6 +576,8 @@ private val ControlsPadding = 8.dp
 private fun BoardCornerMenu(
     onExit: () -> Unit,
     onAction: (BoardAction) -> Unit,
+    fullControl: Boolean = false,
+    onSetFullControl: (Boolean) -> Unit = {},
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
     var confirming by rememberSaveable { mutableStateOf<String?>(null) }
@@ -508,6 +596,37 @@ private fun BoardCornerMenu(
                 confirming = null
             },
         ) {
+            // **A mode, not an act**, so it does not confirm: it ends nothing, and a second press puts
+            // it back. The check says which way it is set.
+            DropdownMenuItem(
+                text = { Text(FULL_CONTROL_LABEL) },
+                trailingIcon = {
+                    if (fullControl) Icon(imageVector = Icons.Filled.Check, contentDescription = null)
+                },
+                onClick = {
+                    open = false
+                    onSetFullControl(!fullControl)
+                },
+                modifier = Modifier.testTag(TableBoardTestTags.FULL_CONTROL),
+            )
+            // **Standing rules, taken back.** The server keeps an always-first and an always-yes for the rest
+            // of the game; these are the only way to undo one.
+            DropdownMenuItem(
+                text = { Text(RESET_TRIGGER_ORDER_LABEL) },
+                onClick = {
+                    open = false
+                    onAction(BoardAction.ResetTriggerOrder)
+                },
+                modifier = Modifier.testTag(TableBoardTestTags.RESET_TRIGGER_ORDER),
+            )
+            DropdownMenuItem(
+                text = { Text(RESET_AUTO_ANSWERS_LABEL) },
+                onClick = {
+                    open = false
+                    onAction(BoardAction.ResetAutoAnswers)
+                },
+                modifier = Modifier.testTag(TableBoardTestTags.RESET_AUTO_ANSWERS),
+            )
             DropdownMenuItem(
                 text = { Text(LEAVE_BOARD_LABEL) },
                 onClick = {

@@ -17,6 +17,7 @@ import magefree.network.game.GameClient
 import magefree.network.game.GamePrompt
 import magefree.network.game.GameState
 import magefree.network.game.GameUnreachableFailure
+import magefree.network.game.PassPriorityScope
 
 /**
  * The persistent context of a cast in flight — requirements the organizing principle: *"a player
@@ -263,6 +264,20 @@ class GameBoardViewModel
         private var outstandingPrompt: GamePrompt? = null
 
         /**
+         * The ability the player pressed on a raised card, while the server is being asked which of that
+         * object's abilities to use — see [BoardAction.ActivateAbility]. The app's own record of what it
+         * sent, dropped as soon as the next question arrives, answered or not.
+         */
+        private var pendingAbility: BoardAction.ActivateAbility? = null
+
+        /**
+         * The player's arrangement of their simultaneous triggers, **the first to resolve first**, while the
+         * server is still asking where they go — see [answerTriggerOrder]. The app's own record, dropped when
+         * priority comes back and when a send fails.
+         */
+        private var triggerPlan: List<String> = emptyList()
+
+        /**
          * Begin observing [gameId] and take our seat in it. Idempotent — a recomposition or a
          * configuration change must not open a second subscription or re-join.
          */
@@ -296,6 +311,10 @@ class GameBoardViewModel
                     gameClient.setPriorityStops(
                         yourTurn = current.asSteps(TurnSide.Yours, forced = OWN_MAIN_PHASE_STOPS),
                         opponentTurn = current.asSteps(TurnSide.Theirs),
+                        // **Full Control off is upstream's own pass-after-casting.** The server passes
+                        // the moment the player's spell or ability lands, before a prompt is built.
+                        passPriorityCast = !current.fullControl,
+                        passPriorityActivation = !current.fullControl,
                     )
                 }.launchIn(viewModelScope)
 
@@ -331,7 +350,7 @@ class GameBoardViewModel
                 previous.copy(
                     board = BoardUi.from(state),
                     snapshot = state,
-                    controls = controlsFor(state, hasPickedTarget = hasPickedTarget),
+                    controls = controlsArranged(state),
                     selectedObjectId = if (promptChanged) null else previous.selectedObjectId,
                     cast = previous.cast.advancedBy(state.prompt),
                     declaration = previous.declaration.advancedBy(state.prompt),
@@ -354,6 +373,12 @@ class GameBoardViewModel
                     "cast=${_uiState.value.cast?.cardName} visible=${_uiState.value.areControlsVisible}"
             }
 
+            // An ability pressed on a raised card, answered when the server asks which one.
+            answerPendingAbility(state.prompt, promptChanged)
+
+            // The player's arranged triggers, placed as the server asks where each goes.
+            answerTriggerOrder(state.prompt, promptChanged)
+
             // The one place the app decides *when* to answer a priority prompt. Asked once per
             // prompt instance, so a re-emission of the same question cannot pass twice.
             val prompt = state.prompt
@@ -362,6 +387,74 @@ class GameBoardViewModel
                 consumeOneShotStop(state)
                 if (passPolicy.decide(state) == PassDecision.PassImmediately) sendPass()
             }
+        }
+
+        /**
+         * Answers the server's ability question with the ability the player already pressed on the card.
+         *
+         * **Only the question that was expected, and only once.** A new [GamePrompt.ChooseAbility] that
+         * offers the pressed id is answered with it. Any other new question drops the record without
+         * answering, so a question that does not offer that ability is left on screen for the player
+         * rather than answered with a guess.
+         *
+         * **A snapshot with no question is not an answer.** An update can arrive between the press and
+         * the question, and dropping the record there would leave the player picking the ability they
+         * had already picked. A re-emission of the same question keeps waiting too.
+         */
+        private fun answerPendingAbility(
+            prompt: GamePrompt?,
+            promptChanged: Boolean,
+        ) {
+            val pending = pendingAbility ?: return
+            if (!promptChanged || prompt == null) return
+            pendingAbility = null
+            if (prompt is GamePrompt.ChooseAbility && prompt.choices.any { it.abilityId == pending.abilityId }) {
+                narrate { "answering ${prompt.diag()} with the pressed ${pending.abilityId}" }
+                val id = gameId
+                send { it.chooseAbility(id, pending.abilityId) }
+            } else {
+                narrate { "pressed ability ${pending.abilityId} not offered by ${prompt.diag()}; left to the player" }
+            }
+        }
+
+        /**
+         * Answers the server's trigger-ordering question from the arrangement the player confirmed — see
+         * `TriggerOrder.kt`.
+         *
+         * **Priority coming back ends the round**, and the arrangement with it. Any other question in between —
+         * a trigger's own targets, its costs — is the player's, and the arrangement waits it out. An ordering
+         * question the arrangement does not wholly cover is left on screen, arranged as far as it goes.
+         *
+         * **Once per question.** A re-emission of the same question is not a new one to answer.
+         */
+        private fun answerTriggerOrder(
+            prompt: GamePrompt?,
+            promptChanged: Boolean,
+        ) {
+            if (triggerPlan.isEmpty() || !promptChanged) return
+            if (prompt is GamePrompt.Select) {
+                triggerPlan = emptyList()
+                return
+            }
+            if (prompt !is GamePrompt.Target || !prompt.options.isTriggerOrder) return
+            val next = nextTriggerToStack(triggerPlan, prompt.cards.map { it.id }) ?: return
+            narrate { "placing trigger $next from the arrangement $triggerPlan" }
+            val id = gameId
+            send { it.chooseTarget(id, next) }
+        }
+
+        /**
+         * The controls for [state], with an ordering question laid out as the player already arranged it and
+         * marked as being placed when the arrangement answers it.
+         */
+        private fun controlsArranged(state: GameState): PromptControlsUi? {
+            val controls = controlsFor(state, hasPickedTarget = hasPickedTarget)
+            if (controls !is PromptControlsUi.TriggerOrder) return controls
+            val offered = (state.prompt as? GamePrompt.Target)?.cards?.map { it.id }.orEmpty()
+            return controls.copy(
+                triggerGroups = arrangedBy(controls.triggerGroups, triggerPlan),
+                isPlacing = nextTriggerToStack(triggerPlan, offered) != null,
+            )
         }
 
         /**
@@ -473,6 +566,12 @@ class GameBoardViewModel
 
                 is BoardAction.AnswerAsk -> send { it.answerAsk(id, action.yes) }
                 is BoardAction.ChooseAbility -> send { it.chooseAbility(id, action.abilityId) }
+                is BoardAction.ActivateAbility -> {
+                    // The object now; the ability once the server asks which — see [answerPendingAbility].
+                    pendingAbility = action
+                    _uiState.value = _uiState.value.copy(cast = CastUi(cardName = nameOf(action.objectId)))
+                    send { it.playObject(id, action.objectId) }
+                }
                 is BoardAction.ChoosePile -> send { it.choosePile(id, action.first) }
                 is BoardAction.ChooseChoice -> send { it.chooseChoice(id, action.key, action.special) }
                 is BoardAction.PlayManaSource -> send { it.playManaSource(id, action.sourceId) }
@@ -493,6 +592,27 @@ class GameBoardViewModel
                 is BoardAction.DistributeAmounts -> send { it.distributeAmounts(id, action.amounts) }
                 BoardAction.Concede -> send { it.concede(id) }
                 BoardAction.QuitMatch -> send { it.quitMatch(id) }
+
+                is BoardAction.AlwaysAnswer ->
+                    // The rule, then the answer — the order upstream's own client sends them in, so the
+                    // question on screen is answered the way every later one will be.
+                    send { client ->
+                        client.setAutoAnswer(id, action.question, action.yes).fold(
+                            onSuccess = { client.answerAsk(id, action.yes) },
+                            onFailure = { Result.failure(it) },
+                        )
+                    }
+
+                is BoardAction.OrderTriggers -> {
+                    triggerPlan = action.resolveOrder
+                    _uiState.value = _uiState.value.copy(controls = controlsForLatest())
+                    answerTriggerOrder(latestState?.prompt, promptChanged = true)
+                }
+
+                is BoardAction.AlwaysOrderTrigger -> send { it.setTriggerAutoOrder(id, action.ruleText, action.order) }
+                BoardAction.ResolveStack -> send { it.passPriorityUntil(id, PassPriorityScope.UntilStackResolved) }
+                BoardAction.ResetTriggerOrder -> send { it.resetTriggerAutoOrder(id) }
+                BoardAction.ResetAutoAnswers -> send { it.resetAutoAnswers(id) }
             }
         }
 
@@ -506,13 +626,17 @@ class GameBoardViewModel
         }
 
         /** Re-project the controls against the latest snapshot (after a local flag such as a pick). */
-        private fun controlsForLatest(): PromptControlsUi? = latestState?.let { controlsFor(it, hasPickedTarget = hasPickedTarget) }
+        private fun controlsForLatest(): PromptControlsUi? = latestState?.let(::controlsArranged)
 
         private fun send(call: suspend (GameClient) -> Result<Unit>) {
             viewModelScope.launch {
                 call(gameClient).onFailure { error ->
                     narrate { "send failed: $error" }
-                    _uiState.value = _uiState.value.copy(actionError = error.asBoardMessage())
+                    // A press the server never received has no question coming after it.
+                    pendingAbility = null
+                    // …and an arrangement whose placing stopped is the player's to look at again.
+                    triggerPlan = emptyList()
+                    _uiState.value = _uiState.value.copy(actionError = error.asBoardMessage(), controls = controlsForLatest())
                 }
             }
         }
@@ -572,6 +696,12 @@ class GameBoardViewModel
             stepId: String,
         ) {
             stops.press(side, stepId)
+        }
+
+        /** Turns Full Control on or off. It reaches the server with the stops — see [BoardStops.fullControl]. */
+        fun setFullControl(on: Boolean) {
+            narrate { "full control $on" }
+            stops.setFullControl(on)
         }
 
         /**

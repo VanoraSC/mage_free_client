@@ -1,60 +1,71 @@
-# 0122 — An emblem is the card that made it
+# 0122 — An emblem is drawn, and read
 
 - **Story:** #215
 - **Epic:** EPIC-19 — Game Board Rebuild
-- **Depends on:** 0114 (the stack), 0118 (`sourceId` on the wire).
+- **Depends on:** 0114 (the stack), 0118 (`sourceId` on the wire), 0123 (the seat window).
 - **Specified by:** a real game — Liliana, the Last Hope's emblem, drawn as a grey placeholder.
 
 ## 1. Objective
 
-Draw an emblem with the art of the card that made it, and let it be opened and read like any other
-object on the board.
+Draw an emblem with a picture instead of a placeholder — on the stack and in the command zone — and let
+it be opened and read like any other object on the board.
 
-## 2. Context & background — what upstream knows
+## 2. What upstream knows
 
-**An emblem has a set code, but not a card's.** `Emblem.setSourceObjectAndInitImage` asks
-`TokenRepository.findPreferredTokenInfoForClass` for a `TokenInfo`, then sets `expansionSetCode` from
-it, `cardNumber` to `""`, and an `imageNumber`. That is upstream's *own* image pipeline — a numbered
-image inside an emblem set — and it is not a Scryfall printing. An art request built from
-`(setCode, "")` resolves to nothing, which is the grey placeholder on the board today.
+This story first proposed drawing an emblem with the art of **the card that created it**. Checked against
+upstream, that printing is not reachable, so the design below is different.
 
-**But it knows exactly which card made it.** `Emblem.sourceObject` is the `MageObject` that created
-it, and `Emblem.getSourceId()` returns that object's id. Liliana, the Last Hope has a real set code
-and a real collector number, and therefore real art.
+**An emblem names no printing, and no view names its source.** `Emblem.setSourceObjectAndInitImage`
+asks `TokenRepository.findPreferredTokenInfoForClass` for the emblem's image, then sets
+`expansionSetCode` from it, `cardNumber` to `""` and an `imageNumber`. `EmblemView` carries exactly that,
+plus the id, name and rules. The emblem object on the server does hold its `sourceObject`, but nothing
+copies it onto a view. `GameView` builds an emblem trigger's stack entry from `new CardView(new
+EmblemView(...))`, and the line that would have set the source card's set code is commented out. The
+bridge reads views, so the planeswalker's printing cannot be put on the wire.
 
-So Pete's instruction — *use the art of the card that created it* — is not a workaround. It is the
-one identity on the object that maps to a printing this client can actually fetch.
+**Upstream's own client draws emblems from a table.** `ScryfallImageSource` resolves every token and
+emblem through `ScryfallImageSupportTokens.findTokenLink(set, name, imageNumber)`. That is a
+hand-maintained map from `SET/Name`, or `SET/Name/N` where one set has two images of a name, to a
+Scryfall link. It has 130 emblem entries (`EMN/Emblem Liliana` → `cards/temn/9`), and every one is a plain
+set-and-number link. This client's by-name token lookup cannot find them because Scryfall names them
+differently (`Emblem Nixilis` is `Ob Nixilis Reignited Emblem`).
 
-## 3. The work, and the thing to check first
+**What that picture is.** It is Scryfall's emblem card for that emblem — not the planeswalker card's own
+printing — and it is what upstream's client shows.
 
-**Unverified, and it decides the shape:** whether `CommandObjectView` (for the emblem sitting in the
-command zone) exposes the source object's set code and collector number, or only its id — and the
-same question for the emblem's triggered ability on the stack, where 0118's `sourceId` currently
-resolves to the *emblem*, not to the card behind it.
+## 3. Design
 
-- If the printing is reachable on the view, this is a bridge mapping and nothing more.
-- If only an id is reachable, the board can resolve it against a permanent it is already drawing —
-  but a planeswalker that has left the battlefield is exactly the case an emblem outlives, so that
-  resolution will often fail and the honest answer is a wire field carrying the source printing.
+- **The table, ported as printings.** `emblemArtRequest(set, name, imageNumber)` in `core/cards`, keyed
+  exactly as `findTokenLink` keys it. It resolves to an ordinary set-and-number request, so it goes
+  through the same image path as every other card. Where upstream has no entry (eight emblems in its
+  token database today, such as Dominaria United's Karn) there is no image, and the placeholder stays.
+- **`imageNumber` on the wire**, on cards and command objects. It is the `N` in the key, and the only
+  thing telling Commander Masters' two `Emblem Chandra`s apart. Additive.
+- **On the stack.** An emblem trigger's source card is the emblem, and the bridge already reads name and
+  set off it, so `artRequestOf` asks the table for any card without a collector number. Only an exact
+  key answers.
+- **In the command zone.** The seat window draws command objects as cards in their own column rather
+  than as names in the status list. A commander, or an emblem made of a card, draws its real printing;
+  other emblems use the table; dungeons and planes keep the placeholder. A press opens the ordinary card
+  detail with the object's rules.
 
-**Do not guess this.** `CardView` turned out to expose no owner at all in 0120, after the story had
-already proposed a design that assumed one.
+Nothing depends on the planeswalker still being in play, which is the case an emblem exists for.
 
 ## 4. Scope
 
-**In scope**
-- An emblem drawn with its source card's art, in the command zone and on the stack.
-- An emblem that opens the ordinary card detail, showing its oracle text — which the server already
-  sends and the board already draws for everything else.
+**In scope:** the wire field, the ported table, emblem art on the stack and in the seat window, and the
+detail for command objects.
 
 **Out of scope**
-- Upstream's own emblem images. They are a different pipeline (`imageNumber` into an emblem set) and
-  adopting it would mean a second art path for one object type.
+- Dungeon and plane images. They are not emblems and name no printing.
+- An always-visible command zone on the board. Where it would go is a design decision; today the command
+  zone is in the seat window.
 
 ## 5. Acceptance criteria
 
-- [ ] An emblem shows the art of the card that created it.
-- [ ] Pressing an emblem opens the card detail.
-- [ ] The detail shows the emblem's oracle text.
-- [ ] The emblem's triggered ability on the stack shows the same art.
-- [ ] An emblem whose source has left the battlefield still draws correctly.
+- [ ] An emblem in the command zone draws upstream's image for it.
+- [ ] The emblem's trigger on the stack draws the same image.
+- [ ] Pressing an emblem in the seat window opens the card detail, which shows its rules.
+- [ ] Commander Masters' two `Emblem Chandra`s draw different images.
+- [ ] An emblem upstream has no image for draws the placeholder, as before.
+- [ ] An emblem whose planeswalker has left the battlefield still draws correctly.

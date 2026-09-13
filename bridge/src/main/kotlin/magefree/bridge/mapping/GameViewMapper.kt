@@ -213,6 +213,7 @@ public object GameViewMapper {
                     else -> null
                 },
             rules = command.rules.orEmpty().filterNotNull(),
+            imageNumber = command.imageNumber,
         )
 
     /**
@@ -404,6 +405,9 @@ public object GameViewMapper {
             // Which kind of face-down this is — see [GameCardView.imageName]. Non-empty only for a
             // face-down or inner-named object, which is upstream's own rule for the field.
             imageName = card.imageFileName.orNullIfBlank(),
+            // Which same-named image in its set — see [GameCardView.imageNumber]. From the source card
+            // for an ability, for the reason [setCode] is: an emblem's trigger names nothing of its own.
+            imageNumber = (sourceCardOf(card) ?: card).imageNumber,
             manaCost = text { card.manaCostStr }.orNullIfBlank(),
             typeLine = text { card.typeText }?.trim().orNullIfBlank(),
             power = card.power.orNullIfBlank(),

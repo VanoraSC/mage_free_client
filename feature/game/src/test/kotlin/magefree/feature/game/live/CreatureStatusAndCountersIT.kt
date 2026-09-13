@@ -314,6 +314,9 @@ class CreatureStatusAndCountersIT {
                 }
             }
 
+            // Simultaneous triggers go on in the order the panel shows them.
+            is PromptControlsUi.TriggerOrder -> BoardAction.OrderTriggers(controls.triggerGroups.flatMap { it.abilityIds })
+
             // Mutavault has two activatable abilities, so the server asks which. Pick the one that is not
             // the mana ability — by the server's own text, since the ability ids mean nothing to us.
             is PromptControlsUi.Choices -> {

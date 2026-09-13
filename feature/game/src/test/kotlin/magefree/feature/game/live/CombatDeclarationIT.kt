@@ -299,6 +299,9 @@ class CombatDeclarationIT {
                     ?: BoardAction.FinishTargeting
             }
 
+            // Simultaneous triggers go on in the order the panel shows them.
+            is PromptControlsUi.TriggerOrder -> BoardAction.OrderTriggers(controls.triggerGroups.flatMap { it.abilityIds })
+
             is PromptControlsUi.Priority -> {
                 // Lands before spells: a seat that casts first strands itself mid-payment and
                 // silently retries forever. `manaCost` is null for a land, which is the only signal.

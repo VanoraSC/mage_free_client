@@ -67,6 +67,10 @@ import magefree.designsystem.component.phase.PhaseRailStep
  * @param onOpenPiles opens some piles: a graveyard on its own from the rail, or everything behind
  *   the counts from a press on them.
  * @param onToggleStop invoked with the step and the side whose cell was pressed.
+ * @param anchors where each graveyard and each seat's counts report their boxes, so a card can fly to
+ *   them — see [ZoneFlights]. `null` for a rail nothing flies to.
+ * @param arriving cards on their way to a graveyard. A graveyard keeps showing the card that was on top
+ *   until one of these lands on it, rather than showing it before it has arrived.
  */
 @Composable
 fun StatusRail(
@@ -79,6 +83,8 @@ fun StatusRail(
     onExpand: ((TableVitals) -> Unit)? = null,
     onOpenPiles: ((List<TableZonePile>) -> Unit)? = null,
     onToggleStop: ((PhaseRailStep, PhaseBarTurn) -> Unit)? = null,
+    anchors: BoardAnchors? = null,
+    arriving: Set<String> = emptySet(),
 ) {
     val opponents = vitals.filterNot { it.isViewer }
     val viewer = vitals.filter { it.isViewer }
@@ -88,8 +94,8 @@ fun StatusRail(
         verticalArrangement = Arrangement.spacedBy(SeatGap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        opponents.forEach { seat -> Graveyard(seat.playerId, zones, artFor, onOpenPiles) }
-        opponents.forEach { seat -> Seat(seat, palette, onExpand, zones, onOpenPiles) }
+        opponents.forEach { seat -> Graveyard(seat.playerId, zones, artFor, onOpenPiles, anchors, arriving) }
+        opponents.forEach { seat -> Seat(seat, palette, onExpand, zones, onOpenPiles, anchors) }
 
         // **The turn takes what is left**, which is what keeps the rail one screen tall however many
         // seats there are. The graveyards and the counts are the fixed ends; the steps divide the
@@ -104,8 +110,8 @@ fun StatusRail(
             Box(modifier = Modifier.fillMaxWidth().weight(1f))
         }
 
-        viewer.forEach { seat -> Seat(seat, palette, onExpand, zones, onOpenPiles) }
-        viewer.forEach { seat -> Graveyard(seat.playerId, zones, artFor, onOpenPiles) }
+        viewer.forEach { seat -> Seat(seat, palette, onExpand, zones, onOpenPiles, anchors) }
+        viewer.forEach { seat -> Graveyard(seat.playerId, zones, artFor, onOpenPiles, anchors, arriving) }
     }
 }
 
@@ -116,6 +122,7 @@ private fun Seat(
     onExpand: ((TableVitals) -> Unit)?,
     zones: List<TableZonePile>,
     onOpenPiles: ((List<TableZonePile>) -> Unit)?,
+    anchors: BoardAnchors?,
 ) {
     VitalsStrip(
         vitals = seat,
@@ -126,7 +133,8 @@ private fun Seat(
         // board" is one question, and answering it a pile at a time makes the player ask it four
         // times to find out that three of the answers were empty.
         onZonePress = onOpenPiles?.let { open -> { open(zones.pilesBehindTheCounts(seat.playerId)) } },
-        modifier = Modifier.fillMaxWidth(),
+        // The panel a card lands on when it goes anywhere the board draws only as a count.
+        modifier = Modifier.fillMaxWidth().then(anchors?.anchorModifier(zoneCountsAnchorId(seat.playerId)) ?: Modifier),
     )
 }
 
@@ -143,9 +151,12 @@ private fun Graveyard(
     zones: List<TableZonePile>,
     artFor: TableArtResolver?,
     onOpenPiles: ((List<TableZonePile>) -> Unit)?,
+    anchors: BoardAnchors?,
+    arriving: Set<String>,
 ) {
     val pile = zones.pileFor(playerId, TableZoneKind.Graveyard)
-    val top = pile?.topCard
+    // The top card that has already *arrived*: one still in flight to this graveyard is not on it yet.
+    val top = pile?.cards?.lastOrNull { it.id !in arriving }
 
     Box(
         modifier =
@@ -158,7 +169,8 @@ private fun Graveyard(
                     } else {
                         Modifier
                     },
-                ).testTag(StatusRailTestTags.graveyard(playerId)),
+                ).then(anchors?.anchorModifier(graveyardAnchorId(playerId)) ?: Modifier)
+                .testTag(StatusRailTestTags.graveyard(playerId)),
         contentAlignment = Alignment.Center,
     ) {
         if (top == null) {

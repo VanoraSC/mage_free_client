@@ -741,11 +741,14 @@ stack first)"*, and first-on is last-to-resolve.
 there are two ways to get it wrong rather than one: the inversion, and the fact that **N triggers cost
 N−1 questions** because the last one is placed by elimination with no prompt at all.
 
-**Dragging a whole arrangement behind one confirm is not built**, and the reason is in the trace §1.3
-and §1.4: putting a trigger on the stack runs its own modes, targets and costs *immediately*, so the
-ordering questions are separated by unrelated prompts — and the candidate set can grow between them,
-because a trigger that fires as a result of an earlier one joins the same round. Holding a local
-arrangement across that would be the declared-intent model rebuilt for a smaller problem.
+**Dragging a whole arrangement behind one confirm is built — 2026-09-12, at Pete's direction (story
+0129).** The trace §1.3 and §1.4 still hold: putting a trigger on the stack runs its own modes, targets
+and costs *immediately*, so the ordering questions are separated by unrelated prompts, and the candidate
+set can grow between them. It is reachable anyway because the arrangement never answers a question it
+does not wholly cover: each ordering question is answered with the lowest arranged trigger it offers,
+anything in between is the player's, a question offering a trigger that fired since is asked, and
+priority coming back ends the round. Equivalent triggers (same source name, rule text and targets) are
+one group.
 
 **Two prerequisites, both small:**
 

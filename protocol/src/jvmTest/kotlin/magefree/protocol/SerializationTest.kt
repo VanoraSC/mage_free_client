@@ -464,4 +464,17 @@ class SerializationTest {
             json.encodeToString<ServerMessage>(UnknownServerMessage("future_server_message"))
         }
     }
+
+    @Test
+    fun `passing after a cast crosses the wire, and an older peer that says nothing asks for no pass`() {
+        // Upstream's own `passPriorityCast` / `passPriorityActivation`. Defaulted off, which is upstream's
+        // default, so a peer from before the fields existed changes nothing it never mentioned.
+        val sent = SetPriorityStops(passPriorityCast = true, passPriorityActivation = true)
+
+        val round = json.decodeFromString<ClientMessage>(json.encodeToString<ClientMessage>(sent)) as SetPriorityStops
+        val older = json.decodeFromString<ClientMessage>("""{"type":"set_priority_stops"}""") as SetPriorityStops
+
+        assertTrue(round.passPriorityCast && round.passPriorityActivation)
+        assertTrue(!older.passPriorityCast && !older.passPriorityActivation)
+    }
 }

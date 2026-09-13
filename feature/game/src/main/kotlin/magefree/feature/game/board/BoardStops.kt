@@ -69,6 +69,20 @@ enum class TurnSide {
 data class BoardStops(
     val yours: Map<String, PhaseStop> = emptyMap(),
     val theirs: Map<String, PhaseStop> = emptyMap(),
+    /**
+     * **Full Control** — whether priority comes back to the player after they put something on the
+     * stack.
+     *
+     * Off, the server passes for them the moment a spell or a non-mana activated ability lands: upstream's
+     * own `UserData.passPriorityCast` and `passPriorityActivation`, which `HumanPlayer.priority()` checks
+     * before anything else. On is how the board played before this existed — every cast hands priority
+     * back, so a player can respond to their own spell.
+     *
+     * A pinned mode rather than a held key, because a phone has no `Ctrl` (§3.2). It asks for *more*
+     * decisions, not fewer. Kept with the stops because it is one: it decides whether a priority window
+     * arrives at all, and it reaches the server the same way.
+     */
+    val fullControl: Boolean = false,
 ) {
     fun modeAt(
         side: TurnSide,
@@ -139,6 +153,11 @@ class StopStore {
         stepId: String,
     ) {
         _stops.update { it.pressed(side, stepId) }
+    }
+
+    /** Turns Full Control on or off — see [BoardStops.fullControl]. */
+    fun setFullControl(on: Boolean) {
+        _stops.update { it.copy(fullControl = on) }
     }
 
     /**

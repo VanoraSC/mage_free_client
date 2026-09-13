@@ -211,6 +211,8 @@ data class GameCommandObject(
     val setCode: String? = null,
     val collectorNumber: String? = null,
     val rules: List<String> = emptyList(),
+    /** Which of several same-named images in its set this is; `0` for the only one. See [GameCard.imageNumber]. */
+    val imageNumber: Int = 0,
 )
 
 /**
@@ -306,6 +308,14 @@ data class GameCard(
      * `Face Down` — or null for an ordinary card. Upstream's own image name.
      */
     val imageName: String? = null,
+    /**
+     * Which of several same-named images in its set this object uses, and `0` where there is one.
+     *
+     * Upstream's own image key for a token or an emblem is `SET/Name/N`, and this is the `N` — the only
+     * thing telling Commander Masters' two `Emblem Chandra`s apart. For an ability on the stack it is
+     * the source's, like [setCode].
+     */
+    val imageNumber: Int = 0,
     val objectType: MageObjectType = MageObjectType.Unknown,
     val icons: List<GameCardIcon> = emptyList(),
 )
@@ -679,6 +689,22 @@ enum class PassPriorityScope {
 
     /** Cancel every outstanding "pass until …" instruction. */
     CancelAll,
+}
+
+/**
+ * Where a [GameClient.setTriggerAutoOrder] rule puts a triggered ability among the player's simultaneous
+ * triggers, **in resolution order** — the order a stack is read in, top first.
+ *
+ * Upstream names the same two rules by the order abilities go *onto* the stack, which is the reverse:
+ * resolving first is going on last. The names here are the player's; the mapping to upstream's is in one
+ * place, [DefaultGameClient].
+ */
+enum class TriggerAutoOrder {
+    /** Always resolves before the player's other simultaneous triggers — upstream's `TRIGGER_AUTO_ORDER_NAME_LAST`. */
+    ResolveFirst,
+
+    /** Always resolves after them — upstream's `TRIGGER_AUTO_ORDER_NAME_FIRST`. */
+    ResolveLast,
 }
 
 /**

@@ -115,12 +115,14 @@ internal object GameViews {
         token: Boolean = false,
         objectType: MageObjectType = MageObjectType.NULL,
         icons: List<CardIcon> = emptyList(),
+        imageNumber: Int = 0,
     ): CardView =
         allocate(CardView::class.java).apply {
             set("counters", counters.map { (counterName, count) -> CounterView(Counter(counterName, count)) })
             set("id", id)
             set("expansionSetCode", setCode)
             set("cardNumber", collectorNumber)
+            set("imageNumber", imageNumber)
             set("name", name)
             set("rules", rules)
             set("power", power)
@@ -337,6 +339,7 @@ internal object GameViews {
         setCode: String = "SOI",
         cardNumber: String = "",
         rules: List<String> = listOf("Whenever an opponent casts a spell, exile it."),
+        imageNumber: Int = 0,
     ): EmblemView =
         allocate(EmblemView::class.java).apply {
             set("id", id)
@@ -344,6 +347,7 @@ internal object GameViews {
             set("expansionSetCode", setCode)
             set("cardNumber", cardNumber)
             set("rules", rules)
+            set("imageNumber", imageNumber)
         }
 
     /**
